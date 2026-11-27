@@ -3,20 +3,17 @@
 //! words, and the refusal carries `attempted: true` in its detail and flat
 //! beside its code, so the short form shows it as well. A request never
 //! sent, a daemon refusal and an observed stopped daemon are known.
-use layerfs_bridge::control::{
-    Call, ControlCode, ControlError, ControlRefusal, Reply, Request, SdkRefusal, SdkValue,
-    WorkspaceToken,
-};
-use layerfs_bridge::duplex::ChannelError;
+use layerfs_protocol::provision::install::{Call, ControlCode, ControlError, ControlRefusal, Reply, Request, SdkRefusal, SdkValue, WorkspaceToken};
+use layerfs_protocol::duplex::ChannelError;
 use layerfs_history::WorkspaceId;
 use layerfs_sandbox::daemon::values::{failure, mount_failure, sdk_error, wire, ATTEMPTED};
 use layerfs_sandbox::internal::{ControlCause, ControlFailure, ControlPhase};
 use layerfs_sandbox::{MountFailure, OperationCause, OperationFailure, SdkError};
-use layerfs_sandbox_backend::{ContainerId, RuntimeError, WireFailure, OUTCOME_UNKNOWN};
+use layerfs_sandbox::{ContainerId, RuntimeError, WireFailure, OUTCOME_UNKNOWN};
 use std::io;
 
 fn unmount() -> Request {
-    Request::Unmount(layerfs_bridge::control::UnmountControl {
+    Request::Unmount(layerfs_protocol::provision::install::UnmountControl {
         token: WorkspaceToken {
             workspace: WorkspaceId::from_authority([5; 32]).unwrap(),
             namespace: 2,

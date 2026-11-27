@@ -147,7 +147,7 @@ impl Edit<'_> {
 pub(crate) enum Room {
     /// Applied to the resident body, whose length, recency and time were
     /// recorded under the same lock: this is the companion's stat afterwards.
-    Resident(layerfs_workspace::ViewStat),
+    Resident(layerfs_vfs::ViewStat),
     /// On disk: finish with its file outside the lock.
     Spilled,
     /// Resident, but growing it needs this many more budget bytes first.
@@ -159,7 +159,7 @@ pub(crate) enum Room {
 /// What one application of an edit made of a companion.
 pub(crate) enum Edited {
     /// It landed; this is the companion's stat afterwards.
-    Done(layerfs_workspace::ViewStat),
+    Done(layerfs_vfs::ViewStat),
     /// The body would take a slot of the index bound and none is free, so
     /// nothing was changed.
     NoSlot,

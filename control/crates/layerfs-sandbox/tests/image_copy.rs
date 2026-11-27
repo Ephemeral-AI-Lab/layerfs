@@ -2,20 +2,20 @@
 //! on the local side: resolve, refuse, export, send, unpack once, reuse,
 //! resume; then prune.
 #[allow(dead_code)]
-#[path = "../../layerfs-sandbox-backend/tests/support/image.rs"]
+#[path = "support/image.rs"]
 mod fixture;
 #[allow(dead_code)]
 #[path = "support/standin.rs"]
 mod standin;
 use fixture::{Scratch, Tar};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::events::Events;
 use layerfs_sandbox::deploy::Side;
 use layerfs_sandbox::image_artifact::{self as cache, architecture, Sidecar};
 use layerfs_sandbox::image_load::{load, Loaded, Target};
 use layerfs_sandbox::image_tar::Filtered;
 use layerfs_sandbox::images;
-use layerfs_sandbox_backend::{rootfs, Image};
+use layerfs_sandbox::{rootfs, Image};
 use standin::Standin;
 use std::fs;
 use std::io::Read;
@@ -50,7 +50,7 @@ fn run(
     standin: &Standin,
     home: &Path,
     image: &str,
-) -> (Result<Loaded, layerfs_bridge::control::SdkRefusal>, Run) {
+) -> (Result<Loaded, layerfs_protocol::provision::install::SdkRefusal>, Run) {
     let mut phases = Vec::new();
     let mut sink = |event: SdkValue| {
         if let Some(p) = event.get("progress") {
@@ -468,7 +468,7 @@ fn prune(
     target: Option<&str>,
     unused: bool,
     default: Option<&str>,
-) -> Result<SdkValue, layerfs_bridge::control::SdkRefusal> {
+) -> Result<SdkValue, layerfs_protocol::provision::install::SdkRefusal> {
     images::prune_in_worker(
         root,
         SdkValue::map([

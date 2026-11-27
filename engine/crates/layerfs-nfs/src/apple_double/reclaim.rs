@@ -2,7 +2,7 @@
 use super::Orphan;
 use crate::{apple_double_spill::unlink_paths, attributes::Status, kernel::Kernel};
 use layerfs_content::filesystem::PathName;
-use layerfs_workspace::KernelReadOperation;
+use layerfs_vfs::KernelReadOperation;
 
 impl Kernel {
     /// The companion slots no name reaches any more: one whose main inode

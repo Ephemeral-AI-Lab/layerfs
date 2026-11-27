@@ -12,7 +12,7 @@ use layerfs_content::{
 };
 use layerfs_history::BranchSnapshot;
 use layerfs_storage::Save;
-use layerfs_workspace::{InodeSerials, WorkspaceError};
+use layerfs_vfs::{InodeSerials, WorkspaceError};
 
 /// Serials one reservation takes while a merge needs fresh ones.
 const MERGE_SERIALS: u64 = 64;

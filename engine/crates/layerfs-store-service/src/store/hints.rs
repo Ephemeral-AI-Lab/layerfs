@@ -10,7 +10,7 @@ use layerfs_content::filesystem::{binding_changes::BindingChanges, path::PathNam
 use layerfs_content::{AuthenticatedObjects, ContentError, ContentResult};
 use layerfs_history::{BindingHint, HistoryCatalog, HistoryError};
 use layerfs_overlay::IndexedOperationRecordScope;
-use layerfs_workspace::IndexedEditRecords;
+use layerfs_vfs::IndexedEditRecords;
 use std::cell::RefCell;
 
 /// Rows one hint write transaction carries.

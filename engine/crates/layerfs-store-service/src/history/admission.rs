@@ -1,7 +1,7 @@
 //! Store-service side of GC admission: operation ids, intent builders and the
 //! short-lived guard a shared Init/merge holds.
 use crate::history::lookup;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_history::records::{
     GcAuditAfter, GcAuditPage, GcBranchAuditPage, GcIntent, GcIntentDone, GcIntentKind,
     GcReconcile, GcScopeKind,
@@ -218,10 +218,10 @@ pub fn owner_tokens(suffix: &str) -> (String, String) {
         // An unreadable start is recorded as 0 and an unreadable boot as
         // `unknown`; admission reads either as missing evidence, never as
         // proof that the owner is gone (#776 G2).
-        let start = layerfs_bridge::process::stat(pid)
+        let start = layerfs_os::process::stat(pid)
             .map(|stat| stat.start)
             .unwrap_or(0);
-        let boot = layerfs_bridge::process::boot()
+        let boot = layerfs_os::process::boot()
             .map_or_else(|_| "unknown".to_owned(), |boot| format!("{boot:032x}"));
         let namespace = match pid_namespace() {
             Some(namespace) => format!("@ns:{namespace}"),
@@ -264,7 +264,7 @@ pub fn mount_intent(
     workspace: layerfs_history::WorkspaceId,
     snapshot: &layerfs_history::BranchSnapshot,
     project: Option<&str>,
-    place: &layerfs_bridge::control::MountPlace,
+    place: &layerfs_protocol::provision::install::MountPlace,
     authority: PlaceAuthority,
 ) -> GcIntent {
     let body: [u8; 32] = workspace.as_slice().try_into().unwrap_or([0u8; 32]);

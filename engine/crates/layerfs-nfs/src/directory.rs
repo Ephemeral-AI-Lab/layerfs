@@ -30,8 +30,8 @@ use crate::{
     xdr::{opaque_size, Writer},
 };
 use layerfs_content::object::inode_leaf::InodeKind;
-use layerfs_mount_ports::operations::{DirectoryFailure, DirectoryStep, DirectoryStream};
-use layerfs_workspace::{KernelDirectoryEntry, ViewStat};
+use layerfs_vfs::requests::{DirectoryFailure, DirectoryStep, DirectoryStream};
+use layerfs_vfs::{KernelDirectoryEntry, ViewStat};
 /// One enumeration request.
 pub struct Listing {
     pub serial: u64,

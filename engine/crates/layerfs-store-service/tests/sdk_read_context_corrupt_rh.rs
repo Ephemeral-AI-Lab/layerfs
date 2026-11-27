@@ -11,7 +11,7 @@
 mod adversary;
 
 use adversary::{Service, TestStore};
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 
 const SEED: &[(&str, &[u8])] = &[("/seed", b"seed\n"), ("/dir/gone", b"gone\n")];
 

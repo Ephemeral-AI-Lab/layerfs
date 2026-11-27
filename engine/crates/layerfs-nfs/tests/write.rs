@@ -1503,20 +1503,20 @@ impl JobCounts {
     }
 }
 struct CountingMount {
-    inner: Arc<dyn layerfs_mount_ports::ports::MountServices>,
+    inner: Arc<dyn layerfs_vfs::ports::mount::MountServices>,
     counts: Arc<JobCounts>,
 }
 struct CountingRequest {
-    inner: Arc<dyn layerfs_mount_ports::ports::RequestServices>,
+    inner: Arc<dyn layerfs_vfs::ports::mount::RequestServices>,
     counts: Arc<JobCounts>,
 }
-impl layerfs_mount_ports::ports::MountServices for CountingMount {
+impl layerfs_vfs::ports::mount::MountServices for CountingMount {
     fn request(
         &self,
-        fence: &layerfs_mount_ports::ports::Fence,
+        fence: &layerfs_vfs::ports::mount::Fence,
     ) -> Result<
-        Arc<dyn layerfs_mount_ports::ports::RequestServices>,
-        layerfs_mount_ports::ports::ServiceError,
+        Arc<dyn layerfs_vfs::ports::mount::RequestServices>,
+        layerfs_vfs::ports::mount::ServiceError,
     > {
         Ok(Arc::new(CountingRequest {
             inner: self.inner.request(fence)?,
@@ -1524,7 +1524,7 @@ impl layerfs_mount_ports::ports::MountServices for CountingMount {
         }))
     }
 }
-impl layerfs_mount_ports::ports::RequestServices for CountingRequest {
+impl layerfs_vfs::ports::mount::RequestServices for CountingRequest {
     fn directory_visit(
         &self,
         mount: layerfs_overlay::KernelMount,
@@ -1533,9 +1533,9 @@ impl layerfs_mount_ports::ports::RequestServices for CountingRequest {
         offset: u64,
         after: Option<Vec<u8>>,
         attributes: bool,
-    ) -> layerfs_mount_ports::ports::ServiceFuture<
+    ) -> layerfs_vfs::ports::mount::ServiceFuture<
         '_,
-        layerfs_mount_ports::ports::ServiceReply<Arc<layerfs_workspace::KernelDirectoryWindow>>,
+        layerfs_vfs::ports::mount::ServiceReply<Arc<layerfs_vfs::KernelDirectoryWindow>>,
     > {
         self.inner
             .directory_visit(mount, serial, handle, offset, after, attributes)
@@ -1544,7 +1544,7 @@ impl layerfs_mount_ports::ports::RequestServices for CountingRequest {
         &self,
         offer: layerfs_overlay::KernelCookieOffer,
         names: Vec<Vec<u8>>,
-    ) -> layerfs_mount_ports::ports::ServiceFuture<'_, layerfs_mount_ports::ports::ServiceReply<()>>
+    ) -> layerfs_vfs::ports::mount::ServiceFuture<'_, layerfs_vfs::ports::mount::ServiceReply<()>>
     {
         self.inner.publish_cookies(offer, names)
     }
@@ -1553,7 +1553,7 @@ impl layerfs_mount_ports::ports::RequestServices for CountingRequest {
         mount: layerfs_overlay::KernelMount,
         serial: u64,
         handle: u64,
-    ) -> layerfs_mount_ports::ports::ServiceFuture<'_, layerfs_mount_ports::ports::ServiceReply<()>>
+    ) -> layerfs_vfs::ports::mount::ServiceFuture<'_, layerfs_vfs::ports::mount::ServiceReply<()>>
     {
         self.inner.close_directory(mount, serial, handle)
     }
@@ -1564,9 +1564,9 @@ impl layerfs_mount_ports::ports::RequestServices for CountingRequest {
         handle: Option<u64>,
         offset: u64,
         length: u32,
-    ) -> layerfs_mount_ports::ports::ServiceFuture<
+    ) -> layerfs_vfs::ports::mount::ServiceFuture<
         '_,
-        layerfs_mount_ports::ports::ServiceReply<Arc<layerfs_workspace::KernelWindow>>,
+        layerfs_vfs::ports::mount::ServiceReply<Arc<layerfs_vfs::KernelWindow>>,
     > {
         self.inner.read_visit(mount, serial, handle, offset, length)
     }
@@ -1575,7 +1575,7 @@ impl layerfs_mount_ports::ports::RequestServices for CountingRequest {
         mount: layerfs_overlay::KernelMount,
         serial: u64,
         handle: u64,
-    ) -> layerfs_mount_ports::ports::ServiceFuture<'_, layerfs_mount_ports::ports::ServiceReply<()>>
+    ) -> layerfs_vfs::ports::mount::ServiceFuture<'_, layerfs_vfs::ports::mount::ServiceReply<()>>
     {
         self.counts.close_file.fetch_add(1, Ordering::AcqRel);
         self.inner.close_file(mount, serial, handle)
@@ -1583,15 +1583,15 @@ impl layerfs_mount_ports::ports::RequestServices for CountingRequest {
     fn provider_failure(
         &self,
     ) -> Result<
-        Option<layerfs_mount_ports::ports::ServiceError>,
-        layerfs_mount_ports::ports::ServiceError,
+        Option<layerfs_vfs::ports::mount::ServiceError>,
+        layerfs_vfs::ports::mount::ServiceError,
     > {
         self.inner.provider_failure()
     }
     fn failed_base_read(
         &self,
-        step: layerfs_mount_ports::ports::ServiceError,
-    ) -> layerfs_mount_ports::ports::ServiceError {
+        step: layerfs_vfs::ports::mount::ServiceError,
+    ) -> layerfs_vfs::ports::mount::ServiceError {
         self.inner.failed_base_read(step)
     }
     fn observe_visit(
@@ -1600,25 +1600,25 @@ impl layerfs_mount_ports::ports::RequestServices for CountingRequest {
         request: u64,
         serial: u64,
         handle: Option<u64>,
-        operation: layerfs_workspace::KernelReadOperation,
-        facts: Arc<layerfs_workspace::VisitFacts>,
-    ) -> layerfs_mount_ports::ports::ServiceFuture<
+        operation: layerfs_vfs::KernelReadOperation,
+        facts: Arc<layerfs_vfs::VisitFacts>,
+    ) -> layerfs_vfs::ports::mount::ServiceFuture<
         '_,
-        layerfs_mount_ports::ports::ServiceReply<Arc<layerfs_workspace::KernelReadOutcome>>,
+        layerfs_vfs::ports::mount::ServiceReply<Arc<layerfs_vfs::KernelReadOutcome>>,
     > {
         self.counts.observe.fetch_add(1, Ordering::AcqRel);
         self.inner
             .observe_visit(mount, request, serial, handle, operation, facts)
     }
-    fn base(&self) -> layerfs_mount_ports::ports::ServiceFuture<'_, layerfs_workspace::BaseView> {
+    fn base(&self) -> layerfs_vfs::ports::mount::ServiceFuture<'_, layerfs_vfs::BaseView> {
         self.inner.base()
     }
     fn mutate_visit(
         &self,
-        request: layerfs_workspace::KernelVisitRequest,
-    ) -> layerfs_mount_ports::ports::ServiceFuture<
+        request: layerfs_vfs::KernelVisitRequest,
+    ) -> layerfs_vfs::ports::mount::ServiceFuture<
         '_,
-        layerfs_mount_ports::ports::ServiceReply<Arc<layerfs_workspace::KernelMutationOutcome>>,
+        layerfs_vfs::ports::mount::ServiceReply<Arc<layerfs_vfs::KernelMutationOutcome>>,
     > {
         self.counts.mutate.fetch_add(1, Ordering::AcqRel);
         self.inner.mutate_visit(request)
@@ -1627,8 +1627,8 @@ impl layerfs_mount_ports::ports::RequestServices for CountingRequest {
         &self,
         serial: u64,
         offset: u64,
-        data: layerfs_workspace::WriteData,
-    ) -> layerfs_mount_ports::ports::ServiceFuture<'_, layerfs_workspace::WriteData> {
+        data: layerfs_vfs::WriteData,
+    ) -> layerfs_vfs::ports::mount::ServiceFuture<'_, layerfs_vfs::WriteData> {
         self.inner.recognize(serial, offset, data)
     }
     fn forget(
@@ -1636,18 +1636,18 @@ impl layerfs_mount_ports::ports::RequestServices for CountingRequest {
         mount: layerfs_overlay::KernelMount,
         serial: u64,
         count: u64,
-    ) -> layerfs_mount_ports::ports::ServiceFuture<'_, layerfs_mount_ports::ports::ServiceReply<()>>
+    ) -> layerfs_vfs::ports::mount::ServiceFuture<'_, layerfs_vfs::ports::mount::ServiceReply<()>>
     {
         self.counts.forget.fetch_add(1, Ordering::AcqRel);
         self.inner.forget(mount, serial, count)
     }
-    fn reserve_serial(&self) -> Result<Option<u64>, layerfs_mount_ports::ports::ServiceError> {
+    fn reserve_serial(&self) -> Result<Option<u64>, layerfs_vfs::ports::mount::ServiceError> {
         self.inner.reserve_serial()
     }
     fn reply_attempted(
         &self,
         publication: layerfs_overlay::Publication,
-    ) -> layerfs_mount_ports::ports::ServiceFuture<'_, layerfs_mount_ports::ports::ServiceReply<()>>
+    ) -> layerfs_vfs::ports::mount::ServiceFuture<'_, layerfs_vfs::ports::mount::ServiceReply<()>>
     {
         self.inner.reply_attempted(publication)
     }

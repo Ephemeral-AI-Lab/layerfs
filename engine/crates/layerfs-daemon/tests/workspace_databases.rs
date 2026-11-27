@@ -5,7 +5,7 @@ mod fixture;
 #[allow(dead_code)]
 #[path = "support/host_install.rs"]
 mod support;
-use layerfs_bridge::control::{CleanupObservation, Reply, Request, WorkspaceToken};
+use layerfs_protocol::provision::install::{CleanupObservation, Reply, Request, WorkspaceToken};
 use layerfs_history::{BranchId, WorkspaceId};
 
 fn token(reply: &Reply) -> WorkspaceToken {
@@ -41,7 +41,7 @@ fn terminal_unmount_deletes_only_its_file_after_retained_requests_release() {
     fixture::write(&f.service, b_token, 88);
     let closed = f
         .service
-        .execute_control(&Request::Unmount(layerfs_bridge::control::UnmountControl {
+        .execute_control(&Request::Unmount(layerfs_protocol::provision::install::UnmountControl {
             token: a_token,
             discard: true,
         }))
@@ -72,7 +72,7 @@ fn terminal_unmount_deletes_only_its_file_after_retained_requests_release() {
     assert_eq!(std::fs::read(&template).unwrap(), pristine);
     drop(
         f.service
-            .execute_control(&Request::Unmount(layerfs_bridge::control::UnmountControl {
+            .execute_control(&Request::Unmount(layerfs_protocol::provision::install::UnmountControl {
                 token: b_token,
                 discard: true,
             }))
@@ -81,7 +81,7 @@ fn terminal_unmount_deletes_only_its_file_after_retained_requests_release() {
     drop(b);
     drop(
         f.service
-            .execute_control(&Request::Unmount(layerfs_bridge::control::UnmountControl {
+            .execute_control(&Request::Unmount(layerfs_protocol::provision::install::UnmountControl {
                 token: c_token,
                 discard: true,
             }))
@@ -109,7 +109,7 @@ fn a_replaced_terminal_path_is_retained_and_never_deleted_on_a_guess() {
     let path = f.host.directory.join("1.sqlite");
     drop(
         f.service
-            .execute_control(&Request::Unmount(layerfs_bridge::control::UnmountControl {
+            .execute_control(&Request::Unmount(layerfs_protocol::provision::install::UnmountControl {
                 token: selected,
                 discard: true,
             }))
@@ -138,7 +138,7 @@ fn a_replaced_terminal_path_is_retained_and_never_deleted_on_a_guess() {
     fixture::write(&f.service, other_token, 89);
     drop(
         f.service
-            .execute_control(&Request::Unmount(layerfs_bridge::control::UnmountControl {
+            .execute_control(&Request::Unmount(layerfs_protocol::provision::install::UnmountControl {
                 token: other_token,
                 discard: true,
             }))

@@ -46,11 +46,8 @@ mod mounted;
 #[path = "support/mounted_commit.rs"]
 mod rig;
 use history_gate::Point;
-use layerfs_bridge::control::{CommitControl, Reply, Request, UnmountControl, WorkspaceToken};
-use layerfs_daemon::{
-    control::Service,
-    store::{ReaderFactory, ReleasedOwner, Store, StoreReader},
-};
+use layerfs_protocol::provision::install::{CommitControl, Reply, Request, UnmountControl, WorkspaceToken};
+use {layerfs_daemon::control::Service, layerfs_store_service::store::{ReaderFactory, ReleasedOwner, Store, StoreReader}};
 use layerfs_history::CommitOutcome;
 use layerfs_persistence::SqliteHandles;
 use layerfs_storage::{port::PackPersistence, ReservationBlocks, Storage};

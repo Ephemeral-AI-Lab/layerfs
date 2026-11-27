@@ -34,10 +34,7 @@ use layerfs_store_service::bootstrap::open_store_observed;
 use layerfs_store_service::store::{BindRequest, StoreWork};
 use layerfs_store_service::{Owner, OwnerConfig, StoreService};
 use layerfs_telemetry::timer::Timing;
-use layerfs_workspace::{
-    CanonicalCache, CanonicalClient, KernelDirectoryRead, KernelDirectoryWindow,
-    KernelReadDecision, VisitFacts,
-};
+use layerfs_vfs::{CanonicalCache, CanonicalClient, KernelDirectoryRead, KernelDirectoryWindow, KernelReadDecision, VisitFacts};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;

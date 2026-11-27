@@ -3,7 +3,7 @@
 //! on a machine at a time, and [`PruneGate`], which `machine.prune` holds while
 //! it reads those locks and removes, so a copy cannot start writing meanwhile.
 use crate::image_artifact as cache;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::home::{self, flock, private_dir, read_record, write_record};
 use layerfs_home::outcome::{failed, refused};

@@ -10,7 +10,7 @@ mod installed;
 #[allow(dead_code)]
 mod support;
 
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use std::fs;
 use support::{items, Fixture};
 

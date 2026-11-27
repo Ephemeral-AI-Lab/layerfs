@@ -4,7 +4,7 @@ use crate::{
     history::{lookup as args, saved},
     store::{Store, StorePorts},
 };
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_content::object::inode_leaf::InodeKind;
 use std::sync::Arc;
 
@@ -71,7 +71,7 @@ const HIDDEN_WINDOW: usize = 256;
 fn lengths(
     reader: &StorePorts,
     roots: &mut Vec<layerfs_content::object::ObjectId>,
-) -> Result<u64, layerfs_bridge::control::SdkRefusal> {
+) -> Result<u64, layerfs_protocol::provision::install::SdkRefusal> {
     if roots.is_empty() {
         return Ok(0);
     }

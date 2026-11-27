@@ -1,10 +1,8 @@
 //! Direct kernel visits and ownership changes on the Workspace connection.
 use crate::{OwnerClient, OwnerError, ServiceClass};
 use layerfs_overlay::{KernelCookieOffer, KernelMount};
-use layerfs_workspace::Route;
-use layerfs_workspace::{
-    KernelDataVisit, KernelDirectoryVisit, KernelMutationVisit, KernelReadVisit,
-};
+use layerfs_vfs::Route;
+use layerfs_vfs::{KernelDataVisit, KernelDirectoryVisit, KernelMutationVisit, KernelReadVisit};
 use std::sync::Arc;
 impl OwnerClient {
     pub fn kernel_mount(
@@ -31,7 +29,7 @@ impl OwnerClient {
         &self,
         route: Route,
         job: Box<KernelReadVisit>,
-    ) -> Result<std::sync::Arc<layerfs_workspace::KernelReadOutcome>, OwnerError> {
+    ) -> Result<std::sync::Arc<layerfs_vfs::KernelReadOutcome>, OwnerError> {
         self.call(route, ServiceClass::General, None, move |db| {
             Ok(Arc::new(job.perform(db)))
         })
@@ -40,7 +38,7 @@ impl OwnerClient {
         &self,
         route: Route,
         job: Box<KernelDataVisit>,
-    ) -> Result<std::sync::Arc<layerfs_workspace::KernelWindow>, OwnerError> {
+    ) -> Result<std::sync::Arc<layerfs_vfs::KernelWindow>, OwnerError> {
         self.call(route, ServiceClass::General, None, move |db| {
             job.perform(db).map(Arc::new)
         })
@@ -49,7 +47,7 @@ impl OwnerClient {
         &self,
         route: Route,
         job: Box<KernelMutationVisit>,
-    ) -> Result<std::sync::Arc<layerfs_workspace::KernelMutationOutcome>, OwnerError> {
+    ) -> Result<std::sync::Arc<layerfs_vfs::KernelMutationOutcome>, OwnerError> {
         self.call(route, ServiceClass::Mutation, None, move |db| {
             Ok(Arc::new(job.perform(db)))
         })
@@ -91,7 +89,7 @@ impl OwnerClient {
         &self,
         route: Route,
         visit: KernelDirectoryVisit,
-    ) -> Result<std::sync::Arc<layerfs_workspace::KernelDirectoryWindow>, OwnerError> {
+    ) -> Result<std::sync::Arc<layerfs_vfs::KernelDirectoryWindow>, OwnerError> {
         self.call(route, ServiceClass::General, None, move |db| {
             visit.perform(db).map(Arc::new)
         })

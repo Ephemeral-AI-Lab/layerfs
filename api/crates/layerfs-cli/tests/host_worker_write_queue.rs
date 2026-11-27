@@ -16,7 +16,7 @@ mod fixture;
 mod writes;
 
 use layerfs_api::worker::{read_host_frame, HOST_HELD_WRITES, HOST_MAX_REPLY, MAX_HELLO};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use std::io::Write;
 use std::os::unix::net::UnixStream;
 use std::process::Stdio;
@@ -287,7 +287,7 @@ fn twenty_writes_at_once_all_commit_or_are_refused_before_sending() {
         }
         // only the pre-send refusal of a full worker: nothing was sent
         let text = String::from_utf8_lossy(&output.stderr);
-        let answer = layerfs_api::json::parse(text.trim()).unwrap();
+        let answer = layerfs_home::json::parse(text.trim()).unwrap();
         assert_eq!(answer.get_text("error"), Some("Unavailable"), "{answer:?}");
         assert!(
             !text.contains("request ") && !text.contains("Unknown"),

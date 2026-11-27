@@ -31,7 +31,7 @@ mod rig;
 #[allow(dead_code)]
 #[path = "support/host_install.rs"]
 mod support;
-use layerfs_bridge::control::{Activity, ReadyMount, Reply, Request, WorkspaceToken};
+use layerfs_protocol::provision::install::{Activity, ReadyMount, Reply, Request, WorkspaceToken};
 use layerfs_content::ObjectId;
 use layerfs_daemon::control::Service;
 use layerfs_history::CommitRecord;

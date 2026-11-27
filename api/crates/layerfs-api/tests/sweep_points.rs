@@ -9,7 +9,7 @@
 //! refused after their sweep (the bucket record names a port nothing
 //! listens on).
 use layerfs_api::home::{self, paths, read_record, write_record};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
@@ -49,7 +49,7 @@ fn swept(home: &Path) -> Vec<(String, String)> {
     let text =
         std::fs::read_to_string(paths::log_dir(home).join("sweep.jsonl")).unwrap_or_default();
     (text.lines())
-        .map(|line| layerfs_api::json::parse(line).unwrap())
+        .map(|line| layerfs_home::json::parse(line).unwrap())
         .filter(|line| line.get_text("outcome") == Some("removed"))
         .map(|line| {
             let field = |name| line.get_text(name).unwrap().to_owned();
@@ -195,7 +195,7 @@ fn the_next_backup_create_or_restore_removes_stale_staging() {
 
     // a restore that replaces the Store: linked at its current heads, so
     // only the bucket stands in the way
-    let heads = layerfs_bucket::backup::heads(&paths::store_file(&home, "shop")).unwrap();
+    let heads = layerfs_store::backup::copy::heads(&paths::store_file(&home, "shop")).unwrap();
     let path = paths::store_record(&home, "shop");
     let record = read_record(&path).unwrap().unwrap();
     let linked = SdkValue::map([(

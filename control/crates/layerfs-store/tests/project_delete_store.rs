@@ -4,7 +4,7 @@
 //! with `MountsActive` (its holders) and a live operation with `Busy`; a
 //! refusal leaves a pending sidecar, no marker and no leaked admission
 //! intent.
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_history::records::{GcIntent, GcIntentKind, GcScopeKind};
 use layerfs_history::{HistoryName, LayerStackId, NamedSnapshot};
 use layerfs_home::events::Events;
@@ -50,7 +50,7 @@ fn plaindir(tag: &str) -> PathBuf {
 /// True when the sandbox filesystem cannot hold a directly opened Store, so
 /// these real-Store cases cannot run here. The fake-home cases in
 /// `project_delete` cover the same home path without a Store.
-fn no_direct_store(refusal: &layerfs_bridge::control::SdkRefusal) -> bool {
+fn no_direct_store(refusal: &layerfs_protocol::provision::install::SdkRefusal) -> bool {
     refusal.code == "Unsupported" && refusal.message.contains("does not carry SQLite locks")
 }
 
@@ -95,13 +95,13 @@ fn shop(tag: &str) -> Option<(PathBuf, OpenArgs, LayerStackId)> {
     Some((home, open, stack))
 }
 
-fn unused(_: &std::path::Path, _: &str) -> Result<(), layerfs_bridge::control::SdkRefusal> {
+fn unused(_: &std::path::Path, _: &str) -> Result<(), layerfs_protocol::provision::install::SdkRefusal> {
     Ok(())
 }
 
 /// `project.delete shop/app` through the control-layer home path; the
 /// Sandbox check is a no-op here (that check has its own inventory test).
-fn remove(home: &std::path::Path) -> Result<SdkValue, layerfs_bridge::control::SdkRefusal> {
+fn remove(home: &std::path::Path) -> Result<SdkValue, layerfs_protocol::provision::install::SdkRefusal> {
     let mut sink = |_| {};
     delete(
         home,

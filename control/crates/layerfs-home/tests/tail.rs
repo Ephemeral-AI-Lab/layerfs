@@ -4,7 +4,7 @@
 //! window in pieces, an unfinished last line, escaped control characters,
 //! and a cursor into a rotated or replaced file.
 #![cfg(unix)]
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::tail::{self, Pair, CHUNK, DEFAULT_LINES, MAX_LINES};
 use std::fs::{self, OpenOptions};
 use std::io::Write;

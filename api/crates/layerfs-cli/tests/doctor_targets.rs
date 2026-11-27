@@ -86,7 +86,7 @@ fn each_doctor_answers_or_refuses_without_making_a_home() {
     // the home: a report, exit 0
     let out = layerfs(&root, &["home", "doctor"]);
     assert_eq!(out.status.code(), Some(0), "{out:?}");
-    let report = layerfs_api::json::parse(String::from_utf8_lossy(&out.stdout).trim()).unwrap();
+    let report = layerfs_home::json::parse(String::from_utf8_lossy(&out.stdout).trim()).unwrap();
     assert!(report.get("ok").is_some() || report.get("findings").is_some());
     // a thing that is not there: a refusal naming it
     for args in [

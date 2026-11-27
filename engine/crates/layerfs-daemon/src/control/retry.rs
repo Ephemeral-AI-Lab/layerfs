@@ -9,8 +9,8 @@ use super::{
     serving::{Evidence, Kept, Leaving},
     Failure, Service, Success,
 };
-use crate::store::BoundWorkspace;
-use layerfs_bridge::control::{Activity, ForcedFacts, MountPhase, WorkspaceToken};
+use layerfs_store_service::store::BoundWorkspace;
+use layerfs_protocol::provision::install::{Activity, ForcedFacts, MountPhase, WorkspaceToken};
 use layerfs_fuse::session::{Drained, SessionObserver, Undrained};
 use layerfs_overlay::KernelMount;
 use std::sync::Arc;
@@ -111,7 +111,7 @@ impl Service {
             drained,
             mut facts,
         } = retried;
-        facts.detach = layerfs_bridge::control::DetachDisposition::Detached;
+        facts.detach = layerfs_protocol::provision::install::DetachDisposition::Detached;
         let drained = self.revoke(token, &workspace, mount, &observer, drained, &facts)?;
         self.close(token, &workspace, Some(drained))
     }

@@ -3,8 +3,8 @@
 //! retry: nothing is resent. A record whose publication outcome the attempt
 //! could not determine stays for the next request, which only reads again.
 use super::{registry::bound_mut, Failure, Service};
-use crate::store::Resolution;
-use layerfs_bridge::control::{Activity, ControlCode, ControlRefusal, WorkspaceToken};
+use layerfs_store_service::store::Resolution;
+use layerfs_protocol::provision::install::{Activity, ControlCode, ControlRefusal, WorkspaceToken};
 
 impl Service {
     /// When `token`'s Workspace is `Uncertain` or `LocalFailure` with a

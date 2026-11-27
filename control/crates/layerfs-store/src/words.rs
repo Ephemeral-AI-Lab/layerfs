@@ -9,8 +9,6 @@ use layerfs_project::store::InitError;
 use layerfs_project::ProjectError;
 use layerfs_storage::port::acquisition::AcquisitionError;
 
-/// A Store database operation that failed, in words.
-pub use layerfs_bucket::words::persistence;
 
 /// A Store creation or project add that failed.
 pub fn init_error(error: &InitError) -> String {
@@ -76,6 +74,29 @@ pub fn acquisition(error: &AcquisitionError) -> String {
         AcquisitionError::Bounds => "an import window was too large or malformed".to_owned(),
         AcquisitionError::Changed { .. } => {
             "a file changed while it was imported; nothing was changed".to_owned()
+        }
+    }
+}
+
+// Store database failures in plain words, for a refusal's message: the
+// engine's own `Display` of a `PersistenceError` prints Rust `Debug` text.
+// It lives here, below the Store crate, so a backup's own failures use it
+// too; the Store crate's `words` module re-exports it.
+use layerfs_storage::port::PersistenceError;
+
+/// A Store database operation that failed: each outcome in words, a
+/// refusal with the backend's own status text.
+pub fn persistence(error: &PersistenceError) -> String {
+    match error {
+        PersistenceError::Busy => "the Store is held by another writer; nothing was changed".into(),
+        PersistenceError::BackendUnavailable => {
+            "the Store's database is not available to this build".into()
+        }
+        PersistenceError::Missing => "the Store holds no record of what was asked".into(),
+        PersistenceError::Refused { status } => format!("the Store refused it: {status}"),
+        PersistenceError::Malformed => "the Store answered something malformed".into(),
+        PersistenceError::Uncertain => {
+            "the Store's answer was lost; whether it changed is not known".into()
         }
     }
 }

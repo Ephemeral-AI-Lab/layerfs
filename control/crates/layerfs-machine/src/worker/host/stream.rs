@@ -21,7 +21,7 @@
 use super::super::frame::ATTACHED;
 use super::super::host_frame::{self, HOST_MAX_REPLY, HOST_MAX_REQUEST};
 use super::{decode_answer, unavailable, unknown, HostPaths};
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::{
     home::host_socket,
     json,
@@ -34,7 +34,7 @@ use std::time::{Duration, Instant};
 
 /// Largest data frame of streamed content: four engine records
 /// (`MAX_PLAINTEXT_BYTES`), so full pieces are written as whole records.
-pub const STREAM_PIECE: usize = 4 * layerfs_bridge::duplex::MAX_PLAINTEXT_BYTES;
+pub const STREAM_PIECE: usize = 4 * layerfs_protocol::duplex::MAX_PLAINTEXT_BYTES;
 /// The worker's minimum-progress rule (§11, review M3): while it waits
 /// for its caller, a streamed input must deliver [`STREAM_PROGRESS`] bytes
 /// within this much waiting, or end. Only the time the worker spends

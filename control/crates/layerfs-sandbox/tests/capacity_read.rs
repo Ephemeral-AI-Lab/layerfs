@@ -6,11 +6,8 @@
 //!
 //! Nothing runs: a stand-in daemon answers the query on the connections it
 //! accepts, and counts what it saw.
-use layerfs_bridge::control::{
-    AdmissionModel, Answer, Call, CapacityModel, DaemonPhase, DaemonStatus, Reply, Request,
-    RetainedModel, SdkValue, OPERATION,
-};
-use layerfs_bridge::duplex;
+use layerfs_protocol::provision::install::{AdmissionModel, Answer, Call, CapacityModel, DaemonPhase, DaemonStatus, Reply, Request, RetainedModel, SdkValue, OPERATION};
+use layerfs_protocol::duplex;
 use layerfs_home::home::paths;
 use layerfs_home::secrets;
 use layerfs_sandbox::daemon::capacity;
@@ -370,7 +367,7 @@ fn a_process_ends_the_sessions_of_the_sandboxes_it_reached() {
         name: "layerfs-00000000-s1".to_owned(),
         directory: directory.clone(),
         runtime: None,
-        identity: layerfs_sandbox_backend::CommandIdentity {
+        identity: layerfs_sandbox::CommandIdentity {
             uid: 1000,
             gid: 1000,
         },

@@ -1,15 +1,8 @@
 //! Runtime startup: one launch, one authenticated connection and the Store's installation, the same for every backend.
 use super::{connection::Startup, SandboxApi, SandboxCause, SandboxPhase};
 use crate::internal::Control;
-use layerfs_bridge::{
-    control::{ControlError, DaemonStatus},
-    daemon_setup::DaemonSetup,
-    duplex::{public_key, ChannelWork},
-    provision::StoreManifest,
-};
-use layerfs_sandbox_backend::{
-    Bind, CommandIdentity, LaunchRequest, ProviderLaunchOptions, Runtime, Sandbox,
-};
+use layerfs_protocol::{provision::{install::{ControlError, DaemonStatus}, daemon_setup::DaemonSetup, manifest::StoreManifest}, duplex::{public_key, ChannelWork}};
+use crate::{Bind, CommandIdentity, LaunchRequest, ProviderLaunchOptions, Runtime, Sandbox};
 use std::{fmt, sync::Arc};
 
 /// Runtime launch and private daemon authentication inputs.
@@ -97,7 +90,7 @@ impl SandboxApi {
     ) -> Result<ProviderSandbox, Box<ProviderFailure>> {
         if !matches!(
             request.setup.store,
-            layerfs_bridge::DaemonStore::Postgres { .. }
+            layerfs_protocol::DaemonStore::Postgres { .. }
         ) {
             return Err(Box::new(ProviderFailure {
                 request,
@@ -121,7 +114,7 @@ impl SandboxApi {
                 self.runtime
                     .local_directory(&request.launch.name)
                     .map_err(|cause| {
-                        SandboxCause::Runtime(layerfs_sandbox_backend::WireFailure::local(cause))
+                        SandboxCause::Runtime(crate::WireFailure::local(cause))
                     })?
             {
                 if std::path::Path::new(&request.setup.overlay)
@@ -129,7 +122,7 @@ impl SandboxApi {
                     || std::path::Path::new(&request.setup.mounts) != directory.join("workspaces")
                     || matches!(
                         &request.setup.store,
-                        layerfs_bridge::DaemonStore::Sqlite { locator, .. }
+                        layerfs_protocol::DaemonStore::Sqlite { locator, .. }
                             if std::path::Path::new(locator).starts_with(&directory)
                     )
                     || request.setup.listen != "127.0.0.1:0"
@@ -169,10 +162,10 @@ impl SandboxApi {
                 Ok(owner) => Box::new(owner),
                 Err(mut failure) => {
                     progress.phase = match failure.phase {
-                        layerfs_sandbox_backend::LaunchPhase::Validate => SandboxPhase::Validate,
-                        layerfs_sandbox_backend::LaunchPhase::Create => SandboxPhase::Create,
-                        layerfs_sandbox_backend::LaunchPhase::Start => SandboxPhase::Start,
-                        layerfs_sandbox_backend::LaunchPhase::Listener => SandboxPhase::Listener,
+                        crate::LaunchPhase::Validate => SandboxPhase::Validate,
+                        crate::LaunchPhase::Create => SandboxPhase::Create,
+                        crate::LaunchPhase::Start => SandboxPhase::Start,
+                        crate::LaunchPhase::Listener => SandboxPhase::Listener,
                     };
                     launched = failure.instance.take();
                     return Err(SandboxCause::Provider(failure));
@@ -232,7 +225,7 @@ impl SandboxApi {
                 self.runtime
                     .local_directory(&request.launch.name)
                     .map_err(|cause| {
-                        SandboxCause::Runtime(layerfs_sandbox_backend::WireFailure::local(cause))
+                        SandboxCause::Runtime(crate::WireFailure::local(cause))
                     })?
             {
                 if std::path::Path::new(&request.setup.overlay)
@@ -240,7 +233,7 @@ impl SandboxApi {
                     || std::path::Path::new(&request.setup.mounts) != directory.join("workspaces")
                     || matches!(
                         &request.setup.store,
-                        layerfs_bridge::DaemonStore::Sqlite { locator, .. }
+                        layerfs_protocol::DaemonStore::Sqlite { locator, .. }
                             if std::path::Path::new(locator).starts_with(&directory)
                     )
                     || request.setup.listen != "127.0.0.1:0"
@@ -275,7 +268,7 @@ impl SandboxApi {
                     "provider topology/identity",
                 )));
             }
-            if let layerfs_bridge::DaemonStore::Sqlite {
+            if let layerfs_protocol::DaemonStore::Sqlite {
                 install: Some(selected),
                 ..
             } = &request.setup.store
@@ -293,10 +286,10 @@ impl SandboxApi {
                 Ok(owner) => Box::new(owner),
                 Err(mut failure) => {
                     progress.phase = match failure.phase {
-                        layerfs_sandbox_backend::LaunchPhase::Validate => SandboxPhase::Validate,
-                        layerfs_sandbox_backend::LaunchPhase::Create => SandboxPhase::Create,
-                        layerfs_sandbox_backend::LaunchPhase::Start => SandboxPhase::Start,
-                        layerfs_sandbox_backend::LaunchPhase::Listener => SandboxPhase::Listener,
+                        crate::LaunchPhase::Validate => SandboxPhase::Validate,
+                        crate::LaunchPhase::Create => SandboxPhase::Create,
+                        crate::LaunchPhase::Start => SandboxPhase::Start,
+                        crate::LaunchPhase::Listener => SandboxPhase::Listener,
                     };
                     launched = failure.instance.take();
                     return Err(SandboxCause::Provider(failure));
@@ -363,16 +356,16 @@ impl SandboxApi {
 /// daemon dials the server. Other backends take none.
 fn binds(
     launch: &LaunchRequest,
-    store: &layerfs_bridge::DaemonStore,
+    store: &layerfs_protocol::DaemonStore,
 ) -> Result<Vec<Bind>, SandboxCause> {
     match (&launch.options, store) {
         (
             ProviderLaunchOptions::Namespaces { .. },
-            layerfs_bridge::DaemonStore::Sqlite { locator, .. },
+            layerfs_protocol::DaemonStore::Sqlite { locator, .. },
         ) => Bind::store(std::path::Path::new(locator))
             .map(|bind| vec![bind])
             .map_err(|cause| {
-                SandboxCause::Runtime(layerfs_sandbox_backend::WireFailure::local(cause))
+                SandboxCause::Runtime(crate::WireFailure::local(cause))
             }),
         _ => Ok(Vec::new()),
     }

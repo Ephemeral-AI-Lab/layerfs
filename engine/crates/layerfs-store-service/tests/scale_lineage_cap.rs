@@ -13,7 +13,7 @@ mod installed;
 #[allow(dead_code)]
 mod support;
 
-use layerfs_bridge::control::{SdkCall, SdkValue};
+use layerfs_protocol::provision::install::{SdkCall, SdkValue};
 use layerfs_content::ObjectId;
 use layerfs_history::records::{
     AddLayerOutcome, AddLayerRequest, CommitMeta, CommitOutcome, CommitRequest, CommitVia,

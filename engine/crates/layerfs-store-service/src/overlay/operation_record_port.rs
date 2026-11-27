@@ -3,10 +3,7 @@ use crate::{OriginalInput, OwnerClient, OwnerError, ServiceClass};
 use layerfs_overlay::{
     IndexedOperationRecordChange, IndexedOperationRecordKey, IndexedOperationRecordScope, Overlay,
 };
-use layerfs_workspace::{
-    OperationRecordApply, OperationRecordReply, OperationRecordWindow, OverlayOperationRecords,
-    WorkspaceError, WorkspaceResult,
-};
+use layerfs_vfs::{OperationRecordApply, OperationRecordReply, OperationRecordWindow, OverlayOperationRecords, WorkspaceError, WorkspaceResult};
 
 impl OwnerClient {
     fn record<T, I: Send + 'static>(

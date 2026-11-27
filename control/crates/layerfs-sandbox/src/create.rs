@@ -8,7 +8,7 @@ use super::direct;
 use super::record::{self, SandboxRecord};
 use crate::host::{Call, Message, Started};
 use crate::route::{on_machine, Asked};
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::home::{self, paths};
 use layerfs_home::op::Op;

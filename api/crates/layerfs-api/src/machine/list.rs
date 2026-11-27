@@ -5,7 +5,7 @@ use crate::calls::table::{call, Call};
 use crate::calls::Context;
 use crate::calls::{Form, Part, Section};
 #[cfg(feature = "machine")]
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 #[cfg(feature = "machine")]
 use layerfs_home::outcome::Outcome;
 
@@ -66,7 +66,7 @@ pub(crate) const CALL: Call = call(
 /// Runs `machine.list`: the probes run only with `--with live`.
 #[cfg(feature = "machine")]
 fn run(context: &mut Context<'_>, _args: &SdkValue) -> Outcome {
-    layerfs_control::machine::list(&context.home, context.with("live"))
+    layerfs_machine::with_users::list(&context.home, context.with("live"))
 }
 
 // without the `machine` feature (the guest worker's build) it is

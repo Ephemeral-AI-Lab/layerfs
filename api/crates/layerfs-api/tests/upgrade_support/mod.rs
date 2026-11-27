@@ -3,8 +3,8 @@
 //! the call surface, and the comparison of a Store with its fixture's
 //! manifest (every Branch head, every Commit id, every file at every head).
 #![allow(dead_code)]
-use layerfs_api::json;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_home::json;
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
@@ -125,7 +125,7 @@ fn binding_of(file: &Path) -> Vec<u8> {
 }
 
 fn hex(bytes: &[u8]) -> String {
-    layerfs_bridge::sdk_values::hex(bytes)
+    layerfs_protocol::sdk::hex(bytes)
 }
 
 /// `record.json` of Store `store` with its binding replaced by `binding`.
@@ -168,7 +168,7 @@ pub fn sqlite_fixture_home(tag: &str) -> Option<PathBuf> {
     let home = tempdir(tag).join("home");
     ok(&home, "home.init", &[]);
     ok(&home, "store.create", &[("name", t("fx"))]);
-    layerfs_api::close_idle(std::time::Duration::ZERO);
+    layerfs_store::admin::with_users::close_idle(std::time::Duration::ZERO);
     rebind(&home, "fx", &binding_of(&fixture));
     let file = home.join("store/fx/store.sqlite");
     std::fs::copy(&fixture, &file).unwrap();
@@ -268,7 +268,7 @@ pub fn postgresql_fixture_home(server: &Postgres, tag: &str, db: &str) -> PathBu
             ("password", t("unused")),
         ],
     );
-    layerfs_api::close_idle(std::time::Duration::ZERO);
+    layerfs_store::admin::with_users::close_idle(std::time::Duration::ZERO);
     server
         .client(db)
         .batch_execute("DROP SCHEMA layerfs CASCADE")

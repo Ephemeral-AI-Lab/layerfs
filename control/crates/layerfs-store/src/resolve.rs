@@ -2,7 +2,7 @@
 //! checks every Store call makes on them first.
 use crate::project::record::ProjectRecord;
 use crate::record::{StoreRecord, StoreRef};
-use layerfs_bridge::control::SdkRefusal;
+use layerfs_protocol::provision::install::SdkRefusal;
 use layerfs_home::outcome::refused;
 use std::path::Path;
 

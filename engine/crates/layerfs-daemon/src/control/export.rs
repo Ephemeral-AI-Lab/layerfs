@@ -35,12 +35,8 @@ use super::{
     registry::{bound_mut, idle},
     Failure, Service, Success,
 };
-use crate::store::BoundWorkspace;
-use layerfs_bridge::control::{
-    AbortDisposition, Activity, ControlCode, DetachDisposition, ForceUnmounted, ForcedCleanup,
-    ForcedFacts, ForcedOutcome, MountPhase, MountReceipt, MountStatus, MountWork, ReadyMount,
-    Reply, TeardownStage, WorkspaceToken, MOUNT_DIRECTORY_LIMIT,
-};
+use layerfs_store_service::store::BoundWorkspace;
+use layerfs_protocol::provision::install::{AbortDisposition, Activity, ControlCode, DetachDisposition, ForceUnmounted, ForcedCleanup, ForcedFacts, ForcedOutcome, MountPhase, MountReceipt, MountStatus, MountWork, ReadyMount, Reply, TeardownStage, WorkspaceToken, MOUNT_DIRECTORY_LIMIT};
 use layerfs_nfs::{ExportConfig, Released, Server};
 use layerfs_overlay::{CleanupState, KernelMount};
 use std::{
@@ -432,7 +428,7 @@ impl Service {
         if let Err(error) = operation.workspace().prepare_serials(operation.ports()) {
             let failure = match operation.ports().failure() {
                 Ok(Some(cause)) => match cause.as_ref() {
-                    crate::store::PortError::History(error) => Failure::History(error.clone()),
+                    layerfs_store_service::store::PortError::History(error) => Failure::History(error.clone()),
                     _ => Failure::Workspace(error),
                 },
                 Ok(None) | Err(_) => Failure::Workspace(error),
@@ -447,7 +443,7 @@ impl Service {
                 format!("mount directory {text}: {error}"),
             )));
         }
-        let mount = match self.job(workspace.route(), |client: &crate::OwnerClient, route| {
+        let mount = match self.job(workspace.route(), |client: &layerfs_store_service::OwnerClient, route| {
             client.kernel_mount(route, root)
         }) {
             Ok(mount) => mount,
@@ -532,7 +528,7 @@ impl Service {
         released: Option<Released>,
         failure: Failure,
     ) -> Stop {
-        match self.job(workspace.route(), |client: &crate::OwnerClient, route| {
+        match self.job(workspace.route(), |client: &layerfs_store_service::OwnerClient, route| {
             client.kernel_revoke(route, mount)
         }) {
             Ok(()) => Stop::Unattached(failure),
@@ -619,8 +615,8 @@ impl Service {
         // the rest is revalidated on the client's own schedule.
         let _ = workspace.stale_after_install(shown, installed, |found| {
             stale.insert(match found {
-                crate::store::Stale::Inode(serial) => serial,
-                crate::store::Stale::Entry { parent, .. } => parent,
+                layerfs_store_service::store::Stale::Inode(serial) => serial,
+                layerfs_store_service::store::Stale::Entry { parent, .. } => parent,
             });
             if stale.len() >= REFRESHED {
                 return Err(std::io::Error::other("refresh bound"));
@@ -732,7 +728,7 @@ impl Service {
                 ))
             }
         };
-        if let Err(failure) = self.job(workspace.route(), |client: &crate::OwnerClient, route| {
+        if let Err(failure) = self.job(workspace.route(), |client: &layerfs_store_service::OwnerClient, route| {
             client.kernel_revoke(route, mount)
         }) {
             let custody = ExportKept {
@@ -961,7 +957,7 @@ pub(super) fn take(kernel: &mut Kernel, phase: MountPhase) -> Result<Exported, F
 /// writes are flushed, so it cannot stand in for the waited flush.
 #[cfg(target_os = "macos")]
 fn flush_default(directory: &std::path::Path) -> Result<(), String> {
-    layerfs_bridge::process::sync_volume_wait(directory)
+    layerfs_os::process::sync_volume_wait(directory)
         .map_err(|error| format!("sync_volume_np({}): {error}", directory.display()))
 }
 

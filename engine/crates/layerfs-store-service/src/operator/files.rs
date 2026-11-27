@@ -8,7 +8,7 @@ use crate::{
     store::{Store, StorePorts},
     write::files::path as checked,
 };
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_content::{
     compare::{EntryFacts, TreeTable},
     filesystem::FilesystemRootId,

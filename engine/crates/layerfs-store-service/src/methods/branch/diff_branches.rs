@@ -4,7 +4,7 @@ use crate::{
     read::{compare, snapshot},
     StoreService,
 };
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 
 /// `diff_branches({ from, to })`: path-level changes between two Branches or main.
 pub fn diff_branches(service: &StoreService, args: &SdkValue) -> Answer {
@@ -37,13 +37,13 @@ pub fn diff_branches(service: &StoreService, args: &SdkValue) -> Answer {
             &service.store,
             &stack,
             &reader,
-            &crate::history::lookup::node_text(from_node),
+            &layerfs_protocol::sdk::node_text(from_node),
         )?;
         let to = snapshot::resolve(
             &service.store,
             &stack,
             &reader,
-            &crate::history::lookup::node_text(to_node),
+            &layerfs_protocol::sdk::node_text(to_node),
         )?;
         return crate::read::branch_compare::diff(&service.store, &reader, &from, &to, args);
     }

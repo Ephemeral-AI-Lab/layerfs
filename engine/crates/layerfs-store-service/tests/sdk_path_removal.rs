@@ -9,7 +9,7 @@ mod installed;
 #[allow(dead_code)]
 mod support;
 
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use std::fs;
 use support::{paths, write, Fixture};
 
@@ -21,7 +21,7 @@ fn remove(fixture: &Fixture, path: &str) -> SdkValue {
     fixture.call("project.remove_file", vec![("path", text(path))])
 }
 
-fn read(fixture: &Fixture, path: &str) -> Result<SdkValue, layerfs_bridge::control::SdkRefusal> {
+fn read(fixture: &Fixture, path: &str) -> Result<SdkValue, layerfs_protocol::provision::install::SdkRefusal> {
     fixture.try_call(
         "fs.read",
         vec![("branch", text("work")), ("path", text(path))],

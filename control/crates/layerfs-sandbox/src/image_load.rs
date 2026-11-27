@@ -23,7 +23,7 @@ use crate::image_artifact::{self as cache, CHUNK};
 pub use crate::image_lock::ImageLock;
 use crate::image_tar::{Filtered, TarReport};
 use crate::images::{refused_with, stopped};
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::home;
 use layerfs_home::outcome::shell_word;
@@ -395,7 +395,7 @@ fn home_id(home: &Path) -> Result<String> {
 
 fn export_nonce() -> Result<String> {
     let bytes = layerfs_home::helpers::random()?;
-    Ok(layerfs_bridge::sdk_values::hex(&bytes[..8]))
+    Ok(layerfs_protocol::sdk::hex(&bytes[..8]))
 }
 
 fn container_name(home_id: &str, machine: &str, nonce: &str) -> String {
@@ -754,7 +754,7 @@ fn send(
             left -= n as u64;
         }
         let matched =
-            left == 0 && Some(layerfs_bridge::sdk_values::hex(&head.finalize())) == prefix;
+            left == 0 && Some(layerfs_protocol::sdk::hex(&head.finalize())) == prefix;
         if !matched {
             return Ok(None);
         }
@@ -803,7 +803,7 @@ fn send(
     phase(events, "send", Some((offset, Some(offset))));
     Ok(Some((
         offset,
-        layerfs_bridge::sdk_values::hex(&whole.finalize()),
+        layerfs_protocol::sdk::hex(&whole.finalize()),
         tar.into_report(),
     )))
 }

@@ -3,7 +3,7 @@
 use crate::calls::table::Kind::Name;
 use crate::calls::table::{call, opt, Call};
 use crate::calls::{Context, Form, Part};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::outcome::Outcome;
 
 /// One Store file: its bucket and name, and what is news about it.

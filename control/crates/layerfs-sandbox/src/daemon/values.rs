@@ -6,13 +6,8 @@
 //! refusals with stable codes.
 use super::workspace::{CommitReply, MountedWorkspace, Unmounted};
 use crate::{OperationCause, OperationFailure};
-use layerfs_bridge::control::{
-    AbortDisposition, DetachDisposition, ForcedOutcome, SdkRefusal, SdkValue, TeardownStage,
-    WorkspaceStatus,
-};
-use layerfs_bridge::sdk_values::{
-    commit_value, conflicts, conflicts_truncated, hex, lww, lww_truncated,
-};
+use layerfs_protocol::provision::install::{AbortDisposition, DetachDisposition, ForcedOutcome, SdkRefusal, SdkValue, TeardownStage, WorkspaceStatus};
+use layerfs_protocol::sdk::{commit_value, conflicts, conflicts_truncated, hex, lww, lww_truncated};
 use layerfs_history::{CommitId, CommitOutcome};
 
 fn head(id: Option<CommitId>) -> SdkValue {
@@ -122,7 +117,7 @@ pub fn mount_failure(failure: Box<crate::MountFailure>) -> SdkRefusal {
 /// The refusal of a runtime request's `failure` (a stop, delete or reopen
 /// of a Sandbox's daemon): uncertain when it was sent and nothing observed
 /// settles it.
-pub fn wire(failure: Box<layerfs_sandbox_backend::WireFailure>) -> SdkRefusal {
+pub fn wire(failure: Box<crate::WireFailure>) -> SdkRefusal {
     uncertain(&failure, failure.unsettled())
 }
 
@@ -140,7 +135,7 @@ pub fn uncertain(error: impl std::fmt::Display, attempted: bool) -> SdkRefusal {
 
 /// `refusal` marked uncertain: `attempted: true` in its detail and flat.
 fn with_attempted(mut refusal: SdkRefusal) -> SdkRefusal {
-    let sent = layerfs_sandbox_backend::OUTCOME_UNKNOWN;
+    let sent = crate::OUTCOME_UNKNOWN;
     if !refusal.message.contains(sent) {
         refusal.message = format!("{}; {sent}", refusal.message);
     }
@@ -156,8 +151,8 @@ pub const ATTEMPTED: &str = "attempted";
 /// Sandbox daemon of another LayerFS build): `Failed` for a read, which
 /// changed nothing; `Unknown` for any other request, whose effect is not
 /// known. Its fix is the doctor that names the daemon's build.
-fn unreadable(request: &layerfs_bridge::control::Request) -> SdkRefusal {
-    use layerfs_bridge::control::Request;
+fn unreadable(request: &layerfs_protocol::provision::install::Request) -> SdkRefusal {
+    use layerfs_protocol::provision::install::Request;
     let read = matches!(
         request,
         Request::Status(_) | Request::Hello(_) | Request::Sdk(_)

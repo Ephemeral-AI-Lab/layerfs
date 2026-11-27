@@ -7,7 +7,7 @@
 //! The 1.1 `runtime.*` and `backend.*` tables are gone (#536 step 2).
 use crate::host::{Call, Host, Message};
 use crate::registry;
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::outcome::{refused, Outcome};
 
 /// Runs one Sandbox operation once; a Commit `message` is checked for every
@@ -135,7 +135,7 @@ fn capacity(host: &Host) -> Outcome {
 }
 
 /// Refuses an invalid Commit `message` before any effect.
-pub fn checked(message: &Message) -> Result<(), layerfs_bridge::control::SdkRefusal> {
+pub fn checked(message: &Message) -> Result<(), layerfs_protocol::provision::install::SdkRefusal> {
     match message {
         Message::Absent | Message::Null => Ok(()),
         Message::NotText => Err(refused("InvalidInput", "message must be text")),

@@ -5,18 +5,11 @@ mod held_writer;
 mod support;
 use layerfs_content::filesystem::PathName;
 use layerfs_content::{AuthenticatedObjects, ContentError, ObjectId};
-use layerfs_daemon::{
-    bootstrap::open_store,
-    store::{
-        BindError, BindIntent, BindPhase, BindRequest, BoundWorkspace, PortError,
-        ReadAdmissionError, Store,
-    },
-    Owner, OwnerConfig,
-};
+use layerfs_store_service::{bootstrap::open_store, store::{BindError, BindIntent, BindPhase, BindRequest, BoundWorkspace, PortError, ReadAdmissionError, Store}, Owner, OwnerConfig};
 use layerfs_history::{BranchId, WorkspaceId};
 use layerfs_overlay::ProfileConfig;
 use layerfs_storage::StorageError;
-use layerfs_workspace::InodeSerials;
+use layerfs_vfs::InodeSerials;
 use std::{
     collections::BTreeSet,
     sync::{mpsc, Arc},

@@ -10,7 +10,7 @@ mod client;
 #[path = "support/rig.rs"]
 mod rig;
 use client::Client;
-use layerfs_bridge::control::{CommitControl, ControlCode, Reply, Request, UnmountControl};
+use layerfs_protocol::provision::install::{CommitControl, ControlCode, Reply, Request, UnmountControl};
 use layerfs_daemon::control::{ExportServing, ExportServingConfig, Failure, Helper, Mounter};
 use layerfs_history::WorkspaceId;
 use std::{

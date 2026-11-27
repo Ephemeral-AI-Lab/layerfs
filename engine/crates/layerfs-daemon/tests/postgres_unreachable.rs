@@ -4,10 +4,7 @@
 //! includes the URL password.
 #![cfg(any(target_os = "linux", target_os = "macos"))]
 
-use layerfs_bridge::{
-    daemon_setup::{DaemonLimits, DaemonSetup},
-    duplex, DaemonStore, KernelRoute, StoreAuthority,
-};
+use layerfs_protocol::{provision::daemon_setup::{DaemonLimits, DaemonSetup}, duplex, DaemonStore, KernelRoute, StoreAuthority};
 use std::{
     fs::{self, File},
     net::TcpListener,

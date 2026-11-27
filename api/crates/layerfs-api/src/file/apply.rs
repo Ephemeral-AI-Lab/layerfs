@@ -5,7 +5,7 @@ use crate::calls::scope::Rule;
 use crate::calls::table::Kind::{Json, Name, Project};
 use crate::calls::table::{a, call, Call, MESSAGE};
 use crate::calls::{Context, Policy};
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::outcome::{refused, Outcome};
 use layerfs_store::calls::file::{apply, FileApply};
 use layerfs_store::calls::Change;

@@ -1,10 +1,6 @@
 //! A committed Branch from a host tree, bound to one Workspace and one engine
 //! kernel mount, with no kernel connection: the NFS export is the only client.
-use layerfs_daemon::{
-    bootstrap::open_store,
-    store::{BindRequest, BoundWorkspace, Store},
-    Mounted, Owner, OwnerClient, OwnerConfig,
-};
+use {layerfs_store_service::{bootstrap::open_store, store::{BindRequest, BoundWorkspace, Store}, Owner, OwnerClient, OwnerConfig}, layerfs_daemon::Mounted};
 use layerfs_history::{
     BranchId, ForkRequest, ForkSource, HistoryCatalog, HistoryCatalogConfig, HistoryName,
     LayerStackId, WorkspaceId,
@@ -177,7 +173,7 @@ impl Rig {
     pub fn export_services(
         &self,
         listener: TcpListener,
-        services: Arc<dyn layerfs_mount_ports::ports::MountServices>,
+        services: Arc<dyn layerfs_vfs::ports::mount::MountServices>,
         uid: u32,
         gid: u32,
         read_only: bool,
@@ -213,9 +209,9 @@ impl Rig {
         ))
     }
     /// The product Commit of everything the Workspace published locally.
-    pub fn commit(&self) -> layerfs_daemon::store::CommitSuccess {
+    pub fn commit(&self) -> layerfs_store_service::store::CommitSuccess {
         self.bound
-            .commit_captured(&layerfs_daemon::store::CommitOptions::default())
+            .commit_captured(&layerfs_store_service::store::CommitOptions::default())
             .unwrap_or_else(|failure| panic!("Commit: {:?}", failure.error))
     }
     /// A second Workspace bound to Branch `main` as it is now, with its own

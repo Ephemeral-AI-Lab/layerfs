@@ -17,14 +17,9 @@ use fuser::{
     ReplyEntry, ReplyWrite,
 };
 use layerfs_content::filesystem::PathName;
-use layerfs_mount_ports::{
-    operations::{
-        write::time, Declined, KernelMutation, MutationInput, MutationRequest, Published,
-    },
-    ports::{Fence, RequestServices, ServiceError},
-};
+use layerfs_vfs::{requests::{write::time, Declined, KernelMutation, MutationInput, MutationRequest, Published}, ports::mount::{Fence, RequestServices, ServiceError}};
 use layerfs_overlay::KernelMount;
-use layerfs_workspace::{Refusal, Time};
+use layerfs_vfs::{Refusal, Time};
 use std::{ffi::OsStr, io, os::unix::ffi::OsStrExt, sync::Arc, time::SystemTime};
 
 pub(super) enum MutationReply {

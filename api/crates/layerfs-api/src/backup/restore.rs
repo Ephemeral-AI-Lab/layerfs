@@ -3,7 +3,7 @@
 use crate::calls::table::Kind::Name;
 use crate::calls::table::{a, call, Call, PROGRESS};
 use crate::calls::{Context, Form, Part};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::outcome::Outcome;
 use layerfs_store::backup::family::BackupRestore;
 
@@ -47,5 +47,5 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         file: text("file"),
     };
     let (home, events) = context.parts();
-    layerfs_control::backup::restore(home, events, &request)
+    layerfs_store::backup::jobs::restore::restore(home, events, &request)
 }

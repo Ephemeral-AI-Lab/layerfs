@@ -20,7 +20,7 @@ use super::parts::Parts;
 use super::tree::{header, Record};
 use crate::place::Worker;
 use crate::sqlite::transfer::steps::CHUNK;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_content::filesystem::symlink::SymlinkTarget;
 use layerfs_content::PathName;
 use layerfs_home::events::Events;
@@ -102,7 +102,7 @@ pub fn log_left(home: &Path, left: &Left<'_>, message: &str) {
 /// A fresh copy id: 16 hex digits.
 pub fn new_id() -> Result<String> {
     let bytes = layerfs_home::helpers::random()?;
-    Ok(layerfs_bridge::sdk_values::hex(&bytes[..8]))
+    Ok(layerfs_protocol::sdk::hex(&bytes[..8]))
 }
 
 /// Where copy `id` may stay on `machine` after an uncertain end.

@@ -1,12 +1,10 @@
 //! Private Workspace mutations used by one atomic public filesystem call.
 use crate::history::lookup as args;
 use crate::store::{BoundWorkspace, StoreOperation};
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_content::filesystem::PathName;
 use layerfs_content::object::inode_leaf::InodeKind;
-use layerfs_workspace::{
-    Operation, Outcome, OverlayJobs, SourceView, Time, ViewStat, WorkspaceError,
-};
+use layerfs_vfs::{Operation, Outcome, OverlayJobs, SourceView, Time, ViewStat, WorkspaceError};
 pub type Result<T> = std::result::Result<T, SdkRefusal>;
 pub struct Mutation<'a> {
     pub workspace: &'a BoundWorkspace,
@@ -54,7 +52,7 @@ pub(super) fn permitted(path: &str, kind: InodeKind, mode: u32) -> Result<u32> {
 /// The refusal an engine error is to a call, with a plain sentence for each
 /// definite refusal; only an unexpected engine error keeps its own text.
 pub fn failure(e: WorkspaceError) -> SdkRefusal {
-    use layerfs_workspace::Refusal as R;
+    use layerfs_vfs::Refusal as R;
     let (code, message) = match &e {
         WorkspaceError::Refused(r) => match r {
             R::Missing => ("NoSuchPath", "no such file or folder"),
@@ -279,7 +277,7 @@ impl<'a> Mutation<'a> {
     pub fn write_at(&mut self, serial: u64, offset: u64, bytes: &[u8]) -> Result<()> {
         self.apply(Operation::Write {
             serial,
-            position: layerfs_workspace::Position::At(offset),
+            position: layerfs_vfs::Position::At(offset),
             data: bytes.into(),
         })?;
         Ok(())
@@ -289,7 +287,7 @@ impl<'a> Mutation<'a> {
         let same = existing == Some(bytes.len() as u64);
         let mut changed = !same;
         let mut offset = 0;
-        for piece in bytes.chunks(layerfs_bridge::duplex::MAX_PLAINTEXT_BYTES) {
+        for piece in bytes.chunks(layerfs_protocol::duplex::MAX_PLAINTEXT_BYTES) {
             changed |= self.put(serial, same, offset, piece)?;
             offset += piece.len() as u64;
         }
@@ -312,7 +310,7 @@ impl<'a> Mutation<'a> {
         let (serial, existing) = self.target(path, mode)?;
         let (mut changed, mut offset) = (existing.is_none(), 0u64);
         while let Some(piece) = next.piece()? {
-            for part in piece.chunks(layerfs_bridge::duplex::MAX_PLAINTEXT_BYTES) {
+            for part in piece.chunks(layerfs_protocol::duplex::MAX_PLAINTEXT_BYTES) {
                 let end = offset + part.len() as u64;
                 let same = !changed && existing.is_some_and(|length| end <= length);
                 changed |= self.put(serial, same, offset, part)?;

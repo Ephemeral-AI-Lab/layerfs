@@ -1,5 +1,5 @@
 //! Kernel half of one registry entry and its bounded status block.
-use layerfs_bridge::control::{MountPhase, MountStatus};
+use layerfs_protocol::provision::install::{MountPhase, MountStatus};
 use std::{path::PathBuf, time::Duration};
 
 /// Declared kernel serving inputs, assembled once by the application.

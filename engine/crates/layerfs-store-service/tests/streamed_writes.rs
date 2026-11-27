@@ -8,7 +8,7 @@ mod installed;
 #[allow(dead_code)]
 mod support;
 
-use layerfs_bridge::control::{SdkCall, SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkCall, SdkRefusal, SdkValue};
 use layerfs_store_service::methods::{call_streamed, Source};
 use std::collections::VecDeque;
 use support::Fixture;

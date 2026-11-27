@@ -3,7 +3,7 @@ use crate::{
     control::{ServeFailure, Served},
     install_types::{InstallFailure, InstalledStore},
 };
-use layerfs_bridge::{control::ControlError, duplex::ChannelError};
+use layerfs_protocol::{provision::install::ControlError, duplex::ChannelError};
 use std::{fmt, io};
 
 /// Exact startup or original connection failure, never followed by a replay.
@@ -11,11 +11,11 @@ pub enum ApplicationError {
     /// Before-effect configuration/listener/kernel file error.
     Io(io::Error),
     /// Original initialized Overlay owner failure.
-    Owner(Box<crate::OwnerStart>),
+    Owner(Box<layerfs_store_service::OwnerStart>),
     /// Original later startup failure, retaining the successfully initialized Overlay owner.
     AfterOverlay {
         /// Actual Overlay service/creation receipt; no cleanup or zero work is inferred.
-        owner: Box<crate::Owner>,
+        owner: Box<layerfs_store_service::Owner>,
         /// Exact subsequent startup boundary.
         cause: Box<ApplicationError>,
     },
@@ -39,7 +39,7 @@ pub enum ApplicationError {
         /// Original call/outcome whose reply send completed before the terminal failure.
         served: Box<Served>,
         /// Original terminal byte/work/cause, not a replayed final reply.
-        ending: Box<layerfs_bridge::duplex::PeerEndFailure>,
+        ending: Box<layerfs_protocol::duplex::PeerEndFailure>,
     },
     /// Original control receipt retained after an unresolved operation or a
     /// separate failed diagnostic transfer. Its known outcome stays unchanged.
@@ -89,7 +89,7 @@ pub struct ConnectionFailure {
     /// Original malformed metadata bytes only; successful requests own decoded fields.
     pub received: Option<Vec<u8>>,
     /// Owned original decoded request when a before-effect application boundary fails.
-    pub original: Option<layerfs_bridge::initial_record::InitialRecord>,
+    pub original: Option<layerfs_protocol::initial_record::InitialRecord>,
     /// Exact original deciding boundary.
     pub cause: ApplicationError,
     /// Original failed socket fence, independent of the cause.
@@ -115,8 +115,8 @@ impl fmt::Debug for ConnectionFailure {
             .field(
                 "original_kind",
                 &self.original.as_ref().map(|request| match request {
-                    layerfs_bridge::initial_record::InitialRecord::Control(_) => "control",
-                    layerfs_bridge::initial_record::InitialRecord::Install(_) => "install",
+                    layerfs_protocol::initial_record::InitialRecord::Control(_) => "control",
+                    layerfs_protocol::initial_record::InitialRecord::Install(_) => "install",
                 }),
             )
             .field("cause", &self.cause)

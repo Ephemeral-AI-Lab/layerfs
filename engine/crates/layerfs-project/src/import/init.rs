@@ -326,10 +326,10 @@ fn owner_tokens(op: [u8; 16]) -> (String, String) {
         // An unreadable start is recorded as 0 and an unreadable boot as
         // `unknown`; admission reads either as missing evidence, never as
         // proof that the owner is gone (#776 G2).
-        let start = layerfs_bridge::process::stat(pid)
+        let start = layerfs_os::process::stat(pid)
             .map(|stat| stat.start)
             .unwrap_or(0);
-        let boot = layerfs_bridge::process::boot()
+        let boot = layerfs_os::process::boot()
             .map_or_else(|_| "unknown".to_owned(), |boot| format!("{boot:032x}"));
         let namespace = {
             #[cfg(target_os = "linux")]
@@ -386,7 +386,7 @@ pub(crate) fn init_unknown_state(name: &str, op: Option<[u8; 16]>) -> UnknownOut
         GcScopeKind::Project,
         name,
         Some("init".to_owned()),
-        op.as_ref().map(|op| layerfs_bridge::sdk_values::hex(op)),
+        op.as_ref().map(|op| layerfs_protocol::sdk::hex(op)),
     )
 }
 

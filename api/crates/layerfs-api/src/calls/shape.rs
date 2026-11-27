@@ -10,7 +10,7 @@
 //! release build. What a declared section would add is not such a key: when
 //! the section was not asked for it is left out without a word.
 use super::form::{Asked, Form, Part, Place, Section, ITEMS, OK, THING};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 
 type Fields = Vec<(String, SdkValue)>;
 

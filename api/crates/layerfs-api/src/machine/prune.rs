@@ -5,7 +5,7 @@ use crate::calls::table::{a, call, opt, Call};
 use crate::calls::Context;
 use crate::calls::{Form, Part};
 #[cfg(feature = "machine")]
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 #[cfg(feature = "machine")]
 use layerfs_home::names::MachineName;
 #[cfg(feature = "machine")]

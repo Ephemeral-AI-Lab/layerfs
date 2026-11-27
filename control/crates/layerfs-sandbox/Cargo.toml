@@ -22,3 +22,27 @@ libc = "=0.2.189"
 [features]
 # The machine calls (2.0, #533): host builds only.
 machine = ["layerfs-machine/machine"]
+
+[[test]]
+name = "kernel_application"
+path = "tests/standalone/kernel_application.rs"
+
+[[test]]
+name = "kernel_mount_routes"
+path = "tests/standalone/kernel_mount_routes.rs"
+
+[[test]]
+name = "mount_control"
+path = "tests/standalone/mount_control.rs"
+
+[[test]]
+name = "observed_application"
+path = "tests/standalone/observed_application.rs"
+
+[[test]]
+name = "kernel_commit"
+path = "tests/standalone/kernel_commit.rs"
+
+[[test]]
+name = "local_search_path"
+path = "tests/standalone/local_search_path.rs"

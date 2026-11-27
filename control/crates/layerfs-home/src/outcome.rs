@@ -4,7 +4,7 @@
 //! carries for the caller's next step (`fix`, flat fields) are declared
 //! here once (call surface 2.0).
 use crate::home::with_field;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 
 /// What one operation answers.
 pub type Outcome = Result<SdkValue, SdkRefusal>;

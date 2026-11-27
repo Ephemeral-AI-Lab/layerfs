@@ -28,7 +28,7 @@ fn home_doctor_reports_an_absent_home_and_makes_none() {
     let home = home_path("clean");
     let out = layerfs(&home, &["home", "doctor", "--detail"]);
     assert_eq!(out.status.code(), Some(0), "{out:?}");
-    let report = layerfs_api::json::parse(String::from_utf8(out.stdout).unwrap().trim()).unwrap();
+    let report = layerfs_home::json::parse(String::from_utf8(out.stdout).unwrap().trim()).unwrap();
     let tree = report.get("tree").unwrap();
     assert_eq!(tree.get_text("coverage"), Some("shallow"));
     assert!(!home.exists(), "the doctor made the home");
@@ -89,7 +89,7 @@ fn home_leftovers_and_home_prune_are_gone() {
             "home",
             "leftovers",
             "--machine",
-            layerfs_api::names::HOST_MACHINE,
+            layerfs_home::names::HOST_MACHINE,
         ],
         &["home", "prune", "native:image_tmp:x"],
         &["doctor", "fix", "native:image_tmp:x"],

@@ -33,7 +33,7 @@
 #[path = "support/round_trips.rs"]
 mod rt;
 
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_persistence::SqlWork;
 use layerfs_store_service::telemetry::{attribute_sql, mark_phases, phase_sql, Recording};
 use rt::{t, Opened, Server, Statements, Store};

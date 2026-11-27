@@ -8,7 +8,7 @@
 //! deadline, which ends the blocked call immediately. The doctor's bounded
 //! observation (`doctor/sandbox_channel.rs` outside this crate) uses the same
 //! pattern.
-use layerfs_bridge::duplex::CloseHandle;
+use layerfs_protocol::duplex::CloseHandle;
 use std::net::{Shutdown, TcpStream};
 use std::sync::mpsc;
 use std::time::Instant;

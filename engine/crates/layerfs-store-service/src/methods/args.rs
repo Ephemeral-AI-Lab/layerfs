@@ -9,7 +9,7 @@ use crate::read::snapshot::{Named, Saved, Snap};
 use crate::store::StorePorts;
 use crate::write::files::{self, Change};
 use crate::StoreService;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_content::AuthenticatedObjects;
 use layerfs_history::{ContextTarget, HistoryName, LayerStackRecord, NodeId};
 use std::sync::Arc;
@@ -92,8 +92,8 @@ fn context_target(args: &SdkValue) -> Option<(HistoryName, String, ContextTarget
     };
     let target = if name == crate::history::MAIN {
         ContextTarget::Main
-    } else if name.len() == FULL && crate::history::lookup::unhex(name).is_some() {
-        ContextTarget::Node(NodeId::from_slice(&crate::history::lookup::unhex(name)?).ok()?)
+    } else if name.len() == FULL && layerfs_protocol::sdk::unhex(name).is_some() {
+        ContextTarget::Node(NodeId::from_slice(&layerfs_protocol::sdk::unhex(name)?).ok()?)
     } else {
         ContextTarget::Branch(HistoryName::new(name).ok()?)
     };

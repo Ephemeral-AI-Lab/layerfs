@@ -16,7 +16,7 @@ use crate::project::{live, op};
 use crate::record::{StoreRecord, StoreRef};
 use crate::resolve;
 use crate::sqlite::family::progress;
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::events::Events;
 use layerfs_home::names::{ProjectRef, StoreName};
 use layerfs_home::op::FIELD;

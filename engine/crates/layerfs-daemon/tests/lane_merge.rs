@@ -14,15 +14,15 @@ mod installed;
 #[allow(dead_code)]
 mod support;
 
-use layerfs_bridge::control::{CommitControl, Reply, Request, SdkValue, UnmountControl};
+use layerfs_protocol::provision::install::{CommitControl, Reply, Request, SdkValue, UnmountControl};
 use layerfs_content::filesystem::PathName;
 use layerfs_daemon::control::Service;
-use layerfs_daemon::store::{ReaderFactory, Store, StoreReader};
+use layerfs_store_service::store::{ReaderFactory, Store, StoreReader};
 use layerfs_history::records::*;
 use layerfs_history::*;
 use layerfs_persistence::SqliteHandles;
 use layerfs_storage::{ReservationBlocks, Storage};
-use layerfs_workspace::{Operation, Outcome, Position, Time};
+use layerfs_vfs::{Operation, Outcome, Position, Time};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 use std::{fs, thread};
@@ -223,7 +223,7 @@ fn mounted_write(
     id: u8,
     name: &str,
     bytes: &[u8],
-) -> layerfs_bridge::control::WorkspaceToken {
+) -> layerfs_protocol::provision::install::WorkspaceToken {
     mounted_writes(fixture, id, &[(name.to_owned(), bytes.to_vec())])
 }
 
@@ -233,7 +233,7 @@ fn mounted_writes(
     fixture: &Fixture,
     id: u8,
     files: &[(String, Vec<u8>)],
-) -> layerfs_bridge::control::WorkspaceToken {
+) -> layerfs_protocol::provision::install::WorkspaceToken {
     let bound = fixture
         .service
         .execute_control(&Request::Mount {
@@ -345,7 +345,7 @@ struct Held {
 /// releases it.
 fn commit_held(
     fixture: &Fixture,
-    token: layerfs_bridge::control::WorkspaceToken,
+    token: layerfs_protocol::provision::install::WorkspaceToken,
     land: impl FnOnce(),
 ) -> Held {
     fixture.gate.arm();
@@ -386,7 +386,7 @@ fn commit_held(
 }
 
 /// An uncontended Commit of the same shape, for the lane hold beside it.
-fn commit_plain(fixture: &Fixture, token: layerfs_bridge::control::WorkspaceToken) -> Held {
+fn commit_plain(fixture: &Fixture, token: layerfs_protocol::provision::install::WorkspaceToken) -> Held {
     let start = Instant::now();
     let reply = fixture
         .service
@@ -494,7 +494,7 @@ fn a_conflict_landing_before_the_lane_follows_the_conflict_rules() {
 fn more_than_the_lane_bound_is_refused_and_counted() {
     let fixture = fixture("lane-merge-refused");
     let token = mounted_write(&fixture, 83, "a.txt", b"a\n");
-    let many = layerfs_daemon::store::LANE_MERGE_PATHS + 1;
+    let many = layerfs_store_service::store::LANE_MERGE_PATHS + 1;
     let held = commit_held(&fixture, token, || {
         let changes = (0..many)
             .map(|n| support::write(&format!("/many{n:05}"), "x\n"))

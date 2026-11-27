@@ -7,7 +7,7 @@ use crate::{
     },
     store::Store,
 };
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_history::NodeId;
 use std::sync::Arc;
 

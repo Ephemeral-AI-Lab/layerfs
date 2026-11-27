@@ -28,7 +28,7 @@ mod rig;
 #[allow(dead_code)]
 #[path = "support/host_install.rs"]
 mod support;
-use layerfs_bridge::control::Activity;
+use layerfs_protocol::provision::install::Activity;
 use model::{assert_same, Flat, Seen, DIRECTORY, FILE, SYMLINK};
 use mounted::{until, COMMAND};
 use mutating::{counter, direct, Mapping};
@@ -1031,7 +1031,7 @@ touch -d '2003-03-03 03:03:03.3 UTC' src/main.rs",
 /// ends at unmount.
 #[test]
 fn an_unmount_without_discard_succeeds_after_an_mtime_only_commit() {
-    use layerfs_bridge::control::{Reply, Request, UnmountControl};
+    use layerfs_protocol::provision::install::{Reply, Request, UnmountControl};
     let rig = Rig::new("e10-unmount");
     let ready = rig.mount(1);
     let mount = root(&ready);

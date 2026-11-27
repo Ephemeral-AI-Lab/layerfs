@@ -12,7 +12,7 @@ mod fixture;
 #[allow(dead_code)]
 #[path = "support/host_install.rs"]
 mod support;
-use layerfs_bridge::control::{Reply, Request};
+use layerfs_protocol::provision::install::{Reply, Request};
 use layerfs_history::{BranchId, ForkRequest, ForkSource, HistoryName, LayerStackId, WorkspaceId};
 
 fn named(f: &fixture::Fixture, tag: u8, project: &str, branch: &str) -> Reply {
@@ -123,7 +123,7 @@ fn a_named_mount_binds_its_branch_and_refuses_as_the_lookup_does() {
     drop(again);
     let closed = f
         .service
-        .execute_control(&Request::Unmount(layerfs_bridge::control::UnmountControl {
+        .execute_control(&Request::Unmount(layerfs_protocol::provision::install::UnmountControl {
             token,
             discard: true,
         }))

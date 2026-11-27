@@ -8,7 +8,7 @@
 //! after its device minor was checked against the test's own mount-table row,
 //! and only `<minor>/…` of that connection is ever stat-ed or read. The one
 //! write under this tree is the product's own abort control.
-use layerfs_bridge::control::ReadyMount;
+use layerfs_protocol::provision::install::ReadyMount;
 use std::{
     fs,
     path::PathBuf,

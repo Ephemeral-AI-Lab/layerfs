@@ -5,7 +5,7 @@ use crate::{
     DispatchError, MountRequests, MountWork,
 };
 use fuser::{SessionMonitor, SessionOutcome, SessionPhase, SessionSnapshot};
-use layerfs_mount_ports::ports::{FailedDemands, Fence};
+use layerfs_vfs::ports::mount::{FailedDemands, Fence};
 use layerfs_overlay::KernelMount;
 use nix::errno::Errno;
 use std::{

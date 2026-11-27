@@ -5,7 +5,7 @@ use crate::{
     read::{paged_reads, reads, visibility},
     StoreService,
 };
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_content::compare::memo::Memo;
 
 /// `stat(path, { branch, commit? })`: type, inode, size and mode of one path.

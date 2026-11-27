@@ -5,7 +5,7 @@
 use crate::calls::table::Kind::Name;
 use crate::calls::table::{a, call, Call};
 use crate::calls::{Context, Form, Part, Section};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::names::StoreName;
 use layerfs_home::outcome::Outcome;
 use layerfs_store::get::With;
@@ -149,6 +149,6 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         format: context.with("format"),
     };
     let (home, events) = context.parts();
-    let reads = layerfs_control::store::reads();
+    let reads = layerfs_store::admin::with_users::reads();
     layerfs_store::get::get(home, events, store.as_str(), with, reads)
 }

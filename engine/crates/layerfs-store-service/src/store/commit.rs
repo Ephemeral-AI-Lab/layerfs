@@ -13,7 +13,7 @@ use layerfs_history::{
 use layerfs_overlay::Capture;
 use layerfs_storage::Save;
 use layerfs_telemetry::timer::{Active, TimingScope};
-use layerfs_workspace::{CanonicalCache, CanonicalClient, ConstructedObjects, WorkspaceError};
+use layerfs_vfs::{CanonicalCache, CanonicalClient, ConstructedObjects, WorkspaceError};
 use std::sync::{atomic::Ordering, Arc};
 
 /// The private cache allowance of one validation over a built set: the
@@ -812,9 +812,9 @@ impl BoundWorkspace {
         target: &BranchSnapshot,
         candidate: FilesystemRootId,
         capture: Capture,
-        original_base: &layerfs_workspace::BaseView,
+        original_base: &layerfs_vfs::BaseView,
         built: Option<Arc<ConstructedObjects>>,
-    ) -> Result<layerfs_workspace::PreparedBase, CommitError> {
+    ) -> Result<layerfs_vfs::PreparedBase, CommitError> {
         let mut next = target.clone();
         next.effective_root = candidate.0;
         let ports = self.store.ports_for(target.scope, self.identity);

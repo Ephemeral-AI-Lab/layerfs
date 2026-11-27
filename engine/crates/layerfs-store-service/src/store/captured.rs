@@ -15,10 +15,7 @@ use layerfs_content::{
 use layerfs_overlay::{Capture, IndexedOperationRecordScope};
 use layerfs_storage::{Save, SaveSink};
 use layerfs_telemetry::timer::{Timing, TimingNode, TimingReport};
-use layerfs_workspace::{
-    CapturedNamespace, CapturedNamespaceAttempt, ConstructedObjects, IndexedEditRecords,
-    WorkspaceError,
-};
+use layerfs_vfs::{CapturedNamespace, CapturedNamespaceAttempt, ConstructedObjects, IndexedEditRecords, WorkspaceError};
 use std::{cell::RefCell, convert::Infallible, sync::Arc};
 
 pub(super) struct Candidate {
@@ -363,7 +360,7 @@ impl BoundWorkspace {
     }
     fn released(
         &self,
-        command: impl FnOnce(&crate::OwnerClient, layerfs_workspace::Route) -> Result<(), crate::OwnerError>
+        command: impl FnOnce(&crate::OwnerClient, layerfs_vfs::Route) -> Result<(), crate::OwnerError>
             + Send,
         held: &mut CapturedConstruction,
     ) -> bool {
@@ -383,7 +380,7 @@ impl BoundWorkspace {
 /// checks every identity, whichever answered.
 pub(super) struct Built {
     pub(super) objects: Arc<ConstructedObjects>,
-    pub(super) store: Arc<layerfs_workspace::CanonicalClient>,
+    pub(super) store: Arc<layerfs_vfs::CanonicalClient>,
 }
 impl AuthenticatedObjects for Built {
     fn read_canonical_batch(&self, ids: &[ObjectId]) -> ContentResult<Vec<Vec<u8>>> {

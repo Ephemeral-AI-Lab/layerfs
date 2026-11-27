@@ -10,7 +10,7 @@
 use super::{snapshot, walk};
 use crate::history::lookup;
 use crate::store::{PortError, Store};
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_content::compare::EntryFacts;
 use layerfs_content::merge::Rule;
 use layerfs_content::object::inode_leaf::InodeKind;

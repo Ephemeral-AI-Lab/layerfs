@@ -2,10 +2,7 @@
 #[allow(dead_code)]
 #[path = "support/rig.rs"]
 mod rig;
-use layerfs_bridge::control::{
-    CleanupObservation, DetachDisposition, ForcedCleanup, MountPhase, Reply, Request,
-    TeardownStage, UnmountControl,
-};
+use layerfs_protocol::provision::install::{CleanupObservation, DetachDisposition, ForcedCleanup, MountPhase, Reply, Request, TeardownStage, UnmountControl};
 use layerfs_daemon::control::{
     ExportServing, ExportServingConfig, Failure, Helper, Mounter, HELPER_WAIT,
 };

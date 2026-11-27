@@ -2,7 +2,7 @@
 //! specification does (conformance R2 G1): the same value word or default
 //! (`[--at C]`, `[--limit 100]`), `-m msg` for a Commit message, and a
 //! required option without brackets.
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 
 const SPEC: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -48,7 +48,7 @@ fn options(line: &str) -> Vec<(String, String, bool)> {
 #[test]
 fn usage_lines_show_the_rows_value_words() {
     let text = std::fs::read_to_string(SPEC).expect("the frozen spec");
-    let spec = layerfs_api::json::parse(&text).expect("calls.json");
+    let spec = layerfs_home::json::parse(&text).expect("calls.json");
     let mut checked = 0;
     for family in list(spec.get("families")) {
         for row in list(family.get("calls")) {

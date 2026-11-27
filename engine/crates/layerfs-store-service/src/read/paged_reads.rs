@@ -12,7 +12,7 @@ use crate::{
     history::{lookup as args, saved},
     store::{Store, StorePorts},
 };
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_content::{
     compare::{tree::join, Memo},
     filesystem::{

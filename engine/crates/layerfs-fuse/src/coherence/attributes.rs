@@ -1,6 +1,6 @@
 //! One attribute set per kernel inode, always taken from published state.
-use layerfs_mount_ports::operations::Published;
-use layerfs_workspace::ViewStat;
+use layerfs_vfs::requests::Published;
+use layerfs_vfs::ViewStat;
 use std::{error::Error, fmt};
 
 /// A successful mutation whose published value cannot describe the inode the

@@ -29,7 +29,7 @@ use adversary::{
     assert_linear, commit, seed_tree, verdict, write, Gate, Kind, Node, Op, Service, TestStore,
     Verdict, CURSOR,
 };
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_history::{CommitId, HistoryError};
 use layerfs_persistence::{CompactRequest, Handles, SqliteHandles, StoreSelection};
 
@@ -68,7 +68,7 @@ fn gc_service(store: &TestStore) -> Option<Service> {
     (store.kind == Kind::Postgres).then(|| store.open())
 }
 
-fn refusal_code(answer: &Result<SdkValue, layerfs_bridge::control::SdkRefusal>) -> String {
+fn refusal_code(answer: &Result<SdkValue, layerfs_protocol::provision::install::SdkRefusal>) -> String {
     match answer {
         Ok(_) => "Ok".into(),
         Err(refusal) => refusal.code.clone(),

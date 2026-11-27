@@ -17,11 +17,8 @@
 //! the connection is ready.
 use crate::daemon::fence::Fence;
 use crate::internal::Control;
-use layerfs_bridge::control::{DaemonPhase, HelloRequest, Reply, Request, SdkRefusal, SdkValue};
-use layerfs_bridge::duplex::{
-    admission::{AdmissionNotice, AdmissionReason},
-    initiate_observed, ChannelError,
-};
+use layerfs_protocol::provision::install::{DaemonPhase, HelloRequest, Reply, Request, SdkRefusal, SdkValue};
+use layerfs_protocol::duplex::{admission::{AdmissionNotice, AdmissionReason}, initiate_observed, ChannelError};
 use layerfs_home::outcome::{failed, refused};
 use std::net::SocketAddr;
 use std::ops::{Deref, DerefMut};

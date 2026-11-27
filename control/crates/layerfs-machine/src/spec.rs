@@ -4,13 +4,11 @@
 //! reads the home.
 pub use super::record::vm_name;
 use super::record::MachineRecord;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::home::{self, paths, write_record};
 use layerfs_home::outcome::refused;
 use layerfs_home::state::Reason;
-use layerfs_platform::{
-    self as adapters, Endpoint, HostOs, Lasting, MachineError, Platform, Running, Spec, Tools,
-};
+use crate::platform::{self as adapters, Endpoint, HostOs, Lasting, MachineError, Platform, Running, Spec, Tools};
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -266,5 +264,5 @@ pub fn refusal(error: MachineError) -> SdkRefusal {
 /// store it (`native` for `Backend::Process`, G6).
 pub fn backend_name(kind: Platform) -> &'static str {
     kind.backend(HostOs::current())
-        .map_or("-", layerfs_platform::Backend::stored_name)
+        .map_or("-", crate::platform::Backend::stored_name)
 }

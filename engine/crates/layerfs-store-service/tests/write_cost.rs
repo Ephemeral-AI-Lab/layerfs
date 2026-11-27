@@ -12,7 +12,7 @@
 #[allow(dead_code)]
 mod installed;
 
-use layerfs_bridge::control::{SdkCall, SdkValue};
+use layerfs_protocol::provision::install::{SdkCall, SdkValue};
 use layerfs_persistence::{PersistenceConfig, SqlitePersistenceProfile};
 use layerfs_store_service::{bootstrap::open_store_observed, Owner, OwnerConfig, StoreService};
 

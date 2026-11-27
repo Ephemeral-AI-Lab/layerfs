@@ -1,0 +1,313 @@
+//! Setup steps 2 to 4 inside any VM guest (H §7.1.1): the guest's
+//! folders and user-namespace block, the bundle and Sandbox image copied in
+//! once, the worker started as root behind a 0600 secret file, and the
+//! readiness wait. The adapters make the kernel and its data disk first.
+use super::guest::{Guest, EXEC};
+use super::tool;
+use crate::platform::error::{Code, MachineError};
+use crate::setup::facts;
+use crate::setup::spec::{Bundle, Endpoint, Spec, BUNDLE, DATA, IMAGE, STATE, WORKER_LOG, WORKER_PORT};
+use layerfs_home::log::rotate::ROTATE_AT;
+use std::net::{Ipv4Addr, SocketAddr, TcpStream};
+use std::path::Path;
+use std::thread;
+use std::time::{Duration, Instant};
+
+/// Hashing the bundle comes first in the worker, so its readiness takes a while.
+pub(crate) const READY: Duration = Duration::from_secs(60);
+
+/// The guest's folders on the data disk, IPv4 forwarding on (every
+/// Sandbox's commands reach the network through the guest's namespace,
+/// which LayerFS owns here, unlike a Linux host's) and, VM-wide, no user
+/// namespaces but LayerFS's own: `user.max_user_namespaces=0`, read back.
+/// `/proc/sys` is remounted read-write first where a guest mounts it
+/// read-only (Apple Container).
+const PREPARE: &str = r#"set -e
+umask 022
+mkdir -p "$1/store" "$1/sandbox" /layerfs/state
+chmod 755 "$1" "$1/store" "$1/sandbox"
+chmod 700 /layerfs/state
+mount -o remount,rw /proc/sys 2>/dev/null || true
+echo 1 > /proc/sys/net/ipv4/ip_forward
+echo 0 > /proc/sys/user/max_user_namespaces
+cat /proc/sys/user/max_user_namespaces"#;
+
+/// What a launcher's shell runs before it starts a worker whose output it
+/// appends to `$LAYERFS_WORKER_LOG` ([`WORKER_LOG`]): the log's folder
+/// (0700) and file (0600), and the one rotation. A start that finds the log past 16 MiB
+/// renames it to `worker.1.log`, replacing an older one; a smaller log is
+/// appended to, so the lines of the run before stay in it and its readers'
+/// positions hold across a restart. Nothing rotates it while the worker
+/// runs: a rename would not move the worker's descriptor. Each start then
+/// marks where its lines begin. Used by every machine kind's launcher,
+/// once no earlier worker runs.
+pub(crate) fn log_start() -> String {
+    format!(
+        r#"( umask 077
+  mkdir -p "${{LAYERFS_WORKER_LOG%/*}}"
+  if [ -f "$LAYERFS_WORKER_LOG" ] && [ "$(wc -c < "$LAYERFS_WORKER_LOG")" -gt {ROTATE_AT} ]; then
+    mv -f "$LAYERFS_WORKER_LOG" "${{LAYERFS_WORKER_LOG%.log}}.1.log"
+  fi
+  echo "layerfs worker: launched $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$LAYERFS_WORKER_LOG"
+  chmod 600 "$LAYERFS_WORKER_LOG" )"#
+    )
+}
+
+/// What a launcher's shell runs before it starts a worker, after
+/// [`log_start`] (layerfs-project#182 L4): where the worker would start at
+/// the root of a cgroup namespace of its own (the root has a `cgroup.type`
+/// file, which the real root never has: the docker machine's container,
+/// an Apple Container guest), every process of that root moves to a leaf
+/// `layerfs-worker`, and the root then gives its children the memory and
+/// pids controllers it lists and does not give yet, in one write. A cgroup
+/// that holds processes cannot give controllers; only the real root is
+/// exempt, and there (Lima, host Linux) nothing is moved or written.
+/// Idempotent: a second start finds the leaf and the controllers there. It
+/// never sets a limit; a failed write leaves one line in the worker's log
+/// and the worker starts as before, its Sandboxes' memory and process
+/// values null. `docker exec` and `container exec` join the leaf once the
+/// root gives controllers (runc falls back to the init process's group).
+pub(crate) const CGROUP_LEAF: &str = r#"c=/sys/fs/cgroup
+if [ -f $c/cgroup.type ] && [ -f $c/cgroup.controllers ] && mkdir -p $c/layerfs-worker 2>/dev/null; then
+  for p in $(cat $c/cgroup.procs); do echo "$p" > $c/layerfs-worker/cgroup.procs 2>/dev/null || true; done
+  w=""
+  for k in memory pids; do
+    case " $(cat $c/cgroup.controllers) " in *" $k "*)
+      case " $(cat $c/cgroup.subtree_control) " in *" $k "*) ;; *) w="$w +$k" ;; esac ;;
+    esac
+  done
+  if [ -n "$w" ] && ! echo $w > $c/cgroup.subtree_control 2>/dev/null; then
+    echo "layerfs worker: Sandboxes get no$w controller: writing it to $c/cgroup.subtree_control failed" >> "$LAYERFS_WORKER_LOG"
+  fi
+fi"#;
+
+/// Step 3: ends a worker an earlier start left (by its pid, if that pid's
+/// command line is still exactly the bundle's `layerfs worker`: a guest
+/// that restarted reuses pids, even this script's own), then starts it
+/// detached as root, its settings in its environment, its secret in a file
+/// and its output appended to its log ([`log_start`]). It serves until
+/// `machine.stop` ends it (#535 D11).
+fn launch_script() -> String {
+    format!(
+        r#"s=/layerfs/state
+if [ -f $s/worker.pid ]; then
+  p=$(cat $s/worker.pid)
+  # exactly the bundle's worker: a guest that restarted reuses its pids
+  if [ "$p" != $$ ] && [ "$(tr '\0' ' ' < /proc/$p/cmdline 2>/dev/null)" = "$2/layerfs worker " ]; then
+    kill "$p" 2>/dev/null; i=0
+    while kill -0 "$p" 2>/dev/null && [ $i -lt 50 ]; do sleep 0.1; i=$((i+1)); done
+  fi
+fi
+LAYERFS_WORKER_LOG="$3"
+{}
+{CGROUP_LEAF}
+LAYERFS_WORKER_LISTEN="$1" LAYERFS_WORKER_SECRET=$s/secret LAYERFS_WORKER_INCARNATION="$4" setsid nohup "$2/layerfs" worker >> "$LAYERFS_WORKER_LOG" 2>&1 < /dev/null &
+echo $! > $s/worker.pid"#,
+        log_start()
+    )
+}
+
+/// One readiness look: whether the worker still runs, then the guest's TCP sockets.
+const LOOK: &str = r#"p=$(cat /layerfs/state/worker.pid 2>/dev/null)
+if [ -z "$p" ] || kill -0 "$p" 2>/dev/null; then echo alive; else echo ended; fi
+cat /proc/net/tcp /proc/net/tcp6 2>/dev/null; true"#;
+
+/// Step 2 and 3's preparation in a guest whose data disk is at `/layerfs/data`.
+pub(crate) fn prepare(spec: &Spec, guest: &Guest) -> Result<(), MachineError> {
+    let left = guest.script(&spec.tools, "preparing the guest", PREPARE, &[DATA])?;
+    if left.trim() != "0" {
+        return Err(MachineError::new(
+            Code::Unsupported,
+            format!(
+                "the guest of {} still allows user namespaces ({left})",
+                spec.name
+            ),
+        ));
+    }
+    Ok(())
+}
+
+/// Step 2: install missing or changed bundle files by content identity, then
+/// the machine's custom Sandbox image if absent.
+pub(crate) fn install(spec: &Spec, guest: &Guest, bundle: &Bundle) -> Result<(), MachineError> {
+    let tools = &spec.tools;
+    super::bundle_install::install(spec, guest, bundle)?;
+    if let Some(image) = &spec.image {
+        let (Some(dir), Some(file)) = (image.parent(), image.file_name().and_then(|f| f.to_str()))
+        else {
+            return Err(MachineError::new(
+                Code::InvalidInput,
+                format!("the Sandbox image {} names no file", image.display()),
+            ));
+        };
+        let target = format!("{IMAGE}/{file}");
+        if guest
+            .read_file(tools, &format!("{target}.copied"))?
+            .is_none()
+        {
+            guest.copy_in(tools, dir, Some(file), IMAGE)?;
+            guest.write_file(tools, &format!("{target}.copied"), "")?;
+        }
+    }
+    Ok(())
+}
+
+/// Step 3 and 4: a new secret, the worker started on `bind:7070` in the
+/// guest, then the readiness wait at `address` on the host.
+pub(crate) fn launch(
+    spec: &Spec,
+    guest: &Guest,
+    bind: Ipv4Addr,
+    address: SocketAddr,
+) -> Result<Endpoint, MachineError> {
+    let tools = &spec.tools;
+    let secret = tool::secret()?;
+    guest.write_file(tools, &format!("{STATE}/secret"), &secret)?;
+    let listen = format!("{bind}:{WORKER_PORT}");
+    let script = launch_script();
+    let incarnation = spec.incarnation.as_deref().unwrap_or("");
+    let args = [listen.as_str(), BUNDLE, WORKER_LOG, incarnation];
+    guest.script(tools, "starting the worker", &script, &args)?;
+    ready(spec, guest, WORKER_PORT, address, &|| None)?;
+    Ok(Endpoint { address, secret })
+}
+
+/// The readiness wait (not a retry): until the worker listens on
+/// `guest_port` in the guest and the host's loopback `address` accepts a
+/// connection, at most [`READY`]. A worker that ends meanwhile is reported
+/// with its log's end. `gone` is asked when a look cannot run in the guest:
+/// it answers the log's end where the guest itself stopped with its worker
+/// (docker's worker container), `None` where it still runs.
+pub(crate) fn ready(
+    spec: &Spec,
+    guest: &Guest,
+    guest_port: u16,
+    address: SocketAddr,
+    gone: &dyn Fn() -> Option<String>,
+) -> Result<(), MachineError> {
+    let deadline = Instant::now() + READY;
+    let mut guest_ready = false;
+    loop {
+        if !guest_ready {
+            let out = guest.exec(&spec.tools, &["sh", "-c", LOOK], EXEC)?;
+            let ended = match out.stdout.starts_with("ended") {
+                true => Some(log_tail(spec, guest)),
+                false if out.ok() => None,
+                false => gone(),
+            };
+            if let Some(said) = ended {
+                return Err(MachineError::new(
+                    Code::Failed,
+                    format!("the worker of {} ended: {said}", spec.name),
+                ));
+            }
+            guest_ready = out.ok() && facts::listening(&out.stdout, guest_port);
+        }
+        if guest_ready && TcpStream::connect_timeout(&address, Duration::from_secs(1)).is_ok() {
+            return Ok(());
+        }
+        if Instant::now() >= deadline {
+            return Err(MachineError::new(
+                Code::Failed,
+                format!(
+                    "the worker of {} did not answer at {address} within {} s; its log ends: {}",
+                    spec.name,
+                    READY.as_secs(),
+                    log_tail(spec, guest)
+                ),
+            ));
+        }
+        thread::sleep(Duration::from_millis(200));
+    }
+}
+
+/// The last lines of the worker's log, read in the guest.
+fn log_tail(spec: &Spec, guest: &Guest) -> String {
+    let script = format!("tail -n 8 {WORKER_LOG} 2>/dev/null");
+    guest
+        .exec(&spec.tools, &["sh", "-c", &script], EXEC)
+        .map(|out| out.stdout.trim().replace('\n', "; "))
+        .unwrap_or_else(|e| e.message)
+}
+
+/// Free bytes of the guest's data disk, if `df` answers.
+pub(crate) fn free_disk(spec: &Spec, guest: &Guest) -> Option<u64> {
+    let out = guest.exec(&spec.tools, &["df", "-kP", DATA], EXEC).ok()?;
+    out.ok().then(|| facts::df_free(&out.stdout)).flatten()
+}
+
+/// Whether the host reaches a worker at `endpoint` now.
+pub(crate) fn answers(endpoint: Option<&crate::setup::spec::Endpoint>) -> bool {
+    endpoint.is_some_and(|e| hello(e).unwrap_or(false))
+}
+
+/// The worker protocol's first step only: the secret as one frame (a 4-byte
+/// big-endian length, then JSON), answered `{"ready":true}` within 2 s; the
+/// connection then closes with no request. A bare connection is not enough:
+/// an `ssh -L` or Lima port forward accepts on the host while no worker
+/// listens in the guest.
+fn hello(endpoint: &Endpoint) -> std::io::Result<bool> {
+    use std::io::{Read, Write};
+    let wait = Some(Duration::from_secs(2));
+    let mut stream = TcpStream::connect_timeout(&endpoint.address, Duration::from_secs(1))?;
+    stream.set_read_timeout(wait)?;
+    stream.set_write_timeout(wait)?;
+    let secret = endpoint.secret.replace('\\', "\\\\").replace('"', "\\\"");
+    let hello = format!("{{\"secret\":\"{secret}\"}}");
+    let mut frame = (hello.len() as u32).to_be_bytes().to_vec();
+    frame.extend_from_slice(hello.as_bytes());
+    stream.write_all(&frame)?;
+    let mut length = [0u8; 4];
+    stream.read_exact(&mut length)?;
+    let length = u32::from_be_bytes(length) as usize;
+    if length > 4096 {
+        return Ok(false);
+    }
+    let mut body = vec![0; length];
+    stream.read_exact(&mut body)?;
+    let text: String = String::from_utf8_lossy(&body)
+        .chars()
+        .filter(|c| !c.is_whitespace())
+        .collect();
+    Ok(text.contains("\"ready\":true"))
+}
+
+/// Steps 2 to 4 for a guest whose kernel runs and whose data disk is mounted.
+pub(crate) fn bring_up(
+    spec: &Spec,
+    guest: &Guest,
+    bundle: &Bundle,
+    port: u16,
+) -> Result<Endpoint, MachineError> {
+    prepare(spec, guest)?;
+    install(spec, guest, bundle)?;
+    launch(spec, guest, spec.kind.worker_bind(), loopback(port))
+}
+
+pub(crate) fn loopback(port: u16) -> SocketAddr {
+    SocketAddr::from((Ipv4Addr::LOCALHOST, port))
+}
+
+/// Refuses a bundle folder without the Linux binaries a guest runs.
+pub(crate) fn check_bundle(bundle: &Bundle) -> Result<(), MachineError> {
+    let missing: Vec<String> = ["layerfs", "layerfs-daemon", "layerfs-sandbox-helper"]
+        .iter()
+        .filter(|name| !Path::new(&bundle.dir).join(name).is_file())
+        .map(|name| format!("bundle:{name}"))
+        .collect();
+    if bundle.hash.is_empty() || !bundle.hash.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Err(MachineError::new(
+            Code::InvalidInput,
+            "the bundle hash is not hex",
+        ));
+    }
+    if missing.is_empty() {
+        return Ok(());
+    }
+    Err(MachineError {
+        code: Code::InvalidInput,
+        message: format!("the bundle {} lacks Linux binaries", bundle.dir.display()),
+        missing,
+        vm_exists: false,
+    })
+}

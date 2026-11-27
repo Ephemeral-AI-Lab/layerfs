@@ -5,7 +5,7 @@ use crate::{
     read::{paged_reads, query, reads, visibility},
     StoreService,
 };
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_content::compare::memo::Memo;
 
 /// `list(path?, { branch, commit?, pageSize?, pagePos? })`: one window of a directory.

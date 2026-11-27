@@ -1,7 +1,7 @@
 //! `sandbox.create`'s `installed` step repairs an incomplete SQLite project
 //! record (missing `manifest`/`installed`, no `op`) from the local Store file
 //! before launching the daemon (#749).
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::home::{paths, private_dir};
 use layerfs_home::names::StoreName;
 use layerfs_sandbox::host::{Deploy, Host, Message};

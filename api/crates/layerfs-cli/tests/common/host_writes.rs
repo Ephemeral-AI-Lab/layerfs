@@ -2,8 +2,8 @@
 //! with piped input, Commit counts, kept outcomes and raw streamed frames.
 #![allow(dead_code)]
 use super::fixture::Fixture;
-use layerfs_api::json;
-use layerfs_bridge::control::SdkValue;
+use layerfs_home::json;
+use layerfs_protocol::provision::install::SdkValue;
 use std::io::Write;
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};

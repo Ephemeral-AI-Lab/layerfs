@@ -3,7 +3,7 @@
 //! it, the Store pushed to a worker machine and read there, then the project
 //! removed.
 use layerfs_api::home::{self, paths, write_record};
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 
@@ -232,7 +232,7 @@ fn init_files_branches_move_and_remove() {
     // fix compared from its fork point by default
     let diff = ok(&home, "commit.diff", &[p(), ("ref", t("fix"))]);
     assert!(
-        layerfs_api::json::print(&diff).contains("/NEW.md"),
+        layerfs_home::json::print(&diff).contains("/NEW.md"),
         "{diff:?}"
     );
 
@@ -293,7 +293,7 @@ fn init_files_branches_move_and_remove() {
         &[p(), ("ref", t(&base_layer)), detail()],
     );
     assert_eq!(first.get("from"), Some(&SdkValue::Null), "{first:?}");
-    assert!(layerfs_api::json::print(&first).contains("/README.md"));
+    assert!(layerfs_home::json::print(&first).contains("/README.md"));
 
     ok(
         &home,
@@ -313,7 +313,7 @@ fn init_files_branches_move_and_remove() {
     );
     assert_eq!(content(&read), "newer\n");
     let branches = ok(&home, "branch.list", &[p()]);
-    assert!(layerfs_api::json::print(&branches).contains("\"fix\""));
+    assert!(layerfs_home::json::print(&branches).contains("\"fix\""));
     ok(&home, "branch.get", &[p(), ("branch", t("fix"))]);
 
     let export_dir = tempdir("export").join("out");
@@ -717,8 +717,8 @@ fn move_and_sandbox_repair_an_existing_incomplete_project_record() {
             let SdkValue::Bytes(bytes) = full.get("manifest").unwrap() else {
                 panic!()
             };
-            let m = layerfs_bridge::provision::StoreManifest::decode(bytes).unwrap();
-            layerfs_bridge::sdk_values::hex(&m.stack)
+            let m = layerfs_protocol::provision::manifest::StoreManifest::decode(bytes).unwrap();
+            layerfs_protocol::sdk::hex(&m.stack)
         });
     let write_stub = |created: i64| {
         write_record(
@@ -825,8 +825,8 @@ fn move_skips_unreadable_project_record_and_still_repairs_incomplete_ones() {
     let SdkValue::Bytes(bytes) = legacy_full.get("manifest").unwrap() else {
         panic!()
     };
-    let stack = layerfs_bridge::sdk_values::hex(
-        &layerfs_bridge::provision::StoreManifest::decode(bytes)
+    let stack = layerfs_protocol::sdk::hex(
+        &layerfs_protocol::provision::manifest::StoreManifest::decode(bytes)
             .unwrap()
             .stack,
     );

@@ -4,7 +4,7 @@
 //! and `sandbox.close` forgets it, answering its container's name. No
 //! Docker is used; nothing it names is touched.
 #![cfg(any(target_os = "linux", target_os = "macos"))]
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::home::{paths, read_record, write_record};
 use layerfs_sandbox::host::{Deploy, Host, Message};
 use layerfs_store::open_args::PgSelection;

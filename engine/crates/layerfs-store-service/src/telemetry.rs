@@ -9,7 +9,7 @@
 //! (the SDK in-process, or the daemon for a Workspace call) starts a
 //! [`Recording`] around one operation to get its Commit and read phase reports.
 use crate::store::SaveCounters;
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_persistence::SqlWork;
 use layerfs_storage::encoding::delta::select::DepthHistogram;
 use layerfs_telemetry::timer::{

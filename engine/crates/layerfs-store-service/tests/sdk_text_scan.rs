@@ -13,7 +13,7 @@ mod installed;
 #[allow(dead_code)]
 mod support;
 
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use support::Fixture;
 
 const WINDOW: usize = 16 * 1024;

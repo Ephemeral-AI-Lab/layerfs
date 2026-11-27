@@ -6,7 +6,7 @@
 //! ([`local_host`], `Recorded::stop_now`).
 use crate::host::{Deploy, Host, Message};
 use crate::mount_intents::{Bound, Branch};
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::home::{self, paths};
 use layerfs_home::outcome::{failed, refused, Outcome};
 use std::path::Path;
@@ -132,7 +132,7 @@ pub fn close(host: &Host, held: &[String]) -> Outcome {
 /// The Workspace id and Branch name a Workspace record keeps, when both
 /// are readable.
 fn recorded_bound(record: &crate::record::WorkspaceRecord) -> Option<([u8; 32], Branch)> {
-    let id = layerfs_bridge::sdk_values::unhex(record.id()?)?;
+    let id = layerfs_protocol::sdk::unhex(record.id()?)?;
     let branch = Branch::Named(record.branch()?.to_owned());
     Some((id.try_into().ok()?, branch))
 }

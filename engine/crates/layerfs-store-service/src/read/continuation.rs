@@ -1,6 +1,6 @@
 //! Stateless saved-query continuations. Only authenticated positions are trusted.
 use crate::{history::lookup as args, store::Store};
-use layerfs_bridge::control::{Answer, Reply, SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{Answer, Reply, SdkRefusal, SdkValue};
 
 // Leave room for both the result page and continuation in one control record.
 const MAXIMUM_PAYLOAD: usize = 4 * 1024;

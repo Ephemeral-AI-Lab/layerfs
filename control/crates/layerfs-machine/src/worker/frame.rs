@@ -14,7 +14,7 @@
 //! sends nothing to a worker whose `ready` names another (protocol 2 sent
 //! bytes as `{"base64": ...}` in a plain frame, and reads an attached
 //! header as a length past [`MAX_FRAME`], refused before its body).
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::json;
 use layerfs_home::outcome::refused;
 use std::io::{Read, Write};

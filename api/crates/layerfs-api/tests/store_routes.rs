@@ -1,9 +1,9 @@
 //! Routes by records and leases (#533 step 7): a Store call goes where its
 //! Store's records say, a worker gets the records with the call, and leases
 //! are held, read and cleaned.
-use layerfs_api::home::lease;
+use layerfs_store::lease;
 use layerfs_api::home::{self, paths, write_record};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use std::net::TcpListener;
 use std::path::PathBuf;
 
@@ -194,7 +194,7 @@ fn a_lease_names_its_process_so_a_reused_or_group_pid_never_holds() {
         .spawn()
         .unwrap();
     let pid = child.id();
-    let seen = layerfs_bridge::process::LocalProcess::observe(pid).unwrap();
+    let seen = layerfs_os::process::LocalProcess::observe(pid).unwrap();
     let boot = seen.boot.unwrap();
     let lease = dir.join(pid.to_string());
     std::fs::write(&lease, format!("1 {} {boot:032x}\n", seen.start)).unwrap();
@@ -206,7 +206,7 @@ fn a_lease_names_its_process_so_a_reused_or_group_pid_never_holds() {
     // this process's own lease records its start time
     let mine = lease::hold(&home, "shop").unwrap();
     let text = std::fs::read_to_string(dir.join(std::process::id().to_string())).unwrap();
-    let me = layerfs_bridge::process::LocalProcess::observe(std::process::id()).unwrap();
+    let me = layerfs_os::process::LocalProcess::observe(std::process::id()).unwrap();
     assert!(text.contains(&me.start.to_string()), "{text}");
     drop(mine);
     let _ = child.kill();

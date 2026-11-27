@@ -6,12 +6,9 @@
 //! with one it reads the docker machine's recorded socket. Also the
 //! per-machine `supports` of `machine.list` and `machine.get` (P3).
 use super::spec as record;
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::outcome::Outcome;
-use layerfs_platform::{
-    self as adapters, CallSite, DockerCandidate, DockerEnv, HostOs, Platform, Probe, SupportRow,
-    Supports,
-};
+use crate::platform::{self as adapters, CallSite, DockerCandidate, DockerEnv, HostOs, Platform, Probe, SupportRow, Supports};
 use std::path::{Path, PathBuf};
 
 /// The platforms of this host: `{ host, items: [row] }`, the keys of

@@ -8,7 +8,7 @@ mod installed;
 #[allow(dead_code)]
 mod support;
 
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_history::{BranchId, HistoryName, LayerStackId, NodeId};
 use std::fs;
 use support::{operation, write, Fixture, Work};

@@ -4,7 +4,7 @@
 //! checks size, then the built-in settings, then the daemon, then wsl.
 #![cfg(feature = "machine")]
 use layerfs_api::home::{paths, write_record};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::names::MachineName;
 use std::path::{Path, PathBuf};
 

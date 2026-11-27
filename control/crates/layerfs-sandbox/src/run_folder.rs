@@ -17,7 +17,7 @@
 //! its owner's locks).
 use crate::inspect::process;
 use crate::record::DaemonRecord;
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::home::with_field;
 use std::path::Path;
 

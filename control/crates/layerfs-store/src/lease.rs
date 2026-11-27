@@ -14,7 +14,7 @@
 //! reads (`store.get`, `store.list`, the doctors) ignore it and
 //! change nothing.
 use crate::record::StoreRecord;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::home::{self, paths};
 use layerfs_home::outcome::{failed, refused};
 use layerfs_home::process::{alive_as, me};

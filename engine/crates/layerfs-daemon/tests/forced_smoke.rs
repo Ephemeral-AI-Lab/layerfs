@@ -24,10 +24,7 @@ mod mounted;
 #[allow(dead_code)]
 #[path = "support/mounted_commit.rs"]
 mod rig;
-use layerfs_bridge::control::{
-    AbortDisposition, Activity, CommitKnowledge, ControlCode, DetachDisposition, ForcedCleanup,
-    MountPhase, Reply, Request,
-};
+use layerfs_protocol::provision::install::{AbortDisposition, Activity, CommitKnowledge, ControlCode, DetachDisposition, ForcedCleanup, MountPhase, Reply, Request};
 use layerfs_daemon::control::Failure;
 use mounted::{mount_entry, until, COMMAND};
 use rig::{bash_in, passed, root, Rig};
@@ -97,7 +94,7 @@ fn an_idle_workspace_is_forced_with_one_abort_and_one_detach() {
             token: ready.token,
             relinquish_unknown: false,
         },
-        Request::Unmount(layerfs_bridge::control::UnmountControl {
+        Request::Unmount(layerfs_protocol::provision::install::UnmountControl {
             token: ready.token,
             discard: true,
         }),

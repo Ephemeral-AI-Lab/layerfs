@@ -11,7 +11,7 @@
 use super::state::Shared;
 use crate::{OwnerClient, OwnerError};
 use layerfs_overlay::OverlayError;
-use layerfs_workspace::Route;
+use layerfs_vfs::Route;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Weak};
 

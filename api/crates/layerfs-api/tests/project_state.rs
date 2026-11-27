@@ -5,7 +5,7 @@
 //! `unresolved` from one whose owner is gone. The records-only cases run on
 //! any host; the cases that open a Store run where a sqlite Store opens.
 use layerfs_api::home::{self, paths, write_record};
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -336,7 +336,7 @@ mod with_a_store {
     #[test]
     fn an_old_format_store_answers_outdated_with_its_fix() {
         let (home, folder, _) = shop_with_api("outdated");
-        layerfs_api::close_idle(std::time::Duration::ZERO);
+        layerfs_store::admin::with_users::close_idle(std::time::Duration::ZERO);
         rusqlite::Connection::open(paths::store_file(&home, "shop"))
             .unwrap()
             .execute_batch("PRAGMA user_version=36")
@@ -381,7 +381,7 @@ mod with_a_store {
             assert!(doctor.contains(said), "{said}: {doctor}");
         }
         assert!(!doctor.contains("Text(\"failed\")"), "{doctor}");
-        layerfs_api::close_idle(std::time::Duration::ZERO);
+        layerfs_store::admin::with_users::close_idle(std::time::Duration::ZERO);
         std::fs::remove_dir_all(home).unwrap();
         std::fs::remove_dir_all(folder).unwrap();
     }
@@ -436,7 +436,7 @@ mod with_a_store {
         assert_eq!(exported.get_int("file_count"), Some(1));
         assert_eq!(exported.get_int("size"), Some(6));
         std::fs::remove_dir_all(out.parent().unwrap()).unwrap();
-        layerfs_api::close_idle(std::time::Duration::ZERO);
+        layerfs_store::admin::with_users::close_idle(std::time::Duration::ZERO);
         std::fs::remove_dir_all(home).unwrap();
         std::fs::remove_dir_all(folder).unwrap();
     }
@@ -496,7 +496,7 @@ mod with_a_store {
         assert_eq!(deleted.get_text("outcome"), Some("deleted"));
         let gone = call(&home, "project.get", &[("project", t("shop/api"))]).unwrap_err();
         assert_eq!(gone.code, "NotFound");
-        layerfs_api::close_idle(std::time::Duration::ZERO);
+        layerfs_store::admin::with_users::close_idle(std::time::Duration::ZERO);
         std::fs::remove_dir_all(home).unwrap();
         std::fs::remove_dir_all(folder).unwrap();
     }
@@ -550,7 +550,7 @@ mod with_a_store {
             .unwrap()
             .unwrap();
         assert!(record.get("op").is_none(), "{record:?}");
-        layerfs_api::close_idle(std::time::Duration::ZERO);
+        layerfs_store::admin::with_users::close_idle(std::time::Duration::ZERO);
         std::fs::remove_dir_all(home).unwrap();
         std::fs::remove_dir_all(folder).unwrap();
     }

@@ -1,6 +1,6 @@
 //! Original point/operation observations with fixed output and no product hooks.
 use super::allocation;
-use layerfs_daemon::{bootstrap::OpenedStore, Owner};
+use layerfs_store_service::{bootstrap::OpenedStore, Owner};
 use std::{
     fs::File,
     io::{BufRead, Write},

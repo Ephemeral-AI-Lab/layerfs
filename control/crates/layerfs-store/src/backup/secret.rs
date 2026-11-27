@@ -2,7 +2,7 @@
 //! (`layerfs_home::home::secrets`, kind `bucket`: `secret/bucket/<bucket>.json`,
 //! a 0600 file in a 0700 folder), never answered and never logged. Only the
 //! backup family reads or writes one.
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::home::secrets::{read_secret, remove_secret, save_secret};
 use layerfs_home::outcome::refused;
 use std::path::Path;

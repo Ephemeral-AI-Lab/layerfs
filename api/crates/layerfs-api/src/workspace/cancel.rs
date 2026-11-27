@@ -4,9 +4,9 @@ use crate::calls::scope::Rule;
 use crate::calls::table::Kind::Text;
 use crate::calls::table::{a, call, opt, Call};
 use crate::calls::{Context, Form};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::outcome::Outcome;
-use layerfs_sandbox::workspace::exec::{cancel_call, CancelRequest};
+use layerfs_workspace::exec::call::{cancel_call, CancelRequest};
 
 /// One command's cancel.
 const COMMAND: Form = Form::of(&[], &[], &["exec", "outcome", "signal"]);

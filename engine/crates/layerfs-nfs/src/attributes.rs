@@ -1,7 +1,7 @@
 //! NFSv3 (RFC 1813) status codes and the projection of Workspace inode facts.
 use crate::xdr::Writer;
 use layerfs_content::object::inode_leaf::InodeKind;
-use layerfs_workspace::{Refusal, ViewStat};
+use layerfs_vfs::{Refusal, ViewStat};
 
 /// `nfsstat3` values this server returns.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

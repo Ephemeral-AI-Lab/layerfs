@@ -15,7 +15,7 @@ use crate::backup::record::StoreLink;
 use crate::intent;
 use crate::record::{StoreRecord, StoreRef};
 use crate::state;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::home::{observed, paths};
 use layerfs_home::outcome::{failed, Outcome};
@@ -43,7 +43,7 @@ pub(crate) fn at(ms: Option<i64>) -> SdkValue {
 
 /// Bytes as answers show them: lowercase hex text.
 pub(crate) fn hex_text(bytes: &[u8]) -> SdkValue {
-    SdkValue::text(layerfs_bridge::sdk_values::hex(bytes))
+    SdkValue::text(layerfs_protocol::sdk::hex(bytes))
 }
 
 /// A digest as answers show it: hex text, whether the record holds text

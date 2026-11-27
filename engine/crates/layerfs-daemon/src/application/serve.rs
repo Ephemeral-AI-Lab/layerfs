@@ -1,11 +1,7 @@
 //! Exact one-time installation admission and original Store-to-Service transfer.
 use super::{Application, ApplicationError, ConnectionFailure};
 use crate::install_types::StoreSettings;
-use layerfs_bridge::{
-    control::{DaemonPhase, InstallPhase, InstallRefusal, InstallReply, RefusalKind},
-    duplex::Connection,
-    provision::StoreManifest,
-};
+use layerfs_protocol::{provision::{install::{DaemonPhase, InstallPhase, InstallRefusal, InstallReply, RefusalKind}, manifest::StoreManifest}, duplex::Connection};
 use layerfs_storage::ReservationBlocks;
 
 impl Application {
@@ -73,8 +69,8 @@ impl Application {
         let result = crate::install::receive_install_manifest(
             connection,
             std::path::Path::new(match &self.setup.store {
-                layerfs_bridge::DaemonStore::Sqlite { locator, .. } => locator.as_str(),
-                layerfs_bridge::DaemonStore::Postgres { .. } => "",
+                layerfs_protocol::DaemonStore::Sqlite { locator, .. } => locator.as_str(),
+                layerfs_protocol::DaemonStore::Postgres { .. } => "",
             }),
             settings,
             manifest,

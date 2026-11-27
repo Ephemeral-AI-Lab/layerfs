@@ -2,11 +2,11 @@
 use super::list::changed;
 use super::spec::machine_of;
 use crate::Related;
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::home::{lock, paths};
 use layerfs_home::outcome::shell_word;
 use layerfs_home::outcome::{refused, Outcome};
-use layerfs_platform::HostOs;
+use crate::platform::HostOs;
 use std::path::Path;
 
 /// What an update answers beside `ok` and `outcome`.
@@ -127,7 +127,7 @@ pub fn update(home: &Path, request: &MachineUpdate, related: Related) -> Outcome
 
 /// The Docker socket `--docker` names: an absolute path, or `unix://` and
 /// one; `None` for `""`, which clears the recorded one.
-fn docker_socket(value: &str) -> Result<Option<&str>, layerfs_bridge::control::SdkRefusal> {
+fn docker_socket(value: &str) -> Result<Option<&str>, layerfs_protocol::provision::install::SdkRefusal> {
     if value.is_empty() {
         return Ok(None);
     }

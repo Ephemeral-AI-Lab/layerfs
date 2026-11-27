@@ -10,7 +10,7 @@ mod support;
 #[test]
 #[ignore = "needs Docker and the build-listed Linux binary in LAYERFS_INSTALL_DAEMON_BINARY"]
 fn macos_init_handoff_to_linux_daemon_has_no_host_data_path() {
-    use layerfs_bridge::duplex;
+    use layerfs_protocol::duplex;
     use std::{fs, net::TcpStream, time::Duration};
     let fixture = support::Fixture::new("docker", Some("/store/store.sqlite"));
     let mut daemon = docker::Daemon::start();
@@ -59,7 +59,7 @@ fn macos_init_handoff_to_linux_daemon_has_no_host_data_path() {
 #[test]
 #[ignore = "external daemon role; invoked explicitly by the macOS handoff proof"]
 fn linux_daemon_install_role() {
-    use layerfs_bridge::duplex;
+    use layerfs_protocol::duplex;
     use layerfs_daemon::{install::receive_install, install_types::StoreSettings};
     use std::{io::Write, net::TcpListener, path::Path};
     assert_eq!(std::env::var("LAYERFS_INSTALL_CHILD").as_deref(), Ok("1"));

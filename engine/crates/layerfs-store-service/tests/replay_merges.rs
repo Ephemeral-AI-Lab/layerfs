@@ -21,7 +21,7 @@ mod installed;
 #[allow(dead_code)]
 mod view;
 
-use layerfs_bridge::control::{SdkCall, SdkValue};
+use layerfs_protocol::provision::install::{SdkCall, SdkValue};
 use layerfs_persistence::{PersistenceConfig, SqlitePersistenceProfile};
 use layerfs_store_service::{bootstrap::open_store_observed, Owner, OwnerConfig, StoreService};
 
@@ -46,7 +46,7 @@ fn call(
     service: &StoreService,
     method: &str,
     fields: Vec<(&str, SdkValue)>,
-) -> Result<SdkValue, layerfs_bridge::control::SdkRefusal> {
+) -> Result<SdkValue, layerfs_protocol::provision::install::SdkRefusal> {
     let mut fields: Vec<(String, SdkValue)> = fields
         .into_iter()
         .map(|(name, value)| (name.to_owned(), value))

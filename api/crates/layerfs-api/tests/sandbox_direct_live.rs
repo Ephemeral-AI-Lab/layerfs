@@ -14,7 +14,7 @@
 #![cfg(all(target_os = "macos", feature = "machine"))]
 use layerfs_api::home::{self, paths, read_record, write_record};
 use layerfs_api::worker::{read_frame, write_frame};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use std::net::{SocketAddr, TcpListener};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -106,7 +106,7 @@ fn refusing_worker() -> (SocketAddr, Arc<Mutex<Vec<String>>>) {
             let request = read_frame(&mut stream).ok().flatten().unwrap_or_default();
             seen.lock()
                 .unwrap()
-                .push(layerfs_api::json::print(&request));
+                .push(layerfs_home::json::print(&request));
             let refused = SdkValue::map([(
                 "refused",
                 SdkValue::map([
@@ -263,7 +263,7 @@ fn a_forwarded_sandbox_s_workspace_calls_dial_its_daemon_from_here() {
             dialled()
         );
         let got = ok(&home, "sandbox.get", &[("sandbox", t("t1"))]);
-        assert!(layerfs_api::json::print(&got).contains("t1:one"), "{got:?}");
+        assert!(layerfs_home::json::print(&got).contains("t1:one"), "{got:?}");
         // the get's one overlay-size inspect dials the machine's worker
         // (layerfs-project#164); the stand-in's hello names no protocol, so
         // no call is sent on it, and the list is answered anyway

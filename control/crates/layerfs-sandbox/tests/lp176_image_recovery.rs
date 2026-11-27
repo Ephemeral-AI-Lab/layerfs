@@ -3,10 +3,10 @@
 //! dropped target refusal, declared-loss metadata/SHA verification, and
 //! record-only variant/config (#176 I03).
 #[allow(dead_code)]
-#[path = "../../layerfs-sandbox-backend/tests/support/image.rs"]
+#[path = "support/image.rs"]
 mod fixture;
 use fixture::{pax_record, Scratch, Tar};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::events::Events;
 use layerfs_home::home::{self, paths, write_record};
 use layerfs_home::names::MachineName;
@@ -16,7 +16,7 @@ use layerfs_sandbox::image_artifact::{self as cache, architecture, Sidecar, CHUN
 use layerfs_sandbox::image_load::{load, ImageLock, Loaded, Target};
 use layerfs_sandbox::image_tar::{Filtered, TarReport, EXTENDED_TOTAL_MAX, SPARSE_MAX};
 use layerfs_sandbox::images;
-use layerfs_sandbox_backend::{rootfs, Image};
+use layerfs_sandbox::{rootfs, Image};
 use layerfs_store::place::{self, Executor};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
@@ -31,7 +31,7 @@ use std::time::{Duration, Instant, UNIX_EPOCH};
 static SEQ: AtomicU64 = AtomicU64::new(0);
 
 fn sha256_hex(bytes: &[u8]) -> String {
-    layerfs_bridge::sdk_values::hex(&Sha256::digest(bytes))
+    layerfs_protocol::sdk::hex(&Sha256::digest(bytes))
 }
 
 fn docker_available() -> bool {
@@ -267,7 +267,7 @@ fn run_load(
     home: &Path,
     machine: &str,
     image: &str,
-) -> Result<Loaded, layerfs_bridge::control::SdkRefusal> {
+) -> Result<Loaded, layerfs_protocol::provision::install::SdkRefusal> {
     let mut sink = |_: SdkValue| {};
     let mut events = Events::new(&mut sink);
     load(
@@ -291,7 +291,7 @@ fn image_rows(home: &Path) -> Vec<SdkValue> {
     }
 }
 
-fn step(home: &Path, args: SdkValue) -> Result<SdkValue, layerfs_bridge::control::SdkRefusal> {
+fn step(home: &Path, args: SdkValue) -> Result<SdkValue, layerfs_protocol::provision::install::SdkRefusal> {
     cache::step(&layerfs_sandbox::deploy::Side::Home(home), &args)
 }
 

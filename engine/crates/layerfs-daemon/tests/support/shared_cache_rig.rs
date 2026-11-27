@@ -9,20 +9,14 @@ use layerfs_content::{
     object::inode_leaf::InodeKind,
     AuthenticatedObjects, ContentError, ContentResult, ObjectId,
 };
-use layerfs_daemon::{
-    bootstrap::open_store,
-    store::{BindRequest, BoundWorkspace, Store, StoreOperation, StorePorts},
-    Owner, OwnerConfig,
-};
+use layerfs_store_service::{bootstrap::open_store, store::{BindRequest, BoundWorkspace, Store, StoreOperation, StorePorts}, Owner, OwnerConfig};
 use layerfs_history::{
     BranchId, BranchSnapshot, ForkRequest, ForkSource, HistoryName, WorkspaceId,
 };
 use layerfs_overlay::ProfileConfig;
 
 use layerfs_storage::ReservationBlocks;
-use layerfs_workspace::{
-    CanonicalClient, ClientWork, Operation, Outcome, Position, SourceView, Time, ViewStat,
-};
+use layerfs_vfs::{CanonicalClient, ClientWork, Operation, Outcome, Position, SourceView, Time, ViewStat};
 use std::{
     collections::BTreeMap,
     path::Path,
@@ -356,7 +350,7 @@ pub fn apply(workspace: &BoundWorkspace, clock: &mut i64, step: Do<'_>) -> bool 
                 drive::job(
                     operation.overlay(),
                     workspace.route(),
-                    |job_client: &layerfs_daemon::OwnerClient, _| {
+                    |job_client: &layerfs_store_service::OwnerClient, _| {
                         job_client.reply_attempted(publication)
                     },
                 );
@@ -423,7 +417,7 @@ pub fn read(workspace: &BoundWorkspace, path: &str) -> Vec<u8> {
 /// Its completions are released before this returns.
 pub fn commit(workspace: &BoundWorkspace) -> ObjectId {
     let done = workspace
-        .commit_captured(&layerfs_daemon::store::CommitOptions::default())
+        .commit_captured(&layerfs_store_service::store::CommitOptions::default())
         .unwrap_or_else(|failure| panic!("Commit: {:?}", failure.error));
     drop(done);
     workspace.snapshot().unwrap().effective_root

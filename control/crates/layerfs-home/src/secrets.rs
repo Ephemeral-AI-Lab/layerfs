@@ -4,7 +4,7 @@
 //! with the PostgreSQL client itself.
 use crate::home::{paths, read_record, write_record};
 use crate::outcome::{failed, refused};
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use std::net::SocketAddr;
 use std::path::Path;
 

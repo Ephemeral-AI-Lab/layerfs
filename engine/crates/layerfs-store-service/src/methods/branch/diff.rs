@@ -7,7 +7,7 @@
 //! main is compared as its head is. A later page names both sides it
 //! compared as `pinTo` and `pinFrom` (`pinned`), so a moved Branch does not
 //! change what the pages list.
-use crate::history::lookup::{self as args, node_text, Answer};
+use {crate::history::lookup::{self as args, Answer}, layerfs_protocol::sdk::node_text};
 use crate::history::resolve::{self, Named};
 use crate::history::{listing, saved::reply_cost};
 use crate::methods::args::{project, text};
@@ -18,7 +18,7 @@ use crate::read::walk::Walker;
 use crate::store::{Store, StorePorts};
 use crate::write::files;
 use crate::StoreService;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_content::compare::{ChangeKind, PathChange};
 use layerfs_history::{LayerStackRecord, NodeId};
 use std::sync::Arc;

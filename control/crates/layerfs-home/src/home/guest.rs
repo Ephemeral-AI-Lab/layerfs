@@ -9,7 +9,7 @@
 //! On a worker's thread, it is the one the request being served carried.
 use super::layout::{HomeFile, LAYOUT_VERSION};
 use crate::outcome::refused;
-use layerfs_bridge::control::SdkRefusal;
+use layerfs_protocol::provision::install::SdkRefusal;
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;

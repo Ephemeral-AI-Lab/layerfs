@@ -11,7 +11,7 @@ mod installed;
 #[allow(dead_code)]
 mod support;
 
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_history::{BranchId, HistoryName, LayerStackId, WorkspaceId};
 use layerfs_store_service::store::{BindError, BindPhase, BindRequest};
 use support::Fixture;

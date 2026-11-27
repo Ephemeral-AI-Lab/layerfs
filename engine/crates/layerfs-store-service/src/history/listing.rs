@@ -9,11 +9,11 @@
 //! Branches come before them; a Commit list follows first parents from its
 //! place. Rows carry the keys the call surface answers (camelCase here); a
 //! Commit's time is `createdMs`, which the caller writes as a date.
-use super::lookup::{self as args, hex, invalid, node_text, refuse, Answer};
+use {super::lookup::{self as args, invalid, refuse, Answer}, layerfs_protocol::sdk::{hex, node_text}};
 use super::resolve::{self, Saved};
 use super::{saved::reply_cost, MAIN};
 use crate::store::Store;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_history::{
     BranchId, BranchRecord, CommitRecord, CommitVia, LayerRecord, LayerStackRecord, NodeId,
     MAXIMUM_PAGE_RECORDS,

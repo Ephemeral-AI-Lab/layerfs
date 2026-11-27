@@ -3,11 +3,11 @@
 //! This also runs in builds without machine adapters, so a recorded worker or
 //! a forwarded daemon cannot bypass the product policy. Each table entry
 //! says which [`Policy`] checks it, so no call name is written here.
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::outcome::refused;
 use layerfs_machine::record::MachineRecord;
 use layerfs_sandbox::record::SandboxRecord;
-use layerfs_store::record::{StoreKind, StoreRecord};
+use {layerfs_protocol::StoreKind, layerfs_store::record::StoreRecord};
 use std::path::Path;
 
 type Result = std::result::Result<(), SdkRefusal>;
@@ -38,7 +38,7 @@ pub enum Policy {
 }
 
 fn platform(name: &str) -> Result {
-    match layerfs_sandbox_backend::removed_platforms::removed_reason(name) {
+    match layerfs_machine::table::removed::removed_reason(name) {
         Some(reason) => Err(refused("Unsupported", reason)),
         None => Ok(()),
     }

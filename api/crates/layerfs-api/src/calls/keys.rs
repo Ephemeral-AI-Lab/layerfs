@@ -1,7 +1,7 @@
 //! Result keys in snake_case for every front end (S §2.1): `exit_code`, not
 //! 1.1.0's `exitCode`. Only identifier-like keys that start with a lowercase
 //! letter change; a key holding a path or another name never does.
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 
 /// `value` with every field name in snake_case.
 pub fn snake(value: SdkValue) -> SdkValue {

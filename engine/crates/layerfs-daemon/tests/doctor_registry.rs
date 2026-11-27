@@ -5,8 +5,8 @@ mod installed;
 #[path = "../../layerfs-store-service/tests/support/sdk.rs"]
 #[allow(dead_code)]
 mod support;
-use layerfs_bridge::control::{Reply, Request, SdkCall, SdkValue, UnmountControl};
-use layerfs_daemon::{control::Service, ServiceClass};
+use layerfs_protocol::provision::install::{Reply, Request, SdkCall, SdkValue, UnmountControl};
+use {layerfs_daemon::control::Service, layerfs_store_service::ServiceClass};
 use layerfs_history::WorkspaceId;
 
 fn page(service: &Service, offset: i64, generation: Option<String>) -> Reply {

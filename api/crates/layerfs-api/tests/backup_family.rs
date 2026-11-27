@@ -7,7 +7,7 @@
 //! LAYERFS_REMOTE_* variables tests/minio_service.sh of layerfs-bucket
 //! prints; without them the test says NOT_RUN and passes.
 use layerfs_api::home::{self, paths, read_record, write_record};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use std::net::TcpListener;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -802,7 +802,7 @@ fn restored_records_are_complete_for_a_sandbox() {
     );
     assert_eq!(std::fs::read(&record).unwrap(), before, "record rewritten");
     // a record an earlier restore left without its manifests is completed
-    let stack = layerfs_bridge::sdk_values::hex(&original.manifest.stack);
+    let stack = layerfs_protocol::sdk::hex(&original.manifest.stack);
     let listing = SdkValue::map([("name", t("api")), ("stack", t(&stack))]);
     write_record(&record, &listing).unwrap();
     ok(

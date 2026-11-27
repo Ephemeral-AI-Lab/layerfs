@@ -14,8 +14,8 @@ use crate::calls::table::{
     Kind::{Bool, Int, Name, Project, Text},
 };
 use crate::calls::Context;
-use layerfs_bridge::control::SdkValue;
-use layerfs_control::store::RepairRequest;
+use layerfs_protocol::provision::install::SdkValue;
+use layerfs_store::admin::with_users::RepairRequest;
 use layerfs_home::outcome::Outcome;
 
 pub(crate) const CALL: Call = call(
@@ -51,5 +51,5 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         cursor: text("cursor"),
     };
     let (home, _) = context.parts();
-    layerfs_control::store::repair(home, &request)
+    layerfs_store::admin::with_users::repair(home, &request)
 }

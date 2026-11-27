@@ -19,7 +19,7 @@ pub fn sixteen(bytes: [u8; 32]) -> [u8; 16] {
 
 /// Init's deadline, counted from now: the caller's required `timeoutMs`, a
 /// positive whole number of milliseconds. There is no default here.
-pub fn deadline(timeout_ms: Option<i64>) -> Result<Instant, layerfs_bridge::control::SdkRefusal> {
+pub fn deadline(timeout_ms: Option<i64>) -> Result<Instant, layerfs_protocol::provision::install::SdkRefusal> {
     let Some(ms @ 1..) = timeout_ms else {
         return Err(refused(
             "InvalidInput",

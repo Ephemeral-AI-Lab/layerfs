@@ -4,12 +4,8 @@
 mod fixture;
 
 use fixture::Fixture;
-use layerfs_api::{
-    home::paths,
-    json,
-    worker::{write_host_frame, MAX_HELLO},
-};
-use layerfs_bridge::control::SdkValue;
+use {layerfs_api::{home::paths, worker::{write_host_frame, MAX_HELLO}}, layerfs_home::json};
+use layerfs_protocol::provision::install::SdkValue;
 use std::fs;
 use std::io::{ErrorKind, Read};
 use std::os::unix::{fs::PermissionsExt, net::UnixListener};
@@ -36,7 +32,7 @@ fn machine(home: &Fixture) -> SdkValue {
         &[
             "machine",
             "get",
-            layerfs_api::names::HOST_MACHINE,
+            layerfs_home::names::HOST_MACHINE,
             "--with",
             "live",
         ],
@@ -62,7 +58,7 @@ fn live_and_doctor_observe_absent_ready_and_stale_without_starting() {
     );
     cli(
         &home,
-        &["machine", "doctor", layerfs_api::names::HOST_MACHINE],
+        &["machine", "doctor", layerfs_home::names::HOST_MACHINE],
     );
     assert!(!home.paths.control.exists());
     assert!(!paths::host_worker_lock(&home.paths.home).exists());
@@ -82,7 +78,7 @@ fn live_and_doctor_observe_absent_ready_and_stale_without_starting() {
     assert_eq!(fact.get("last_close"), Some(&SdkValue::Null));
     let report = cli(
         &home,
-        &["machine", "doctor", layerfs_api::names::HOST_MACHINE],
+        &["machine", "doctor", layerfs_home::names::HOST_MACHINE],
     );
     let checks = list(report.get("tree").unwrap(), "checks");
     let checked = checks
@@ -127,7 +123,7 @@ fn live_and_doctor_observe_absent_ready_and_stale_without_starting() {
     );
     let report = cli(
         &home,
-        &["machine", "doctor", layerfs_api::names::HOST_MACHINE],
+        &["machine", "doctor", layerfs_home::names::HOST_MACHINE],
     );
     let checks = list(report.get("tree").unwrap(), "checks");
     let endpoint = checks
@@ -153,7 +149,7 @@ fn live_and_doctor_observe_absent_ready_and_stale_without_starting() {
     );
     let report = cli(
         &home,
-        &["machine", "doctor", layerfs_api::names::HOST_MACHINE],
+        &["machine", "doctor", layerfs_home::names::HOST_MACHINE],
     );
     let warning = list(&report, "findings")
         .iter()
@@ -206,7 +202,7 @@ fn incompatible_hello_is_a_notice_and_receives_no_ping() {
     });
     let report = cli(
         &home,
-        &["machine", "doctor", layerfs_api::names::HOST_MACHINE],
+        &["machine", "doctor", layerfs_home::names::HOST_MACHINE],
     );
     server.join().unwrap();
     let notice = list(&report, "findings")

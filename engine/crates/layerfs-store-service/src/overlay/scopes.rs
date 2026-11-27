@@ -2,7 +2,7 @@
 use super::{owner::OriginalInput, workspaces::CleanupTarget};
 use crate::{JobWork, OwnerClient, OwnerError, ServiceClass};
 use layerfs_overlay::{CleanupState, Resources};
-use layerfs_workspace::Route;
+use layerfs_vfs::Route;
 impl OwnerClient {
     pub fn open(
         &self,

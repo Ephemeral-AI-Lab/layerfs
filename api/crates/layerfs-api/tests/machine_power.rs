@@ -13,7 +13,7 @@
 //! process's environment.
 #![cfg(feature = "machine")]
 use layerfs_api::home::{self, paths, read_record, write_record};
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::os::unix::fs::PermissionsExt;
@@ -61,7 +61,7 @@ fn called(home: &Path, name: &str, machine: &str) -> Result<(SdkValue, Vec<Strin
 }
 
 fn json(value: &SdkValue) -> String {
-    layerfs_api::json::print(value)
+    layerfs_home::json::print(value)
 }
 
 fn frame(stream: &mut TcpStream) -> Option<Vec<u8>> {

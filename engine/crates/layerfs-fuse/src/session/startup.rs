@@ -5,7 +5,7 @@ use super::state::{
 };
 use crate::{attributes::Identity, mount::syscalls, request::KernelFilesystem, MountRequests};
 use fuser::{Config, Session, SessionACL, SessionMonitor, SessionPhase};
-use layerfs_mount_ports::ports::MountServices;
+use layerfs_vfs::ports::mount::MountServices;
 use std::{fs, io, sync::Arc, thread, time::Duration};
 
 impl KernelSession {

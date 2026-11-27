@@ -3,7 +3,7 @@
 //! argument, fresh random bytes, an answer's list with its `<list>_count`
 //! companion, and a map of ordered fields.
 use crate::outcome::{failed, refused};
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use std::sync::{Mutex, MutexGuard};
 
 /// The lock of a table each holder changes in one step (one insert, remove
@@ -51,7 +51,7 @@ pub fn ordered_token(home: &str, kind: &str, floor: &[&str]) -> String {
         .map(|floor| floor.saturating_add(1))
         .fold(now, u64::max);
     let nonce = match random() {
-        Ok(bytes) => layerfs_bridge::sdk_values::hex(&bytes[..8]),
+        Ok(bytes) => layerfs_protocol::sdk::hex(&bytes[..8]),
         Err(_) => format!("{:016x}", milliseconds),
     };
     let home: String = home.chars().filter(char::is_ascii_alphanumeric).collect();
@@ -71,7 +71,7 @@ fn token_milliseconds(value: &str) -> Option<u64> {
 
 /// 32 fresh random bytes from the transport's key generator.
 pub fn random() -> Result<[u8; 32], SdkRefusal> {
-    layerfs_bridge::duplex::generate_keypair()
+    layerfs_protocol::duplex::generate_keypair()
         .map(|pair| pair.public)
         .map_err(failed)
 }

@@ -1,15 +1,6 @@
 //! Authenticated one-time file installation and concrete Store bootstrap.
-use crate::{
-    bootstrap::open_store_observed,
-    install_file,
-    install_types::{InstallError, InstallFailure, InstallWork, InstalledStore, StoreSettings},
-    shared_install::{check_initial, InitialCheck},
-};
-use layerfs_bridge::{
-    control::{ControlError, InstallPhase, InstallReply, INSTALL_FINISH},
-    duplex::Connection,
-    provision::{StoreManifest, StoreProfile},
-};
+use {layerfs_store_service::{bootstrap::open_store_observed, install::{check_initial, InitialCheck}}, crate::{install_file, install_types::{InstallError, InstallFailure, InstallWork, InstalledStore, StoreSettings}}};
+use layerfs_protocol::{provision::{install::{ControlError, InstallPhase, InstallReply, INSTALL_FINISH}, manifest::{StoreManifest, StoreProfile}}, duplex::Connection};
 use layerfs_persistence::{PersistenceConfig, SqlitePersistenceProfile};
 use std::{fs, path::Path};
 

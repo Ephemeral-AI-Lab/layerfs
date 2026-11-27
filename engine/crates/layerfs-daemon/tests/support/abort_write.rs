@@ -1,7 +1,7 @@
 //! Kernel-denied writes to this test's own, already-bound abort descriptor.
 //! The filter belongs only to the calling thread, which exits after Unmount.
 //! No descriptor is replaced and no test code writes a fusectl file.
-use layerfs_bridge::control::ReadyMount;
+use layerfs_protocol::provision::install::ReadyMount;
 use nix::libc;
 use std::{
     fs, io,

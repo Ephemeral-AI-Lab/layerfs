@@ -10,8 +10,8 @@
 //! Nothing runs a machine or a daemon: records are written by hand, and a
 //! `sleep` this test starts and ends stands for a daemon that ended.
 #![cfg(any(target_os = "linux", target_os = "macos"))]
-use layerfs_bridge::control::SdkValue;
-use layerfs_bridge::process::LocalProcess;
+use layerfs_protocol::provision::install::SdkValue;
+use layerfs_os::process::LocalProcess;
 use layerfs_home::home::{self, paths, write_record};
 use layerfs_sandbox::family::{remove, RemoveRequest, Removed};
 use layerfs_sandbox::record::{DaemonRecord, Local};
@@ -34,7 +34,7 @@ fn removed(
     home: &Path,
     name: &str,
     force: bool,
-) -> Result<Removed, layerfs_bridge::control::SdkRefusal> {
+) -> Result<Removed, layerfs_protocol::provision::install::SdkRefusal> {
     let mut sink = |_| {};
     let mut events = layerfs_home::events::Events::new(&mut sink);
     let request = RemoveRequest {

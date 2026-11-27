@@ -16,7 +16,7 @@
 //! the same read. Paths are found as the Dirty check finds them.
 use super::dirty::{join, Names, WALK};
 use super::{Failure, Service};
-use crate::store::BoundWorkspace;
+use layerfs_store_service::store::BoundWorkspace;
 use layerfs_content::compare::{locate, TreeTable};
 use layerfs_content::filesystem::attributes::{read_portable, AttributeReadWork};
 use layerfs_content::filesystem::{FilesystemRootId, PathName};
@@ -79,7 +79,7 @@ impl Service {
         }
         let reader = self.store.ports(binding.scope);
         let failed = |error: layerfs_content::ContentError| {
-            Failure::Workspace(layerfs_workspace::WorkspaceError::Service(Box::new(error)))
+            Failure::Workspace(layerfs_vfs::WorkspaceError::Service(Box::new(error)))
         };
         let base = ObjectId::from_bytes(&state.base_root).map_err(failed)?;
         let tree = TreeTable::open(reader.as_ref(), FilesystemRootId(base)).map_err(failed)?;

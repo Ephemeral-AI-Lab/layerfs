@@ -18,7 +18,7 @@
 //! an observation before terminal admission, so a write that lands after it
 //! is closed with the Workspace.
 use super::{registry::bound, Failure, Service};
-use layerfs_bridge::control::{DirtyReport, WorkspaceToken};
+use layerfs_protocol::provision::install::{DirtyReport, WorkspaceToken};
 use layerfs_content::compare::{locate, TreeTable};
 use layerfs_content::filesystem::attributes::{read_portable, AttributeReadWork};
 use layerfs_content::filesystem::FilesystemRootId;
@@ -104,7 +104,7 @@ impl Service {
         }
         let reader = self.store.ports(binding.scope);
         let failed = |error: layerfs_content::ContentError| {
-            Failure::Workspace(layerfs_workspace::WorkspaceError::Service(Box::new(error)))
+            Failure::Workspace(layerfs_vfs::WorkspaceError::Service(Box::new(error)))
         };
         let base = ObjectId::from_bytes(&state.base_root).map_err(failed)?;
         let tree = TreeTable::open(reader.as_ref(), FilesystemRootId(base)).map_err(failed)?;

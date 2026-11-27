@@ -24,9 +24,9 @@ use crate::image_artifact as cache;
 use crate::image_load::{existing_home_id, owned_for_home_id, remove_container, Target};
 use crate::image_lock::{ImageLock, PruneGate};
 use crate::sweep::{Bounds, Budget, BOUNDS};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::home::log_swept as log;
-use layerfs_sandbox_backend::rootfs::{self, Temporary};
+use crate::rootfs::{self, Temporary};
 use std::path::Path;
 use std::time::{Duration, Instant};
 

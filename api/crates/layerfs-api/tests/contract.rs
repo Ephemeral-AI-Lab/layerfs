@@ -15,8 +15,8 @@
 //!
 //! Every package has landed: [`PENDING_MUST_BE_EMPTY`] holds the pending
 //! file empty.
-use layerfs_api::{json, Asked, Call, Form, Kind, Paging, Part, Place, Section};
-use layerfs_bridge::control::SdkValue;
+use {layerfs_home::json, layerfs_api::{Asked, Call, Form, Kind, Paging, Part, Place, Section}};
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::outcome::{public_code, CODES, FOLDS};
 use layerfs_home::state::{Reason, State, WORDS};
 use std::path::{Path, PathBuf};

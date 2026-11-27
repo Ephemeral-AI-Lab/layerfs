@@ -6,10 +6,10 @@ use crate::calls::table::Kind::Name;
 use crate::calls::table::{a, call, opt, Call, PROGRESS};
 use crate::calls::Context;
 use crate::doctor::answer::{self, FORM};
-use layerfs_bridge::control::SdkValue;
-use layerfs_control::doctor::{Kind, Options};
+use layerfs_protocol::provision::install::SdkValue;
+use layerfs_inspect::{Kind, Options};
 use layerfs_home::outcome::{refused, Outcome};
-use layerfs_store::record::{StoreKind, StoreRecord};
+use {layerfs_protocol::StoreKind, layerfs_store::record::StoreRecord};
 
 /// Its table entry.
 pub(crate) const CALL: Call = call(
@@ -41,7 +41,7 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
             Some(StoreKind::Postgresql)
                 if !record.as_ref().is_some_and(|r| r.is_attached(machine)) =>
             {
-                return Err(layerfs_control::store::not_attached(store, machine));
+                return Err(layerfs_store::admin::with_users::not_attached(store, machine));
             }
             _ => {}
         }

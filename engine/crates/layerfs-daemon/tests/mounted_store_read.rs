@@ -41,15 +41,8 @@ mod mounted;
 #[allow(dead_code)]
 #[path = "support/store_gate.rs"]
 mod store_gate;
-use layerfs_bridge::control::{
-    AbortDisposition, Activity, ControlCode, DetachDisposition, ForcedOutcome, MountPhase,
-    MountWork, ReadyMount, Reply, Request, TeardownCustody, TeardownStage, WorkspaceToken,
-};
-use layerfs_daemon::{
-    control::Failure,
-    store::{Store, StoreReader},
-    OwnerClient,
-};
+use layerfs_protocol::provision::install::{AbortDisposition, Activity, ControlCode, DetachDisposition, ForcedOutcome, MountPhase, MountWork, ReadyMount, Reply, Request, TeardownCustody, TeardownStage, WorkspaceToken};
+use {layerfs_daemon::control::Failure, layerfs_store_service::{store::{Store, StoreReader}, OwnerClient}};
 use layerfs_overlay::{CleanupState, KernelMount, KernelMountState, StoredCounts};
 use layerfs_persistence::SqliteHandles;
 use layerfs_storage::{port::PackPersistence, ReservationBlocks, Storage};
@@ -280,9 +273,9 @@ fn job<T>(
     client: &OwnerClient,
     route: Route,
     command: impl FnOnce(
-        &layerfs_daemon::OwnerClient,
-        layerfs_workspace::Route,
-    ) -> Result<T, layerfs_daemon::OwnerError>,
+        &layerfs_store_service::OwnerClient,
+        layerfs_vfs::Route,
+    ) -> Result<T, layerfs_store_service::OwnerError>,
 ) -> T {
     command(client, route).unwrap_or_else(|error| panic!("{error:?}"))
 }
@@ -291,7 +284,7 @@ fn engine_mount(client: &OwnerClient, route: Route) -> Option<KernelMount> {
     job(
         client,
         route,
-        |job_client: &layerfs_daemon::OwnerClient, job_route| {
+        |job_client: &layerfs_store_service::OwnerClient, job_route| {
             job_client.kernel_retained_mount(job_route)
         },
     )
@@ -300,7 +293,7 @@ fn mount_state(client: &OwnerClient, route: Route, mount: KernelMount) -> Kernel
     job(
         client,
         route,
-        |job_client: &layerfs_daemon::OwnerClient, job_route| {
+        |job_client: &layerfs_store_service::OwnerClient, job_route| {
             job_client.kernel_state(job_route, mount)
         },
     )
@@ -366,7 +359,7 @@ impl Staged {
         let gate = Gate::new();
         let reader_config = fixture.config.clone();
         let reader_gate = gate.clone();
-        let factory: layerfs_daemon::store::ReaderFactory = Arc::new(move |_| {
+        let factory: layerfs_store_service::store::ReaderFactory = Arc::new(move |_| {
             let read = SqliteHandles::open_read_only(
                 reader_config.clone(),
                 installed::BINDING,
@@ -635,7 +628,7 @@ fn unmount_apart(harness: &Harness, token: WorkspaceToken) -> (Receiver<Left>, J
     let (sender, receiver) = mpsc::channel();
     let worker = thread::spawn(move || {
         let left = match service.execute_control(&Request::Unmount(
-            layerfs_bridge::control::UnmountControl {
+            layerfs_protocol::provision::install::UnmountControl {
                 token,
                 discard: true,
             },
@@ -875,7 +868,7 @@ fn force_beside_a_read_inside_its_store_read_stops_at_requests_and_revokes_nothi
     for (what, request) in [
         (
             "Unmount",
-            Request::Unmount(layerfs_bridge::control::UnmountControl {
+            Request::Unmount(layerfs_protocol::provision::install::UnmountControl {
                 token,
                 discard: true,
             }),
@@ -1068,4 +1061,4 @@ fn force_completes_when_the_read_inside_its_store_read_returns_inside_the_drain_
     checks.done(name);
 }
 
-use layerfs_workspace::Route;
+use layerfs_vfs::Route;

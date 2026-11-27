@@ -10,7 +10,7 @@ mod installed;
 #[allow(dead_code)]
 mod support;
 
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_content::{object::inode_leaf::InodeKind, AuthenticatedObjects};
 use layerfs_history::WorkspaceId;
 use layerfs_store_service::read::window;

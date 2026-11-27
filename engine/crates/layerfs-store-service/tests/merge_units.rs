@@ -12,7 +12,7 @@ mod support;
 #[allow(dead_code)]
 mod view;
 
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use std::fs;
 use support::{operation, write, Change, Fixture};
 

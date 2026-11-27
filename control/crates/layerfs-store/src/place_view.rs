@@ -17,7 +17,7 @@
 //! The view is bounded by the places the home actually records; it never
 //! scans a Store, a Workspace or a content pack.
 use crate::open_args::OpenArgs;
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_history::PlaceView;
 use layerfs_home::home::{paths, read_record};
 use layerfs_machine::record::MachineRecord;
@@ -38,11 +38,11 @@ pub fn admits(method: &str) -> bool {
 /// Runs `work` with the place view of `open`'s home installed, unless a
 /// caller (a worker frame) installed one already: one admitting call's read.
 pub fn scoped<R>(open: &OpenArgs, work: impl FnOnce() -> R) -> R {
-    let place = match layerfs_store_service::history::admission::has_place_view() {
+    let place = match layerfs_persistence::has_place_view() {
         true => None,
         false => from_open(open),
     };
-    layerfs_store_service::history::admission::with_place_view(place, work)
+    layerfs_persistence::with_place_view(place, work)
 }
 
 /// Builds the bounded place view from the caller's home alone.

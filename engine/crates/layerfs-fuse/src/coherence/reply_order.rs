@@ -8,7 +8,7 @@
 //! kernel discards an attribute reply sampled before a newer inode version;
 //! that discard, not reply order on the wire, is what the daemon relies on.
 use crate::RequestDisposition;
-use layerfs_mount_ports::operations::{KernelMutation, MutationFailure};
+use layerfs_vfs::requests::{KernelMutation, MutationFailure};
 
 /// Called once the reply method returned. The pinned library reports no send
 /// result, so this is a reply *attempt*: the ticket is released whether or not

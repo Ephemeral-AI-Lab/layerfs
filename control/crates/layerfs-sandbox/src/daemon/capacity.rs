@@ -13,7 +13,7 @@ use crate::daemon::pool::{Controls, Dial};
 use crate::direct;
 use crate::internal::Control;
 use crate::record::SandboxRecord;
-use layerfs_bridge::control::{CapacityModel, Request, SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{CapacityModel, Request, SdkRefusal, SdkValue};
 use layerfs_home::home::paths;
 use layerfs_home::outcome::{failed, refused};
 use layerfs_home::secrets;
@@ -24,7 +24,7 @@ use std::time::{Duration, Instant};
 
 /// The daemon's operator read model of control admission and retained
 /// connection failures.
-pub const OPERATION: &str = layerfs_bridge::control::OPERATION;
+pub const OPERATION: &str = layerfs_protocol::provision::install::OPERATION;
 
 /// How long one daemon query may take: connecting, its Hello and its one
 /// exchange. Short on purpose: a reader must not stall behind a daemon that

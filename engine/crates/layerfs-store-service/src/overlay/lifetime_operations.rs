@@ -2,7 +2,7 @@
 use crate::overlay::owner::Readiness;
 use crate::{OwnerClient, OwnerError, ServiceClass};
 use layerfs_overlay::{BaseSource, Capture, CapturedReader, OperationOwner, OverlayError};
-use layerfs_workspace::Route;
+use layerfs_vfs::Route;
 impl OwnerClient {
     pub fn acquire_operation(
         &self,
@@ -119,8 +119,8 @@ impl OwnerClient {
     pub fn namespace(
         &self,
         route: Route,
-        job: Box<layerfs_workspace::NamespaceJob>,
-    ) -> Result<layerfs_workspace::JobOutcome, OwnerError> {
+        job: Box<layerfs_vfs::NamespaceJob>,
+    ) -> Result<layerfs_vfs::JobOutcome, OwnerError> {
         self.call_observed(Some(route), ServiceClass::Mutation, None, move |db, _| {
             if route.engine() != job.source().engine() {
                 return Err(OwnerError::Overlay(OverlayError::Stale));
@@ -133,8 +133,8 @@ impl OwnerClient {
     pub fn install_prepared(
         &self,
         route: Route,
-        workspace: std::sync::Arc<layerfs_workspace::Workspace>,
-        input: layerfs_workspace::PreparedBase,
+        workspace: std::sync::Arc<layerfs_vfs::Workspace>,
+        input: layerfs_vfs::PreparedBase,
     ) -> Result<(), OwnerError> {
         let ready = Some(Readiness::Install(input.capture()));
         self.call_observed(Some(route), ServiceClass::General, ready, move |db, _| {

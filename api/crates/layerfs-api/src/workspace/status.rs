@@ -4,10 +4,10 @@ use crate::calls::scope::Rule;
 use crate::calls::table::Kind::Text;
 use crate::calls::table::{a, call, opt, Call};
 use crate::calls::{Context, Form, Part};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::outcome::Outcome;
-use layerfs_sandbox::workspace::answers::status as answered;
-use layerfs_sandbox::workspace::calls::{status, StatusRequest};
+use layerfs_workspace::answers::status as answered;
+use layerfs_workspace::route::send::{status, StatusRequest};
 
 /// One change; a file is the usual `type`.
 const CHANGE: Form = Form::of(&["path", "change"], &["type"], &["path", "change", "type"])

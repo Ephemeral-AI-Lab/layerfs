@@ -1,6 +1,6 @@
 //! Logical binding and kernel mount acknowledgements.
 use crate::{internal::Control, OperationFailure};
-use layerfs_bridge::control::{MountPlace, ReadyMount, Reply, Request, WorkspaceToken};
+use layerfs_protocol::provision::install::{MountPlace, ReadyMount, Reply, Request, WorkspaceToken};
 use layerfs_history::{BranchId, BranchSnapshot, WorkspaceId};
 use std::fmt;
 

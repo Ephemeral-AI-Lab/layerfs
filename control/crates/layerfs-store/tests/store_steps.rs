@@ -1,7 +1,7 @@
 //! The `store.file` frame (layerfs-project#109): the typed step encodes the
 //! frame its callers built by hand, and the worker's decode refuses in the
 //! order it always did.
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_store::sqlite::transfer::step::{StepFrame, StoreStep};
 
 fn t(text: &str) -> SdkValue {

@@ -13,8 +13,8 @@
 //! test here takes one lock. The walker's own tests are layerfs-sandbox
 //! `inspect_files`.
 #![cfg(unix)]
-use layerfs_api::home::{self, lease, paths, read_record, write_record};
-use layerfs_bridge::control::SdkValue;
+use {layerfs_api::home::{self, paths, read_record, write_record}, layerfs_store::lease};
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_sandbox::record::{DaemonRecord, Local, WorkspaceRecord};
 use std::collections::BTreeMap;
 use std::net::{SocketAddr, TcpListener};
@@ -133,7 +133,7 @@ fn sandbox_as(root: &Path, runtime: &'static str) -> PathBuf {
     std::fs::write(folder.join("config/daemon.setup"), "private key").unwrap();
     std::fs::write(folder.join("tmp/notes.txt"), "left by a command\n").unwrap();
     std::fs::write(folder.join("tmp/project/main.rs"), "fn main() {}\n").unwrap();
-    let me = layerfs_bridge::process::LocalProcess::observe(std::process::id()).unwrap();
+    let me = layerfs_os::process::LocalProcess::observe(std::process::id()).unwrap();
     let daemon = DaemonRecord::local(Local {
         platform: "macos".to_owned(),
         name: name.to_owned(),
@@ -397,7 +397,7 @@ fn reads_its_home_only(home: &Path, folder: &Path) {
         ("byte_length", SdkValue::Int(4)),
     ];
     assert_eq!(
-        layerfs_api::json::print(&call(home, "sandbox.files", &file).unwrap()),
+        layerfs_home::json::print(&call(home, "sandbox.files", &file).unwrap()),
         r#"{"items":null,"next_cursor":null,"text":"by a","binary":false,"size":null,"next_byte_offset":9,"type":"file"}"#
     );
     let asked = [("sandbox", t("s1")), ("path", p(&tmp.join("nothing")))];
@@ -443,7 +443,7 @@ fn the_table_lists_the_call_quiet_with_a_path_and_its_options() {
             "machine.log"
         ]
     );
-    let table = layerfs_api::json::parse(&layerfs_api::table_json()).unwrap();
+    let table = layerfs_home::json::parse(&layerfs_api::table_json()).unwrap();
     let SdkValue::List(calls) = table else {
         panic!()
     };

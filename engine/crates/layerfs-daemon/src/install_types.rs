@@ -1,10 +1,6 @@
 //! Original file publication and opened-Store custody during kernel installation.
-use crate::{bootstrap::OpenedStore, store::PortError};
-use layerfs_bridge::{
-    control::{ControlError, InstallPhase, InstallRefusal, RefusalKind},
-    duplex::ChannelError,
-    provision::StoreManifest,
-};
+use layerfs_store_service::{bootstrap::OpenedStore, store::PortError};
+use layerfs_protocol::{provision::{install::{ControlError, InstallPhase, InstallRefusal, RefusalKind}, manifest::StoreManifest}, duplex::ChannelError};
 use layerfs_content::ContentError;
 use layerfs_history::HistoryError;
 use layerfs_storage::{ReservationBlocks, StorageError};

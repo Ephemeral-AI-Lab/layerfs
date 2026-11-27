@@ -29,7 +29,7 @@
 //! the same budget, holding one frame and that value.
 #![cfg(any(target_os = "macos", target_os = "linux"))]
 use crate::host_write::{header, InputKind};
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::json;
 use layerfs_home::outcome::{refused, Outcome};
 use layerfs_machine::worker::{

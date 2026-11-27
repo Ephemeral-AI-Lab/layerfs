@@ -27,7 +27,7 @@ use super::list::handle;
 use super::record::{self, SandboxRecord};
 use crate::host::Call;
 use crate::route::on_machine;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::home;
 use layerfs_home::op::{Op, Standing};

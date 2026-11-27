@@ -3,9 +3,9 @@ use crate::calls::scope::Rule;
 use crate::calls::table::Kind::{Bool, Content, Function, Json, Text};
 use crate::calls::table::{a, call, opt, Call, PROGRESS};
 use crate::calls::{Context, Form, Policy};
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::outcome::{refused, Outcome};
-use layerfs_sandbox::workspace::exec::{exec, ExecRequest};
+use layerfs_workspace::exec::call::{exec, ExecRequest};
 
 const FORM: Form = Form::of(
     &["exit_code"],

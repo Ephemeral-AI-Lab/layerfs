@@ -4,10 +4,10 @@ use crate::calls::table::Kind::{Int, Name, Text};
 use crate::calls::table::{a, call, opt, Call};
 use crate::calls::{Context, Paging};
 use crate::sandbox::log::{self, FORM};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::names::MachineName;
 use layerfs_home::outcome::Outcome;
-use layerfs_sandbox::inspect::{machine_log, Window};
+use layerfs_inspect::{machine_log, Window};
 
 /// Its table entry: a read a UI polls, so it writes no log line.
 pub(crate) const CALL: Call = call(

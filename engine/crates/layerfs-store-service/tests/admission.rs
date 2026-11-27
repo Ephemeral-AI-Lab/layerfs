@@ -7,7 +7,7 @@ mod installed;
 #[allow(dead_code)]
 mod support;
 
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_history::records::{GcIntent, GcIntentKind, GcScopeKind};
 use layerfs_history::{HistoryError, PlaceAuthority, PlaceView, WorkspaceId};
 use layerfs_store_service::history::{admission, deletion, lookup, removal};
@@ -43,7 +43,7 @@ fn a_mount_intent_records_owner_evidence_and_settles_unresolved() {
         .expect("snapshot")
         .expect("the Branch");
     let workspace = WorkspaceId::from_authority([7; 32]).expect("workspace");
-    let place = layerfs_bridge::control::MountPlace::new(Some("sandbox-7"), Some("machine-7"));
+    let place = layerfs_protocol::provision::install::MountPlace::new(Some("sandbox-7"), Some("machine-7"));
     let intent = admission::mount_intent(
         workspace,
         &snapshot,
@@ -106,7 +106,7 @@ fn a_mount_intent_records_the_callers_place_authority() {
         .expect("snapshot")
         .expect("the Branch");
     let workspace = WorkspaceId::from_authority([8; 32]).expect("workspace");
-    let place = layerfs_bridge::control::MountPlace::new(Some("sandbox-8"), Some("machine-8"));
+    let place = layerfs_protocol::provision::install::MountPlace::new(Some("sandbox-8"), Some("machine-8"));
     let authority = PlaceAuthority {
         machine_incarnation: Some("worker:2".to_owned()),
         sandbox_generation: Some("generation:2".to_owned()),
@@ -163,7 +163,7 @@ fn a_newer_incarnation_settles_the_older_mount_at_removal_not_at_mount() {
             WorkspaceId::from_authority([tag; 32]).expect("workspace"),
             &snapshot,
             Some("installed"),
-            &layerfs_bridge::control::MountPlace::new(Some("sandbox-9"), Some("machine-9")),
+            &layerfs_protocol::provision::install::MountPlace::new(Some("sandbox-9"), Some("machine-9")),
             PlaceAuthority {
                 machine_incarnation: Some(incarnation.to_owned()),
                 sandbox_generation: None,
@@ -285,7 +285,7 @@ fn a_mount_sees_a_live_init_or_merge_but_shares_with_another_mount() {
         .branch_snapshot(branch.id)
         .expect("snapshot")
         .expect("the Branch");
-    let place = layerfs_bridge::control::MountPlace::new(Some("sandbox-7"), Some("machine-7"));
+    let place = layerfs_protocol::provision::install::MountPlace::new(Some("sandbox-7"), Some("machine-7"));
     let mount = |tag: u8| {
         admission::mount_intent(
             WorkspaceId::from_authority([tag; 32]).expect("workspace"),
@@ -356,7 +356,7 @@ fn a_placed_bind_records_the_sandbox_generation() {
     let history = fixture.service.store.history();
     let incarnation = "p1:aa11.worker:10:aa";
     let generation = "p1:aa11.sandbox:10:aa";
-    let place = layerfs_bridge::control::MountPlace::new(Some("sandbox-21"), Some("machine-21"))
+    let place = layerfs_protocol::provision::install::MountPlace::new(Some("sandbox-21"), Some("machine-21"))
         .with_generation(Some(generation))
         .with_machine_incarnation(Some(incarnation));
     let bound = fixture
@@ -405,7 +405,7 @@ fn a_tombstoned_sandbox_generation_settles_its_mount() {
     let history = fixture.service.store.history();
     let incarnation = "p1:aa11.worker:10:aa";
     let generation = "p1:aa11.sandbox:10:aa";
-    let place = layerfs_bridge::control::MountPlace::new(Some("sandbox-22"), Some("machine-22"))
+    let place = layerfs_protocol::provision::install::MountPlace::new(Some("sandbox-22"), Some("machine-22"))
         .with_generation(Some(generation))
         .with_machine_incarnation(Some(incarnation));
     let bound = fixture
@@ -804,7 +804,7 @@ fn the_service_reconcile_settles_the_dead_mount() {
         .expect("snapshot")
         .expect("the Branch");
     let workspace = WorkspaceId::from_authority([9; 32]).expect("workspace");
-    let place = layerfs_bridge::control::MountPlace::new(Some("sandbox-9"), Some("machine-9"));
+    let place = layerfs_protocol::provision::install::MountPlace::new(Some("sandbox-9"), Some("machine-9"));
     let authority = PlaceAuthority {
         machine_incarnation: Some(token(10, "a")),
         sandbox_generation: Some(token(10, "g")),

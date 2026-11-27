@@ -46,12 +46,10 @@ mod mounted;
 #[allow(dead_code)]
 #[path = "support/mounted_commit.rs"]
 mod rig;
-use layerfs_bridge::control::{
-    Activity, MountWork, ReadyMount, Reply, Request, WorkspaceStatus, WorkspaceToken,
-};
-use layerfs_daemon::{control::Service, OwnerClient, OwnerWork, ServiceClass};
+use layerfs_protocol::provision::install::{Activity, MountWork, ReadyMount, Reply, Request, WorkspaceStatus, WorkspaceToken};
+use {layerfs_daemon::control::Service, layerfs_store_service::{OwnerClient, OwnerWork, ServiceClass}};
 use layerfs_history::{CommitOutcome, CommitRecord};
-use layerfs_workspace::Route;
+use layerfs_vfs::Route;
 use model::{assert_same, Flat, DIRECTORY, FILE};
 use mounted::{mount_entry, COMMAND};
 use nix::libc;
@@ -494,7 +492,7 @@ fn commit(rig: &Rig, token: WorkspaceToken, what: &str) -> CommitRecord {
     let (sender, receiver) = mpsc::channel();
     let worker = thread::spawn(move || {
         let outcome = match service.execute_control(&Request::Commit(
-            layerfs_bridge::control::CommitControl {
+            layerfs_protocol::provision::install::CommitControl {
                 token,
                 force: false,
                 message: None,

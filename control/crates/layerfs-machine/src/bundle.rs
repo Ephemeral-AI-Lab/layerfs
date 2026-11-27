@@ -5,12 +5,12 @@
 //! with its hash in `bundle.json`; `tools/linux_bundle.py` builds and places
 //! it. An installed runtime carries its own beside its command, which comes
 //! first; `LAYERFS_BUNDLE` (internal) names another folder.
-use layerfs_bridge::control::SdkRefusal;
+use layerfs_protocol::provision::install::SdkRefusal;
 use layerfs_home::outcome::refused;
 #[cfg(feature = "machine")]
 use layerfs_home::outcome::{shell_word, with_fix};
 #[cfg(feature = "machine")]
-use layerfs_platform::Bundle;
+use crate::platform::Bundle;
 use std::path::PathBuf;
 
 /// The Sandbox image archive (a docker-archive) a Linux bundle carries.
@@ -125,9 +125,9 @@ pub fn bundle() -> Result<Bundle, SdkRefusal> {
                     dir.display()
                 ),
             );
-            refusal.detail = layerfs_bridge::control::SdkValue::map([(
+            refusal.detail = layerfs_protocol::provision::install::SdkValue::map([(
                 "missing",
-                layerfs_bridge::control::SdkValue::List(vec![layerfs_bridge::control::SdkValue::text(
+                layerfs_protocol::provision::install::SdkValue::List(vec![layerfs_protocol::provision::install::SdkValue::text(
                     format!("bundle:{}", dir.display()),
                 )]),
             )]);
@@ -136,7 +136,7 @@ pub fn bundle() -> Result<Bundle, SdkRefusal> {
     let manifest = layerfs_home::home::read_record(&dir.join("bundle.json"))?;
     if let Some(manifest) = manifest {
         if let Some(protocol) = manifest.get("protocol") {
-            if protocol != &layerfs_bridge::control::SdkValue::Int(crate::worker::PROTOCOL) {
+            if protocol != &layerfs_protocol::provision::install::SdkValue::Int(crate::worker::PROTOCOL) {
                 return Err(refused("Unavailable", format!(
                     "the Linux bundle at {} has an incompatible worker protocol; rebuild it with `python3 tools/linux_bundle.py` before starting a machine (expected protocol {})",
                     dir.display(), crate::worker::PROTOCOL)));
@@ -201,12 +201,12 @@ pub fn cache_root() -> Result<PathBuf, SdkRefusal> {
 /// An invalid or incompatible mapping is refused rather than silently bypassed.
 #[cfg(feature = "machine")]
 pub fn prepared_os_image(
-    kind: layerfs_platform::Platform,
+    kind: crate::platform::Platform,
     bundle: &Bundle,
 ) -> Result<Option<String>, SdkRefusal> {
-    use layerfs_bridge::control::SdkValue;
+    use layerfs_protocol::provision::install::SdkValue;
     use layerfs_home::home::read_record;
-    use layerfs_platform::Platform;
+    use crate::platform::Platform;
     if !matches!(kind, Platform::Lima | Platform::AppleContainer) {
         return Ok(None);
     }

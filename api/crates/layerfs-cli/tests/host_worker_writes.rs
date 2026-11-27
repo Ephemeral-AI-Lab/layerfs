@@ -9,7 +9,7 @@ mod fixture;
 mod writes;
 
 use fixture::Fixture;
-use layerfs_api::json;
+use layerfs_home::json;
 use std::io::Write;
 use std::os::unix::net::UnixStream;
 use std::process::{Child, Command, Output, Stdio};

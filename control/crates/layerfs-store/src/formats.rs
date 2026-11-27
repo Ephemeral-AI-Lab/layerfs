@@ -14,7 +14,7 @@
 use crate::place::{self, Executor};
 use crate::record::{StoreRecord, StoreRef};
 use crate::upgrade::FORMAT_OP;
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::home::paths;
 use layerfs_home::outcome::shell_word;
 use layerfs_persistence::upgrade::{

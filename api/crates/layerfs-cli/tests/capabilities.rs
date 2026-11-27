@@ -1,8 +1,8 @@
 //! Discovery works without initializing a home and reflects the API table.
 mod common;
 use common::{layerfs, run, tempdir, text};
-use layerfs_api::json;
-use layerfs_bridge::control::SdkValue;
+use layerfs_home::json;
+use layerfs_protocol::provision::install::SdkValue;
 
 #[test]
 fn version_identifies_source_and_features_without_a_home() {
@@ -33,7 +33,7 @@ fn version_identifies_source_and_features_without_a_home() {
     );
     assert_eq!(
         features.contains(&SdkValue::text("sandbox-runtime")),
-        layerfs_bridge::sandbox_runtime::LOADER.is_some()
+        layerfs_sandbox::backend::namespaces::linux::runtime::LOADER.is_some()
     );
     // the Store formats this build writes (#804 §2)
     assert_eq!(

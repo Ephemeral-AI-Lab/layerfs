@@ -4,7 +4,7 @@
 //! names, and `home.log` / `home.clear_log`. The environment is shared by the
 //! test threads, so every test here takes one lock.
 use layerfs_api::Scope;
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::home::paths;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -94,7 +94,7 @@ fn lines(home: &Path) -> Vec<SdkValue> {
     match std::fs::read_to_string(paths::calls_file(home)) {
         Ok(text) => text
             .lines()
-            .map(|line| layerfs_api::json::parse(line).unwrap())
+            .map(|line| layerfs_home::json::parse(line).unwrap())
             .collect(),
         Err(_) => Vec::new(),
     }
@@ -334,7 +334,7 @@ fn free_text_credentials_content_and_json_are_byte_counts() {
         words.windows(2).any(|w| w == ["--user", "app"]),
         "{words:?}"
     );
-    let printed = layerfs_api::json::print(&line);
+    let printed = layerfs_home::json::print(&line);
     assert!(!printed.contains("hunter2"), "{printed}");
     assert!(argv(&line).contains(&bytes(7)), "{printed}");
     assert!(
@@ -349,7 +349,7 @@ fn free_text_credentials_content_and_json_are_byte_counts() {
     assert_eq!(argv(&last(&home))[3], bytes(11));
     // json, encoded length
     let changes = SdkValue::List(vec![map(&[("op", t("rm")), ("path", t("/b"))])]);
-    let encoded = layerfs_api::json::print(&changes).len();
+    let encoded = layerfs_home::json::print(&changes).len();
     let _ = call(
         &home,
         "file.apply",

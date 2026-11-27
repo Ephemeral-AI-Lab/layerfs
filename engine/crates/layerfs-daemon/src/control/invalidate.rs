@@ -3,8 +3,8 @@
 //! skips invalidation only for an install that changes nothing the kernel
 //! showed; this one sends it before the caller's answer.
 use super::{Failure, Service};
-use crate::store::BoundWorkspace;
-use layerfs_bridge::control::WorkspaceToken;
+use layerfs_store_service::store::BoundWorkspace;
+use layerfs_protocol::provision::install::WorkspaceToken;
 use layerfs_content::ObjectId;
 
 impl Service {
@@ -26,8 +26,8 @@ impl Service {
         #[cfg(target_os = "linux")]
         {
             use super::{kernel::Kernel, registry::bound};
-            use crate::store::Stale;
-            use layerfs_bridge::control::ControlCode;
+            use layerfs_store_service::store::Stale;
+            use layerfs_protocol::provision::install::ControlCode;
             let invalidator = {
                 let entries = self.entries.lock().map_err(|_| Failure::Poisoned)?;
                 match &bound(&entries, token)?.kernel {

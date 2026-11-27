@@ -4,7 +4,7 @@ use super::{
     fixture,
     mounted::{until, Harness, COMMAND},
 };
-use layerfs_bridge::control::{ReadyMount, WorkspaceToken};
+use layerfs_protocol::provision::install::{ReadyMount, WorkspaceToken};
 use layerfs_daemon::control::Success;
 use layerfs_history::BranchId;
 use nix::{

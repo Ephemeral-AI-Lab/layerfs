@@ -10,7 +10,7 @@
 //! names is the caller's to read: one that is gone is its `NotFound`.
 use crate::json;
 use crate::outcome::refused;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 
 /// The key of the call a cursor belongs to.
 const FOR: &str = "for";

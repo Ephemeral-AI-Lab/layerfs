@@ -9,10 +9,10 @@
 //! never starts a machine under the home lock; a move refuses the wrong
 //! side and a stopped machine, naming `machine start`. All from records:
 //! no Store is opened, so these run on any host.
-use layerfs_api::home::lease;
+use layerfs_store::lease;
 use layerfs_api::home::{self, paths, read_record, write_record};
-use layerfs_bridge::control::SdkValue;
-use layerfs_bridge::process::LocalProcess;
+use layerfs_protocol::provision::install::SdkValue;
+use layerfs_os::process::LocalProcess;
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -309,7 +309,7 @@ fn a_store_on_a_stopped_machine_is_blocked_and_its_read_starts_nothing() {
     }
     let listed = call(&home, "store.list", &[("machine", t("vm"))]).unwrap();
     assert_eq!(
-        layerfs_api::json::print(&listed),
+        layerfs_home::json::print(&listed),
         r#"{"items":[{"store":"shop","engine":"sqlite","state":"blocked","machine":"vm","blocked_by":{"machine":"vm","reason":"stopped"}}]}"#
     );
     assert!(
@@ -469,7 +469,7 @@ fn refusal(
     home: &Path,
     name: &str,
     args: &[(&str, SdkValue)],
-) -> layerfs_bridge::control::SdkRefusal {
+) -> layerfs_protocol::provision::install::SdkRefusal {
     let args = SdkValue::Map(
         args.iter()
             .map(|(n, v)| ((*n).to_owned(), v.clone()))

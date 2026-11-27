@@ -13,10 +13,10 @@ use crate::daemon::values;
 use crate::host::{Deploy, Host, Started};
 use crate::record::DaemonRecord;
 use crate::registry::{SandboxState, SANDBOXES};
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_bridge::daemon_setup::{DaemonLimits, DaemonSetup};
-use layerfs_bridge::provision::StoreManifest;
-use layerfs_bridge::{DaemonStore, KernelRoute};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::daemon_setup::{DaemonLimits, DaemonSetup};
+use layerfs_protocol::provision::manifest::StoreManifest;
+use layerfs_protocol::{DaemonStore, KernelRoute};
 use layerfs_home::helpers::lock;
 use layerfs_home::outcome::{failed, refused, Outcome};
 use std::path::Path;
@@ -396,7 +396,7 @@ pub fn close(host: &Host, force: bool, held: &[String]) -> Outcome {
     let bound = bound_mounts(&state, &mounted)?;
     drop(_guard);
     for path in &mounted {
-        let _ = crate::workspace::serve::unmount(host, Some(path), true, true);
+        let _ = layerfs_workspace::machine::serve::unmount(host, Some(path), true, true);
     }
     let value = crate::files::started(&directory)?
         .ok_or_else(|| refused("NoSuchSandbox", format!("Sandbox {id} was closed")))?;
@@ -415,7 +415,7 @@ pub fn close(host: &Host, force: bool, held: &[String]) -> Outcome {
     // ends the mount intents and reports the failure in `left`.
     let unretired = retired(host, &id);
     let pg = (host.store_record.as_ref())
-        .is_some_and(|r| r.kind().ok() == Some(layerfs_store::record::StoreKind::Postgresql));
+        .is_some_and(|r| r.kind().ok() == Some(layerfs_protocol::StoreKind::Postgresql));
     let (left, handed) = match (pg, &host.postgresql) {
         (true, None) => {
             let handed = crate::mount_intents::handed(&bound);

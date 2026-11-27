@@ -13,8 +13,8 @@ mod fixture;
 mod pg;
 
 use fixture::Fixture;
-use layerfs_api::names::HOST_MACHINE;
-use layerfs_bridge::control::SdkValue;
+use layerfs_home::names::HOST_MACHINE;
+use layerfs_protocol::provision::install::SdkValue;
 use pg::*;
 use std::path::Path;
 use std::time::{Duration, Instant};
@@ -66,7 +66,7 @@ fn retained(home: &Path) -> Vec<SdkValue> {
         .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "json"))
         .map(|entry| {
             let text = std::fs::read_to_string(entry.path()).unwrap();
-            layerfs_api::json::parse(&text).unwrap()
+            layerfs_home::json::parse(&text).unwrap()
         })
         .collect()
 }

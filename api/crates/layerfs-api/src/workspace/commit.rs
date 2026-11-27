@@ -3,11 +3,11 @@ use crate::calls::scope::Rule;
 use crate::calls::table::Kind::{Bool, Name, Text};
 use crate::calls::table::{a, call, opt, Call, MESSAGE};
 use crate::calls::{Context, Form, Policy};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::outcome::Outcome;
 use layerfs_sandbox::host::Message;
-use layerfs_sandbox::workspace::answers::committed;
-use layerfs_sandbox::workspace::calls::{commit, CommitRequest};
+use layerfs_workspace::answers::committed;
+use layerfs_workspace::route::send::{commit, CommitRequest};
 
 const FORM: Form = Form::of(
     &["commit"],

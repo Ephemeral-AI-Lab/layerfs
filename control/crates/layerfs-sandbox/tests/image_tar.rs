@@ -1,7 +1,7 @@
 //! The flat image tar copied from `docker export`: the init layer's files and
 //! device/FIFO entries are left out, everything else passes byte for byte.
 #[allow(dead_code)]
-#[path = "../../layerfs-sandbox-backend/tests/support/image.rs"]
+#[path = "support/image.rs"]
 mod fixture;
 use fixture::{pax_record, Tar};
 use layerfs_sandbox::image_tar::{dropped, Filtered};

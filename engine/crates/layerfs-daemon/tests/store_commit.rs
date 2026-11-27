@@ -12,17 +12,13 @@ use layerfs_content::filesystem::{
 use layerfs_content::{
     AuthenticatedObjects, ConstructionPolicy, FinalizedObject, ObjectId, ObjectRole,
 };
-use layerfs_daemon::{
-    bootstrap::open_store,
-    store::{BindRequest, BoundWorkspace, CommitError, CommitPhase, Store},
-    Owner, OwnerClient, OwnerConfig,
-};
+use layerfs_store_service::{bootstrap::open_store, store::{BindRequest, BoundWorkspace, CommitError, CommitPhase, Store}, Owner, OwnerClient, OwnerConfig};
 use layerfs_history::{BranchSnapshot, CommitOutcome, HistoryError, WorkspaceId};
 use layerfs_overlay::ProfileConfig;
 use layerfs_storage::{ReservationBlocks, Save, StorageError};
 use layerfs_telemetry::timer::Timing;
-use layerfs_workspace::Route;
-use layerfs_workspace::{Operation, Outcome, Position, Time};
+use layerfs_vfs::Route;
+use layerfs_vfs::{Operation, Outcome, Position, Time};
 use std::{
     cell::Cell,
     sync::{
@@ -36,9 +32,9 @@ fn job<T>(
     owner: &OwnerClient,
     route: Route,
     command: impl FnOnce(
-        &layerfs_daemon::OwnerClient,
-        layerfs_workspace::Route,
-    ) -> Result<T, layerfs_daemon::OwnerError>,
+        &layerfs_store_service::OwnerClient,
+        layerfs_vfs::Route,
+    ) -> Result<T, layerfs_store_service::OwnerError>,
 ) -> T {
     command(owner, route).unwrap_or_else(|error| panic!("{error:?}"))
 }
@@ -83,14 +79,14 @@ fn bytes(tag: u8) -> Vec<u8> {
 }
 fn window<T>(
     workspace: &BoundWorkspace,
-    f: impl FnOnce(&layerfs_daemon::store::StoreOperation, &layerfs_workspace::SourceView) -> T,
+    f: impl FnOnce(&layerfs_store_service::store::StoreOperation, &layerfs_vfs::SourceView) -> T,
 ) -> T {
     static NEXT: AtomicU64 = AtomicU64::new(100);
     let operation = workspace.operation().unwrap();
     let acquired = job(
         operation.overlay(),
         workspace.route(),
-        |job_client: &layerfs_daemon::OwnerClient, job_route| {
+        |job_client: &layerfs_store_service::OwnerClient, job_route| {
             job_client.acquire_base_source(job_route, NEXT.fetch_add(1, Ordering::Relaxed))
         },
     );
@@ -101,7 +97,7 @@ fn window<T>(
     job(
         operation.overlay(),
         workspace.route(),
-        |job_client: &layerfs_daemon::OwnerClient, job_route| {
+        |job_client: &layerfs_store_service::OwnerClient, job_route| {
             job_client.release_base_source(job_route, source)
         },
     );
@@ -141,7 +137,7 @@ fn write(workspace: &BoundWorkspace, value: &[u8]) {
         job(
             operation.overlay(),
             workspace.route(),
-            |job_client: &layerfs_daemon::OwnerClient, _| job_client.reply_attempted(publication),
+            |job_client: &layerfs_store_service::OwnerClient, _| job_client.reply_attempted(publication),
         );
     });
 }
@@ -295,7 +291,7 @@ fn known_publication_survives_an_unattempted_local_install() {
     assert_eq!(failed.phase, CommitPhase::Install);
     assert!(matches!(
         &failed.error,
-        CommitError::Owner(layerfs_daemon::OwnerError::Unattempted { .. })
+        CommitError::Owner(layerfs_store_service::OwnerError::Unattempted { .. })
     ));
     assert!(matches!(
         failed.published,
@@ -580,10 +576,10 @@ fn observed_store(
         SqliteHandles::open_writable(f.config.clone(), support::BINDING, support::CURSOR).unwrap(),
     );
     let config = f.config.clone();
-    let factory: layerfs_daemon::store::ReaderFactory = Arc::new(move |_| {
+    let factory: layerfs_store_service::store::ReaderFactory = Arc::new(move |_| {
         let read =
             SqliteHandles::open_read_only(config.clone(), support::BINDING, support::CURSOR)?;
-        Ok(layerfs_daemon::store::StoreReader::new(
+        Ok(layerfs_store_service::store::StoreReader::new(
             layerfs_storage::Storage::new(read.storage)?,
             Arc::new(read.history),
         ))
@@ -794,7 +790,7 @@ fn unknown_publication(
     Arc<Store>,
     Owner,
     Arc<BoundWorkspace>,
-    Box<layerfs_daemon::store::CommitFailure>,
+    Box<layerfs_store_service::store::CommitFailure>,
 ) {
     let f = support::Fixture::new(8, label);
     let (store, _handles) = observed_store(&f, boundary);

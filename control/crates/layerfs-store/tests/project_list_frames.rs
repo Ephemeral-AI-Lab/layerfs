@@ -1,8 +1,8 @@
 //! The `project.list` worker frame and its reply (T4.5c): the map the
 //! caller builds, the fields the worker decodes, and the filtered listing
 //! it sends back.
-use layerfs_bridge::control::SdkValue;
-use layerfs_bridge::sdk_values::hex;
+use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::hex;
 use layerfs_history::LayerStackId;
 use layerfs_home::names::StoreName;
 use layerfs_store::project::frame::{ListedProject, ListingFrame, ListingReply};

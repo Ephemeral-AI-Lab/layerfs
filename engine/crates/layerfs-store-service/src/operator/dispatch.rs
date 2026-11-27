@@ -1,7 +1,7 @@
 //! The backend Store call router (#428: `backend.store.*`).
 use super::{files, snapshot, store};
 use crate::StoreService;
-use layerfs_bridge::control::{SdkCall, SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkCall, SdkRefusal, SdkValue};
 
 /// Runs one backend Store call once. The read model's history half
 /// (`backend.store.project.get_history`) is the snapshot with no Workspaces,

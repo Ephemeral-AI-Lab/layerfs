@@ -130,7 +130,7 @@ fn a_caller_behind_a_wedged_worker_is_refused_before_sending() {
         &output.stdout
     })
     .into_owned();
-    let refusal = layerfs_api::json::parse(text.trim()).unwrap();
+    let refusal = layerfs_home::json::parse(text.trim()).unwrap();
     assert_eq!(refusal.get_text("error"), Some("Unavailable"), "{text}");
     let message = refusal.get_text("message").unwrap_or_default();
     assert!(message.contains("no call thread was free"), "{text}");

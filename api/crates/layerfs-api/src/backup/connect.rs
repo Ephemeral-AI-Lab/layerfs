@@ -5,7 +5,7 @@
 use crate::calls::table::Kind::{Content, Name, Text};
 use crate::calls::table::{a, call, opt, Call};
 use crate::calls::{Context, Form};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::names::BucketName;
 use layerfs_home::outcome::{refused, Outcome};
 use layerfs_store::backup::family::connect;
@@ -38,7 +38,7 @@ pub(crate) const CALL: Call = call(
 /// Option `name` as text: bytes must be UTF-8, and it may not be empty.
 /// The table requires both key options, so a missing one is refused
 /// before the call runs.
-fn text(args: &SdkValue, name: &str) -> Result<String, layerfs_bridge::control::SdkRefusal> {
+fn text(args: &SdkValue, name: &str) -> Result<String, layerfs_protocol::provision::install::SdkRefusal> {
     let text = match args.get(name) {
         Some(SdkValue::Bytes(bytes)) => String::from_utf8(bytes.clone())
             .map_err(|_| refused("InvalidInput", format!("`{name}` must be UTF-8 text")))?,

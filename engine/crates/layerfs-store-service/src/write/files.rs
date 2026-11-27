@@ -8,7 +8,7 @@ use crate::read::{snapshot, visibility::Visibility};
 use crate::store::{BindError, BindPhase};
 use crate::store_service::NamedBindFailure;
 use crate::StoreService;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_content::compare::TreeTable;
 use layerfs_content::filesystem::FilesystemRootId;
 use layerfs_history::{BranchRecord, CommitOutcome, CommitVia, LayerStackRecord, WorkspaceId};
@@ -268,7 +268,7 @@ fn resolve<'a>(
 
 /// A fresh identity for the call's private Workspace.
 fn workspace_id() -> Result<WorkspaceId, SdkRefusal> {
-    let key = layerfs_bridge::duplex::generate_keypair().map_err(args::failed)?;
+    let key = layerfs_protocol::duplex::generate_keypair().map_err(args::failed)?;
     WorkspaceId::from_authority(key.public).map_err(args::history)
 }
 

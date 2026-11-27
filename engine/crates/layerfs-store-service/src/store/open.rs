@@ -6,7 +6,7 @@ use layerfs_storage::{encoding::delta::select::DeltaCounters, save::PoolCounters
 use layerfs_storage::{
     port::PackPersistence, ReservationBlocks, Storage, StorageError, StoragePolicy, StorageResult,
 };
-use layerfs_workspace::{CanonicalCache, CanonicalClient, ClientWork};
+use layerfs_vfs::{CanonicalCache, CanonicalClient, ClientWork};
 use std::sync::{
     atomic::{AtomicU64, Ordering},
     Arc, Mutex,

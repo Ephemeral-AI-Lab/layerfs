@@ -19,8 +19,8 @@
 //!
 //! Nothing runs a daemon: a record names this test's own process.
 #![cfg(target_os = "macos")]
-use layerfs_bridge::control::SdkValue;
-use layerfs_bridge::process::LocalProcess;
+use layerfs_protocol::provision::install::SdkValue;
+use layerfs_os::process::LocalProcess;
 use layerfs_home::home::{self, paths, write_record};
 use layerfs_sandbox::family::{remove, RemoveRequest, Removed};
 use layerfs_sandbox::force::local_host;

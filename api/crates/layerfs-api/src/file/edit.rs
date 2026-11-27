@@ -5,7 +5,7 @@ use crate::calls::scope::Rule;
 use crate::calls::table::Kind::{Bool, Name, Project, Text};
 use crate::calls::table::{a, call, opt, Call, MESSAGE};
 use crate::calls::{Context, Form, Policy};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::outcome::Outcome;
 use layerfs_store::calls::file::{edit, FileEdit};
 

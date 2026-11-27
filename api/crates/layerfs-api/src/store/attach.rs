@@ -4,7 +4,7 @@
 use crate::calls::table::Kind::{Bool, Name};
 use crate::calls::table::{a, call, opt, Call};
 use crate::calls::{Context, Form};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::names::{MachineName, StoreName};
 use layerfs_home::outcome::Outcome;
 
@@ -41,5 +41,5 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let machine = MachineName::parse(args.get_text("machine").unwrap_or(""))?;
     let (home, events) = context.parts();
     let dry_run = args.get_bool("dry_run");
-    layerfs_control::store::attach(home, events, &store, &machine, dry_run)
+    layerfs_store::admin::with_users::attach(home, events, &store, &machine, dry_run)
 }

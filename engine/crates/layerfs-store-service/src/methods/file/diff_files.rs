@@ -4,7 +4,7 @@ use crate::{
     read::{file_compare, query},
     StoreService,
 };
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 
 /// `diff_files({ left, right }, { branch })`: two files compared line by line.
 pub fn diff_files(service: &StoreService, args: &SdkValue) -> Answer {

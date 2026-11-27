@@ -13,9 +13,7 @@ mod client;
 #[path = "support/rig.rs"]
 mod rig;
 use client::{Client, NOENT};
-use layerfs_bridge::control::{
-    CommitControl, MountPhase, ReadyMount, Reply, Request, UnmountControl, WorkspaceToken,
-};
+use layerfs_protocol::provision::install::{CommitControl, MountPhase, ReadyMount, Reply, Request, UnmountControl, WorkspaceToken};
 use layerfs_daemon::control::{
     ExportServing, ExportServingConfig, Failure, Helper, Mounter, Service,
 };

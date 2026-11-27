@@ -4,7 +4,7 @@
 use super::live::{self, Seen};
 use super::record::{Holders, MachineRecord};
 use crate::Related;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::home::{observed, paths};
 use layerfs_home::names::MachineName;
 use layerfs_home::outcome::{failed, with_fix, Outcome};
@@ -29,7 +29,7 @@ fn loopback(home: &Path, record: &MachineRecord) -> SdkValue {
         return SdkValue::Null;
     }
     match super::spec::provider_spec(home, record) {
-        Ok(spec) if layerfs_platform::shares_loopback(&spec) => SdkValue::text("shared"),
+        Ok(spec) if crate::platform::shares_loopback(&spec) => SdkValue::text("shared"),
         Ok(_) => SdkValue::text("apart"),
         Err(_) => SdkValue::Null,
     }

@@ -7,7 +7,7 @@
 use super::form::Asked;
 use super::table::{Arg, Call, Kind, Redact};
 use super::Scope;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::outcome::Outcome;
 
 /// A path argument's logged byte length: the §4.3 normalization (strip one

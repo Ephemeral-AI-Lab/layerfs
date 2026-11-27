@@ -1,8 +1,5 @@
 //! One attempted authenticated control exchange, retaining the original unknown.
-use layerfs_bridge::{
-    control::{Answer, Call, ControlError, Reply, Request},
-    duplex::{ChannelError, CloseHandle, Connection},
-};
+use layerfs_protocol::{provision::install::{Answer, Call, ControlError, Reply, Request}, duplex::{ChannelError, CloseHandle, Connection}};
 use std::fmt;
 /// One sequential control connection. Concurrent callers may use separate channels.
 pub struct Control {
@@ -109,7 +106,7 @@ impl Control {
                 .send(&record)
                 .map_err(ControlCause::Channel)?;
             for body in bodies {
-                for record in body.chunks(layerfs_bridge::duplex::MAX_PLAINTEXT_BYTES) {
+                for record in body.chunks(layerfs_protocol::duplex::MAX_PLAINTEXT_BYTES) {
                     self.connection
                         .send
                         .send(record)
@@ -174,14 +171,14 @@ impl Control {
     pub fn install_file(
         &mut self,
         store: &layerfs_persistence::SealedStore,
-        manifest: &layerfs_bridge::provision::StoreManifest,
+        manifest: &layerfs_protocol::provision::manifest::StoreManifest,
     ) -> Result<layerfs_project::store::Installed, Box<layerfs_project::store::InstallFailure>>
     {
         if self.is_failed() {
             return Err(Box::new(layerfs_project::store::InstallFailure {
                 source: store.path.clone(),
                 manifest: manifest.clone(),
-                phase: layerfs_bridge::control::InstallPhase::Request,
+                phase: layerfs_protocol::provision::install::InstallPhase::Request,
                 request_attempted: false,
                 accepted: false,
                 acknowledged: None,
@@ -317,7 +314,7 @@ impl fmt::Display for ControlFailure {
             ControlCause::Protocol(error) => write!(f, "{error}")?,
         }
         if self.attempted {
-            write!(f, "; {}", layerfs_sandbox_backend::OUTCOME_UNKNOWN)?;
+            write!(f, "; {}", crate::OUTCOME_UNKNOWN)?;
         }
         if let Some(error) = &self.fence_error {
             write!(f, "; closing the connection also failed: {error}")?;

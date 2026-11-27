@@ -1,7 +1,7 @@
 //! Captured namespace construction over existing bounded original reader jobs.
 use crate::OwnerClient;
 use layerfs_overlay::{CapturedReader, DirectoryEntry, Inode};
-use layerfs_workspace::{OverlayCapturedNamespace, WorkspaceError, WorkspaceResult};
+use layerfs_vfs::{OverlayCapturedNamespace, WorkspaceError, WorkspaceResult};
 
 impl OwnerClient {
     /// This synchronous port serves the constructor thread, never a kernel
@@ -9,7 +9,7 @@ impl OwnerClient {
     /// Failure keeps the original input or attempted cause/backing.
     fn captured_namespace_job<T>(
         &self,
-        command: impl FnOnce(&crate::OwnerClient, layerfs_workspace::Route) -> Result<T, crate::OwnerError>
+        command: impl FnOnce(&crate::OwnerClient, layerfs_vfs::Route) -> Result<T, crate::OwnerError>
             + Send,
     ) -> WorkspaceResult<T> {
         command(

@@ -4,7 +4,7 @@
 //! again; a machine that ran before sockets were recorded keeps Docker's
 //! default socket. One test: it owns this process's environment.
 #![cfg(all(feature = "machine", target_os = "macos"))]
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::home;
 use layerfs_machine::worker::{read_frame_within, write_frame, MAX_HELLO};
 use layerfs_machine::{

@@ -12,9 +12,9 @@ mod fixture;
 mod pg;
 
 use fixture::Fixture;
-use layerfs_api::names::HOST_MACHINE;
+use layerfs_home::names::HOST_MACHINE;
 use layerfs_api::worker::{read_host_frame, write_host_frame, HOST_MAX_REPLY, MAX_HELLO};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use pg::*;
 use postgres::{Client as Postgres, NoTls};
 use std::io::{Read, Write};
@@ -121,7 +121,7 @@ fn rotation_retires_old_sessions_and_refuses_the_old_revision() {
     let wrong = raw(&home, &new_revision, "not-the-password");
     assert!(wrong.get("error").is_some(), "{wrong:?}");
     // a refused login never names the password it sent
-    let said = layerfs_api::json::print(&wrong);
+    let said = layerfs_home::json::print(&wrong);
     assert!(!said.contains("not-the-password"), "{said}");
     assert_eq!(db.settle(0).len(), 0, "the held session was retired");
     ok(path, READ);
@@ -1034,7 +1034,7 @@ fn a_record_that_cannot_be_written_puts_the_old_password_back() {
     let secret_back = std::fs::read(&secret).unwrap() == secret_before;
     assert!(secret_back, "the old password is back");
     let saved = std::fs::read_to_string(&secret).unwrap();
-    let saved = layerfs_api::json::parse(&saved).unwrap();
+    let saved = layerfs_home::json::parse(&saved).unwrap();
     let kept = saved.get_text("password") == Some(old_password.as_str());
     assert!(kept, "the saved login is the old password");
     drain(&home);

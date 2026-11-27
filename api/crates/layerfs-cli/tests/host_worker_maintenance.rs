@@ -4,9 +4,9 @@
 mod fixture;
 
 use fixture::Fixture;
-use layerfs_api::home::{self, lease, paths};
+use {layerfs_api::home::{self, paths}, layerfs_store::lease};
 use layerfs_api::worker::{self, HostHello, HostPaths, HOST_MAX_REPLY, MAX_HELLO};
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use std::fs;
 use std::io;
 use std::net::TcpListener;

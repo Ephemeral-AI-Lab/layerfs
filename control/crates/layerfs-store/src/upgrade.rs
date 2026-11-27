@@ -29,7 +29,7 @@ use crate::place::{self, Executor, Worker};
 use crate::record::{StoreRecord, StoreRef};
 use crate::sqlite::family::{self, progress};
 use crate::Related;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::home::paths;
 use layerfs_home::op::{Op, Standing};

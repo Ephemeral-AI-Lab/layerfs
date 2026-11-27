@@ -4,7 +4,7 @@
 //! Product source holds no tests (the product-boundary guard), so
 //! `project::add::add_failure` (already public) and
 //! `unknown::named_unknown` (`#[doc(hidden)] pub`) are exercised here.
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_history::records::{GcIntentKind, GcScopeKind};
 use layerfs_history::{HistoryError, OpConflict, UnknownOutcomeState};
 use layerfs_project::store::InitError;

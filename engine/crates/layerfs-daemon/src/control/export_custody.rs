@@ -6,9 +6,7 @@
 //! types here are what an entry holds while an export lives, so status,
 //! teardown and Force name one ownership model instead of two.
 use super::kernel::bounded;
-use layerfs_bridge::control::{
-    ForcedFacts, MountPhase, MountWork, ReadyMount, TeardownCustody, TeardownStage, WorkspaceToken,
-};
+use layerfs_protocol::provision::install::{ForcedFacts, MountPhase, MountWork, ReadyMount, TeardownCustody, TeardownStage, WorkspaceToken};
 use layerfs_nfs::Server;
 use layerfs_overlay::KernelMount;
 use std::{fmt, sync::Arc};

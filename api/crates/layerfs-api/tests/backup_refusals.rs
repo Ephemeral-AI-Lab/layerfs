@@ -3,7 +3,7 @@
 //! and the Sandbox's project records stay. The bucket record names a port
 //! nothing listens on, so a request would fail as `Failed` or `Unknown`.
 use layerfs_api::home::{self, paths, read_record, write_record};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
@@ -72,7 +72,7 @@ fn restore_over_a_store_with_a_running_sandbox_is_in_use() {
     dead_bucket(&home);
     // the Store links the bucket's file at its current heads, so only the
     // Sandbox stands in the way
-    let heads = layerfs_bucket::backup::heads(&paths::store_file(&home, "shop")).unwrap();
+    let heads = layerfs_store::backup::copy::heads(&paths::store_file(&home, "shop")).unwrap();
     let path = paths::store_record(&home, "shop");
     let record = read_record(&path).unwrap().unwrap();
     let linked = SdkValue::map([(

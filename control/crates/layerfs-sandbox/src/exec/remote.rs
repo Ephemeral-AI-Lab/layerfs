@@ -9,7 +9,7 @@ use super::record::ExecRecord;
 use crate::host::Call;
 use crate::record::SandboxRecord;
 use crate::route::reach;
-use layerfs_bridge::control::SdkRefusal;
+use layerfs_protocol::provision::install::SdkRefusal;
 use layerfs_home::events::Events;
 use std::path::Path;
 use std::time::Duration;

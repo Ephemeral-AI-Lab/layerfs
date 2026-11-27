@@ -21,7 +21,7 @@ use layerfs_store_service::store::{
     CommitPhase, CommitSuccess,
 };
 use layerfs_store_service::telemetry::{mark_phases, Recording};
-use layerfs_workspace::{CapturedNamespace, Operation, Outcome, Position, Time};
+use layerfs_vfs::{CapturedNamespace, Operation, Outcome, Position, Time};
 use std::{cell::Cell, rc::Rc, sync::Once};
 
 const MIB: usize = 1024 * 1024;

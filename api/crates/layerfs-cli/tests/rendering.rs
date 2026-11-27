@@ -1,5 +1,5 @@
 //! Tests for terminal front-end rendering and suggestions (A1-A4).
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 
 #[test]
 fn format_size_human_units() {

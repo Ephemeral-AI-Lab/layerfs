@@ -12,7 +12,7 @@ use crate::project::record::ProjectRecord;
 use crate::project::state::{self, Listing};
 use crate::record::StoreRecord;
 use crate::state::Machines;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::cursor;
 use layerfs_home::home::paths;
 use layerfs_home::names::{ProjectRef, StoreName};

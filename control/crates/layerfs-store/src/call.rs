@@ -12,7 +12,7 @@ use crate::open_args::{OpenArgs, PgSelection};
 use crate::place::{plan, Executor};
 use crate::record::{StoreRecord, StoreRef};
 use crate::resolve::Target;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_history::{BranchId, CommitId};
 use layerfs_home::events::Events;
 use layerfs_home::outcome::{refused, Outcome};

@@ -14,7 +14,7 @@
 //! the `op`, an uncertain one keeps it marked uncertain.
 use crate::project::add::make_entry;
 use crate::project::record::ProjectRecord;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::home::{lock, paths};
 use layerfs_home::op::{Op, Standing, FIELD};
 use std::path::Path;

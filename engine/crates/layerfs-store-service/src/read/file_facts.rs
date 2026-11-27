@@ -2,7 +2,7 @@
 use super::cached::Cached;
 use super::{compare, snapshot};
 use crate::history::lookup as args;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_content::compare::{tree::same_metadata, EntryFacts};
 use layerfs_content::filesystem::attributes::{read_portable, AttributeReadWork};
 

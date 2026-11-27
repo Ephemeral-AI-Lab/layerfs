@@ -11,15 +11,11 @@
 mod support;
 use layerfs_content::filesystem::{FilesystemRead, FilesystemRootId, PathName};
 use layerfs_content::object::inode_leaf::InodeValue;
-use layerfs_daemon::{
-    bootstrap::open_store,
-    store::{BindRequest, BoundWorkspace, CommitSuccess, Store},
-    Owner, OwnerConfig,
-};
+use layerfs_store_service::{bootstrap::open_store, store::{BindRequest, BoundWorkspace, CommitSuccess, Store}, Owner, OwnerConfig};
 use layerfs_history::{CommitOutcome, WorkspaceId};
 use layerfs_overlay::ProfileConfig;
 use layerfs_storage::ReservationBlocks;
-use layerfs_workspace::{CapturedNamespaceWork, Operation, Outcome, Position, Time};
+use layerfs_vfs::{CapturedNamespaceWork, Operation, Outcome, Position, Time};
 use std::sync::{
     atomic::{AtomicU64, Ordering},
     Arc,

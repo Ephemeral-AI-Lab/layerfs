@@ -4,7 +4,7 @@
 //! `{"hex": "..."}` and read back as bytes, so a record keeps its types.
 use crate::json;
 use crate::outcome::{failed, refused};
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use std::fs;
 use std::io::Write;
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
@@ -119,7 +119,7 @@ fn to_hex(value: SdkValue) -> SdkValue {
     match value {
         SdkValue::Bytes(bytes) => SdkValue::map([(
             "hex",
-            SdkValue::Text(layerfs_bridge::sdk_values::hex(&bytes)),
+            SdkValue::Text(layerfs_protocol::sdk::hex(&bytes)),
         )]),
         SdkValue::List(items) => SdkValue::List(items.into_iter().map(to_hex).collect()),
         SdkValue::Map(fields) => {

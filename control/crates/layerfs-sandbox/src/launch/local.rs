@@ -20,12 +20,12 @@ use crate::host::{Deploy, Host};
 use crate::lifecycle::OpenedStore;
 use crate::registry::{SandboxState, SANDBOXES};
 use crate::{ProviderCreate, SandboxApi};
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_bridge::{DaemonStore, KernelRoute};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
+use layerfs_protocol::{DaemonStore, KernelRoute};
 use layerfs_home::helpers::{lock, required};
 use layerfs_home::outcome::{failed, refused};
-use layerfs_sandbox_backend::{CommandIdentity, Runtime, Sandbox};
-use layerfs_sandbox_backend::{LaunchRequest, ProviderLaunchOptions};
+use crate::{CommandIdentity, Runtime, Sandbox};
+use crate::{LaunchRequest, ProviderLaunchOptions};
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
@@ -102,8 +102,8 @@ fn start_named(
             .map(str::to_owned)
             .ok_or_else(|| refused("InvalidInput", "deploy.localDir must be UTF-8"))
     };
-    let controller = layerfs_bridge::duplex::generate_keypair().map_err(failed)?;
-    let daemon = layerfs_bridge::duplex::generate_keypair().map_err(failed)?;
+    let controller = layerfs_protocol::duplex::generate_keypair().map_err(failed)?;
+    let daemon = layerfs_protocol::duplex::generate_keypair().map_err(failed)?;
     let route = match backend {
         crate::runtime::Backend::HostProcess => KernelRoute::Nfs,
         _ => KernelRoute::Fuse,
@@ -148,7 +148,7 @@ fn start_named(
     let options = launch_options(backend, identity, host)?;
     let pg_host = match &setup.store {
         DaemonStore::Postgres { url, .. } => Some(
-            layerfs_sandbox_backend::url_hosts(url)
+            layerfs_machine::table::postgresql_url::url_hosts(url)
                 .map(|hosts| hosts.join(","))
                 .unwrap_or_default(),
         ),
@@ -182,7 +182,7 @@ fn start_named(
         let unavailable = matches!(
             &failure.cause,
             crate::SandboxCause::Provider(provider)
-                if matches!(provider.cause, layerfs_sandbox_backend::RuntimeError::Unavailable(_))
+                if matches!(provider.cause, crate::RuntimeError::Unavailable(_))
         );
         let pg = pg_host
             .as_deref()
@@ -278,21 +278,21 @@ fn start_named(
 fn native_runtime(
     root: &str,
     _: crate::runtime::Backend,
-) -> Result<Runtime, layerfs_sandbox_backend::RuntimeError> {
-    layerfs_sandbox_backend::process::ProcessProvider::new(root).map(Runtime::Process)
+) -> Result<Runtime, crate::RuntimeError> {
+    crate::process::ProcessProvider::new(root).map(Runtime::Process)
 }
 
 #[cfg(target_os = "linux")]
 fn native_runtime(
     root: &str,
     backend: crate::runtime::Backend,
-) -> Result<Runtime, layerfs_sandbox_backend::RuntimeError> {
+) -> Result<Runtime, crate::RuntimeError> {
     match backend {
         crate::runtime::Backend::HostProcess => Err(
-            layerfs_sandbox_backend::RuntimeError::Unsupported(crate::runtime::NATIVE_ON_LINUX),
+            crate::RuntimeError::Unsupported(crate::runtime::NATIVE_ON_LINUX),
         ),
         crate::runtime::Backend::Namespaces => {
-            layerfs_sandbox_backend::namespaces::NamespaceProvider::new(root)
+            crate::namespaces::NamespaceProvider::new(root)
                 .map(Runtime::Namespaces)
         }
     }

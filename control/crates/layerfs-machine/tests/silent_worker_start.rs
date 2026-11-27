@@ -7,7 +7,7 @@
 //! `limactl` logs every command; no VM is used. One test, because it sets
 //! the process's environment.
 #![cfg(all(feature = "machine", target_os = "macos"))]
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::home::{self, paths, write_record};
 use layerfs_home::state::Reason;
 use layerfs_machine::{ensure_built_ins, record::MachineRecord, running, vm_name, Related};

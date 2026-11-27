@@ -1,6 +1,6 @@
 //! Real installed Store, engine mutations and a direct Content producer for control proofs.
 use super::support;
-use layerfs_bridge::control::WorkspaceToken;
+use layerfs_protocol::provision::install::WorkspaceToken;
 use layerfs_content::{
     filesystem::{
         FilesystemInput, FilesystemObjects, FilesystemRead, FilesystemResources, FilesystemRootId,
@@ -8,17 +8,11 @@ use layerfs_content::{
     },
     ConstructionPolicy,
 };
-use layerfs_daemon::{
-    control::Service,
-    install::receive_install,
-    install_types::{InstalledStore, StoreSettings},
-    store::CommitError,
-    Owner, OwnerConfig,
-};
+use {layerfs_daemon::{control::Service, install::receive_install, install_types::{InstalledStore, StoreSettings}}, layerfs_store_service::{store::CommitError, Owner, OwnerConfig}};
 use layerfs_history::BranchSnapshot;
 use layerfs_storage::Save;
 use layerfs_telemetry::timer::Timing;
-use layerfs_workspace::{Operation, Outcome, Position, Time};
+use layerfs_vfs::{Operation, Outcome, Position, Time};
 use std::{
     path::PathBuf,
     sync::{

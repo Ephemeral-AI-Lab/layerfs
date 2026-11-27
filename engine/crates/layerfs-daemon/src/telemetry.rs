@@ -2,7 +2,7 @@
 //! receipts and kernel opcode counts. Phase timing and SQL work are the Store
 //! service's ([`layerfs_store_service::telemetry`]).
 use crate::control::{Failure, Success};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 pub(crate) use layerfs_store_service::telemetry::{delta, sql, sql_values};
 use layerfs_store_service::telemetry::{named, timing};
 pub use layerfs_store_service::telemetry::{phase, recording, timed, Recording};
@@ -82,7 +82,7 @@ pub(crate) fn fuse(w: &layerfs_fuse::request::OpcodeWork) -> SdkValue {
         .collect();
     fields.push(("ns".to_owned(), SdkValue::Map(nanos)));
     // Steps inside the callbacks: [count, ns] for the steps that ran.
-    use layerfs_fuse::request::Phase;
+    use layerfs_vfs::requests::phase::Phase;
     let phases = Phase::NAMES
         .iter()
         .zip(w.phase_counts.iter().zip(w.phase_nanos))

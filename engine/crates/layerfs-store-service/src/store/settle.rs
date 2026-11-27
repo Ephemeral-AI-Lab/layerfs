@@ -8,7 +8,7 @@ impl BoundWorkspace {
     /// busy with other callers delays the Commit and does not refuse it.
     pub(super) fn job<T>(
         &self,
-        command: impl FnOnce(&crate::OwnerClient, layerfs_workspace::Route) -> Result<T, crate::OwnerError>
+        command: impl FnOnce(&crate::OwnerClient, layerfs_vfs::Route) -> Result<T, crate::OwnerError>
             + Send,
     ) -> Result<T, OwnerError> {
         command(&self.owner, self.route())

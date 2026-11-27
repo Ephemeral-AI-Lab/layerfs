@@ -7,8 +7,8 @@ mod installed;
 #[allow(dead_code)]
 mod support;
 
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_bridge::sdk_values::hex;
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
+use layerfs_protocol::sdk::hex;
 use layerfs_store_service::history::{admission, lookup, removal};
 use std::fs;
 use support::Fixture;

@@ -16,7 +16,7 @@
 //! runs once: a refused or failed call returns its own error, nothing is sent
 //! again.
 use crate::open_args::{OpenArgs, ROUTING};
-use layerfs_bridge::control::{SdkCall, SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkCall, SdkRefusal, SdkValue};
 use layerfs_home::helpers::lock;
 use layerfs_home::outcome::{failed, refused, with_fix, Outcome};
 use layerfs_store_service::{OpenRefusal, StoreService};
@@ -157,7 +157,7 @@ fn overlay_directory() -> Result<PathBuf, SdkRefusal> {
     let directory = std::env::temp_dir().join(format!(
         "layerfs-store-{}-{}",
         std::process::id(),
-        layerfs_bridge::sdk_values::hex(&layerfs_home::helpers::random()?[..12])
+        layerfs_protocol::sdk::hex(&layerfs_home::helpers::random()?[..12])
     ));
     let mut builder = std::fs::DirBuilder::new();
     #[cfg(unix)]
@@ -450,7 +450,7 @@ pub fn branch_named(
         Some(SdkValue::List(items)) => items.first().and_then(|item| item.get_text("id")),
         _ => None,
     };
-    id.and_then(layerfs_bridge::sdk_values::unhex)
+    id.and_then(layerfs_protocol::sdk::unhex)
         .and_then(|bytes| layerfs_history::BranchId::from_slice(&bytes).ok())
         .ok_or_else(|| refused("NoSuchBranch", format!("no Branch {name} in {project}")))
 }

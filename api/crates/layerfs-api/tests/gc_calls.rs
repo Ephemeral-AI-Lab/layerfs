@@ -2,7 +2,7 @@
 //! typed refusals before any effect, and the result shapes of one reachable
 //! refusal per call plus the three removal results and the §11 report.
 use layerfs_api::Kind;
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_history::records::{GcIntent, GcIntentKind, GcScopeKind};
 use layerfs_history::PlaceAuthority;
 use layerfs_store::open_args::OpenArgs;
@@ -365,7 +365,7 @@ fn plant_mount(home: &Path, sandbox: &str) {
         ],
     );
     let id = got.get_text("id").expect("the Branch's id");
-    let branch = layerfs_bridge::sdk_values::unhex(id).expect("hex");
+    let branch = layerfs_protocol::sdk::unhex(id).expect("hex");
     let record = layerfs_store::record::StoreRecord::read(home, "shop")
         .unwrap()
         .unwrap();
@@ -433,7 +433,7 @@ fn ended_native_sandbox(home: &Path, project: &str) {
         .arg("30")
         .spawn()
         .unwrap();
-    let process = layerfs_bridge::process::LocalProcess::observe(child.id()).unwrap();
+    let process = layerfs_os::process::LocalProcess::observe(child.id()).unwrap();
     child.kill().unwrap();
     child.wait().unwrap();
     let id = layerfs_home::home::opened(home).unwrap().id;
@@ -645,7 +645,7 @@ fn a_close_without_a_store_url_has_its_caller_end_the_mount_intents() {
             admission::op_id(),
             GcIntentKind::Mount,
             GcScopeKind::Branch,
-            layerfs_bridge::sdk_values::unhex(&branch).unwrap(),
+            layerfs_protocol::sdk::unhex(&branch).unwrap(),
         )
         .named(Some("api"), Some("sb1"))
         .placed(
@@ -733,7 +733,7 @@ fn store_compact_refuses_an_unknown_store_and_reports_a_run() {
     // the short form: the bytes freed alone
     let short = ok(&home, "store.compact", &[("store", t("shop"))]);
     assert_eq!(
-        layerfs_api::json::print(&short),
+        layerfs_home::json::print(&short),
         r#"{"freed_bytes":0}"#,
         "nothing is dead yet"
     );

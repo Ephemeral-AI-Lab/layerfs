@@ -6,7 +6,7 @@
 //! outcome. Each case drives `sandbox.remove`, the close its side runs, or
 //! `sandbox.create`, never the tombstone write alone. Nothing runs a daemon.
 #![cfg(any(target_os = "linux", target_os = "macos"))]
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::home::{self, paths, read_record, write_record};
 use layerfs_sandbox::family::{remove, RemoveRequest, Removed};
 use layerfs_sandbox::host::{Host, Message};

@@ -3,11 +3,11 @@
 //! answered `cancelled` (SIGKILL) and only marked; the owner, told the
 //! handle once the command runs, is refused as interrupted and ends it.
 //! Never `ended` for a command that goes on to run.
-use layerfs_bridge::process::LocalProcess;
+use layerfs_os::process::LocalProcess;
 use layerfs_sandbox::exec::cancel::{cancel, unreached, Outcome};
 use layerfs_sandbox::exec::id::ExecId;
 use layerfs_sandbox::exec::record::{self, ExecRecord, Route, Running};
-use layerfs_sandbox_backend::Stop;
+use layerfs_sandbox::Stop;
 use std::io::ErrorKind;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -131,9 +131,9 @@ fn expired_pending_cancel_does_not_affect_id_reuse_or_other_workspaces() {
     assert!(!running.end().unwrap());
     layerfs_home::home::write_entity(
         &file.with_extension("cancel"),
-        &layerfs_bridge::control::SdkValue::map([(
+        &layerfs_protocol::provision::install::SdkValue::map([(
             "expires",
-            layerfs_bridge::control::SdkValue::Int(1),
+            layerfs_protocol::provision::install::SdkValue::Int(1),
         )]),
     )
     .unwrap();

@@ -8,8 +8,8 @@
 use crate::open_args::OpenArgs;
 use crate::project::frame::{ListedProject, ListingFrame, ListingReply};
 use crate::service;
-use layerfs_bridge::control::SdkRefusal;
-use layerfs_bridge::sdk_values::node_text;
+use layerfs_protocol::provision::install::SdkRefusal;
+use layerfs_protocol::sdk::node_text;
 use layerfs_history::NodeId;
 use layerfs_home::outcome::{refused, Outcome};
 use layerfs_store_service::history::lookup;

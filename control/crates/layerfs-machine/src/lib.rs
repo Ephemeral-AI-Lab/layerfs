@@ -39,6 +39,12 @@ pub mod state;
 #[cfg(feature = "machine")]
 mod update;
 pub mod worker;
+pub(crate) mod lifecycle;
+pub(crate) mod platform;
+pub(crate) mod setup;
+pub(crate) mod table;
+#[cfg(feature = "machine")]
+pub mod with_users;
 
 #[cfg(feature = "machine")]
 pub use bundle::bundle;
@@ -49,10 +55,6 @@ pub use create::{create, MachineCreate, STOCK};
 pub use endpoint::{recorded as worker_endpoint, running};
 #[cfg(feature = "machine")]
 pub use image::docker_default;
-/// The platform driver, for the Sandbox code that reaches a machine's
-/// adapters through its machine (layerfs-project#106).
-#[cfg(feature = "machine")]
-pub use layerfs_platform as platform;
 #[cfg(feature = "machine")]
 pub use list::{get, list};
 pub use local::{in_process, none_in_process, provided, runs_here};

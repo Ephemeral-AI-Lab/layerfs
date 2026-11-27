@@ -27,7 +27,7 @@ use adversary::{
     assert_linear, commit, seed_tree, text_bytes, verdict, write, Gate, Kind, Node, Service,
     TestStore, Verdict,
 };
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_history::CommitId;
 use layerfs_store_service::store::BoundWorkspace;
 

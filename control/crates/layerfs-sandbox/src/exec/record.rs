@@ -18,11 +18,11 @@
 //! owner is gone is stale: [`running`] leaves it out.
 use crate::exec::id::ExecId;
 use crate::record::lock_in;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_bridge::process::LocalProcess;
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
+use layerfs_os::process::LocalProcess;
 use layerfs_home::home::{now_ms, read_record, write_entity};
 use layerfs_home::outcome::{failed, refused};
-use layerfs_sandbox_backend::Stop;
+use crate::Stop;
 use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};

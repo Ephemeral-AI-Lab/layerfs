@@ -5,7 +5,7 @@
 //! filters it is given, and is refused when it is given others.
 use super::record::{SandboxRecord, WorkspaceRecord};
 use super::state::machine_state;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::json;
 use layerfs_home::outcome::refused;
 use layerfs_home::state::State;

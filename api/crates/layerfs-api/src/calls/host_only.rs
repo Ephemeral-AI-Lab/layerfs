@@ -9,7 +9,7 @@ macro_rules! host_only {
         #[cfg(not(feature = "machine"))]
         fn run(
             _context: &mut crate::calls::Context<'_>,
-            _args: &layerfs_bridge::control::SdkValue,
+            _args: &layerfs_protocol::provision::install::SdkValue,
         ) -> layerfs_home::outcome::Outcome {
             Err(layerfs_home::outcome::refused(
                 "Unsupported",

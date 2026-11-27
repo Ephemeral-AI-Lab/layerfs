@@ -5,7 +5,7 @@ use crate::sqlite::family::{advance, begin_maintenance, ended, settle, step_on};
 use crate::sqlite::transfer::step::StoreStep;
 use crate::Related;
 use crate::{host_maintenance, intent};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::home::{self, paths};
 use layerfs_home::op::{Op, Standing};
 use layerfs_home::outcome::{failed, refused, Outcome};
@@ -148,7 +148,7 @@ fn answer(name: &str, left: Vec<String>) -> SdkValue {
 /// Whether machine `machine`'s record has no 2.0 name (RV3 FAIL 1), or a
 /// live read found its VM gone (area 10): this build reaches nothing on
 /// it, so a Store on it goes by its records alone.
-fn nameless(home: &Path, machine: &str) -> Result<bool, layerfs_bridge::control::SdkRefusal> {
+fn nameless(home: &Path, machine: &str) -> Result<bool, layerfs_protocol::provision::install::SdkRefusal> {
     let record = layerfs_machine::record::MachineRecord::read(home, machine)?;
     Ok(record.is_some_and(|record| record.gone()))
 }
@@ -164,7 +164,7 @@ fn forget_on_nameless(
     name: &str,
     machine: &str,
     related: Related,
-) -> Result<Vec<String>, layerfs_bridge::control::SdkRefusal> {
+) -> Result<Vec<String>, layerfs_protocol::provision::install::SdkRefusal> {
     let _lock = home::lock::take(home)?;
     let _store = record::lock(home, name)?;
     let now = record::StoreRecord::of(home, name)?;

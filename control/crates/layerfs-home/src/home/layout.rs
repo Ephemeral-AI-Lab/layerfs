@@ -8,7 +8,7 @@
 //! build writes nothing in it. Reading never changes anything.
 use super::records::{private_dir, read_record, unreadable, write_record};
 use crate::outcome::{refused, shell_word, with_fix};
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use std::path::Path;
 
 /// The layout this build writes.
@@ -180,7 +180,7 @@ pub fn create(home: &Path) -> Result<HomeFile, SdkRefusal> {
     let random = crate::helpers::random()?;
     let file = HomeFile {
         layout: LAYOUT_VERSION,
-        id: layerfs_bridge::sdk_values::hex(&random[..16]),
+        id: layerfs_protocol::sdk::hex(&random[..16]),
     };
     write(home, &file)?;
     Ok(file)

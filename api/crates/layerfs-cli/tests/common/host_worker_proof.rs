@@ -2,7 +2,7 @@
 #![allow(dead_code)]
 use crate::fixture::Fixture;
 use layerfs_api::home::{entity_lock, paths};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Output, Stdio};
 use std::time::{Duration, Instant};
@@ -84,7 +84,7 @@ impl Drop for Cli {
 
 fn decode(bytes: &[u8]) -> SdkValue {
     let text = std::str::from_utf8(bytes).unwrap();
-    layerfs_api::json::parse(text).unwrap_or_else(|error| panic!("{error:?}: {text}"))
+    layerfs_home::json::parse(text).unwrap_or_else(|error| panic!("{error:?}: {text}"))
 }
 
 pub fn create() -> Fixture {

@@ -5,12 +5,12 @@
 //! Also each Store's link to a bucket, which the Store's record holds.
 use super::secret;
 use crate::get::hex_text;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_bridge::sdk_values::hex;
-use layerfs_bucket::backup::Provider;
-use layerfs_bucket::bucket::minio::{MinioSettings, DEFAULT_PART_SIZE};
-use layerfs_bucket::bucket::r2::R2Settings;
-use layerfs_bucket::bucket::{pieces, Credentials, Driver, RemoteError};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
+use layerfs_protocol::sdk::hex;
+use crate::backup::copy::Provider;
+use crate::backup::providers::s3::{MinioSettings, DEFAULT_PART_SIZE};
+use crate::backup::providers::r2::R2Settings;
+use crate::backup::bucket::{pieces, Credentials, Driver, RemoteError};
 use layerfs_home::home::{self, paths, read_record, write_entity};
 use layerfs_home::names::BucketName;
 use layerfs_home::outcome::{refused, View};
@@ -216,13 +216,13 @@ impl BucketRecord {
     pub fn diagnostic_client(
         &self,
         credentials: Credentials,
-    ) -> Result<layerfs_bucket::bucket::s3_api::S3Client> {
+    ) -> Result<crate::backup::s3_api::S3Client> {
         match provider(&self.fields, credentials)? {
             Provider::Minio(settings) => {
-                layerfs_bucket::bucket::minio::connect(&settings).map_err(remote_error)
+                crate::backup::providers::s3::connect(&settings).map_err(remote_error)
             }
             Provider::R2(settings) => {
-                layerfs_bucket::bucket::r2::connect(&settings).map_err(remote_error)
+                crate::backup::providers::r2::connect(&settings).map_err(remote_error)
             }
         }
     }

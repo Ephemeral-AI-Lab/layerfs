@@ -18,7 +18,7 @@
 //! written back is the same JSON.
 use super::daemon::DaemonRecord;
 use crate::host::Started;
-use layerfs_bridge::control::{MountPlace, SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{MountPlace, SdkRefusal, SdkValue};
 use layerfs_home::home::entity_lock::{self, EntityLock};
 use layerfs_home::home::fields::{self, Fields};
 use layerfs_home::home::{self, paths, read_record, write_entity};

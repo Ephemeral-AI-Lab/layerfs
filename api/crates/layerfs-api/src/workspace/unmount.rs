@@ -3,10 +3,10 @@ use crate::calls::scope::Rule;
 use crate::calls::table::Kind::{Bool, Text};
 use crate::calls::table::{a, call, opt, Call};
 use crate::calls::{Context, Form};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::outcome::Outcome;
-use layerfs_sandbox::workspace::answers::unmounted;
-use layerfs_sandbox::workspace::calls::{unmount, UnmountRequest};
+use layerfs_workspace::answers::unmounted;
+use layerfs_workspace::route::send::{unmount, UnmountRequest};
 
 const FORM: Form = Form::of(
     &["ok"],

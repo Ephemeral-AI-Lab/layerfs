@@ -1,7 +1,7 @@
 //! `fs.cp`.
 use crate::methods::args::{commit, single, Answer};
 use crate::StoreService;
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 
 /// `cp(from, to, { branch })`: one Commit copying a path, recursively.
 pub fn cp(service: &StoreService, args: &SdkValue) -> Answer {

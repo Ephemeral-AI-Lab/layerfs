@@ -2,16 +2,14 @@
 //! outside provider IO.
 use crate::{OwnerClient, OwnerError};
 use layerfs_overlay::{BaseSource, Cell, DirectoryEntry, DirectoryEntryWindow, Inode, LocalRead};
-use layerfs_workspace::{
-    JobOutcome, NamespaceJob, OverlayJobs, OverlayRead, WorkspaceError, WorkspaceResult,
-};
+use layerfs_vfs::{JobOutcome, NamespaceJob, OverlayJobs, OverlayRead, WorkspaceError, WorkspaceResult};
 fn error(error: OwnerError) -> WorkspaceError {
     WorkspaceError::Service(Box::new(error))
 }
 impl OwnerClient {
     pub fn read_job<T>(
         &self,
-        command: impl FnOnce(&crate::OwnerClient, layerfs_workspace::Route) -> Result<T, crate::OwnerError>
+        command: impl FnOnce(&crate::OwnerClient, layerfs_vfs::Route) -> Result<T, crate::OwnerError>
             + Send,
     ) -> Result<T, WorkspaceError> {
         command(self, self.bound_route().map_err(error)?).map_err(error)

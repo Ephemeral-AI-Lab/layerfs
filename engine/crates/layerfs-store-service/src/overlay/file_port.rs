@@ -1,7 +1,7 @@
 //! Typed independently owned read windows through the real SQL owner.
 use crate::OwnerClient;
 use layerfs_overlay::{CapturedReader, FileRead, LocalRead};
-use layerfs_workspace::{OverlayFileRead, WorkspaceError, WorkspaceResult};
+use layerfs_vfs::{OverlayFileRead, WorkspaceError, WorkspaceResult};
 impl OverlayFileRead for OwnerClient {
     fn file_read(
         &self,

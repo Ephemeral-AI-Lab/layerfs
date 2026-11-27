@@ -7,7 +7,7 @@
 //! into the address a call dials, only when it dials.
 use super::address::with_login;
 use crate::record::StoreRecord;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::home::secrets::{read_secret, remove_secret, save_secret};
 use layerfs_home::outcome::{refused, shell_word, with_fix};
 use std::path::Path;

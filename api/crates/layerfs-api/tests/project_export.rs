@@ -27,7 +27,7 @@
 //!    destination and the source Store left untouched.
 use layerfs_api::home::{self, paths, read_record, write_record};
 use layerfs_api::worker;
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
@@ -941,7 +941,7 @@ fn worker_sqlite_export_and_midstream_disconnect_cleanup() {
         ],
     );
     // Ensure local Store handle is closed before moving file to worker root
-    layerfs_api::close_idle(std::time::Duration::ZERO);
+    layerfs_store::admin::with_users::close_idle(std::time::Duration::ZERO);
     move_store_file(&home, &root, "shop");
     place_store(&home, "shop", "box");
 
@@ -1628,7 +1628,7 @@ fn export_omits_a_path_hidden_by_hide_path() {
             ..Default::default()
         },
         |service| {
-            let call = layerfs_bridge::control::SdkCall {
+            let call = layerfs_protocol::provision::install::SdkCall {
                 method: "project.remove_file".to_owned(),
                 args: SdkValue::map([("project", t("app")), ("path", t("/a.txt"))]),
             };

@@ -5,7 +5,7 @@
 use super::deploy::{self, Side};
 use super::record::SandboxRecord;
 use crate::host::{Call, Deploy, Host, Message, Op, Sent, StoreUrl};
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::home::{self, paths};
 use layerfs_home::outcome::{failed, refused, Outcome};
@@ -13,7 +13,7 @@ use layerfs_machine::worker::Unreached;
 use layerfs_store::open_args::PgSelection;
 use layerfs_store::place::{self, Executor};
 use layerfs_store::project::record::ProjectRecord;
-use layerfs_store::record::{StoreKind, StoreRecord};
+use {layerfs_protocol::StoreKind, layerfs_store::record::StoreRecord};
 use layerfs_store::resolve;
 use std::path::{Path, PathBuf};
 
@@ -163,7 +163,7 @@ fn reach_check(
     hint: Option<&str>,
 ) -> Result<()> {
     let url = postgresql.url.as_deref().unwrap_or("");
-    let host = layerfs_sandbox_backend::url_hosts(url)
+    let host = layerfs_machine::table::postgresql_url::url_hosts(url)
         .map(|hosts| hosts.join(","))
         .unwrap_or_default();
     let reached = layerfs_store::postgresql::reader::reach(key, store, postgresql, project)

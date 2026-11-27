@@ -15,7 +15,7 @@ use crate::store::{
     BindRefusal, BindRequest, BindSuccess, BoundWorkspace, CommitFailure, NamedBindRequest, Store,
 };
 use crate::{Owner, OwnerClient, OwnerConfig};
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_history::{BranchId, WorkspaceId};
 use layerfs_overlay::ProfileConfig;
 use layerfs_persistence::{PersistenceConfig, SqlitePersistenceProfile};
@@ -358,7 +358,7 @@ impl StoreService {
         workspace: Arc<BoundWorkspace>,
         failure: Box<CommitFailure>,
     ) -> SdkRefusal {
-        use crate::history::lookup::hex;
+        use layerfs_protocol::sdk::hex;
         let intent = failure.intent.as_ref();
         let refusal = SdkRefusal {
             code: "Unknown".to_owned(),

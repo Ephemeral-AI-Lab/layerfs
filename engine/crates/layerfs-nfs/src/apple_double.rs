@@ -73,7 +73,7 @@ use crate::{
     trace::{self, Route as Trace},
 };
 use layerfs_content::filesystem::attributes::PortableMetadata;
-use layerfs_workspace::ViewStat;
+use layerfs_vfs::ViewStat;
 use std::{
     collections::{BTreeSet, HashMap, HashSet},
     fs,

@@ -10,7 +10,7 @@
 //! that call's own `mkdir` made.
 use crate::bootstrap::{open_store_observed, OpenedStore};
 use crate::store::{checked_base, PortError};
-use layerfs_bridge::provision::{StoreManifest, StoreProfile};
+use layerfs_protocol::provision::manifest::{StoreManifest, StoreProfile};
 use layerfs_content::ContentError;
 use layerfs_history::{BranchId, HistoryError, LayerStackId};
 use layerfs_persistence::{PersistenceConfig, SqlitePersistenceProfile};

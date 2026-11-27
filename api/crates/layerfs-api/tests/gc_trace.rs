@@ -5,7 +5,7 @@
 //! changes with the salt, and a `store.compact` report's artifact names never
 //! reach the log.
 use layerfs_api::Redact;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_history::path::{path_key, trace_key};
 use layerfs_history::LayerStackId;
 use layerfs_home::home::paths;
@@ -90,7 +90,7 @@ fn lines(home: &Path) -> Vec<SdkValue> {
     match std::fs::read_to_string(paths::calls_file(home)) {
         Ok(text) => text
             .lines()
-            .map(|line| layerfs_api::json::parse(line).unwrap())
+            .map(|line| layerfs_home::json::parse(line).unwrap())
             .collect(),
         Err(_) => Vec::new(),
     }

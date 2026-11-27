@@ -3,7 +3,7 @@
 //! `{ phase, done, total }`.
 use crate::project::staged;
 use crate::project::tree::{Reader, Record};
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::outcome::refused;
 use std::path::Path;

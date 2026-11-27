@@ -3,10 +3,10 @@
 //! images, and home-scoped owned-container recovery under `ImageLock`
 //! (#176 I02).
 #[allow(dead_code)]
-#[path = "../../layerfs-sandbox-backend/tests/support/image.rs"]
+#[path = "support/image.rs"]
 mod fixture;
 use fixture::{pax_record, Scratch, Tar};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::events::Events;
 use layerfs_home::home;
 use layerfs_sandbox::docker::Docker;
@@ -15,7 +15,7 @@ use layerfs_sandbox::image_load::{
     cleanup_owned, load, owned_containers, Cleanup, ImageLock, Loaded, Target, EXPORT_ROLE,
 };
 use layerfs_sandbox::image_tar::Filtered;
-use layerfs_sandbox_backend::{rootfs, Image};
+use layerfs_sandbox::{rootfs, Image};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
 use std::fs;
@@ -305,7 +305,7 @@ fn filtered_export(image_id: &str, cname: &str) -> (Vec<u8>, String) {
         .args(["rm", "-f", "-v", cname])
         .output();
     assert!(status.status.success());
-    let sha = layerfs_bridge::sdk_values::hex(&Sha256::digest(&filtered));
+    let sha = layerfs_protocol::sdk::hex(&Sha256::digest(&filtered));
     (filtered, sha)
 }
 
@@ -315,7 +315,7 @@ fn run_load(
     machine: &str,
     image: &str,
 ) -> (
-    Result<Loaded, layerfs_bridge::control::SdkRefusal>,
+    Result<Loaded, layerfs_protocol::provision::install::SdkRefusal>,
     Vec<SdkValue>,
 ) {
     let mut phases = Vec::new();

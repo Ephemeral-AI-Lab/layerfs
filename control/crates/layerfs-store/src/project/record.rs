@@ -3,9 +3,9 @@
 //! made. The record also holds the sqlite project's manifest, which
 //! `sandbox/files.rs` reads and writes with the rest kept.
 use crate::record::StoreRecord;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_bridge::provision::StoreManifest;
-use layerfs_bridge::sdk_values::unhex;
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::manifest::StoreManifest;
+use layerfs_protocol::sdk::unhex;
 use layerfs_history::LayerStackId;
 use layerfs_home::home::{now_ms, paths, read_record, with_field, write_entity};
 use layerfs_home::op::Op;

@@ -16,7 +16,7 @@ use crate::project::op::{DELETE, INIT};
 use crate::project::record::ProjectRecord;
 use crate::record::StoreRecord;
 use crate::state::Machines;
-use layerfs_bridge::control::SdkRefusal;
+use layerfs_protocol::provision::install::SdkRefusal;
 use layerfs_home::op::Standing;
 use layerfs_home::outcome::refused;
 use layerfs_home::outcome::shell_word;

@@ -3,7 +3,7 @@
 //! malformed value is a usage error naming the flag (#691; 2.0 call
 //! surface).
 use layerfs_api::Call;
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 
 fn publish() -> &'static Call {
     layerfs_api::calls()

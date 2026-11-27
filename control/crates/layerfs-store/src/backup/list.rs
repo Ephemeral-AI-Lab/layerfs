@@ -3,9 +3,9 @@
 use super::heads::store_heads;
 use super::record::{BucketRecord, StoreLink};
 use crate::record::StoreRecord;
-use layerfs_bridge::control::SdkValue;
-use layerfs_bucket::backup as remote;
-use layerfs_bucket::bucket::RemoteError;
+use layerfs_protocol::provision::install::SdkValue;
+use crate::backup::copy as remote;
+use crate::backup::bucket::RemoteError;
 use layerfs_home::home::paths;
 use layerfs_home::outcome::{failed, Outcome};
 use std::collections::BTreeMap;
@@ -55,7 +55,7 @@ fn changed(link: &StoreLink, copy: &remote::Copy) -> Result<bool, String> {
 }
 
 fn hex(bytes: Option<&[u8; 32]>) -> SdkValue {
-    SdkValue::opt_text(bytes.map(|b| layerfs_bridge::sdk_values::hex(b)))
+    SdkValue::opt_text(bytes.map(|b| layerfs_protocol::sdk::hex(b)))
 }
 
 /// One row, in its long form.

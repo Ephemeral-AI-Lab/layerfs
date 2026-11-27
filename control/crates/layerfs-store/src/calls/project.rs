@@ -2,7 +2,7 @@
 //! route, each answering its call's full map (the keys of its long form;
 //! the dispatcher shapes it).
 use super::op::{next_fields, on_project, StoreOp};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::{events::Events, outcome::Outcome};
 use std::path::Path;
 

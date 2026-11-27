@@ -18,7 +18,7 @@ use layerfs_content::ContentError;
 use layerfs_history::CommitOutcome;
 use layerfs_store_service::store::{CommitError, CommitOptions, CommitPhase};
 use layerfs_store_service::telemetry::{mark_phases, Recording};
-use layerfs_workspace::WorkspaceError;
+use layerfs_vfs::WorkspaceError;
 use std::{cell::RefCell, rc::Rc, sync::Once};
 use support::Change;
 

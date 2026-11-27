@@ -7,7 +7,7 @@ use crate::{
     read::{paged_reads, query, reads, search, visibility},
     StoreService,
 };
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_content::compare::memo::Memo;
 
 /// `grep(pattern, { branch, commit?, path?, pageSize?, pagePos? })`: literal matches per line in text files.

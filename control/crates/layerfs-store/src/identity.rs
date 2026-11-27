@@ -11,8 +11,8 @@
 //! is one attempt; nothing is retried.
 use crate::open_args::OpenArgs;
 use crate::project::discovery;
-use crate::record::{required, StoreKind, StoreRecord, StoreRef};
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use {crate::record::{required, StoreRecord, StoreRef}, layerfs_protocol::StoreKind};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_history::{HistoryCatalogConfig, HistoryName};
 use layerfs_home::outcome::{failed, refused};
 use layerfs_persistence::{PersistenceConfig, SealedStore, SqlitePersistenceProfile};

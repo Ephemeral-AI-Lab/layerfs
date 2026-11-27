@@ -3,7 +3,7 @@
 use crate::calls::table::Kind::Name;
 use crate::calls::table::{a, call, opt, Call};
 use crate::calls::{Context, Form};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::names::{MachineName, StoreName};
 use layerfs_home::outcome::Outcome;
 
@@ -25,5 +25,5 @@ pub(crate) const CALL: Call = call(
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let store = StoreName::parse(args.get_text("store").unwrap_or(""))?;
     let machine = MachineName::parse(args.get_text("machine").unwrap_or(""))?;
-    layerfs_control::store::detach(&context.home, &store, &machine)
+    layerfs_store::admin::with_users::detach(&context.home, &store, &machine)
 }

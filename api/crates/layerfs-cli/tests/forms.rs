@@ -7,14 +7,14 @@
 mod common;
 use common::{layerfs, run, run_with_stdin, tempdir, text};
 use layerfs_api::calls::table::{a, call, opt};
-use layerfs_api::{json, Call, Context, Kind, Section};
-use layerfs_bridge::control::SdkValue;
+use {layerfs_home::json, layerfs_api::{Call, Context, Kind, Section}};
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_cli::parse::parse;
 
 fn never(
     _: &mut Context<'_>,
     _: &SdkValue,
-) -> Result<SdkValue, layerfs_bridge::control::SdkRefusal> {
+) -> Result<SdkValue, layerfs_protocol::provision::install::SdkRefusal> {
     unreachable!("the parser calls nothing")
 }
 

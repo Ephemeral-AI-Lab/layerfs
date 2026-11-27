@@ -3,7 +3,7 @@
 //! worker is gone. Otherwise the start fails before the token is written, so
 //! no Store reconcile can mark that worker's live mounts dead.
 #![cfg(feature = "machine")]
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::home;
 use layerfs_machine::record::MachineRecord;
 use layerfs_machine::Related;
@@ -12,11 +12,11 @@ use std::path::{Path, PathBuf};
 
 static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
-fn none(_: &Path, _: &str) -> Result<Vec<String>, layerfs_bridge::control::SdkRefusal> {
+fn none(_: &Path, _: &str) -> Result<Vec<String>, layerfs_protocol::provision::install::SdkRefusal> {
     Ok(Vec::new())
 }
 
-fn free(_: &Path, _: &str) -> Result<(), layerfs_bridge::control::SdkRefusal> {
+fn free(_: &Path, _: &str) -> Result<(), layerfs_protocol::provision::install::SdkRefusal> {
     Ok(())
 }
 

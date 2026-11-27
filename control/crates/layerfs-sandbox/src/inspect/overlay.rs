@@ -8,8 +8,8 @@
 //! and the home-side call. The read itself is one `lstat` of
 //! `<run folder>/overlay/<namespace>.sqlite` per Workspace: the file is
 //! never opened and no daemon is asked.
-use super::Side;
-use layerfs_bridge::control::SdkValue;
+use super::super::deploy::Side;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::outcome::{refused, Outcome};
 
 /// The inspect kind.
@@ -40,7 +40,7 @@ pub fn overlay_sizes(
             SdkValue::List(namespaces.iter().map(|n| SdkValue::Int(*n)).collect()),
         ),
     ]);
-    super::ask(home, machine, KIND, request)
+    super::route::ask(home, machine, KIND, request)
 }
 
 /// The request on the side that holds the run folder.
@@ -64,7 +64,7 @@ pub(super) fn serve(side: &Side<'_>, args: &SdkValue) -> Outcome {
     let sandbox = args.get_text("sandbox").unwrap_or("");
     // the read: one `lstat` per Workspace, in the run folder the Sandbox's
     // daemon record on this side names, and that record's process
-    let run = super::run_folder(side, sandbox)?;
+    let run = super::route::run_folder(side, sandbox)?;
     let (Side::Home(root) | Side::Worker(root)) = side;
     let directory = layerfs_home::home::paths::sandbox_dir(root, sandbox);
     Ok(match crate::files::started(&directory)? {

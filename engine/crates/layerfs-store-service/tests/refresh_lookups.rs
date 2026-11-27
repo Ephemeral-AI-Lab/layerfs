@@ -15,14 +15,14 @@
 #[allow(dead_code)]
 mod installed;
 
-use layerfs_bridge::control::{SdkCall, SdkValue};
+use layerfs_protocol::provision::install::{SdkCall, SdkValue};
 use layerfs_content::filesystem::PathName;
 use layerfs_content::object::inode_leaf::InodeKind;
 use layerfs_history::WorkspaceId;
 use layerfs_persistence::{PersistenceConfig, SqlitePersistenceProfile};
 use layerfs_store_service::write::mutation::Mutation;
 use layerfs_store_service::{bootstrap::open_store_observed, Owner, OwnerConfig, StoreService};
-use layerfs_workspace::{KernelReadDecision, KernelReadOperation, VisitFacts};
+use layerfs_vfs::{KernelReadDecision, KernelReadOperation, VisitFacts};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 

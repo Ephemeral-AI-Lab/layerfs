@@ -10,7 +10,7 @@ use crate::{
     history::{lookup as args, saved},
     store::{Store, StorePorts},
 };
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_content::{
     compare::{ChangeKind, EntryFacts, PathChange},
     object::inode_leaf::InodeKind,

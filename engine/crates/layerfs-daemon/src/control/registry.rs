@@ -3,11 +3,8 @@ use super::{
     kernel::{Kernel, KernelServing},
     Failure,
 };
-use crate::{
-    store::{BoundWorkspace, Store},
-    Owner, OwnerClient,
-};
-use layerfs_bridge::control::{Activity, ControlCode, WorkspaceToken};
+use layerfs_store_service::{store::{BoundWorkspace, Store}, Owner, OwnerClient};
+use layerfs_protocol::provision::install::{Activity, ControlCode, WorkspaceToken};
 use layerfs_history::{BranchSnapshot, CommitOutcome, WorkspaceId};
 use std::{
     collections::BTreeMap,
@@ -108,7 +105,7 @@ impl Service {
     pub fn operation(
         &self,
         token: WorkspaceToken,
-    ) -> Result<crate::store::StoreOperation, Failure> {
+    ) -> Result<layerfs_store_service::store::StoreOperation, Failure> {
         let workspace = {
             let entries = self.entries.lock().map_err(|_| Failure::Poisoned)?;
             let value = bound(&entries, token)?;
@@ -208,7 +205,7 @@ pub(super) fn idle(value: &Binding) -> Result<(), Failure> {
     match value.activity {
         Activity::Idle => Ok(()),
         Activity::Uncertain | Activity::LocalFailure => Err(Failure::Custody(Box::new(
-            layerfs_bridge::control::ControlRefusal {
+            layerfs_protocol::provision::install::ControlRefusal {
                 code: ControlCode::Unknown,
                 phase: "admission".into(),
                 moved: None,

@@ -31,12 +31,9 @@
 //! Store's lock and the Store's record carries a running `store.move`
 //! intent, as a push does while it checks that the Store is idle.
 #![cfg(unix)]
-use layerfs_api::home::{self, lease, paths, read_record, write_record};
-use layerfs_bridge::control::{
-    AdmissionModel, Answer, Call, CapacityModel, ControlCode, ControlRefusal, DaemonPhase,
-    DaemonStatus, Reply, Request, RetainedModel, SdkValue, OPERATION,
-};
-use layerfs_bridge::duplex;
+use {layerfs_api::home::{self, paths, read_record, write_record}, layerfs_store::lease};
+use layerfs_protocol::provision::install::{AdmissionModel, Answer, Call, CapacityModel, ControlCode, ControlRefusal, DaemonPhase, DaemonStatus, Reply, Request, RetainedModel, SdkValue, OPERATION};
+use layerfs_protocol::duplex;
 use layerfs_sandbox::record::{DaemonRecord, Local, WorkspaceRecord};
 use std::collections::BTreeMap;
 use std::net::{SocketAddr, TcpListener};
@@ -395,7 +392,7 @@ fn local_sandbox(root: &Path, home_id: &str, endpoint: SocketAddr, items: &[SdkV
 /// [`local_sandbox`], under the run-folder name `name`.
 fn sandbox_named(root: &Path, name: &str, endpoint: SocketAddr, items: &[SdkValue]) {
     let name = name.to_owned();
-    let me = layerfs_bridge::process::LocalProcess::observe(std::process::id()).unwrap();
+    let me = layerfs_os::process::LocalProcess::observe(std::process::id()).unwrap();
     let daemon = DaemonRecord::local(Local {
         platform: "macos".to_owned(),
         name: name.clone(),
@@ -619,7 +616,7 @@ fn the_holder_of_the_store_finds_no_lease_after_a_get() {
         lease::read_holders(&home, "shop").unwrap(),
         (Vec::new(), Vec::new())
     );
-    let refusal = layerfs_control::inventory::store_idle(&home, "shop").unwrap_err();
+    let refusal = layerfs_sandbox::status::inventory::store_idle(&home, "shop").unwrap_err();
     assert_eq!(refusal.code, "InUse", "{refusal:?}");
     let Some(SdkValue::List(related)) = refusal.detail.get("related") else {
         panic!("{refusal:?}")
@@ -1000,7 +997,7 @@ impl Client {
 
     /// How a record names it its owner: its id, start time and boot.
     fn owner(&self) -> SdkValue {
-        let me = layerfs_bridge::process::LocalProcess::observe(self.0.id()).unwrap();
+        let me = layerfs_os::process::LocalProcess::observe(self.0.id()).unwrap();
         map(&[
             ("pid", SdkValue::Int(i64::from(me.pid))),
             ("pid_start", t(&me.start.to_string())),
@@ -1280,7 +1277,7 @@ fn redaemon(root: &Path, change: impl FnOnce(SdkValue) -> SdkValue) {
 
 #[test]
 fn a_get_shows_the_daemon_process_as_the_side_that_runs_it_sees_it() {
-    let me = layerfs_bridge::process::LocalProcess::observe(std::process::id()).unwrap();
+    let me = layerfs_os::process::LocalProcess::observe(std::process::id()).unwrap();
     for side in [layerfs_home::names::HOST_MACHINE, "worker"] {
         let items = vec![item(1)];
         let (scratch, home, root) = on_side(side, "process", &items);

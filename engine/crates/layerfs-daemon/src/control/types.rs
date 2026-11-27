@@ -1,11 +1,8 @@
 //! Original control operation receipts, independent of delivery acknowledgement.
-use crate::{
-    store::{BindRefusal, CommitFailure, CommitSuccess},
-    OwnerError,
-};
-use layerfs_bridge::control::{ControlCode, Reply};
+use layerfs_store_service::{store::{BindRefusal, CommitFailure, CommitSuccess}, OwnerError};
+use layerfs_protocol::provision::install::{ControlCode, Reply};
 use layerfs_history::HistoryError;
-use layerfs_workspace::WorkspaceError;
+use layerfs_vfs::WorkspaceError;
 /// Original kernel terminal receipt; it already owns the drained connection
 /// facts. Keep their concrete type instead of erasing counted work behind Debug.
 #[cfg(target_os = "linux")]
@@ -38,7 +35,7 @@ pub struct KernelFailure {
 #[derive(Debug)]
 pub enum Failure {
     Rejected(ControlCode, &'static str),
-    Custody(Box<layerfs_bridge::control::ControlRefusal>),
+    Custody(Box<layerfs_protocol::provision::install::ControlRefusal>),
     Bind(Box<BindRefusal>),
     Commit(Box<CommitFailure>),
     Owner(OwnerError),
@@ -47,7 +44,7 @@ pub enum Failure {
     Kernel(Box<KernelFailure>),
     /// A terminal operation stopped after effects. The registry entry keeps
     /// the exact owners; this is the bounded summary sent to the caller.
-    Retained(Box<layerfs_bridge::control::TeardownCustody>),
+    Retained(Box<layerfs_protocol::provision::install::TeardownCustody>),
     Poisoned,
     After {
         cause: Box<Failure>,

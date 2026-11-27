@@ -1,11 +1,7 @@
 //! Kernel source creation and authenticated installation, retaining failures.
 use super::{bytes, support};
 use layerfs_content::filesystem::attributes::PortableMetadata;
-use layerfs_daemon::{
-    bootstrap::{open_store_observed, OpenedStore},
-    install::receive_install,
-    install_types::StoreSettings,
-};
+use {layerfs_store_service::bootstrap::{open_store_observed, OpenedStore}, layerfs_daemon::{install::receive_install, install_types::StoreSettings}};
 use layerfs_history::{BranchId, HistoryCatalogConfig, HistoryName, LayerStackId};
 use layerfs_persistence::{PersistenceConfig, SqlitePersistenceProfile};
 use layerfs_project::store::{InitRequest, ProjectApi};
@@ -67,7 +63,7 @@ pub const DIRS: [&str; 13] = [
 pub struct Fixture {
     pub directory: PathBuf,
     pub opened: OpenedStore,
-    pub manifest: layerfs_bridge::provision::StoreManifest,
+    pub manifest: layerfs_protocol::provision::manifest::StoreManifest,
     pub metadata: Vec<(String, PortableMetadata)>,
     pub file_metadata: PortableMetadata,
     pub root_metadata: PortableMetadata,
@@ -270,13 +266,13 @@ impl Fixture {
         let directory =
             std::env::temp_dir().join(format!("layerfs-q1-{}-Wide-clone", std::process::id()));
         fs::create_dir(&directory).unwrap();
-        let mut manifest = layerfs_bridge::provision::StoreManifest::decode(
+        let mut manifest = layerfs_protocol::provision::manifest::StoreManifest::decode(
             &fs::read(prepared.join("prepared.manifest")).unwrap(),
         )
         .unwrap();
         assert_eq!(
             manifest.profile,
-            layerfs_bridge::provision::StoreProfile::Normal
+            layerfs_protocol::provision::manifest::StoreProfile::Normal
         );
         let expected = fs::read_to_string(prepared.join("expected-metadata.txt")).unwrap();
         let fields = expected.split_whitespace().collect::<Vec<_>>();

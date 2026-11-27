@@ -8,7 +8,7 @@ use super::{
 };
 use crate::history::{lookup as args, rows::Rows};
 use crate::store::{Store, StorePorts};
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_content::compare::EntryFacts;
 use layerfs_history::{LayerStackId, NodeId};
 use std::sync::Arc;

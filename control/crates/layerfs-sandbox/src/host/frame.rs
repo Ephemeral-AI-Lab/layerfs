@@ -7,7 +7,7 @@
 //! untyped request had. What opens its Store is [`Host::open_args`].
 use super::call::{Call, Deploy, Host, Message, Op, Started};
 use crate::deploy::Choice;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::outcome::refused;
 use layerfs_store::open_args::{OpenArgs, PgSelection};
 use layerfs_store::project::record::ProjectRecord;

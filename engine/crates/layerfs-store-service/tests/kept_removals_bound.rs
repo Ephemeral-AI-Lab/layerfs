@@ -18,7 +18,7 @@
 mod adversary;
 
 use adversary::{verdict, write, Service, TestStore, Verdict};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_content::filesystem::FilesystemRootId;
 use layerfs_history::PathRemovalRecord;
 use layerfs_store_service::removal::KEPT_REMOVAL_BYTES;

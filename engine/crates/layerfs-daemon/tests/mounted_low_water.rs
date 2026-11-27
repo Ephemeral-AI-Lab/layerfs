@@ -42,12 +42,12 @@ mod mounted;
 #[path = "support/mounted_commit.rs"]
 mod rig;
 use held_writer::HeldWriter;
-use layerfs_bridge::control::{Reply, WorkspaceToken};
-use layerfs_daemon::store::{PortError, Store, StoreReader};
+use layerfs_protocol::provision::install::{Reply, WorkspaceToken};
+use layerfs_store_service::store::{PortError, Store, StoreReader};
 use layerfs_history::{HistoryCatalog, HistoryError};
 use layerfs_persistence::{SqliteHandles, SqlitePersistenceProfile};
 use layerfs_storage::{port::PackPersistence, ReservationBlocks, Storage};
-use layerfs_workspace::{WorkspaceError, SERIAL_REFILL};
+use layerfs_vfs::{WorkspaceError, SERIAL_REFILL};
 use model::Model;
 use mounted::{mount_entry, Harness, COMMAND};
 use rig::{bash_in, root, stamp_tree};
@@ -268,7 +268,7 @@ impl Fx {
             attempts: Mutex::new(Vec::new()),
         });
         let reader_config = fixture.config.clone();
-        let factory: layerfs_daemon::store::ReaderFactory = Arc::new(move |_| {
+        let factory: layerfs_store_service::store::ReaderFactory = Arc::new(move |_| {
             let read = SqliteHandles::open_read_only(
                 reader_config.clone(),
                 installed::BINDING,

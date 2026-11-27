@@ -15,7 +15,7 @@
 //!
 //! Nothing runs a daemon: a `sleep` stands for one.
 #![cfg(any(target_os = "linux", target_os = "macos"))]
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::home::{self, paths, read_record, write_record};
 use layerfs_home::op::Op;
 use layerfs_sandbox::family::{remove, RemoveRequest, Removed};
@@ -52,7 +52,7 @@ fn removed(
     home: &Path,
     name: &str,
     force: bool,
-) -> Result<Removed, layerfs_bridge::control::SdkRefusal> {
+) -> Result<Removed, layerfs_protocol::provision::install::SdkRefusal> {
     let mut sink = |_| {};
     let mut events = layerfs_home::events::Events::new(&mut sink);
     let request = RemoveRequest {
@@ -162,7 +162,7 @@ fn an_unstarted_sandbox_on_a_machine_is_closed_by_its_worker_or_kept() {
 /// here), and the create's intent stays.
 #[cfg(target_os = "macos")]
 fn half_created(home: &Path, name: &str, pid: u32) -> PathBuf {
-    use layerfs_bridge::process::LocalProcess;
+    use layerfs_os::process::LocalProcess;
     use layerfs_sandbox::record::{DaemonRecord, Local};
     let host = layerfs_sandbox::force::local_host(home, name).unwrap();
     let given = layerfs_sandbox::lifecycle::sandbox_name(host.deploy(), name).unwrap();
@@ -218,7 +218,7 @@ fn stand_in() -> std::process::Child {
 #[cfg(target_os = "macos")]
 #[test]
 fn a_half_created_native_sandbox_has_its_daemon_stopped_or_kept() {
-    use layerfs_bridge::process::LocalProcess;
+    use layerfs_os::process::LocalProcess;
     let home = new_home(layerfs_home::names::HOST_MACHINE);
 
     // no Store to open: the ordinary close cannot run, so the remove is
@@ -278,7 +278,7 @@ fn a_half_created_native_sandbox_has_its_daemon_stopped_or_kept() {
 #[cfg(target_os = "macos")]
 #[test]
 fn a_forced_remove_goes_on_when_its_tombstone_cannot_be_written() {
-    use layerfs_bridge::process::LocalProcess;
+    use layerfs_os::process::LocalProcess;
     let home = new_home("unretired");
     let mut kept = stand_in();
     let folder = half_created(&home, "s1", kept.id());

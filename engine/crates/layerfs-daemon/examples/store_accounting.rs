@@ -19,7 +19,7 @@ mod records;
 #[path = "../tests/support/host_install.rs"]
 mod support;
 use layerfs_content::filesystem::{FilesystemRootId, PathName};
-use layerfs_daemon::{store::BindRequest, Owner, OwnerConfig};
+use layerfs_store_service::{store::BindRequest, Owner, OwnerConfig};
 use layerfs_history::{CommitOutcome, WorkspaceId};
 use std::{
     fs::OpenOptions,

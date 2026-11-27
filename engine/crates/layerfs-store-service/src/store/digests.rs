@@ -1,6 +1,6 @@
 //! The Store's saved file roots by digest, as the captured construction's port.
 use layerfs_history::{FileDigest, HistoryCatalog};
-use layerfs_workspace::{FileDigestRow, FileDigests, WorkspaceError, WorkspaceResult};
+use layerfs_vfs::{FileDigestRow, FileDigests, WorkspaceError, WorkspaceResult};
 
 /// Records and reads `file_digest` rows through the History catalog: each
 /// call is one bounded statement window outside the publication lane.

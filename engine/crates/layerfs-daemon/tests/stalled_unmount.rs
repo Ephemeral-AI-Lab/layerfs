@@ -31,10 +31,7 @@ mod mounted;
 #[allow(dead_code)]
 #[path = "support/mounted_commit.rs"]
 mod rig;
-use layerfs_bridge::control::{
-    AbortDisposition, CommitKnowledge, DetachDisposition, Reply, Request, TeardownStage,
-    UnmountControl,
-};
+use layerfs_protocol::provision::install::{AbortDisposition, CommitKnowledge, DetachDisposition, Reply, Request, TeardownStage, UnmountControl};
 use layerfs_daemon::control::Failure;
 use mounted::{mount_entry, until};
 use rig::{root, Rig};
@@ -263,7 +260,7 @@ fn later_failure(stage: TeardownStage) {
             let route = operation.workspace().route();
             // A failed owner job poisons only this Workspace's connection.
             assert!(thread::spawn(move || {
-                owner.call::<(), _>(route, layerfs_daemon::ServiceClass::General, None, |_| {
+                owner.call::<(), _>(route, layerfs_store_service::ServiceClass::General, None, |_| {
                     panic!("staged owner failure before Revoke")
                 })
             })

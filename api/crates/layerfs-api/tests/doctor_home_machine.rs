@@ -9,8 +9,8 @@
 //! error. One progress event goes out per finished thing.
 #![cfg(feature = "machine")]
 use layerfs_api::home::{paths, read_record, with_field, write_entity, write_record};
-use layerfs_api::json;
-use layerfs_bridge::control::SdkValue;
+use layerfs_home::json;
+use layerfs_protocol::provision::install::SdkValue;
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::os::unix::fs::PermissionsExt;

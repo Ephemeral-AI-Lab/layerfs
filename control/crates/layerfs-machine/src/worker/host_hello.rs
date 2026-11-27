@@ -1,9 +1,6 @@
 //! Host-worker identity, independent of the guest bundle handshake.
 use super::HostPaths;
-use layerfs_bridge::{
-    control::{SdkRefusal, SdkValue},
-    sdk_values::hex,
-};
+use layerfs_protocol::{provision::install::{SdkRefusal, SdkValue}, sdk::hex};
 use layerfs_home::{helpers::random, outcome::refused};
 use std::fs;
 use std::os::unix::fs::MetadataExt;

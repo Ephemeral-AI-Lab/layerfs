@@ -398,7 +398,7 @@ fn scenarios(dir: &Path, selection: StoreSelection, branch: BranchId) -> Vec<Mea
 /// root in every run and on both backends.
 fn change(workspace: &BoundWorkspace, body: impl FnOnce(&mut Mutation<'_>)) {
     let mut m = Mutation::new(workspace).unwrap();
-    m.now = layerfs_workspace::Time {
+    m.now = layerfs_vfs::Time {
         seconds: 1_800_000_000,
         nanoseconds: 0,
     };

@@ -35,7 +35,7 @@ use adversary::{
     apply, commit, random_bytes, tree_of, verdict, wait_until, write, Op, Service, TestStore, Tree,
     Verdict,
 };
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_history::{BranchId, HistoryError};
 use layerfs_persistence::{CompactRequest, Handles};
 use std::collections::BTreeMap;

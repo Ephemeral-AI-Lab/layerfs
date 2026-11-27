@@ -17,7 +17,7 @@
 //! no secret itself. A PostgreSQL Store whose record holds no login
 //! revision, or whose host machine is stopped, keeps its writes direct.
 use crate::resolve::Target;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::outcome::{refused, Outcome};
 use std::cell::RefCell;
 use std::io::Read;

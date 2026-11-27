@@ -18,8 +18,8 @@
 //! NOT_RUN and pass.
 mod common;
 use common::{layerfs, tempdir, text, LAYERFS};
-use layerfs_api::json;
-use layerfs_bridge::control::SdkValue;
+use layerfs_home::json;
+use layerfs_protocol::provision::install::SdkValue;
 use nix::sys::signal::{kill, Signal};
 use nix::unistd::Pid;
 use std::fs::{File, OpenOptions};

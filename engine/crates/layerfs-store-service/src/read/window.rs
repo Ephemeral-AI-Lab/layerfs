@@ -1,7 +1,7 @@
 //! Bounded text scanning at immutable roots: a file's text arrives in whole
 //! blocks, checked as before, and a buffer-wide line scanner splits it.
 use crate::history::lookup as args;
-use layerfs_bridge::control::SdkRefusal;
+use layerfs_protocol::provision::install::SdkRefusal;
 use layerfs_content::{
     compare::EntryFacts, file::FileView, object::inode_leaf::InodeKind, AuthenticatedObjects,
 };
@@ -114,7 +114,7 @@ pub(super) fn texts_bounded(
                 "NotFile"
             },
             "expected a regular file",
-            layerfs_bridge::control::SdkValue::Null,
+            layerfs_protocol::provision::install::SdkValue::Null,
         ));
     }
     // The root is read and classified once.
@@ -180,16 +180,16 @@ pub(super) fn texts_bounded(
 /// Delivered-byte accounting belongs to the internal grep scanner, not public refusals.
 pub(super) fn without_scan_detail(mut error: SdkRefusal) -> SdkRefusal {
     if error.code == "Binary" {
-        error.detail = layerfs_bridge::control::SdkValue::Null;
+        error.detail = layerfs_protocol::provision::install::SdkValue::Null;
     }
     error
 }
 
 fn scan_error(mut error: SdkRefusal, bytes: u64) -> SdkRefusal {
     if error.code == "Binary" {
-        error.detail = layerfs_bridge::control::SdkValue::map([(
+        error.detail = layerfs_protocol::provision::install::SdkValue::map([(
             "bytesScanned",
-            layerfs_bridge::control::SdkValue::Int(bytes as i64),
+            layerfs_protocol::provision::install::SdkValue::Int(bytes as i64),
         )]);
     }
     error
@@ -377,7 +377,7 @@ pub(super) fn binary() -> SdkRefusal {
     args::refuse(
         "Binary",
         "text contains NUL or invalid UTF-8",
-        layerfs_bridge::control::SdkValue::Null,
+        layerfs_protocol::provision::install::SdkValue::Null,
     )
 }
 

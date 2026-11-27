@@ -7,8 +7,8 @@
 //! surface 2.0): they are listed `blocked`, naming the Store, and
 //! project.get answers the same, never a refusal.
 use layerfs_api::home::{self, paths, write_record};
-use layerfs_bridge::control::SdkValue;
-use layerfs_bridge::sdk_values::hex;
+use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::hex;
 use layerfs_history::LayerStackId;
 use layerfs_machine::worker::{self, read_frame, read_frame_within, write_frame, Hello, MAX_HELLO};
 use layerfs_store::open_args::OpenArgs;
@@ -336,7 +336,7 @@ fn a_worker_store_lists_only_its_live_projects() {
     let home = shop_on_box("real-list", &listener, Some(&root));
     let guest = root.clone();
     std::thread::spawn(move || {
-        layerfs_control::worker_server::serve(listener, "k".to_owned(), guest)
+        layerfs_api::worker::serve::serve(listener, "k".to_owned(), guest)
     });
 
     // The Store under the worker's root hides its retired project; the

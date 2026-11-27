@@ -1,7 +1,7 @@
 //! One observation of an existing host worker, bounded by a single deadline.
 use super::host::{existing_socket, host_check_peer, HostPaths};
 use super::host_hello::{build_identity, HostHello};
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::{
     home::{flock, host_socket, paths},
     outcome::refused,

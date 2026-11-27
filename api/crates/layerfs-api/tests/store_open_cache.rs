@@ -5,7 +5,7 @@
 //! (where a writer waits on its Store directory's lock, Linux and macOS) a
 //! call that is running keeps its Store open against a push or remove.
 use layerfs_api::home::{self, paths, write_record};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use std::net::TcpListener;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};

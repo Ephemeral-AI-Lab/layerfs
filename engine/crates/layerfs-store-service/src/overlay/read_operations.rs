@@ -1,11 +1,11 @@
 //! Direct connection operations, each one counted short job on the calling thread.
 use crate::{OwnerClient, OwnerError, ServiceClass};
 use layerfs_overlay::{BaseSource, CapturedReader, FileRead};
-use layerfs_workspace::Route;
+use layerfs_vfs::Route;
 impl OwnerClient {
     pub fn acquire_diagnostic_source(
         &self,
-        route: layerfs_workspace::Route,
+        route: layerfs_vfs::Route,
     ) -> Result<BaseSource, OwnerError> {
         self.call(route, crate::ServiceClass::Source, None, move |db| {
             db.acquire_diagnostic_source()

@@ -31,7 +31,7 @@ fn a_mount_records_only_the_place_its_caller_states() {
     let workspace = WorkspaceId::from_authority([11; 32]).expect("workspace");
 
     // a placed mount whose caller states no incarnation records none
-    let place = layerfs_bridge::control::MountPlace::new(Some("sandbox-11"), Some("machine-11"));
+    let place = layerfs_protocol::provision::install::MountPlace::new(Some("sandbox-11"), Some("machine-11"));
     let placed = admission::mount_intent(
         workspace,
         &snapshot,
@@ -61,7 +61,7 @@ fn a_mount_records_only_the_place_its_caller_states() {
         WorkspaceId::from_authority([13; 32]).expect("workspace"),
         &snapshot,
         None,
-        &layerfs_bridge::control::MountPlace::default(),
+        &layerfs_protocol::provision::install::MountPlace::default(),
         PlaceAuthority::default(),
     );
     assert_eq!(private.machine_incarnation, None);

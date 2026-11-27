@@ -8,9 +8,9 @@
 //! `InUse`.
 use super::step::{StepFrame, StoreStep};
 use crate::get::hex_text;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_bucket::backup::heads::heads;
-use layerfs_bucket::bucket::pieces;
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
+use crate::backup::copy::heads::heads;
+use crate::backup::bucket::pieces;
 use layerfs_home::home::paths;
 use layerfs_home::outcome::{failed, refused, Outcome};
 use std::io::{Read, Seek, SeekFrom, Write};

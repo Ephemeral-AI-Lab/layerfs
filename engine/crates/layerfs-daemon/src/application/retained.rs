@@ -258,8 +258,8 @@ impl RetainedFailures {
 fn request_kind(failure: &ConnectionFailure) -> Option<&'static str> {
     if let Some(original) = &failure.original {
         return Some(match original {
-            layerfs_bridge::initial_record::InitialRecord::Control(_) => "control",
-            layerfs_bridge::initial_record::InitialRecord::Install(_) => "install",
+            layerfs_protocol::initial_record::InitialRecord::Control(_) => "control",
+            layerfs_protocol::initial_record::InitialRecord::Install(_) => "install",
         });
     }
     match &failure.cause {
@@ -273,8 +273,8 @@ fn request_kind(failure: &ConnectionFailure) -> Option<&'static str> {
     }
 }
 
-fn kind(request: &layerfs_bridge::control::Request) -> &'static str {
-    use layerfs_bridge::control::Request;
+fn kind(request: &layerfs_protocol::provision::install::Request) -> &'static str {
+    use layerfs_protocol::provision::install::Request;
     match request {
         Request::Mount { .. } => "mount",
         Request::MountNamed { .. } => "mount",

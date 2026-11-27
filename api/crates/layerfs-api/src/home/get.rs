@@ -3,8 +3,8 @@
 //! in the home.
 use crate::calls::table::{call, Call};
 use crate::calls::{Context, Form, Part, Section};
-use layerfs_bridge::control::SdkValue;
-use layerfs_control::home::{Build, With};
+use layerfs_protocol::provision::install::SdkValue;
+use layerfs_inspect::home::get::{Build, With};
 use layerfs_home::outcome::Outcome;
 
 /// Its answer: `state` always, with `reason` and `fix` when it is broken.
@@ -183,5 +183,5 @@ fn run(context: &mut Context<'_>, _args: &SdkValue) -> Outcome {
         platforms: context.with("platforms"),
         tree: context.with("tree"),
     };
-    layerfs_control::home::get(&context.home, build(), with)
+    layerfs_inspect::home::get::get(&context.home, build(), with)
 }

@@ -83,7 +83,7 @@
 #[path = "support/round_trips.rs"]
 mod rt;
 
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use rt::{branch_arg as branch, path_arg as path, t, Backend, Counts, Measured, Pin, Store};
 
 /// SQLite: `[0, 0, statements, transactions]` per role. Baseline,

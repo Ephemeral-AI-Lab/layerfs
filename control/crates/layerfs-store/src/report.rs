@@ -5,7 +5,7 @@
 //! SQLite and PostgreSQL paths cannot disagree on a key: the report is flat,
 //! every byte total ends in `_bytes`, a zero field is named by its key in
 //! this answer, and `residue_reason` is null unless something remains.
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_persistence::{CompactPath, CompactReceipt, CompactStatus};
 
 /// The key of this answer a §11 report field (`wire`, as the engine names
@@ -36,7 +36,7 @@ pub fn compact_report(store: &str, report: &CompactReceipt) -> SdkValue {
     let found = &report.kept_waste.delta_base_references;
     let references = found
         .iter()
-        .map(|id| SdkValue::text(layerfs_bridge::sdk_values::hex(id)))
+        .map(|id| SdkValue::text(layerfs_protocol::sdk::hex(id)))
         .collect();
     let capped = report.kept_waste.delta_base_references_capped;
     let (references, references_count) = layerfs_home::helpers::shown(references, 0, capped);

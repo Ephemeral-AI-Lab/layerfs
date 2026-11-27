@@ -25,7 +25,7 @@ pub struct State {
 }
 pub struct Shared {
     pub namespace: i64,
-    pub route: OnceLock<layerfs_workspace::Route>,
+    pub route: OnceLock<layerfs_vfs::Route>,
     pub state: Mutex<State>,
     pub changed: Condvar,
     /// Live maintenance holds (`hold.rs`): while any is taken, no step of

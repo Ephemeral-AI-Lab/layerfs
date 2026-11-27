@@ -15,13 +15,15 @@ keeps tests inside src/.
 Rust crates are assigned by name to core, engine, control or api in every
 layout: the call surface layerfs-api and the front ends layerfs-cli,
 layerfs-node and layerfs-python are api crates wherever they sit; the control
-crates (layerfs-home, layerfs-machine, layerfs-platform, layerfs-store,
-layerfs-bucket, layerfs-sandbox, layerfs-sandbox-backend and
-layerfs-control, and the earlier driver names layerfs-isolation,
-layerfs-store-backup and layerfs-remote-storage) are control crates wherever they sit, so a pre-move
-tree counts them under control too (the `control` scope was `connect`, and
-layerfs-control was an api crate, before #101). Unknown historical crates
-remain counted in core.
+crates (layerfs-home, layerfs-machine, layerfs-store, layerfs-sandbox and
+layerfs-inspect; before #828 also layerfs-platform, layerfs-bucket,
+layerfs-sandbox-backend and layerfs-control, and the earlier driver names
+layerfs-isolation, layerfs-store-backup and layerfs-remote-storage) are control
+crates wherever they sit, so a pre-move tree counts them under control too (the
+`control` scope was `connect`, and layerfs-control was an api crate, before
+#101). layerfs-workspace alone goes by its folder: engine/crates held the
+engine's Workspace crate (layerfs-vfs since #828), control/crates holds the
+control layer's. Unknown historical crates remain counted in core.
 
 The `api` scope includes api/python/src/layerfs Python implementation and
 hand-written stubs. Tokenization excludes comments; the AST excludes standalone
@@ -398,17 +400,21 @@ def counted_lines(path: Path) -> int:
 
 SCOPES = ("core", "engine", "control", "reference", "api", "dsh")
 ENGINE_CRATES = {
-    "layerfs-bridge",
+    "layerfs-protocol",
+    "layerfs-os",
+    "layerfs-vfs",
     "layerfs-daemon",
-    "layerfs-mount-ports",
     "layerfs-fuse",
     "layerfs-overlay",
     "layerfs-persistence",
     "layerfs-project",
     "layerfs-store-service",
-    "layerfs-workspace",
     # The NFS export was missing here and counted under core (#533 step 2).
     "layerfs-nfs",
+    # Before #828: layerfs-bridge became layerfs-protocol and layerfs-os,
+    # layerfs-workspace and layerfs-mount-ports became layerfs-vfs.
+    "layerfs-bridge",
+    "layerfs-mount-ports",
 }
 # The control layer (#535; renamed from connect and split by concern, #101):
 # the entity crates, the drivers and layerfs-control. Classified by name in
@@ -417,10 +423,14 @@ ENGINE_CRATES = {
 CONTROL_CRATES = {
     "layerfs-home",
     "layerfs-machine",
-    "layerfs-platform",
     "layerfs-store",
-    "layerfs-bucket",
     "layerfs-sandbox",
+    "layerfs-inspect",
+    # Before #828, merged by entity: layerfs-platform into layerfs-machine,
+    # layerfs-bucket into layerfs-store, layerfs-sandbox-backend into
+    # layerfs-sandbox, layerfs-control into layerfs-inspect.
+    "layerfs-platform",
+    "layerfs-bucket",
     "layerfs-sandbox-backend",
     "layerfs-control",
     # Earlier driver names: before #101 layerfs-platform was layerfs-machine,
@@ -437,7 +447,16 @@ API_CRATES = {"layerfs-api", "layerfs-cli", "layerfs-node", "layerfs-python"}
 OLD_API_CRATES = {"layerfs-api": "layerfs-api", "binding": "layerfs-node"}
 
 
-def crate_layer(name: str) -> str:
+# A name two layers have used, classified by the folder it sits in:
+# layerfs-workspace was the engine's Workspace crate until #828 renamed it
+# layerfs-vfs, and is the control layer's Workspace crate since.
+LAYER_BY_FOLDER = {"layerfs-workspace": {"engine": "engine", "control": "control"}}
+
+
+def crate_layer(name: str, package: Path | None = None) -> str:
+    if name in LAYER_BY_FOLDER:
+        folder = package.parent.parent.name if package is not None else None
+        return LAYER_BY_FOLDER[name].get(folder, "control")
     if name in ENGINE_CRATES:
         return "engine"
     if name in CONTROL_CRATES:
@@ -610,7 +629,7 @@ def scope_files(root: Path, scope: str) -> list:
             names = {
                 package.name
                 for package in packages
-                if package.parent == base and crate_layer(package_crate(root, package)) == scope
+                if package.parent == base and crate_layer(package_crate(root, package), package) == scope
             }
             files.extend(path for path in rust_files(base) if path.relative_to(base).parts[0] in names)
         if scope == "api":

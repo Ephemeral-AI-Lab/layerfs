@@ -29,11 +29,9 @@ mod mounted;
 #[allow(dead_code)]
 #[path = "support/mounted_commit.rs"]
 mod rig;
-use layerfs_bridge::control::{
-    Activity, ControlCode, MountPhase, ReadyMount, Reply, Request, WorkspaceStatus, WorkspaceToken,
-};
+use layerfs_protocol::provision::install::{Activity, ControlCode, MountPhase, ReadyMount, Reply, Request, WorkspaceStatus, WorkspaceToken};
 use layerfs_content::ObjectId;
-use layerfs_daemon::{control::Failure, OwnerWork};
+use {layerfs_daemon::control::Failure, layerfs_store_service::OwnerWork};
 use layerfs_history::{
     BranchId, BranchSnapshot, ForkRequest, ForkSource, HistoryName, WorkspaceId,
 };
@@ -1059,14 +1057,14 @@ fn simultaneous_mounts_over_related_roots_are_isolated_and_a_stale_token_never_r
     let requests = |token: WorkspaceToken| {
         [
             Request::Status(token),
-            Request::Commit(layerfs_bridge::control::CommitControl {
+            Request::Commit(layerfs_protocol::provision::install::CommitControl {
                 token,
                 force: false,
                 message: None,
                 expected: None,
             }),
             Request::Attach(token),
-            Request::Unmount(layerfs_bridge::control::UnmountControl {
+            Request::Unmount(layerfs_protocol::provision::install::UnmountControl {
                 token,
                 discard: true,
             }),

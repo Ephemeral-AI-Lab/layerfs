@@ -38,7 +38,7 @@ use layerfs_store_service::telemetry::{attribute_sql, phase_sql, Recording};
 use layerfs_store_service::write::mutation::Mutation;
 use layerfs_store_service::{Owner, OwnerConfig, StoreService};
 use layerfs_telemetry::timer::Timing;
-use layerfs_workspace::{Operation, Time};
+use layerfs_vfs::{Operation, Time};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};

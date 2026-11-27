@@ -6,8 +6,8 @@
 //! reads or writes a Store record's fields but through [`StoreRecord`].
 use crate::backup::record::StoreLink;
 use crate::intent;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
-pub use layerfs_bridge::StoreKind;
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
+pub use layerfs_protocol::StoreKind;
 use layerfs_home::home::entity_lock::{self, EntityLock};
 use layerfs_home::home::{self, paths, read_record, with_field, write_entity};
 use layerfs_home::op::{self, Op};
@@ -282,7 +282,7 @@ impl StoreRecord {
     /// service still open on the old one (lane K2, terminal pass).
     pub fn postgresql_key(&self, home: &Path, store: &str) -> std::path::PathBuf {
         let binding = self.binding().unwrap_or_default();
-        let bound = layerfs_bridge::sdk_values::hex(&binding[..binding.len().min(8)]);
+        let bound = layerfs_protocol::sdk::hex(&binding[..binding.len().min(8)]);
         paths::store_dir(home, store).join(format!("postgresql-{bound}"))
     }
 
@@ -305,7 +305,7 @@ impl StoreRecord {
 
     /// The record with a new [`Self::login_revision`].
     pub fn with_new_login_revision(self) -> Result<Self> {
-        let token = layerfs_bridge::sdk_values::hex(&layerfs_home::helpers::random()?[..16]);
+        let token = layerfs_protocol::sdk::hex(&layerfs_home::helpers::random()?[..16]);
         Ok(self.with(LOGIN_REVISION, SdkValue::text(token)))
     }
 

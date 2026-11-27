@@ -11,10 +11,8 @@ use layerfs_history::{
 };
 use layerfs_overlay::{Capture, CapturedReader, OperationOwner};
 use layerfs_storage::{Diagnostics, StorageError, WriteOutcome};
-use layerfs_workspace::Route;
-use layerfs_workspace::{
-    CapturedNamespaceCustody, CapturedNamespaceWork, PreparedBase, WorkspaceError,
-};
+use layerfs_vfs::Route;
+use layerfs_vfs::{CapturedNamespaceCustody, CapturedNamespaceWork, PreparedBase, WorkspaceError};
 use std::{fmt, sync::Arc};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

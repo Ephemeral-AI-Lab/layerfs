@@ -7,7 +7,7 @@
 //! it. And `machine.create --os-image stock` (§2.4) takes the provider's own
 //! image over a prepared one. One test: it owns this process's environment.
 #![cfg(feature = "machine")]
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};

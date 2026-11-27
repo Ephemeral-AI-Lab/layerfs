@@ -27,7 +27,7 @@ mod rig;
 mod support;
 use drive::evidence;
 use layerfs_content::{AuthenticatedObjects, ObjectId};
-use layerfs_daemon::store::BoundWorkspace;
+use layerfs_store_service::store::BoundWorkspace;
 use rig::{apply, commit, pattern, read, Daemon, Do, Tree};
 use std::{
     collections::BTreeSet,
@@ -319,7 +319,7 @@ fn eviction_changes_no_byte_and_keeps_exact_accounts() {
     assert_eq!(readers.quarantined, 0);
     // Both readers walk the same order, so both often miss one object at
     // once: each fetches and authenticates it, and it is inserted once.
-    let held = |work: &layerfs_workspace::ClientWork| {
+    let held = |work: &layerfs_vfs::ClientWork| {
         (work.cached_objects + work.file_lengths + work.portable_metadata) as i64
     };
     let inserted = (after.evictions - before.evictions) as i64 + held(&after) - held(&before);

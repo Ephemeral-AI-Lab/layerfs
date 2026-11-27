@@ -6,13 +6,10 @@
 //! with `a`'s `/.lww`, and a clean result becomes one Commit with two parents.
 //! A conflict creates nothing. Publishing is a compare-and-swap on main's
 //! head by default, and reports the main Layers a forced publication skipped.
-use super::lookup::{
-    self as args, branch_node, commit_value, hex, history, invalid, layer_value, node_text, refuse,
-    root, short, Answer,
-};
+use {super::lookup::{self as args, branch_node, history, invalid, refuse, root, Answer}, layerfs_protocol::sdk::{commit_value, hex, layer_value, node_text, short}};
 use super::resolve::{self, Named};
 use crate::store::{CommitError, Store};
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_content::{
     filesystem::FilesystemRootId,
     merge::{merge_roots, MergeInput, MergeUnit, RulesFrom, Units},
@@ -22,7 +19,7 @@ use layerfs_history::{
     CommitMeta, CommitVia, ForkRequest, ForkSource, HistoryError, LayerId, LayerStackRecord,
     MergeCommit, MergeHead, MergeSide, NodeId, MAXIMUM_PAGE_RECORDS,
 };
-use layerfs_workspace::InodeSerials;
+use layerfs_vfs::InodeSerials;
 use std::sync::Arc;
 
 /// The name of the project's line of Layers.
@@ -43,7 +40,7 @@ fn side(
     name: &str,
 ) -> Result<
     (MergeSide, NodeId, Option<layerfs_history::BranchRecord>),
-    layerfs_bridge::control::SdkRefusal,
+    layerfs_protocol::provision::install::SdkRefusal,
 > {
     if name == MAIN {
         return Ok((MergeSide::Main, NodeId::Layer(stack.head_layer), None));
@@ -396,7 +393,7 @@ fn merge_inner(store: &Arc<Store>, stack: &LayerStackRecord, merge: &Merge<'_>) 
         (None, None) => args::content(error),
     })?;
     store.note_merge(&merged);
-    let lww = layerfs_bridge::sdk_values::lww(&merged.lww);
+    let lww = layerfs_protocol::sdk::lww(&merged.lww);
     if !merged.clean() {
         // Nothing is created: the unfinished Save is dropped.
         drop(save);
@@ -411,7 +408,7 @@ fn merge_inner(store: &Arc<Store>, stack: &LayerStackRecord, merge: &Merge<'_>) 
                 ("mergeBase", SdkValue::text(node_text(base_node))),
                 (
                     "conflicts",
-                    layerfs_bridge::sdk_values::conflicts(&merged.conflicts),
+                    layerfs_protocol::sdk::conflicts(&merged.conflicts),
                 ),
                 (
                     "paths",
@@ -428,18 +425,18 @@ fn merge_inner(store: &Arc<Store>, stack: &LayerStackRecord, merge: &Merge<'_>) 
                 ("lww", lww),
                 (
                     "conflictsTruncated",
-                    SdkValue::Bool(layerfs_bridge::sdk_values::conflicts_truncated(
+                    SdkValue::Bool(layerfs_protocol::sdk::conflicts_truncated(
                         &merged.conflicts,
                     )),
                 ),
                 (
                     "lwwTruncated",
-                    SdkValue::Bool(layerfs_bridge::sdk_values::lww_truncated(&merged.lww)),
+                    SdkValue::Bool(layerfs_protocol::sdk::lww_truncated(&merged.lww)),
                 ),
-                ("units", layerfs_bridge::sdk_values::units(&decided)),
+                ("units", layerfs_protocol::sdk::units(&decided)),
                 (
                     "unitsTruncated",
-                    SdkValue::Bool(layerfs_bridge::sdk_values::units_truncated(&decided)),
+                    SdkValue::Bool(layerfs_protocol::sdk::units_truncated(&decided)),
                 ),
             ]),
         ));
@@ -532,12 +529,12 @@ fn merge_inner(store: &Arc<Store>, stack: &LayerStackRecord, merge: &Merge<'_>) 
         ("conflictsTruncated", SdkValue::Bool(false)),
         (
             "lwwTruncated",
-            SdkValue::Bool(layerfs_bridge::sdk_values::lww_truncated(&merged.lww)),
+            SdkValue::Bool(layerfs_protocol::sdk::lww_truncated(&merged.lww)),
         ),
-        ("units", layerfs_bridge::sdk_values::units(&decided)),
+        ("units", layerfs_protocol::sdk::units(&decided)),
         (
             "unitsTruncated",
-            SdkValue::Bool(layerfs_bridge::sdk_values::units_truncated(&decided)),
+            SdkValue::Bool(layerfs_protocol::sdk::units_truncated(&decided)),
         ),
     ]))
 }

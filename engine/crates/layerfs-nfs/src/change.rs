@@ -20,16 +20,12 @@ use crate::{
     names,
 };
 use layerfs_content::{filesystem::PathName, object::inode_leaf::InodeKind};
-use layerfs_mount_ports::operations::{
-    create, link, remove, rename,
-    write::{self, AttributeChange, Stamp},
-    Declined, KernelMutation, MutationFailure, MutationInput, MutationRequest, Published,
-};
+use layerfs_vfs::requests::{create, link, remove, rename, write::{self, AttributeChange, Stamp}, Declined, KernelMutation, MutationFailure, MutationInput, MutationRequest, Published};
 
 /// Pre- and post-operation attributes of one inode or directory.
 pub type Wcc = (Option<ViewStat>, Option<ViewStat>);
 use layerfs_overlay::WRITE_WINDOW;
-use layerfs_workspace::{Position, Time, ViewStat};
+use layerfs_vfs::{Position, Time, ViewStat};
 use std::{io, sync::atomic::Ordering, time::SystemTime};
 
 /// The page a client reads a symlink target into; a longer target could not

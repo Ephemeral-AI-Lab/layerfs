@@ -16,7 +16,7 @@ mod mutating;
 #[allow(dead_code)]
 #[path = "support/host_install.rs"]
 mod support;
-use layerfs_bridge::control::{Activity, ControlCode, MountPhase, Reply, Request};
+use layerfs_protocol::provision::install::{Activity, ControlCode, MountPhase, Reply, Request};
 use layerfs_daemon::control::{Failure, Service};
 use layerfs_history::BranchId;
 use mounted::{mount_entry, until, Harness, COMMAND};
@@ -134,7 +134,7 @@ fn command(identity: u32, program: &str, argument: &Path) -> std::process::Outpu
 }
 
 /// The kernel lookup entries and file custody the engine keeps in memory.
-fn lookups(h: &Harness, through: layerfs_bridge::control::WorkspaceToken) -> u64 {
+fn lookups(h: &Harness, through: layerfs_protocol::provision::install::WorkspaceToken) -> u64 {
     let open = h.engine_resources(through).open;
     open.kernel_entries + open.file_custody
 }
@@ -314,7 +314,7 @@ fn attach_refusals_have_no_effect_and_a_failed_attach_returns_to_unattached() {
         Err(Failure::Rejected(ControlCode::Invalid, _))
     ));
     drop(plain);
-    let stale = layerfs_bridge::control::WorkspaceToken {
+    let stale = layerfs_protocol::provision::install::WorkspaceToken {
         namespace: token.namespace + 1000,
         ..token
     };

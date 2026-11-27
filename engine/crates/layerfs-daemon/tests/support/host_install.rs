@@ -1,6 +1,6 @@
 //! External authenticated endpoints and complete small-root installation oracle.
-use layerfs_bridge::duplex::{self, Connection};
-use layerfs_daemon::{install_types::InstalledStore, store::BindRequest, Owner, OwnerConfig};
+use layerfs_protocol::duplex::{self, Connection};
+use {layerfs_daemon::install_types::InstalledStore, layerfs_store_service::{store::BindRequest, Owner, OwnerConfig}};
 use layerfs_history::{BranchId, HistoryCatalogConfig, HistoryName, LayerStackId, WorkspaceId};
 use layerfs_persistence::{PersistenceConfig, SqlitePersistenceProfile};
 use layerfs_project::store::{InitRequest, ProjectApi, SealedProject};
@@ -243,7 +243,7 @@ pub fn oracle(installed: &InstalledStore, overlay: &Path) {
 /// process. Store calls are not served by the daemon (#352 F-020).
 #[allow(dead_code)]
 pub fn commits(
-    manifest: &layerfs_bridge::provision::StoreManifest,
+    manifest: &layerfs_protocol::provision::manifest::StoreManifest,
     branch: BranchId,
     limit: u16,
 ) -> layerfs_history::PageResult<layerfs_history::CommitRecord> {

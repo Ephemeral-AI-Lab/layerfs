@@ -342,7 +342,7 @@ fn a_branch_removal_while_the_commit_is_paused_inside_the_lane() {
             Some((n, Fault::Pause)),
             || match remover.call(
                 "branch.remove",
-                vec![("branch", layerfs_bridge::control::SdkValue::text(&gone))],
+                vec![("branch", layerfs_protocol::provision::install::SdkValue::text(&gone))],
             ) {
                 Ok(_) => "Ok".into(),
                 Err(refusal) => refusal.code,

@@ -7,7 +7,7 @@
 //! command; no VM is used. One test, because it sets the process's
 //! environment.
 #![cfg(all(feature = "machine", target_os = "macos"))]
-use layerfs_bridge::control::SdkRefusal;
+use layerfs_protocol::provision::install::SdkRefusal;
 use layerfs_home::events::Events;
 use layerfs_home::home;
 use layerfs_home::state::Reason;
@@ -92,7 +92,7 @@ exit 0
     assert_eq!(failed.code, "Failed", "{failed:?}");
     assert_eq!(
         failed.detail.get("vm_exists"),
-        Some(&layerfs_bridge::control::SdkValue::Bool(true)),
+        Some(&layerfs_protocol::provision::install::SdkValue::Bool(true)),
         "{failed:?}"
     );
     let record = MachineRecord::of(&h, "dev").unwrap();

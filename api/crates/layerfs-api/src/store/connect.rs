@@ -6,7 +6,7 @@
 use crate::calls::table::Kind::{Bool, Content, Name, Text};
 use crate::calls::table::{a, call, opt, Call};
 use crate::calls::{Context, Form};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::names::StoreName;
 use layerfs_home::outcome::{refused, Outcome};
 use layerfs_store::postgresql::connect::StoreConnect;
@@ -107,5 +107,5 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         dry_run: args.get_bool("dry_run"),
     };
     let (home, events) = context.parts();
-    layerfs_control::store::connect(home, events, &request)
+    layerfs_store::admin::with_users::connect(home, events, &request)
 }

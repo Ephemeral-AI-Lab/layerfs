@@ -52,7 +52,7 @@
 //! factory keeps one copy for the readers it opens).
 use crate::open_args::OpenArgs;
 use crate::record::{self, StoreRecord};
-use layerfs_bridge::control::SdkRefusal;
+use layerfs_protocol::provision::install::SdkRefusal;
 use layerfs_home::outcome::{refused, Outcome};
 use layerfs_home::wipe::text as wipe;
 use layerfs_store_service::StoreService;

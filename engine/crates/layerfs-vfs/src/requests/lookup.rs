@@ -1,0 +1,243 @@
+//! LOOKUP/GETATTR/OPEN/OPENDIR share the existing atomic semantic plan.
+use crate::ports::mount::{stale, BaseDemandFailed, Fenced, RequestServices, ServiceError, ServiceReply};
+use layerfs_overlay::KernelMount;
+use crate::{KernelReadDecision, KernelReadFailure, KernelReadOperation, KernelReadOutcome, KernelReadValue, Refusal, ViewStat, VisitFacts};
+use std::{fmt, sync::Arc};
+
+pub(super) struct Custody {
+    pub services: Arc<dyn RequestServices>,
+    mount: KernelMount,
+    request: u64,
+    protected: u64,
+    handle: Option<u64>,
+    operation: KernelReadOperation,
+    pub data_input: Option<super::ReadDataInput>,
+    // Retain the engine receipt through every cloned outcome consumer.
+    pub receipt: Option<ServiceReply<Arc<KernelReadOutcome>>>,
+    /// The directory row a refused LOOKUP read in the same job, fresh from
+    /// that job (see [`KernelRead::refused_directory`]).
+    pub refused_directory: Option<ViewStat>,
+}
+/// A deciding answer and the receipt of the visit that decided it.
+/// The request holds nothing else in the engine; the kernel's lookup, open
+/// and directory owners persist independently.
+pub struct KernelRead {
+    pub(super) value: Result<KernelReadValue, Refusal>,
+    pub(super) custody: Custody,
+}
+/// Exact failed step and original request identity. A visit records no
+/// request source, so a failure owns nothing in the engine.
+pub struct ReadFailure {
+    pub reason: ServiceError,
+    pub provider: Option<ServiceError>,
+    custody: Custody,
+}
+impl fmt::Debug for ReadFailure {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ReadFailure")
+            .field("reason", &self.reason)
+            .field("provider", &self.provider)
+            .field("mount", &self.custody.mount)
+            .field("request", &self.custody.request)
+            .field("operation", &self.custody.operation)
+            .field("data_input", &self.custody.data_input)
+            .finish_non_exhaustive()
+    }
+}
+impl fmt::Display for ReadFailure {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.reason.fmt(f)
+    }
+}
+impl std::error::Error for ReadFailure {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(self.reason.as_ref())
+    }
+}
+impl ReadFailure {
+    pub(super) fn new(reason: ServiceError, custody: Custody) -> Self {
+        let provider = match custody.services.provider_failure() {
+            Ok(original) => original,
+            Err(error) => Some(error),
+        };
+        Self {
+            reason,
+            provider,
+            custody,
+        }
+    }
+    pub const fn mount(&self) -> KernelMount {
+        self.custody.mount
+    }
+    pub const fn request(&self) -> u64 {
+        self.custody.request
+    }
+    pub const fn protected(&self) -> u64 {
+        self.custody.protected
+    }
+    pub const fn handle(&self) -> Option<u64> {
+        self.custody.handle
+    }
+    pub fn operation(&self) -> &KernelReadOperation {
+        &self.custody.operation
+    }
+    pub const fn data_input(&self) -> Option<super::ReadDataInput> {
+        self.custody.data_input
+    }
+    pub fn observation(&self) -> Option<&KernelReadOutcome> {
+        self.custody
+            .receipt
+            .as_ref()
+            .map(|receipt| receipt.get().as_ref())
+    }
+    /// The mount's stopped fence refused the failed step before its attempt.
+    pub fn fenced(&self) -> bool {
+        self.reason.is::<Fenced>()
+    }
+    /// The failed step was a base demand of this request alone.
+    pub fn base_demand(&self) -> Option<&BaseDemandFailed> {
+        self.reason.downcast_ref()
+    }
+    /// The kernel named a serial an install dropped ([`stale`]): ESTALE for
+    /// this request alone.
+    pub fn stale(&self) -> bool {
+        stale(&self.reason)
+    }
+    /// Ends a request that was fenced, whose base demand failed or whose
+    /// serial is stale. It holds nothing in the engine, so nothing is
+    /// released and no job is submitted. Any other failure is returned
+    /// unchanged.
+    pub async fn relinquish(self) -> Result<(), ReadFailure> {
+        if !self.fenced() && self.base_demand().is_none() && !self.stale() {
+            return Err(self);
+        }
+        Ok(())
+    }
+}
+impl KernelRead {
+    pub async fn prepare(
+        services: Arc<dyn RequestServices>,
+        mount: KernelMount,
+        request: u64,
+        protected: u64,
+        handle: Option<u64>,
+        operation: KernelReadOperation,
+    ) -> Result<Self, ReadFailure> {
+        let mut custody = Custody::unowned(services, mount, request, protected, handle, operation);
+        match custody.visit().await {
+            Ok(value) => Ok(Self { value, custody }),
+            Err(reason) => Err(ReadFailure::new(reason, custody)),
+        }
+    }
+    pub fn value(&self) -> Result<&KernelReadValue, Refusal> {
+        self.value.as_ref().map_err(|refusal| *refusal)
+    }
+    /// The directory row a refused LOOKUP read in its own job, when it read
+    /// one: the fresh facts its reply's directory attributes are made of.
+    /// `None` for every other refusal and for every other operation, none of
+    /// which read a directory row.
+    pub fn refused_directory(&self) -> Option<&ViewStat> {
+        self.custody.refused_directory.as_ref()
+    }
+    /// Preserve a successfully decided request when kernel reply conversion or
+    /// another downstream invariant fails before consumer disposal.
+    pub fn retain(self, reason: ServiceError) -> ReadFailure {
+        let Self { value, custody } = self;
+        drop(value);
+        ReadFailure::new(reason, custody)
+    }
+    /// Called only after the single reply attempt and disposal of its payload.
+    /// It drops the visit's receipt; nothing is released in the
+    /// engine and the kernel's owners stay live.
+    pub async fn dispose(self) -> Result<(), ReadFailure> {
+        drop(self);
+        Ok(())
+    }
+}
+impl Custody {
+    /// The request as it arrived: nothing is owned in the engine yet.
+    pub(super) fn unowned(
+        services: Arc<dyn RequestServices>,
+        mount: KernelMount,
+        request: u64,
+        protected: u64,
+        handle: Option<u64>,
+        operation: KernelReadOperation,
+    ) -> Self {
+        Self {
+            services,
+            mount,
+            request,
+            protected,
+            handle,
+            operation,
+            data_input: None,
+            receipt: None,
+            refused_directory: None,
+        }
+    }
+    pub(super) const fn target(&self) -> (KernelMount, u64, Option<u64>) {
+        (self.mount, self.protected, self.handle)
+    }
+    /// LOOKUP, GETATTR, OPEN and OPENDIR are served by owner visits that
+    /// record no request source: nothing is acquired, so nothing is released
+    /// afterwards. An undecided visit changed nothing; the base facts it
+    /// asked for are read here, outside the owner, before the next visit.
+    /// The visit that decides an OPEN or OPENDIR wrote its descriptor.
+    async fn visit(&mut self) -> Result<Result<KernelReadValue, Refusal>, ServiceError> {
+        let mut facts = Arc::new(VisitFacts::default());
+        loop {
+            let started = std::time::Instant::now();
+            let receipt = self
+                .services
+                .observe_visit(
+                    self.mount,
+                    self.request,
+                    self.protected,
+                    self.handle,
+                    self.operation.clone(),
+                    facts.clone(),
+                )
+                .await;
+            crate::requests::phase::charge(crate::requests::phase::Phase::ReadVisit, started);
+            let receipt = receipt?;
+            let original = receipt.get().clone();
+            let needs = match (&original.result, &original.decision) {
+                (Ok(None), Some(KernelReadDecision::Value(decided))) => {
+                    let stat = decided.inode.clone().into();
+                    self.receipt = Some(receipt);
+                    return Ok(Ok(KernelReadValue {
+                        stat,
+                        parent: decided.parent.clone().map(Into::into),
+                        file: original.open_candidate,
+                        directory: original.directory_candidate,
+                        original,
+                    }));
+                }
+                (Ok(None), Some(KernelReadDecision::Refused { refusal, directory })) => {
+                    self.refused_directory = directory.clone().map(Into::into);
+                    return Ok(Err(*refusal));
+                }
+                (Ok(None), Some(KernelReadDecision::Needs(needs))) if !needs.is_empty() => needs,
+                _ => {
+                    self.receipt = Some(receipt);
+                    return Err(Box::new(KernelReadFailure {
+                        reason: "kernel read visit did not produce a usable original answer",
+                        original,
+                    }));
+                }
+            };
+            // The job and its receipt are gone before any provider wait.
+            drop(receipt);
+            // The receive worker running this request performs its provider read.
+            let started = std::time::Instant::now();
+            let base = self.services.base().await?;
+            let result = Arc::make_mut(&mut facts).supply(&base, needs, None);
+            drop(base); // Return the actual reader before another SQL wait.
+            crate::requests::phase::charge(crate::requests::phase::Phase::ReadSupply, started);
+            if let Err(error) = result {
+                return Err(self.services.failed_base_read(error.into()));
+            }
+        }
+    }
+}

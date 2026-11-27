@@ -13,11 +13,11 @@
 use crate::deploy::{self, Side};
 use crate::host::Deploy;
 use crate::images::{lowers, refused_with};
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::home::{self, paths};
 use layerfs_home::outcome::{failed, refused, Outcome};
-use layerfs_sandbox_backend::rootfs;
-use layerfs_sandbox_backend::Image;
+use crate::rootfs;
+use crate::Image;
 use sha2::{Digest, Sha256};
 use std::fs::{self, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
@@ -322,7 +322,7 @@ fn sha256_file(path: &Path) -> Result<String, SdkRefusal> {
         }
         hasher.update(&bytes[..count]);
     }
-    Ok(layerfs_bridge::sdk_values::hex(&hasher.finalize()))
+    Ok(layerfs_protocol::sdk::hex(&hasher.finalize()))
 }
 
 /// One step of an image copy on the machine (worker op `image.artifact`),

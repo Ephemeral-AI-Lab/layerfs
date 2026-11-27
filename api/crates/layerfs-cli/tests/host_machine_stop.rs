@@ -6,8 +6,8 @@ mod fixture;
 mod proof;
 
 use fixture::Fixture;
-use layerfs_api::names::HOST_MACHINE;
-use layerfs_bridge::control::SdkValue;
+use layerfs_home::names::HOST_MACHINE;
+use layerfs_protocol::provision::install::SdkValue;
 use proof::Cli;
 
 fn cli(home: &Fixture, args: &[&str]) -> Cli {

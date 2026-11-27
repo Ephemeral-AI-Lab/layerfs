@@ -12,8 +12,8 @@
 //! test here takes one lock. The walker's and the views' own tests are
 //! layerfs-sandbox `inspect_machine_files`.
 #![cfg(unix)]
-use layerfs_api::home::{self, lease, paths, read_record, write_record};
-use layerfs_bridge::control::SdkValue;
+use {layerfs_api::home::{self, paths, read_record, write_record}, layerfs_store::lease};
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_sandbox::record::{DaemonRecord, Local, WorkspaceRecord};
 use std::collections::BTreeMap;
 use std::net::{SocketAddr, TcpListener};
@@ -124,7 +124,7 @@ fn local_sandbox(root: &Path) -> PathBuf {
     std::fs::write(folder.join("config/daemon.setup"), "private key").unwrap();
     std::fs::write(folder.join("tmp/notes.txt"), "left by a command\n").unwrap();
     std::fs::write(folder.join("tmp/project/main.rs"), "fn main() {}\n").unwrap();
-    let me = layerfs_bridge::process::LocalProcess::observe(std::process::id()).unwrap();
+    let me = layerfs_os::process::LocalProcess::observe(std::process::id()).unwrap();
     let daemon = DaemonRecord::local(Local {
         platform: "macos".to_owned(),
         name: name.to_owned(),
@@ -335,7 +335,7 @@ fn the_table_lists_the_call_quiet_with_a_path_and_its_options() {
         ["depth", "limit", "cursor", "byte_offset", "byte_length"]
     );
     assert!(call.quiet);
-    let table = layerfs_api::json::parse(&layerfs_api::table_json()).unwrap();
+    let table = layerfs_home::json::parse(&layerfs_api::table_json()).unwrap();
     let SdkValue::List(calls) = table else {
         panic!()
     };
@@ -439,7 +439,7 @@ fn a_native_machine_s_layerfs_folders_are_read_here_with_no_lock_line_or_write()
         ("byte_length", SdkValue::Int(4)),
     ];
     assert_eq!(
-        layerfs_api::json::print(
+        layerfs_home::json::print(
             &files_of(&home, layerfs_home::names::HOST_MACHINE, &window).unwrap()
         ),
         r#"{"items":null,"next_cursor":null,"text":"by a","binary":false,"size":null,"next_byte_offset":9,"type":"file"}"#

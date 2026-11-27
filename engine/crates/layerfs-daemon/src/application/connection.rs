@@ -6,14 +6,7 @@ use super::{
     retained::{RetainedFailure, RetainedSnapshot},
     Application, ApplicationError, ConnectionFailure,
 };
-use layerfs_bridge::{
-    control::{Call, DaemonPhase, Reply, Request, RECLAIM},
-    duplex::{
-        self as transport,
-        admission::{self as admission_notice, AdmissionNotice, AdmissionReason},
-    },
-    initial_record::InitialRecord,
-};
+use layerfs_protocol::{provision::install::{Call, DaemonPhase, Reply, Request, RECLAIM}, duplex::{self as transport, admission::{self as admission_notice, AdmissionNotice, AdmissionReason}}, initial_record::InitialRecord};
 use std::{
     io::{Read, Write},
     net::{TcpListener, TcpStream},
@@ -499,7 +492,7 @@ impl Application {
                         && matches!(
                             &outcome,
                             Err(crate::control::Failure::Rejected(
-                                layerfs_bridge::control::ControlCode::Capacity,
+                                layerfs_protocol::provision::install::ControlCode::Capacity,
                                 _
                             ))
                         );
@@ -640,7 +633,7 @@ impl Application {
     /// Status probe and the unmount included, for the whole reclamation. The
     /// drain yields to foreground jobs and stops under an unmount's hold. A
     /// thread that does not start leaves the queue to the Workspace's next job.
-    fn reclaim_after_commit(&self, token: layerfs_bridge::control::WorkspaceToken) {
+    fn reclaim_after_commit(&self, token: layerfs_protocol::provision::install::WorkspaceToken) {
         let service = match self.state.lock() {
             Ok(state) => state.startup.service.clone(),
             Err(_) => return,
@@ -661,7 +654,7 @@ impl Application {
         class: SlotClass,
     ) -> Result<crate::control::Success, crate::control::Failure> {
         use crate::control::{Failure, Success};
-        use layerfs_bridge::control::{ControlCode, DaemonPhase};
+        use layerfs_protocol::provision::install::{ControlCode, DaemonPhase};
         if matches!(request, Request::EndSession) {
             return Ok(Success::reply(Reply::SessionEnded));
         }
@@ -693,7 +686,7 @@ impl Application {
         // the application, not with the Store control Service, so answer
         // these here (#540, #547 slice 5).
         if let Request::Sdk(call) = request {
-            if call.method == layerfs_bridge::control::OPERATION {
+            if call.method == layerfs_protocol::provision::install::OPERATION {
                 return self
                     .connection_failures()
                     .map(|value| Success::reply(Reply::Sdk(value)));
@@ -724,10 +717,10 @@ impl Application {
     /// Workspace.
     fn reclaim(
         &self,
-        call: &layerfs_bridge::control::SdkCall,
-    ) -> Result<layerfs_bridge::control::SdkValue, crate::control::Failure> {
+        call: &layerfs_protocol::provision::install::SdkCall,
+    ) -> Result<layerfs_protocol::provision::install::SdkValue, crate::control::Failure> {
         use crate::control::Failure;
-        use layerfs_bridge::control::{ControlCode, SdkValue};
+        use layerfs_protocol::provision::install::{ControlCode, SdkValue};
         let slot = match call
             .args
             .get_int("slot")
@@ -793,7 +786,7 @@ impl Application {
     /// The operator read model of control admission and retained failures.
     fn connection_failures(
         &self,
-    ) -> Result<layerfs_bridge::control::SdkValue, crate::control::Failure> {
+    ) -> Result<layerfs_protocol::provision::install::SdkValue, crate::control::Failure> {
         use crate::control::Failure;
         let counts = self.connection_slots().map_err(|_| Failure::Poisoned)?;
         let snapshot = self
@@ -808,8 +801,8 @@ impl Application {
 fn capacity_report(
     counts: SlotCounts,
     snapshot: RetainedSnapshot,
-) -> layerfs_bridge::control::CapacityModel {
-    use layerfs_bridge::control::{AdmissionModel, RetainedFailureModel, RetainedModel};
+) -> layerfs_protocol::provision::install::CapacityModel {
+    use layerfs_protocol::provision::install::{AdmissionModel, RetainedFailureModel, RetainedModel};
     let failures = snapshot
         .failures
         .iter()
@@ -827,7 +820,7 @@ fn capacity_report(
             age_ms: failure.age.as_millis() as i64,
             expires_in_ms: failure.expires_in.as_millis() as i64,
         });
-    layerfs_bridge::control::CapacityModel {
+    layerfs_protocol::provision::install::CapacityModel {
         admission: AdmissionModel {
             pool_vacant: counts.pool_vacant as i64,
             pool_running: counts.pool_running as i64,
@@ -846,7 +839,7 @@ fn capacity_report(
 }
 
 /// The Workspace of a Commit request, observed or not.
-fn committed_token(request: &Request) -> Option<layerfs_bridge::control::WorkspaceToken> {
+fn committed_token(request: &Request) -> Option<layerfs_protocol::provision::install::WorkspaceToken> {
     match request {
         Request::Commit(control) => Some(control.token),
         Request::Observed { request, .. } => committed_token(request),
@@ -858,6 +851,6 @@ fn committed_token(request: &Request) -> Option<layerfs_bridge::control::Workspa
 fn reported_ready(outcome: &Result<crate::control::Success, crate::control::Failure>) -> bool {
     matches!(outcome, Ok(success) if matches!(
         &success.reply,
-        Reply::Hello(status) if status.phase == layerfs_bridge::control::DaemonPhase::ControlReady
+        Reply::Hello(status) if status.phase == layerfs_protocol::provision::install::DaemonPhase::ControlReady
     ))
 }

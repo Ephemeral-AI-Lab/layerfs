@@ -18,7 +18,7 @@
 //! call runs on a broken connection and none is retried.
 use crate::open_args::{OpenArgs, PgSelection};
 use crate::record::StoreRecord;
-use layerfs_bridge::control::SdkRefusal;
+use layerfs_protocol::provision::install::SdkRefusal;
 use layerfs_history::HistoryCatalog as _;
 use layerfs_home::outcome::failed;
 use layerfs_home::outcome::refused;

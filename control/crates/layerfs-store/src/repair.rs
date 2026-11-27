@@ -18,8 +18,8 @@
 //! the Branch's retained rows. Nothing is automatic.
 use crate::open_args::OpenArgs;
 use crate::service::{branch_named, with_service};
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_bridge::sdk_values::{hex, unhex};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
+use layerfs_protocol::sdk::{hex, unhex};
 use layerfs_history::{
     GcAuditAfter, GcIntent, GcIntentKind, GcScopeKind, Liveness, MountHolderView,
 };

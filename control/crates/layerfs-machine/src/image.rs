@@ -7,10 +7,10 @@
 //! A cached image is inspected before reuse; an import is one attempt.
 use super::spec::{self as record, refusal};
 use crate::bundle::IMAGE_ARCHIVE;
-use layerfs_bridge::control::SdkRefusal;
+use layerfs_protocol::provision::install::SdkRefusal;
 use layerfs_home::home::lock;
 use layerfs_home::outcome::refused;
-use layerfs_platform as adapters;
+use crate::platform as adapters;
 use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 
@@ -56,7 +56,7 @@ pub fn docker_default(home: &Path) -> Result<String, SdkRefusal> {
     // The Engine's tag is the mapping; this file only serializes imports.
     let socket = std::fs::canonicalize(&spec.tools.docker_socket)
         .unwrap_or_else(|_| spec.tools.docker_socket.clone());
-    let engine = layerfs_bridge::sdk_values::hex(socket.as_os_str().as_bytes());
+    let engine = layerfs_protocol::sdk::hex(socket.as_os_str().as_bytes());
     let cache = super::bundle::cache_root()?
         .join("layerfs/docker-images")
         .join(engine);

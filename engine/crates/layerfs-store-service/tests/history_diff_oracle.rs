@@ -19,7 +19,7 @@ mod installed;
 #[allow(dead_code)]
 mod support;
 
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_content::compare::tree::{same_inode, same_metadata};
 use layerfs_content::compare::{
     inode_changes, list_directory, locate, name_from_hints, DifferenceWork, EntryFacts, TreeTable,

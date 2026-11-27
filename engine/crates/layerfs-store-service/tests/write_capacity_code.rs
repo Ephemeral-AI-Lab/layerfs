@@ -4,7 +4,7 @@
 use layerfs_history::HistoryError;
 use layerfs_storage::{port::PersistenceError, StorageError};
 use layerfs_store_service::{store::PortError, write::mutation::failure};
-use layerfs_workspace::WorkspaceError;
+use layerfs_vfs::WorkspaceError;
 use std::sync::Arc;
 
 fn service(error: PortError) -> WorkspaceError {

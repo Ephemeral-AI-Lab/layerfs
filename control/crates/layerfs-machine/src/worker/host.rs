@@ -2,7 +2,7 @@
 use super::frame::MAX_HELLO;
 use super::host_frame::{self, HOST_MAX_REPLY, HOST_MAX_REQUEST};
 use super::host_hello::{build_identity, executable, token, HostHello, CORRELATION_LEN};
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::{
     home::{self, flock, host_socket, paths},
     outcome::{refused, Outcome},
@@ -651,9 +651,9 @@ impl HostPaths {
             .metadata()
             .map_err(|error| unavailable("worker log", error))?
             .len()
-            >= layerfs_bridge::log_file::ROTATE_AT
+            >= layerfs_home::log::rotate::ROTATE_AT
         {
-            layerfs_bridge::log_file::rotate(&log, layerfs_bridge::log_file::ROTATE_AT)
+            layerfs_home::log::rotate::rotate(&log, layerfs_home::log::rotate::ROTATE_AT)
                 .map_err(|error| unavailable("worker log rotation", error))?;
         }
         let log = host_socket::private_file(&log, true)

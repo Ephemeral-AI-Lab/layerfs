@@ -6,7 +6,7 @@
 use crate::calls::table::Kind::Name;
 use crate::calls::table::{a, call, Call, PROGRESS};
 use crate::calls::{Context, Form};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::names::StoreName;
 use layerfs_home::outcome::Outcome;
 
@@ -50,5 +50,5 @@ pub(crate) const CALL: Call = call(
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let store = StoreName::parse(args.get_text("store").unwrap_or(""))?;
     let (home, events) = context.parts();
-    layerfs_control::store::compact(home, events, &store)
+    layerfs_store::admin::with_users::compact(home, events, &store)
 }

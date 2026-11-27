@@ -15,7 +15,7 @@ use super::record::{self, SandboxRecord};
 use super::state::machine_state;
 use crate::host::Call;
 use crate::route::reach;
-use layerfs_bridge::control::{CapacityModel, SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{CapacityModel, SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::home::observed;
 use layerfs_home::state::{Reason, State};

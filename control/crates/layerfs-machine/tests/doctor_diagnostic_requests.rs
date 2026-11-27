@@ -1,5 +1,5 @@
 //! Allowlisted diagnostic streaming preserves deadlines and original uncertainty.
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::outcome::refused;
 use layerfs_machine::worker::{
     diagnostic_connect, read_frame, read_frame_within, write_frame, DiagnosticOperation, Endpoint,

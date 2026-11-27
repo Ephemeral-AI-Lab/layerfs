@@ -1,7 +1,7 @@
 //! The JSON text codec: base64 and quoted strings print and read back
 //! exactly as the character-at-a-time codec before them did (the
 //! `oracle` module keeps that codec), so worker frames are unchanged.
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::json::{base64, parse, print, unbase64};
 
 /// The codec as it was before the bulk one, kept as the reference.

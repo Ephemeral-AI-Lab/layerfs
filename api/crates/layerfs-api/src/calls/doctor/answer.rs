@@ -6,7 +6,7 @@
 //! `not_checked` entry name their thing by its own word. A doctor exits 0
 //! once its report is made; only a thing it cannot find is a refusal.
 use crate::calls::{Context, Form, Part, THING};
-use layerfs_control::doctor::{Kind, Options, Thing};
+use layerfs_inspect::{Kind, Options, Thing};
 use layerfs_home::outcome::Outcome;
 
 /// The words a finding or a `not_checked` entry names its thing by.
@@ -73,9 +73,9 @@ pub(crate) fn run(context: &mut Context<'_>, kind: Kind, name: &str, options: Op
     let report = if kind == Kind::Bucket {
         let mut quiet = |_| {};
         let mut silent = layerfs_home::events::Events::new(&mut quiet);
-        layerfs_control::doctor::run(home, thing, &options, &mut silent)?
+        layerfs_inspect::run(home, thing, &options, &mut silent)?
     } else {
-        layerfs_control::doctor::run(home, thing, &options, events)?
+        layerfs_inspect::run(home, thing, &options, events)?
     };
     Ok(report.to_sdk())
 }

@@ -55,9 +55,9 @@ mod mounted;
 #[allow(dead_code)]
 #[path = "support/mounted_commit.rs"]
 mod rig;
-use layerfs_bridge::control::{MountWork, WorkspaceToken};
+use layerfs_protocol::provision::install::{MountWork, WorkspaceToken};
 use layerfs_content::ObjectId;
-use layerfs_daemon::store::{PortError, Store, StoreReader};
+use layerfs_store_service::store::{PortError, Store, StoreReader};
 use layerfs_persistence::{SqliteHandles, SqlitePersistenceProfile, StorageProvider};
 use layerfs_storage::{
     location::PackInfo,
@@ -175,7 +175,7 @@ impl Fx {
         let readers = Arc::new(Mutex::new(Vec::new()));
         let reader_config = fixture.config.clone();
         let observed_readers = readers.clone();
-        let factory: layerfs_daemon::store::ReaderFactory = Arc::new(move |_| {
+        let factory: layerfs_store_service::store::ReaderFactory = Arc::new(move |_| {
             let read = SqliteHandles::open_read_only(
                 reader_config.clone(),
                 installed::BINDING,

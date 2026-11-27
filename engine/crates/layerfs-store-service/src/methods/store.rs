@@ -1,6 +1,6 @@
 //! Store-wide publication counters, read without walking history or objects.
 use crate::{history::lookup::Answer, StoreService};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 
 pub fn stats(service: &StoreService) -> Answer {
     let value = crate::operator::store::stats(&service.store)?;

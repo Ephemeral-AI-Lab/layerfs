@@ -9,7 +9,7 @@
 //! caller has the stack id, and a hidden project has no name to resolve.
 use crate::history::lookup;
 use crate::store::Store;
-use layerfs_bridge::control::SdkRefusal;
+use layerfs_protocol::provision::install::SdkRefusal;
 use layerfs_history::records::{GcDeletion, GcIntent};
 use layerfs_history::LayerStackId;
 use std::sync::Arc;

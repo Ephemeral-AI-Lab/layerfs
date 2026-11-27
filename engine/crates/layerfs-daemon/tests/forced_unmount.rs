@@ -45,10 +45,7 @@ mod mounted;
 #[allow(dead_code)]
 #[path = "support/mounted_commit.rs"]
 mod rig;
-use layerfs_bridge::control::{
-    AbortDisposition, Activity, CommitKnowledge, ControlCode, DetachDisposition, ForcedOutcome,
-    MountPhase, MountWork, Reply, Request, TeardownCustody, TeardownStage, WorkspaceToken,
-};
+use layerfs_protocol::provision::install::{AbortDisposition, Activity, CommitKnowledge, ControlCode, DetachDisposition, ForcedOutcome, MountPhase, MountWork, Reply, Request, TeardownCustody, TeardownStage, WorkspaceToken};
 use layerfs_daemon::control::Failure;
 use mounted::{mount_entry, Harness, COMMAND};
 use rig::{bash_in, passed, root, Rig};
@@ -397,7 +394,7 @@ fn later(harness: &Harness, token: WorkspaceToken) -> Vec<(&'static str, Teardow
         ),
         (
             "Unmount",
-            Request::Unmount(layerfs_bridge::control::UnmountControl {
+            Request::Unmount(layerfs_protocol::provision::install::UnmountControl {
                 token,
                 discard: true,
             }),

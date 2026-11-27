@@ -2,7 +2,7 @@
 //! Sandboxes, read from their records by `layerfs-control`, which passes
 //! these reads in (layerfs-project#104). A machine call runs each at the
 //! point it ran before, under the same locks.
-use layerfs_bridge::control::SdkRefusal;
+use layerfs_protocol::provision::install::SdkRefusal;
 use std::path::Path;
 
 /// A read of the names on machine `name` in home `home`.

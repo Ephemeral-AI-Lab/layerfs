@@ -1,7 +1,7 @@
 //! First-use writer ownership for a directly opened SQLite Store.
 #![cfg(any(target_os = "linux", target_os = "macos"))]
 
-use layerfs_bridge::control::{SdkCall, SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkCall, SdkRefusal, SdkValue};
 use layerfs_history::{
     BranchId, ForkRequest, ForkSource, HistoryCatalog, HistoryError, HistoryName,
 };

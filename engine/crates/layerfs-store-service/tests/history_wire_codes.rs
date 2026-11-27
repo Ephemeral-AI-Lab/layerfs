@@ -2,7 +2,7 @@
 //! `history/lookup.rs`: product source holds no tests (the product-boundary
 //! guard).
 
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_history::error::{
     HolderKind, HolderState, Missing, MountHolders, MovedState, NameHolder, NameSource,
     NameTakenState, OpConflict, RemovedPath, RemovedState,

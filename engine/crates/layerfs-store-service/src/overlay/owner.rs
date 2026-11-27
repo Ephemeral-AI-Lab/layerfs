@@ -2,7 +2,7 @@
 use super::state::{elapsed, Shared};
 use crate::{JobWork, OwnerWork, ServiceClass};
 use layerfs_overlay::{DatabaseProfile, Overlay, OverlayError, ProfileConfig};
-use layerfs_workspace::Route;
+use layerfs_vfs::Route;
 use std::{
     fmt, io,
     panic::{catch_unwind, AssertUnwindSafe},
@@ -42,11 +42,11 @@ pub enum OwnerError {
         input: OriginalInput,
     },
     Install {
-        cause: Box<layerfs_workspace::WorkspaceError>,
-        input: Box<layerfs_workspace::PreparedBase>,
+        cause: Box<layerfs_vfs::WorkspaceError>,
+        input: Box<layerfs_vfs::PreparedBase>,
     },
     /// Exact failure of an attempted namespace job; never replayed.
-    Workspace(Box<layerfs_workspace::WorkspaceError>),
+    Workspace(Box<layerfs_vfs::WorkspaceError>),
 }
 /// Original attempted failure and the backing it may still own.
 pub struct WorkspaceCallFailure {

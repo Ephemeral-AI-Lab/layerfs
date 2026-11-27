@@ -1,9 +1,6 @@
 //! The unmount guard's record file across a forced attempt (layerfs-project#136):
 //! an attempt that changed nothing must leave the earlier record as it was.
-use layerfs_bridge::control::{
-    AbortDisposition, CommitKnowledge, DetachDisposition, ForcedFacts, Request, SdkRefusal,
-    SdkValue, TeardownCustody, TeardownStage, UnmountControl, WorkspaceToken,
-};
+use layerfs_protocol::provision::install::{AbortDisposition, CommitKnowledge, DetachDisposition, ForcedFacts, Request, SdkRefusal, SdkValue, TeardownCustody, TeardownStage, UnmountControl, WorkspaceToken};
 use layerfs_history::WorkspaceId;
 use layerfs_sandbox::unmount_guard::{
     admits, begin_at, cancel, find_in, finish, forceable, repeat, retryable,

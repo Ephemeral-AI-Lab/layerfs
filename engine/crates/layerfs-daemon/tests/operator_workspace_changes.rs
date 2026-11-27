@@ -6,10 +6,10 @@
 #[path = "support/installed_store.rs"]
 mod installed;
 
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_daemon::application::internals::changes_of;
 use layerfs_daemon::control::Service;
-use layerfs_daemon::{Owner, OwnerConfig};
+use layerfs_store_service::{Owner, OwnerConfig};
 use layerfs_history::{PathRemovalKind, PathRemovalRequest, WorkspaceId};
 use layerfs_storage::ReservationBlocks;
 use layerfs_store_service::{

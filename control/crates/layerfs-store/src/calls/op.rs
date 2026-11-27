@@ -7,7 +7,7 @@ use super::commit::{CommitGet, CommitPage, DiffPage};
 use super::file::FileOp;
 use crate::call::store_call;
 use crate::resolve::target;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::helpers::shown;
 use layerfs_home::outcome::{with_next, Outcome};

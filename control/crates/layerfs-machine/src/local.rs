@@ -4,14 +4,14 @@
 //! the control process, never a machine: `native` is one built-in machine
 //! whose platform runs Sandboxes on the host's own OS, and what is special
 //! about it comes from that platform on this host.
-use layerfs_bridge::control::SdkRefusal;
+use layerfs_protocol::provision::install::SdkRefusal;
 use std::path::Path;
 
 /// Whether machine `machine`'s calls run in this process: its platform's
 /// executor on this host (G8).
 #[cfg(feature = "machine")]
 pub fn runs_here(home: &Path, machine: &str) -> Result<bool, SdkRefusal> {
-    use layerfs_platform::{ExecutorKind, HostOs, Platform};
+    use crate::platform::{ExecutorKind, HostOs, Platform};
     let platform = match machine {
         layerfs_home::names::HOST_MACHINE if in_process().is_some() => Platform::Host,
         _ => crate::record::MachineRecord::of(home, machine)?.platform()?,
@@ -67,7 +67,7 @@ pub fn none_in_process(what: &str) -> SdkRefusal {
 /// know (one removed in 2.0) had one.
 #[cfg(feature = "machine")]
 pub fn provided(platform: &str) -> bool {
-    layerfs_platform::Platform::parse(platform).is_none_or(|p| p.provided())
+    crate::platform::Platform::parse(platform).is_none_or(|p| p.provided())
 }
 
 /// Without the machine adapters (the guest worker's build): only the

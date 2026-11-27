@@ -13,7 +13,7 @@ use crate::history::lookup::Arg;
 use layerfs_content::filesystem::PathName;
 use layerfs_content::object::inode_leaf::{InodeKind, InodeValue};
 use layerfs_content::ContentResult;
-use layerfs_workspace::BaseView;
+use layerfs_vfs::BaseView;
 use std::collections::BTreeMap;
 
 /// Changes one plan covers (owner decision D10). `fs.apply` has no cap on

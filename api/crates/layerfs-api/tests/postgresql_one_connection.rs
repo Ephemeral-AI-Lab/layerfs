@@ -2,7 +2,7 @@
 //! the live schema. PostgreSQL 14+ is required for the session counter.
 //! Needs LAYERFS_TEST_POSTGRES_URL, with a PostgreSQL URL and CREATEDB.
 use layerfs_api::Client;
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_store::record::StoreRecord;
 use postgres::{Client as Postgres, Config, NoTls};
 use std::path::{Path, PathBuf};

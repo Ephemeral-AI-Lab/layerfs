@@ -2,7 +2,7 @@
 //! answer was lost. A lost reply is `refused("Unknown", ...)` with a null
 //! detail; the caller still knows the entity it addressed, and the operation
 //! identity when it held one.
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 
 /// Names the entity on an `Unknown` refusal whose detail carries nothing.
 ///
@@ -34,7 +34,7 @@ pub fn named_unknown(
         (
             "op",
             op.map_or(SdkValue::Null, |op| {
-                SdkValue::text(layerfs_bridge::sdk_values::hex(op))
+                SdkValue::text(layerfs_protocol::sdk::hex(op))
             }),
         ),
     ]);

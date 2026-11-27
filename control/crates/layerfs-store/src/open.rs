@@ -17,7 +17,7 @@ use crate::lease::{self, Lease};
 use crate::open_args::OpenArgs;
 use crate::record::{self, StoreRecord, StoreRef};
 use crate::service::{self as direct, Completion, Owner, Slot};
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::home::paths;
 use layerfs_home::outcome::{failed, refused, with_next, Outcome};
 use std::cell::Cell;

@@ -1,6 +1,6 @@
 //! Traced recording is scoped to its guard: it ends on every exit, and a
 //! later untraced operation on the same thread records nothing.
-use layerfs_daemon::telemetry::{phase, recording, timed, Recording};
+use layerfs_store_service::telemetry::{phase, recording, timed, Recording};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
 fn root(fail: bool) -> Result<u32, &'static str> {

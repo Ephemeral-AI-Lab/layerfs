@@ -5,7 +5,7 @@
 use layerfs_history::PlaceView;
 use layerfs_store::open_args::OpenArgs;
 use layerfs_store::place_view::{admits, scoped};
-use layerfs_store_service::history::admission::{has_place_view, with_place_view};
+use layerfs_persistence::{has_place_view, with_place_view};
 
 #[test]
 fn only_the_exclusive_removals_read_the_place_view() {

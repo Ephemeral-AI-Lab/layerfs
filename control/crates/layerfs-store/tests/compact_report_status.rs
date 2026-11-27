@@ -3,7 +3,7 @@
 //! makes of a compaction's own record. The report renders from the
 //! `CompactReceipt`; the live read reads only the `<store>.compact-op`
 //! sidecar and never opens the Store database.
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_content::ObjectId;
 use layerfs_home::events::Events;
 use layerfs_home::home::{paths, private_dir, write_entity};
@@ -132,7 +132,7 @@ fn receipt() -> CompactReceipt {
 fn machines(
     home: &Path,
     name: &str,
-) -> Result<layerfs_home::state::State, layerfs_bridge::control::SdkRefusal> {
+) -> Result<layerfs_home::state::State, layerfs_protocol::provision::install::SdkRefusal> {
     Ok(
         match layerfs_machine::record::MachineRecord::read(home, name)? {
             Some(record) => record.status(false, 0),

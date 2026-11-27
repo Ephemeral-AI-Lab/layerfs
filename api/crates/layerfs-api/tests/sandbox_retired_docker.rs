@@ -10,7 +10,7 @@
 #![cfg(all(unix, feature = "machine"))]
 use layerfs_api::home::{self, paths, write_record};
 use layerfs_api::worker::{read_frame, write_frame};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use std::net::{SocketAddr, TcpListener};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};

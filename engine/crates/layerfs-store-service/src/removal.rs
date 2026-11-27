@@ -24,7 +24,7 @@
 
 use crate::store::{BoundWorkspace, CommitError, PortError, Store};
 use crate::write::mutation::Mutation;
-use layerfs_bridge::control::SdkRefusal;
+use layerfs_protocol::provision::install::SdkRefusal;
 use layerfs_content::compare::tree::join;
 use layerfs_content::compare::{list_directory, same_value, EntryFacts, TreeTable};
 use layerfs_content::filesystem::{

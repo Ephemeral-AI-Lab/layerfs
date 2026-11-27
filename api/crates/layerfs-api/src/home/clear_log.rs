@@ -1,7 +1,7 @@
 //! `home.clear_log`: clears this home's call log.
 use crate::calls::table::{call, Call};
 use crate::calls::{Context, Form};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::outcome::Outcome;
 
 /// Its answer: nothing to say in the short form.

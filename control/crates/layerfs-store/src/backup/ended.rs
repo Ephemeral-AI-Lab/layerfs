@@ -8,7 +8,7 @@
 use super::record::StoreLink;
 use crate::intent;
 use crate::record::{self, StoreRecord};
-use layerfs_bridge::control::SdkRefusal;
+use layerfs_protocol::provision::install::SdkRefusal;
 use layerfs_home::op::{self, Op};
 use std::path::Path;
 

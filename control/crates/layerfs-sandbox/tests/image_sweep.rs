@@ -5,7 +5,7 @@
 //! removal is a line of `log/sweep.jsonl` under the root. A copy sends
 //! this step under the machine's prune gate (`image_load`, covered with a
 //! real Docker by `lp176_image_export`).
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_sandbox::deploy::Side;
 use layerfs_sandbox::image_artifact::{self as cache};
 use std::fs;

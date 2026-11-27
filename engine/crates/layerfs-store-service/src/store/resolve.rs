@@ -47,7 +47,7 @@ use layerfs_history::{
     BranchSnapshot, CommitOutcome, CommitRecord, CommitRequest, HistoryCatalog, HistoryError,
 };
 use layerfs_overlay::{Capture, CapturedReader, OperationOwner};
-use layerfs_workspace::WorkspaceError;
+use layerfs_vfs::WorkspaceError;
 use std::sync::{atomic::Ordering, Arc};
 
 /// A failed install of a known publication, and whether it was definite

@@ -25,7 +25,7 @@ mod mounted;
 #[allow(dead_code)]
 #[path = "support/mounted_commit.rs"]
 mod rig;
-use layerfs_bridge::control::{ReadyMount, Reply};
+use layerfs_protocol::provision::install::{ReadyMount, Reply};
 use mounted::COMMAND;
 use rig::{bash_in, passed, root, Background, Rig};
 

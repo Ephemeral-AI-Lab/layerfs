@@ -17,7 +17,7 @@
 //! fixtures it finds, which leaves it as it is: the capture goes to a
 //! folder outside them.)
 mod upgrade_support;
-use layerfs_api::json;
+use layerfs_home::json;
 use std::path::Path;
 use upgrade_support::*;
 
@@ -48,12 +48,12 @@ fn the_scenario_run_by_this_build_writes_what_the_fixture_holds() {
     assert_eq!(std::fs::read(&sums).unwrap(), frozen, "SHA256SUMS changed");
     let fresh = json::parse(&std::fs::read_to_string(out.join("manifest.json")).unwrap()).unwrap();
     let old = manifest("sqlite/v2");
-    let projects = |m: &layerfs_bridge::control::SdkValue| fields(m.get("projects").unwrap());
+    let projects = |m: &layerfs_protocol::provision::install::SdkValue| fields(m.get("projects").unwrap());
     for ((name, now), (old_name, then)) in projects(&fresh).iter().zip(projects(&old).iter()) {
         assert_eq!(name, old_name);
-        let branches = |p: &layerfs_bridge::control::SdkValue| fields(p.get("branches").unwrap());
+        let branches = |p: &layerfs_protocol::provision::install::SdkValue| fields(p.get("branches").unwrap());
         let (now, then) = (branches(now), branches(then));
-        let names = |b: &[(String, layerfs_bridge::control::SdkValue)]| {
+        let names = |b: &[(String, layerfs_protocol::provision::install::SdkValue)]| {
             b.iter().map(|(n, _)| n.clone()).collect::<Vec<_>>()
         };
         assert_eq!(names(&now), names(&then), "{name}: Branches");

@@ -10,7 +10,7 @@ mod installed;
 #[allow(dead_code)]
 mod support;
 
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_content::filesystem::FilesystemRootId;
 use layerfs_history::{BranchId, CommitOutcome, HistoryName, LayerStackId, WorkspaceId};
 use layerfs_store_service::store::{BindRequest, CommitOptions};

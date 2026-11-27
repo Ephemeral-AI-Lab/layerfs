@@ -8,7 +8,7 @@
 //! left by a removed project of the same name.
 use layerfs_api::home::{self, paths, read_record, versioned, write_record};
 use layerfs_api::worker;
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use std::net::TcpListener;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -265,7 +265,7 @@ fn a_worker_replaces_a_removed_project_s_record() {
     let address = listener.local_addr().unwrap();
     let served = root.clone();
     std::thread::spawn(move || {
-        layerfs_control::worker_server::serve(listener, "s".to_owned(), served)
+        layerfs_api::worker::serve::serve(listener, "s".to_owned(), served)
     });
     let endpoint = worker::Endpoint {
         address,

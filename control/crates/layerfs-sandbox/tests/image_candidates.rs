@@ -1,13 +1,13 @@
 //! The host's Docker images a machine could copy (`machine.images`'
 //! `docker` and `available`), read through a stand-in Docker.
 #[allow(dead_code)]
-#[path = "../../layerfs-sandbox-backend/tests/support/image.rs"]
+#[path = "support/image.rs"]
 mod fixture;
 #[allow(dead_code)]
 #[path = "support/standin.rs"]
 mod standin;
 use fixture::Scratch;
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_sandbox::docker::{candidates, need, Docker};
 use standin::Standin;
 

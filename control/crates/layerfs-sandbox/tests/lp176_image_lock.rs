@@ -11,10 +11,10 @@
 //! holds its `docker export` until the test lets it go, so a second copy is
 //! really waiting while the first is really sending.
 #[allow(dead_code)]
-#[path = "../../layerfs-sandbox-backend/tests/support/image.rs"]
+#[path = "support/image.rs"]
 mod fixture;
 use fixture::{Scratch, Tar};
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::home;
 use layerfs_sandbox::docker::{self, Docker};

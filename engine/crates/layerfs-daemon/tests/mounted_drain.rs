@@ -29,8 +29,8 @@ mod mounted;
 #[allow(dead_code)]
 #[path = "support/mounted_commit.rs"]
 mod rig;
-use layerfs_bridge::control::{MountPhase, MountWork, Reply, WorkspaceToken};
-use layerfs_daemon::OwnerClient;
+use layerfs_protocol::provision::install::{MountPhase, MountWork, Reply, WorkspaceToken};
+use layerfs_store_service::OwnerClient;
 use layerfs_fuse::request::Opcode;
 use layerfs_overlay::{CleanupState, StoredCounts};
 use mounted::mount_entry;
@@ -441,4 +441,4 @@ fn fp31_batched_forget_is_exact_and_detach_disposes_outstanding_lookup_memory() 
     rig.finish();
 }
 
-use layerfs_workspace::Route;
+use layerfs_vfs::Route;

@@ -25,3 +25,4 @@ pub mod time;
 #[doc(hidden)]
 pub mod trace;
 pub mod wipe;
+pub mod log;

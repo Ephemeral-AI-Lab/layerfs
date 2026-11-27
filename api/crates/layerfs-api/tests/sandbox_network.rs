@@ -43,7 +43,7 @@
 //! Store, its B6 walls) is `sandbox_machines.rs` and the B6 harness.
 #![cfg(feature = "machine")]
 use layerfs_api::home::{self, paths};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 

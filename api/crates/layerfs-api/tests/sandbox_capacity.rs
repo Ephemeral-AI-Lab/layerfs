@@ -10,12 +10,9 @@
 //! whose machine or forward is already down is not dialed at all.
 #![cfg(unix)]
 use layerfs_api::home::{self, paths, write_record};
-use layerfs_bridge::control::{
-    AdmissionModel, Answer, Call, DaemonPhase, DaemonStatus, Reply, Request, RetainedModel,
-    SdkRefusal, SdkValue, OPERATION,
-};
-use layerfs_bridge::duplex;
-use layerfs_bridge::duplex::admission::{self, AdmissionNotice, AdmissionReason};
+use layerfs_protocol::provision::install::{AdmissionModel, Answer, Call, DaemonPhase, DaemonStatus, Reply, Request, RetainedModel, SdkRefusal, SdkValue, OPERATION};
+use layerfs_protocol::duplex;
+use layerfs_protocol::duplex::admission::{self, AdmissionNotice, AdmissionReason};
 use std::net::{SocketAddr, TcpListener};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -249,7 +246,7 @@ fn sandbox_record(home: &Path, endpoint: SocketAddr, id: Option<&str>, pid: Opti
 
 /// A model with no vacant pool slot and one retained failure.
 fn busy() -> SdkValue {
-    let model = layerfs_bridge::control::CapacityModel {
+    let model = layerfs_protocol::provision::install::CapacityModel {
         admission: AdmissionModel {
             pool_vacant: 0,
             pool_running: 8,
@@ -262,7 +259,7 @@ fn busy() -> SdkValue {
             count: 1,
             dropped: 0,
             recorded: 1,
-            failures: vec![layerfs_bridge::control::RetainedFailureModel {
+            failures: vec![layerfs_protocol::provision::install::RetainedFailureModel {
                 slot: 0,
                 class: "pool".into(),
                 generation: 6,

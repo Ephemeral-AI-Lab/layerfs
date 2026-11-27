@@ -315,7 +315,7 @@ fn free(root: &Path, folder: &Path, records: &[Recorded]) -> bool {
     let mut private_root = folder.as_os_str().to_owned();
     private_root.push(".root");
     let unmounted = |point: &Path| {
-        layerfs_sandbox_backend::shared::mounts_under(point).is_ok_and(|mounts| mounts.is_empty())
+        crate::spawn::mounts_under(point).is_ok_and(|mounts| mounts.is_empty())
     };
     unmounted(folder) && unmounted(Path::new(&private_root))
 }
@@ -368,7 +368,7 @@ fn alive(_daemon: &crate::record::DaemonRecord) -> Option<bool> {
 fn empty_root(run: &Path, path: &Path) -> Option<Result<Option<u64>, String>> {
     let device = |at: &Path| std::fs::symlink_metadata(at).map(|found| found.dev());
     let (own, parent) = (device(path).ok()?, device(run).ok()?);
-    let listed = layerfs_sandbox_backend::shared::mounts_under(path).ok()?;
+    let listed = crate::spawn::mounts_under(path).ok()?;
     if own != parent || !listed.is_empty() {
         return None;
     }

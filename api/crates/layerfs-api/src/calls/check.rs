@@ -3,7 +3,7 @@
 //! kind. Sizes become whole bytes. Front ends strip their functions
 //! (`on_progress`, exec sinks) before the call reaches the library.
 use super::table::{Call, Kind};
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::outcome::refused;
 
 /// `args` as the call's checked fields, in the table's order.

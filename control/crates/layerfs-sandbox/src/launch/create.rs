@@ -1,8 +1,8 @@
 //! Ordinary Sandbox startup, original deployment inputs and failure custody.
 use crate::{internal::Control, OperationFailure};
-use layerfs_bridge::control::{ControlError, DaemonStatus, HelloRequest, Reply, Request};
-use layerfs_bridge::duplex::ChannelError;
-use layerfs_sandbox_backend::Runtime;
+use layerfs_protocol::provision::install::{ControlError, DaemonStatus, HelloRequest, Reply, Request};
+use layerfs_protocol::duplex::ChannelError;
+use crate::Runtime;
 use std::{fmt, io, sync::Arc};
 
 /// Concrete boundary reached by one original lifecycle operation.
@@ -46,9 +46,9 @@ pub enum SandboxCause {
     /// Local config or correlated startup validation.
     Setup(ControlError),
     /// Original Engine transfer, no replay.
-    Runtime(Box<layerfs_sandbox_backend::WireFailure>),
+    Runtime(Box<crate::WireFailure>),
     /// Original provider launch cause; partial runtime ownership is retained separately.
-    Provider(Box<layerfs_sandbox_backend::LaunchFailure>),
+    Provider(Box<crate::LaunchFailure>),
     /// Original authentication failure; handshake work remains in the receipt.
     Channel(ChannelError),
     /// Original correlated daemon control exchange/refusal.
@@ -83,7 +83,7 @@ impl SandboxPhase {
 impl fmt::Display for SandboxCause {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use layerfs_project::store::InstallError;
-        use layerfs_sandbox_backend::RuntimeError;
+        use crate::RuntimeError;
         match self {
             Self::Io(error) => write!(f, "{error}"),
             Self::Setup(error) => write!(f, "{error}"),

@@ -6,7 +6,7 @@ use crate::calls::table::{a, call, opt, Call};
 use crate::calls::Context;
 use crate::calls::{Form, Policy};
 #[cfg(feature = "machine")]
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 #[cfg(feature = "machine")]
 use layerfs_home::outcome::Outcome;
 
@@ -61,7 +61,7 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         wsl: text("wsl"),
         daemon: text("daemon"),
     };
-    layerfs_control::machine::update(&context.home, &request)
+    layerfs_machine::with_users::update(&context.home, &request)
 }
 
 // without the `machine` feature (the guest worker's build) it is

@@ -3,7 +3,7 @@
 //! `broken` `lost` in `sandbox.get`, and `sandbox.remove` clears it. The live half needs the
 //! native daemon at LAYERFS_DAEMON; without it, it says NOT_RUN.
 use layerfs_api::home::{self, paths};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -98,7 +98,7 @@ fn a_sandbox_killed_behind_controls_back_is_lost_until_removed() {
     assert_eq!(got.get_text("reason"), Some("lost"), "{got:?}");
     // the list reads the record alone, which the get wrote the reason to:
     // it does not ask the machine
-    let listed = layerfs_api::json::print(&ok(&home, "sandbox.list", &[]));
+    let listed = layerfs_home::json::print(&ok(&home, "sandbox.list", &[]));
     assert!(
         listed.contains("\"s1\"") && listed.contains("\"lost\""),
         "{listed}"

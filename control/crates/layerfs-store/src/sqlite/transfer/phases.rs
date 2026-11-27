@@ -17,7 +17,7 @@ use crate::sqlite::transfer::resolve::{note_incoming, retired};
 use crate::sqlite::transfer::step::{StepFrame, StoreStep};
 use crate::sqlite::transfer::steps::CHUNK;
 use crate::Related;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::home::{self, with_field};
 use layerfs_home::op::{self, Op};

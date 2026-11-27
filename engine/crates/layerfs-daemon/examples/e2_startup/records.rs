@@ -1,6 +1,6 @@
 //! Typed original observations. Unavailable values are never populated from defaults.
 use super::json::Json;
-use layerfs_daemon::{OwnerConfig, OwnerStart, OwnerWork};
+use layerfs_store_service::{OwnerConfig, OwnerStart, OwnerWork};
 use layerfs_overlay::{
     AllocationState, AllocationWork, DatabaseProfile, DatabaseWork, PayloadWork, ProfileConfig,
     StatementWork,

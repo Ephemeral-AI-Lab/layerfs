@@ -6,7 +6,7 @@ use layerfs_content::{
     file::FileView,
     filesystem::{FilesystemRead, FilesystemRootId, LogicalPath},
 };
-use layerfs_control::{projects, AddRequest, CreateRequest, InitError, InitRequest, ProjectApi};
+use layerfs_project::store::{projects, AddRequest, CreateRequest, InitError, InitRequest, ProjectApi};
 use layerfs_history::{
     error::{HolderKind, HolderState, NameSource},
     BranchId, HistoryCatalog, HistoryCatalogConfig, HistoryName, LayerStackId,
@@ -49,7 +49,7 @@ fn add(
     source: PathBuf,
     name: &str,
     seed: u8,
-) -> Result<layerfs_control::AddedProject, InitError> {
+) -> Result<layerfs_project::store::AddedProject, InitError> {
     let request = AddRequest {
         source,
         store: store(path).into(),

@@ -1,10 +1,7 @@
 //! One authenticated request/result exchange, retaining original delivery failures.
 use super::{Failure, Service, Success};
-use crate::store::CommitError;
-use layerfs_bridge::{
-    control::{Answer, Call, ControlError, Reply, Request},
-    duplex::{ChannelError, Connection},
-};
+use layerfs_store_service::store::CommitError;
+use layerfs_protocol::{provision::install::{Answer, Call, ControlError, Reply, Request}, duplex::{ChannelError, Connection}};
 use layerfs_content::filesystem::FilesystemRootId;
 use layerfs_history::BranchSnapshot;
 use layerfs_overlay::Capture;
@@ -99,7 +96,7 @@ pub(crate) fn answer_call(
     connection: &mut Connection,
     call: Call,
     outcome: Result<Success, Failure>,
-    telemetry: Option<layerfs_bridge::control::SdkValue>,
+    telemetry: Option<layerfs_protocol::provision::install::SdkValue>,
 ) -> Result<Served, Box<ServeFailure>> {
     let original = Served { call, outcome };
     let result = (|| {

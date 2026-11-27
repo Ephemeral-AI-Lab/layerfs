@@ -11,10 +11,10 @@
 //! close clears it; a stale one whose end is not confirmed stays as it was.
 use super::record::{self, ExecRecord, Route};
 use crate::record::lock_in;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::home::{log_line, now_ms, write_entity};
 use layerfs_home::outcome::{failed, refused};
-use layerfs_sandbox_backend::{Cancelled, Stop};
+use crate::{Cancelled, Stop};
 use std::path::Path;
 use std::time::Duration;
 
@@ -83,7 +83,7 @@ pub fn grace(grace_ms: Option<i64>) -> Result<Duration> {
 
 /// Ends the command `stop` names here, once.
 pub fn stop(stop: &Stop, grace: Duration) -> Result<Outcome> {
-    match layerfs_sandbox_backend::cancel::cancel(stop, grace).map_err(failed)? {
+    match crate::cancel::cancel(stop, grace).map_err(failed)? {
         Cancelled::Ended => Ok(Outcome::Ended),
         Cancelled::Signalled(signal) => Ok(Outcome::Cancelled(signal.as_str())),
     }
@@ -343,7 +343,7 @@ pub fn call(
     }
     let path = layerfs_home::helpers::required(path, "path")?;
     let token = state.token(path)?;
-    let workspace = layerfs_bridge::sdk_values::hex(&token.workspace.to_bytes());
+    let workspace = layerfs_protocol::sdk::hex(&token.workspace.to_bytes());
     let commands = every(
         &state.directory,
         &state.id,

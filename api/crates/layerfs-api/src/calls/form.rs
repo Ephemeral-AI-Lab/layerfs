@@ -4,7 +4,7 @@
 //! data; [`super::shape`] makes every answer from them, so a run function
 //! builds one full map and never two forms. An entry without a [`Form`] is
 //! not migrated yet: its result passes through as it is.
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 
 /// The keys of one answer map: a call's top level, an item of its list, a
 /// section, or a node of a tree.

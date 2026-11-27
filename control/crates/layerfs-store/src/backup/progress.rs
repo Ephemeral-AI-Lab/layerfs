@@ -8,7 +8,7 @@
 //! and each phase's exact last count before the next phase. A phase that
 //! reaches its total says only that its bytes moved; the call has
 //! succeeded when it returns its result, never before.
-use layerfs_bucket::bucket::progress::{observe, Progress, INTERVAL};
+use crate::backup::bucket::progress::{observe, Progress, INTERVAL};
 use layerfs_home::events::Events;
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::sync::{Arc, Mutex, MutexGuard};

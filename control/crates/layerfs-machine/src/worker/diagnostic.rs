@@ -1,6 +1,6 @@
 //! One observational hello and ping on a socket with an absolute deadline.
 use super::{client::refusal_of, frame_bytes, read_frame_within, Endpoint, Hello, MAX_HELLO};
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::outcome::{refused, Outcome};
 use std::io::{self, Read, Write};
 use std::net::TcpStream;

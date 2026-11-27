@@ -11,7 +11,7 @@
 //! the table. The URLs name 127.0.0.1 port 1, where nothing listens, so a
 //! request would fail with another code.
 use layerfs_api::home::{self, paths, write_record};
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
@@ -193,7 +193,7 @@ fn connect_refuses_a_login_in_the_url_and_a_missing_login() {
     assert!(refused.1.contains("--user"), "{refused:?}");
     assert_eq!(before, std::fs::read(&path).unwrap());
     let listed = ok(&home, "store.list", &[("detail", SdkValue::Bool(true))]);
-    let printed = layerfs_api::json::print(&listed);
+    let printed = layerfs_home::json::print(&listed);
     assert!(!printed.contains("\"auth\""), "{printed}");
     // a sqlite Store of the name exists
     write_record(
@@ -253,7 +253,7 @@ fn disconnect_refuses_a_held_store_then_forgets_it_and_its_password() {
     );
     let done = ok(&home, "store.disconnect", &args);
     assert_eq!(
-        layerfs_api::json::print(&done),
+        layerfs_home::json::print(&done),
         r#"{"ok":true,"outcome":"disconnected","store":"pg"}"#
     );
     assert!(!paths::store_dir(&home, "pg").exists());
@@ -384,12 +384,12 @@ fn an_old_url_login_is_never_shown() {
             "store.get",
             &[("store", t("old")), ("detail", SdkValue::Bool(true))],
         );
-        let shown = layerfs_api::json::print(&got);
+        let shown = layerfs_home::json::print(&got);
         assert!(
             shown.contains("postgresql://<hidden: not an address alone>"),
             "{shown}"
         );
-        let listed = layerfs_api::json::print(&ok(
+        let listed = layerfs_home::json::print(&ok(
             &home,
             "store.list",
             &[("detail", SdkValue::Bool(true))],
@@ -462,10 +462,10 @@ fn attach_and_detach_refuse_what_is_not_theirs() {
     // lima does not share this host's loopback on macOS: the Store is
     // connected again with an address the machine reaches; nothing is
     // recorded
-    let lima = layerfs_platform::sandbox_allowed(
-        layerfs_platform::Platform::Lima,
-        layerfs_platform::HostOs::current(),
-        layerfs_platform::StoreKind::Postgresql,
+    let lima = layerfs_machine::platform::sandbox_allowed(
+        layerfs_machine::platform::Platform::Lima,
+        layerfs_machine::platform::HostOs::current(),
+        layerfs_protocol::Postgresql,
     );
     let loopback = refusal(&home, "store.attach", &on("pg", "dev"));
     match lima {
@@ -531,7 +531,7 @@ fn attach_and_detach_refuse_what_is_not_theirs() {
         ],
     );
     assert_eq!(
-        layerfs_api::json::print(&detached),
+        layerfs_home::json::print(&detached),
         r#"{"ok":true,"outcome":"detached","store":"pg","machine":"dev"}"#
     );
     let record = home::read_record(&paths::store_record(&home, "pg"))

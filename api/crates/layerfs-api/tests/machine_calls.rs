@@ -3,7 +3,7 @@
 //! create that cannot start leaves no record. Real VMs run in step 19.
 #![cfg(feature = "machine")]
 use layerfs_api::home::{paths, read_record, write_record};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use std::path::{Path, PathBuf};
 
 static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);

@@ -1,7 +1,7 @@
 //! Read-only compatibility checks for development homes made before host naming.
 use super::{layout::foreign_fix, paths, read_record, records::unreadable, with_field};
 use crate::outcome::{refused, with_fix};
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use std::path::Path;
 
 pub(super) fn check(home: &Path) -> Result<(), SdkRefusal> {

@@ -22,7 +22,7 @@
 //! record's platform was removed (`layerfs-control`'s
 //! `inventory::machine_state` asks the platform policy).
 use super::record::{Holders, MachineRecord, CREATE, REMOVE};
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::op::{Op, Standing};
 use layerfs_home::outcome::shell_word;
 use layerfs_home::outcome::{with_fix, with_next};

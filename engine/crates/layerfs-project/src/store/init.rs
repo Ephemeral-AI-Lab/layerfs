@@ -1,7 +1,7 @@
 //! Host Init and original handoff/failure custody.
 use crate as layerfs_project;
 use crate::init::init_unknown_state;
-use layerfs_bridge::provision::{check_destination, ProviderKind, StoreManifest, StoreProfile};
+use layerfs_protocol::provision::manifest::{check_destination, ProviderKind, StoreManifest, StoreProfile};
 use layerfs_history::{
     error::NameTakenState, BranchId, BranchSnapshot, ForkRequest, ForkSource, HistoryCatalog,
     HistoryCatalogConfig, HistoryError, HistoryName, InitStatistics, LayerStackId,

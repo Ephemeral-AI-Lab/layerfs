@@ -2,7 +2,7 @@
 //! daemon is needed. The installed file opens as every Store opener opens
 //! it, a second install into the same place is refused before anything is
 //! written, and an already installed manifest is refused.
-use layerfs_control::{InitRequest, ProjectApi, SealedProject};
+use layerfs_project::store::{InitRequest, ProjectApi, SealedProject};
 use layerfs_history::{BranchId, HistoryCatalogConfig, HistoryName, LayerStackId};
 use layerfs_persistence::{PersistenceConfig, SqlitePersistenceProfile};
 use layerfs_storage::StoragePolicy;

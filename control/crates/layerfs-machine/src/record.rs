@@ -9,7 +9,7 @@
 //! `machine remove` removes its record alone. Read once and kept whole. Built without
 //! the `machine` feature too (the guest worker reads its own `native` and
 //! `docker` records); the platform and the summary need the adapters.
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::home::{self, paths, read_record, with_field, write_entity};
 use layerfs_home::op::{self, Op, Standing};
 use layerfs_home::outcome::{refused, shell_word, with_fix};
@@ -317,12 +317,12 @@ impl MachineRecord {
     /// The machine's platform; a record naming one removed in 2.0 is
     /// refused `Unsupported` with [`Self::removed`]'s reason, one naming
     /// none LayerFS knows `Failed`.
-    pub fn platform(&self) -> Result<layerfs_platform::Platform> {
+    pub fn platform(&self) -> Result<crate::platform::Platform> {
         if let Some(reason) = self.removed() {
             return Err(refused("Unsupported", reason));
         }
         self.platform_name()
-            .and_then(layerfs_platform::Platform::parse)
+            .and_then(crate::platform::Platform::parse)
             .ok_or_else(|| refused("Failed", "a machine record names no known platform"))
     }
 
@@ -330,7 +330,7 @@ impl MachineRecord {
     /// (`firecracker`, `microsandbox`, `ssh`).
     pub fn removed(&self) -> Option<&'static str> {
         self.platform_name()
-            .and_then(layerfs_platform::removed_platforms::removed_reason)
+            .and_then(crate::platform::removed_platforms::removed_reason)
     }
 
     /// The machine's state as its record says it ([`Self::status`]), the

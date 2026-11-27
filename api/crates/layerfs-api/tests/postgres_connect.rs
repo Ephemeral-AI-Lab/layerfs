@@ -13,7 +13,7 @@
 //! LAYERFS_TEST_PG_PASSWORD (the user's password); without them the test
 //! says so and passes.
 use layerfs_api::home::{self, paths};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use std::path::{Path, PathBuf};
 
 fn tempdir(tag: &str) -> PathBuf {
@@ -357,7 +357,7 @@ fn an_old_format_store_answers_outdated_with_upgrade_as_its_fix() {
         "project.init",
         &[("project", t("old/api")), ("folder", folder_text)],
     );
-    layerfs_api::close_idle(std::time::Duration::ZERO);
+    layerfs_store::admin::with_users::close_idle(std::time::Duration::ZERO);
     sql(
         &own,
         "ALTER TABLE layerfs.history_meta DROP CONSTRAINT history_meta_schema_version_check; \
@@ -386,7 +386,7 @@ fn an_old_format_store_answers_outdated_with_upgrade_as_its_fix() {
     let got = ok(&home, "project.get", &[("project", t("old/api"))]);
     let by = SdkValue::map([("store", t("old")), ("reason", t("outdated"))]);
     assert_eq!(got.get("blocked_by"), Some(&by), "{got:?}");
-    layerfs_api::close_idle(std::time::Duration::ZERO);
+    layerfs_store::admin::with_users::close_idle(std::time::Duration::ZERO);
     sql(
         &url,
         &format!("DROP DATABASE IF EXISTS {database} WITH (FORCE)"),

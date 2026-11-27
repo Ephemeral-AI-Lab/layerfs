@@ -4,8 +4,8 @@
 //! and one progress event goes out per finished thing. The home's and a
 //! machine's doctors, which ask a provider, are `doctor_home_machine.rs`'s.
 use layerfs_api::home::{paths, write_entity};
-use layerfs_api::json;
-use layerfs_bridge::control::SdkValue;
+use layerfs_home::json;
+use layerfs_protocol::provision::install::SdkValue;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -201,10 +201,10 @@ fn a_project_s_record_is_checked_against_its_store() {
     let home = tempdir("project");
     short(&home, "home.init", &[]);
     sqlite_store(&home, "shop", layerfs_home::names::HOST_MACHINE);
-    let manifest = layerfs_bridge::provision::StoreManifest {
-        provider: layerfs_bridge::provision::ProviderKind::Sqlite,
+    let manifest = layerfs_protocol::provision::manifest::StoreManifest {
+        provider: layerfs_protocol::provision::manifest::ProviderKind::Sqlite,
         locator: "/layerfs-store/global/store.sqlite".into(),
-        profile: layerfs_bridge::provision::StoreProfile::Normal,
+        profile: layerfs_protocol::provision::manifest::StoreProfile::Normal,
         binding: vec![1; 16],
         cursor_key: [7; 32],
         stack: [2; 17],

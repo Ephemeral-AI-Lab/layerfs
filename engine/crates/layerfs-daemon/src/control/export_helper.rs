@@ -1,5 +1,5 @@
 //! One bounded NFS client helper attempt, including post-KILL observation.
-use layerfs_bridge::process::Retained;
+use layerfs_os::process::Retained;
 use nix::fcntl::{fcntl, FcntlArg, OFlag};
 use std::{
     io::{self, Read},
@@ -221,7 +221,7 @@ pub(super) fn mounted_under(home: &Path, table: Option<&Path>) -> io::Result<Vec
         // One bounded listing: a `mount` that waits is killed and read as an
         // unreadable table, never as "not mounted".
         #[cfg(target_os = "macos")]
-        let points = (layerfs_bridge::process::mount_table()?.lines())
+        let points = (layerfs_os::mount_table()?.lines())
             .filter_map(|l| Some(PathBuf::from(l.split_once(" on ")?.1.rsplit_once(" (")?.0)))
             .collect();
         #[cfg(not(target_os = "macos"))]

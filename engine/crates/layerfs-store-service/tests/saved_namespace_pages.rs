@@ -5,7 +5,7 @@ mod installed;
 #[path = "support/sdk.rs"]
 #[allow(dead_code)]
 mod support;
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use std::fs;
 use support::{items, Fixture};
 fn text(s: &str) -> SdkValue {

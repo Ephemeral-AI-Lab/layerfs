@@ -8,7 +8,7 @@ use crate::record::StoreRecord;
 use crate::sqlite::family::step_on;
 use crate::sqlite::transfer::step::StoreStep;
 use crate::state;
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::home::{observed, paths};
 use layerfs_home::outcome::Outcome;
 use layerfs_home::state::State;

@@ -5,9 +5,9 @@ use crate::identity::{Identity, Kind};
 use crate::project::add;
 use crate::project::record::ProjectRecord;
 use crate::record::StoreRecord;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_bridge::provision::{StoreManifest, StoreProfile};
-use layerfs_bridge::sdk_values::hex;
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::manifest::{StoreManifest, StoreProfile};
+use layerfs_protocol::sdk::hex;
 use layerfs_history::{
     BranchId, HistoryCatalog, HistoryName, HistoryResult, LayerStackId, NamedSnapshot,
 };

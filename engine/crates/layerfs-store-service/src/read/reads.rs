@@ -8,7 +8,7 @@ use super::{
     walk, window,
 };
 use crate::history::lookup::{self as args, invalid, Answer, Arg};
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_content::{
     compare::{memo::Memo, EntryFacts},
     filesystem::{

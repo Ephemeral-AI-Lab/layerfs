@@ -3,9 +3,7 @@ use super::{read_handle::ReadSession, ReadAdmissionError, Store};
 use layerfs_content::{AuthenticatedObjects, ContentError, ContentResult, ObjectId};
 use layerfs_history::{HistoryError, ReserveRequest, WorkspaceId};
 use layerfs_storage::{read::CapturedLocators, StorageError};
-use layerfs_workspace::{
-    CanonicalClient, FileLengths, InodeSerials, Workspace, WorkspaceError, WorkspaceResult,
-};
+use layerfs_vfs::{CanonicalClient, FileLengths, InodeSerials, Workspace, WorkspaceError, WorkspaceResult};
 use std::{
     fmt,
     sync::{

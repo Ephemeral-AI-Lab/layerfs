@@ -9,7 +9,7 @@
 use crate::identity as stores;
 use crate::identity::{Identity, Kind};
 use crate::open_args::{OpenArgs, PgSelection};
-use layerfs_bridge::control::SdkRefusal;
+use layerfs_protocol::provision::install::SdkRefusal;
 use layerfs_home::outcome::{refused, Outcome};
 use layerfs_store_service::{OpenRefusal, StoreService};
 use std::path::Path;
@@ -195,7 +195,7 @@ fn binding(url: &str, schema: &str, sync: &str) -> Result<Vec<u8>, SdkRefusal> {
 /// (`postgresql.url`) and goes only into the daemon's private config. The
 /// caller's reach check found the project in the schema on its one session
 /// (#65; every route to `sandbox.create` runs it), so nothing is read here.
-pub fn sandbox_store(open: &OpenArgs) -> Result<Option<layerfs_bridge::DaemonStore>, SdkRefusal> {
+pub fn sandbox_store(open: &OpenArgs) -> Result<Option<layerfs_protocol::DaemonStore>, SdkRefusal> {
     if !stores::postgresql(open)? {
         return Ok(None);
     }
@@ -210,11 +210,11 @@ pub fn sandbox_store(open: &OpenArgs) -> Result<Option<layerfs_bridge::DaemonSto
     // the caller resolved the URL and rewrote it for the Sandbox's machine
     // (#535 §7.4); the daemon dials the same server as this side
     let url = url_of(open.postgresql.as_ref().and_then(|p| p.url.as_deref()))?.to_owned();
-    Ok(Some(layerfs_bridge::DaemonStore::Postgres {
+    Ok(Some(layerfs_protocol::DaemonStore::Postgres {
         url,
         schema,
         synchronous_commit,
-        authority: layerfs_bridge::StoreAuthority {
+        authority: layerfs_protocol::StoreAuthority {
             binding: identity.binding,
             cursor_key: identity.cursor_key,
         },
@@ -228,7 +228,7 @@ pub fn sandbox_store(open: &OpenArgs) -> Result<Option<layerfs_bridge::DaemonSto
 /// error: { code: Unavailable | Denied, message } }`. A failed query after
 /// connecting is refused `Failed`.
 pub fn status(url: &str, schemas: &[String]) -> Outcome {
-    use layerfs_bridge::control::SdkValue;
+    use layerfs_protocol::provision::install::SdkValue;
     use layerfs_persistence::PostgresStatusError as E;
     let unreached = |code: &str, message: String| {
         SdkValue::map([

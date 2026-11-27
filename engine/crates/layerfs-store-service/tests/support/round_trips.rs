@@ -26,7 +26,7 @@
 //! transaction controls included.
 #![allow(dead_code)] // each test crate uses a part of it
 
-use layerfs_bridge::control::{SdkCall, SdkValue};
+use layerfs_protocol::provision::install::{SdkCall, SdkValue};
 use layerfs_history::records::StoreStatistics;
 use layerfs_history::{
     BranchId, ForkRequest, ForkSource, HistoryCatalog, HistoryCatalogConfig, HistoryName,

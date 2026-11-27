@@ -8,7 +8,7 @@ use layerfs_content::{
     object::inode_leaf::InodeKind,
     AuthenticatedObjects,
 };
-use layerfs_daemon::store::StoreOperation;
+use layerfs_store_service::store::StoreOperation;
 use layerfs_telemetry::timer::Timing;
 use std::{
     collections::BTreeSet,

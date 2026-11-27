@@ -1,0 +1,89 @@
+//! What each kind needs on this host and what is missing (`machine list`),
+//! as its adapter reports it: `tool:<cli>` for a command not on the search
+//! path, `host:<fact>` for what the host lacks. A probe starts nothing.
+use crate::platform::adapter::adapter;
+use crate::table::profile::{HostOs, Platform};
+use crate::setup::tool;
+use crate::setup::spec::Tools;
+use std::path::Path;
+use std::process::Command;
+use std::time::Duration;
+
+/// One kind's readiness on this host.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Probe {
+    pub kind: Platform,
+    pub ready: bool,
+    pub missing: Vec<String>,
+    /// The provider tool's version, when it answers.
+    pub version: Option<String>,
+}
+
+const ANSWER: Duration = Duration::from_secs(10);
+
+/// Probes `kind` on this host.
+pub fn probe(kind: Platform, tools: &Tools) -> Probe {
+    let mut missing = Vec::new();
+    let version = adapter(kind).probe(tools, HostOs::current(), &mut missing);
+    Probe {
+        kind,
+        ready: missing.is_empty(),
+        missing,
+        version,
+    }
+}
+
+/// `host` on Linux needs a root caller, `/dev/fuse` and cgroup v2
+/// (`linuxMissing` in today's `sandbox/platforms.js`); macOS needs nothing
+/// LayerFS can check (Network Volumes access is asked by the system).
+pub fn native_missing(host: HostOs) -> Vec<String> {
+    match host {
+        HostOs::Linux => {
+            let mut missing = Vec::new();
+            if !nix::unistd::geteuid().is_root() {
+                missing.push("host:root".into());
+            }
+            if !Path::new("/dev/fuse").exists() {
+                missing.push("host:/dev/fuse".into());
+            }
+            if !Path::new("/sys/fs/cgroup/cgroup.controllers").exists() {
+                missing.push("host:cgroup2".into());
+            }
+            missing
+        }
+        HostOs::Macos => Vec::new(),
+        HostOs::Windows | HostOs::Other => vec!["host:macos-or-linux".into()],
+    }
+}
+
+/// Lima's `vz` and Apple Container are macOS only today.
+pub(crate) fn macos_missing(host: HostOs) -> Vec<String> {
+    if host == HostOs::Macos {
+        Vec::new()
+    } else {
+        vec!["host:macos".into()]
+    }
+}
+
+pub(crate) fn tool_version(
+    tools: &Tools,
+    name: &str,
+    args: &[&str],
+    missing: &mut Vec<String>,
+) -> Option<String> {
+    match tool::lookup(tools, name) {
+        Some(path) => first_line(tool::command(tools, &path, args), false),
+        None => {
+            missing.push(format!("tool:{name}"));
+            None
+        }
+    }
+}
+
+/// The first line a command prints (on stderr when `stderr`), if it succeeds.
+pub(crate) fn first_line(command: Command, stderr: bool) -> Option<String> {
+    let out = tool::run(command, None, ANSWER, "a version query").ok()?;
+    let text = if stderr { &out.stderr } else { &out.stdout };
+    let line = text.lines().next()?.trim();
+    (out.ok() && !line.is_empty()).then(|| line.to_owned())
+}

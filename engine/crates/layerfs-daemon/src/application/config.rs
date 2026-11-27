@@ -1,5 +1,5 @@
 //! Actual protected configuration descriptors and process/placement checks.
-use layerfs_bridge::daemon_setup::DaemonSetup;
+use layerfs_protocol::provision::daemon_setup::DaemonSetup;
 use nix::{fcntl::OFlag, unistd::Uid};
 use std::{
     fs::{self, OpenOptions},
@@ -39,12 +39,12 @@ pub(super) fn read(path: &Path) -> io::Result<DaemonSetup> {
     }
     // One early reservation restores any value below the refill window; a
     // larger one would have consecutive creates each attempt a reservation.
-    if config.limits.serial_low_water >= layerfs_workspace::SERIAL_REFILL {
+    if config.limits.serial_low_water >= layerfs_vfs::SERIAL_REFILL {
         return Err(invalid("serial low-water must be below the refill window"));
     }
     let overlay = Path::new(&config.overlay);
     let mounts = Path::new(&config.mounts);
-    if let layerfs_bridge::DaemonStore::Sqlite { locator, .. } = &config.store {
+    if let layerfs_protocol::DaemonStore::Sqlite { locator, .. } = &config.store {
         let store = Path::new(locator);
         if store == overlay
             || store.starts_with(mounts)
@@ -62,8 +62,8 @@ pub(super) fn read(path: &Path) -> io::Result<DaemonSetup> {
     )?;
     // a PostgreSQL Store (#506) has no file or volume here
     let (locator, install) = match &config.store {
-        layerfs_bridge::DaemonStore::Postgres { .. } => return Ok(config),
-        layerfs_bridge::DaemonStore::Sqlite { locator, install } => (locator, install),
+        layerfs_protocol::DaemonStore::Postgres { .. } => return Ok(config),
+        layerfs_protocol::DaemonStore::Sqlite { locator, install } => (locator, install),
     };
     let store = Path::new(locator);
     private_directory(

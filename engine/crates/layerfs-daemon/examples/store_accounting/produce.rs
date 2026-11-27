@@ -6,11 +6,11 @@ use layerfs_content::{
     },
     ConstructionPolicy,
 };
-use layerfs_daemon::store::{BoundWorkspace, CommitError};
+use layerfs_store_service::store::{BoundWorkspace, CommitError};
 use layerfs_history::BranchSnapshot;
 use layerfs_storage::Save;
 use layerfs_telemetry::timer::Timing;
-use layerfs_workspace::{Operation, Outcome, Position, Time};
+use layerfs_vfs::{Operation, Outcome, Position, Time};
 pub fn changed_bytes() -> Vec<u8> {
     changed_bytes_with_tag(b'X')
 }

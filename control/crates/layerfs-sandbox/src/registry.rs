@@ -8,10 +8,10 @@
 //! exchange at a time, and concurrent calls take separate connections.
 use crate::host::Host;
 use crate::MountedWorkspace;
-use layerfs_bridge::control::{SdkRefusal, WorkspaceToken};
+use layerfs_protocol::provision::install::{SdkRefusal, WorkspaceToken};
 use layerfs_home::helpers::lock;
 use layerfs_home::outcome::refused;
-use layerfs_sandbox_backend::CommandIdentity;
+use crate::CommandIdentity;
 use std::collections::BTreeMap;
 use std::sync::{Arc, LazyLock, Mutex};
 
@@ -32,7 +32,7 @@ pub struct SandboxState {
     /// Its runtime, observed where it runs; `None` for a Sandbox this
     /// process reaches only through its daemon's forwarded port (#535 G4),
     /// whose runtime is in its machine.
-    pub runtime: Option<Box<layerfs_sandbox_backend::Sandbox>>,
+    pub runtime: Option<Box<crate::Sandbox>>,
     pub identity: CommandIdentity,
     pub controls: crate::daemon::pool::Controls,
     pub mounts: Mutex<BTreeMap<String, Mount>>,
@@ -117,7 +117,7 @@ pub fn end_idle_sessions(within: std::time::Duration) -> usize {
 impl SandboxState {
     /// Its runtime; a forwarded Sandbox's is its machine's, which this
     /// process does not run (its commands go through the worker).
-    pub fn runtime(&self) -> Result<&layerfs_sandbox_backend::Sandbox, SdkRefusal> {
+    pub fn runtime(&self) -> Result<&crate::Sandbox, SdkRefusal> {
         self.runtime.as_deref().ok_or_else(|| {
             refused(
                 "Failed",

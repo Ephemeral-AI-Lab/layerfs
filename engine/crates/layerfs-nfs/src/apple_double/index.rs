@@ -10,7 +10,7 @@ use crate::{
     trace::Route as Trace,
 };
 use layerfs_content::object::inode_leaf::InodeKind;
-use layerfs_workspace::ViewStat;
+use layerfs_vfs::ViewStat;
 use std::{collections::BTreeSet, path::PathBuf};
 
 impl Companions {

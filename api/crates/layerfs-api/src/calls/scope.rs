@@ -11,7 +11,7 @@
 //! (a command can still `cd` anywhere in the mounted tree). Every refusal
 //! comes before dispatch.
 use super::table::Call;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::home::with_field;
 use layerfs_home::outcome::refused;
 use std::path::Path;
@@ -295,7 +295,7 @@ impl Scope {
             return Err(out("sandbox"));
         }
         // one read of the Sandbox's record (layout 3, #536 §5)
-        match layerfs_control::inventory::sandbox(home, sandbox)? {
+        match layerfs_sandbox::status::inventory::sandbox(home, sandbox)? {
             Some(record) if record.project() == Some(self.project.as_str()) => Ok(()),
             _ => Err(out("sandbox")),
         }

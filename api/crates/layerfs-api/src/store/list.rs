@@ -3,7 +3,7 @@ use super::get::ITEM_PARTS;
 use crate::calls::table::Kind::Name;
 use crate::calls::table::{call, opt, Call};
 use crate::calls::{Context, Form, Part, Section};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::names::MachineName;
 use layerfs_home::outcome::Outcome;
 
@@ -80,7 +80,7 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         .map(MachineName::parse)
         .transpose()?;
     let machine = machine.as_ref().map(MachineName::as_str);
-    let machines = layerfs_control::store::reads();
+    let machines = layerfs_store::admin::with_users::reads();
     let (stats, format) = (context.with("stats"), context.with("format"));
     layerfs_store::list::list_with(&context.home, machine, stats, format, machines)
 }

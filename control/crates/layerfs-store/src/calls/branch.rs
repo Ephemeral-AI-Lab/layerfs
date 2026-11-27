@@ -2,7 +2,7 @@
 //! Store method that does it, its answer the call's full map (the keys of
 //! its long form; the dispatcher shapes it).
 use super::op::{next_fields, on_project, Names, StoreOp};
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::cursor;
 use layerfs_home::events::Events;
 use layerfs_home::helpers::shown;

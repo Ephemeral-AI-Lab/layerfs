@@ -7,7 +7,7 @@
 #![cfg(feature = "machine")]
 use layerfs_api::home::{self, paths, write_record};
 use layerfs_api::worker::read_frame;
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use std::net::{SocketAddr, TcpListener};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};

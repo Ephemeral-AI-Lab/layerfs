@@ -1,6 +1,6 @@
 //! One Workspace resource observation, explicitly charged to its call.
 use super::Records;
-use crate::{OwnerClient, OwnerError};
+use layerfs_store_service::{OwnerClient, OwnerError};
 use std::{
     fmt,
     io::{self, Write},
@@ -99,8 +99,8 @@ struct Work {
     lock_wait_ns: u64,
     hold_ns: u64,
 }
-impl From<&crate::JobWork> for Work {
-    fn from(work: &crate::JobWork) -> Self {
+impl From<&layerfs_store_service::JobWork> for Work {
+    fn from(work: &layerfs_store_service::JobWork) -> Self {
         Self {
             jobs: work.jobs,
             sql: work.sql.total(),

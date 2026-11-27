@@ -5,7 +5,7 @@ use crate::calls::table::{a, call, opt, Call, PROGRESS};
 use crate::calls::Context;
 use crate::calls::Form;
 #[cfg(feature = "machine")]
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 #[cfg(feature = "machine")]
 use layerfs_home::names::MachineName;
 #[cfg(feature = "machine")]
@@ -64,7 +64,7 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let machine = MachineName::parse(args.get_text("machine").unwrap_or(""))?;
     let force = args.get_bool("force");
     let (home, events) = context.parts();
-    layerfs_control::machine::stop(home, events, &machine, force)
+    layerfs_machine::with_users::stop(home, events, &machine, force)
 }
 
 // without the `machine` feature (the guest worker's build) it is

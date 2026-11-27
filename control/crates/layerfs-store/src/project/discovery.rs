@@ -3,10 +3,7 @@
 //! names, a project's folder and record, the turn calls take on one folder,
 //! and the record file format (moved from `sandbox/files.rs`,
 //! layerfs-project#105).
-use layerfs_bridge::{
-    control::{Reply, SdkRefusal, SdkValue},
-    provision::StoreManifest,
-};
+use layerfs_protocol::provision::{install::{Reply, SdkRefusal, SdkValue}, manifest::StoreManifest};
 use layerfs_home::helpers;
 use layerfs_home::outcome::{failed, refused};
 use layerfs_persistence::{SealedStore, SqlitePersistenceProfile};
@@ -192,7 +189,7 @@ fn no_follow() -> i32 {
 }
 
 pub fn save(path: &Path, value: SdkValue) -> Result<()> {
-    let bytes = layerfs_bridge::control::Answer {
+    let bytes = layerfs_protocol::provision::install::Answer {
         id: 1,
         reply: Reply::Sdk(value),
     }
@@ -201,7 +198,7 @@ pub fn save(path: &Path, value: SdkValue) -> Result<()> {
     let temp = path.with_extension(format!(
         "{}-{}",
         std::process::id(),
-        layerfs_bridge::sdk_values::hex(&helpers::random()?[..8])
+        layerfs_protocol::sdk::hex(&helpers::random()?[..8])
     ));
     let mut file = OpenOptions::new()
         .write(true)
@@ -226,7 +223,7 @@ pub fn load(path: &Path) -> Result<SdkValue> {
     }
     let mut bytes = Vec::new();
     file.take(65536).read_to_end(&mut bytes).map_err(failed)?;
-    match layerfs_bridge::control::Answer::decode(&bytes)
+    match layerfs_protocol::provision::install::Answer::decode(&bytes)
         .map_err(failed)?
         .reply
     {
@@ -296,7 +293,7 @@ fn decoded(path: &Path, value: &SdkValue) -> Result<Project> {
         _ => Err(refused("NoSuchProject", "no complete project manifest")),
     };
     let manifest = decode("manifest")?;
-    if manifest.profile != layerfs_bridge::provision::StoreProfile::Normal {
+    if manifest.profile != layerfs_protocol::provision::manifest::StoreProfile::Normal {
         return Err(refused("InvalidInput", "Normal required"));
     }
     let installed = if matches!(value.get("installed"), Some(SdkValue::Bytes(_))) {

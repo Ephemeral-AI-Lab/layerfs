@@ -11,7 +11,7 @@ use super::snapshot::{self, answer, existing, kind_name, Kind, Snap};
 use super::visibility::Visibility;
 use crate::history::lookup::{self as args, invalid, refuse, Answer, Arg};
 use crate::store::{CatalogHints, Store, StorePorts};
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_content::compare::tree::{same_inode, same_metadata};
 use layerfs_content::compare::{
     line_diff, same_file_bytes, ChangeKind, ChangeWalk, DiffLine, EntryFacts, LineOp, Memo,

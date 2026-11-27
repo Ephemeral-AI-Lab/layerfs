@@ -1,20 +1,9 @@
 //! Async Fuse ports over typed Workspace calls and direct Store readers.
-use crate::{
-    store::{BoundWorkspace, PortError, ReadAdmissionError, StoreOperation},
-    OwnerError,
-};
+use layerfs_store_service::{store::{BoundWorkspace, PortError, ReadAdmissionError, StoreOperation}, OwnerError};
 use layerfs_history::HistoryError;
-use layerfs_mount_ports::ports::{
-    BaseDemandFailed, Fence, Fenced, MountServices, RequestServices, ServiceError, ServiceFuture,
-    ServiceReply,
-};
+use layerfs_vfs::ports::mount::{BaseDemandFailed, Fence, Fenced, MountServices, RequestServices, ServiceError, ServiceFuture, ServiceReply};
 use layerfs_overlay::{KernelCookieOffer, KernelMount, Publication};
-use layerfs_workspace::{
-    BaseView, CanonicalClient, JobOutcome, KernelDirectoryRead, KernelDirectoryWindow, KernelInput,
-    KernelMutationOutcome, KernelReadOperation, KernelReadOutcome, KernelVisitRequest,
-    KernelWindow, Position, Recognition, RecognizeWork, VisitFacts, WorkspaceError, WriteData,
-    RECOGNIZE_BYTES,
-};
+use layerfs_vfs::{BaseView, CanonicalClient, JobOutcome, KernelDirectoryRead, KernelDirectoryWindow, KernelInput, KernelMutationOutcome, KernelReadOperation, KernelReadOutcome, KernelVisitRequest, KernelWindow, Position, Recognition, RecognizeWork, VisitFacts, WorkspaceError, WriteData, RECOGNIZE_BYTES};
 use std::sync::Arc;
 
 /// One request's operation scope and its mount's fence.
@@ -78,7 +67,7 @@ impl FilesystemPort {
     }
     fn call<T: Send + 'static>(
         &self,
-        command: impl FnOnce(&crate::OwnerClient, layerfs_workspace::Route) -> Result<T, OwnerError>
+        command: impl FnOnce(&layerfs_store_service::OwnerClient, layerfs_vfs::Route) -> Result<T, OwnerError>
             + Send
             + 'static,
         gated: bool,
@@ -125,7 +114,7 @@ impl RequestServices for FilesystemPort {
         );
         match visit {
             Ok(visit) => self.call(
-                move |job_client: &crate::OwnerClient, route| {
+                move |job_client: &layerfs_store_service::OwnerClient, route| {
                     job_client.kernel_directory_visit(route, visit)
                 },
                 true,
@@ -139,7 +128,7 @@ impl RequestServices for FilesystemPort {
         names: Vec<Vec<u8>>,
     ) -> ServiceFuture<'_, ServiceReply<()>> {
         self.call(
-            move |job_client: &crate::OwnerClient, route| {
+            move |job_client: &layerfs_store_service::OwnerClient, route| {
                 job_client.kernel_directory_publish(route, offer, names)
             },
             true,
@@ -152,7 +141,7 @@ impl RequestServices for FilesystemPort {
         handle: u64,
     ) -> ServiceFuture<'_, ServiceReply<()>> {
         self.call(
-            move |job_client: &crate::OwnerClient, route| {
+            move |job_client: &layerfs_store_service::OwnerClient, route| {
                 job_client.kernel_directory_close(route, mount, serial, handle)
             },
             false,
@@ -180,7 +169,7 @@ impl RequestServices for FilesystemPort {
         );
         match visit {
             Ok(visit) => self.call(
-                move |job_client: &crate::OwnerClient, route| {
+                move |job_client: &layerfs_store_service::OwnerClient, route| {
                     job_client.kernel_read_visit(route, Box::new(visit))
                 },
                 true,
@@ -195,7 +184,7 @@ impl RequestServices for FilesystemPort {
         handle: u64,
     ) -> ServiceFuture<'_, ServiceReply<()>> {
         self.call(
-            move |job_client: &crate::OwnerClient, route| {
+            move |job_client: &layerfs_store_service::OwnerClient, route| {
                 job_client.kernel_close_file(route, mount, serial, handle)
             },
             false,
@@ -254,7 +243,7 @@ impl RequestServices for FilesystemPort {
         };
         match visit {
             Ok(visit) => self.call(
-                move |job_client: &crate::OwnerClient, route| {
+                move |job_client: &layerfs_store_service::OwnerClient, route| {
                     job_client.kernel_observe_visit(route, Box::new(visit))
                 },
                 true,
@@ -287,7 +276,7 @@ impl RequestServices for FilesystemPort {
             .kernel_mutation_visit(self.0.resident(), request);
         let job = match visit {
             Ok(visit) => self.call(
-                move |job_client: &crate::OwnerClient, route| {
+                move |job_client: &layerfs_store_service::OwnerClient, route| {
                     job_client.kernel_mutate_visit(route, Box::new(visit))
                 },
                 true,
@@ -354,7 +343,7 @@ impl RequestServices for FilesystemPort {
         count: u64,
     ) -> ServiceFuture<'_, ServiceReply<()>> {
         self.call(
-            move |job_client: &crate::OwnerClient, route| {
+            move |job_client: &layerfs_store_service::OwnerClient, route| {
                 job_client.kernel_forget(route, mount, serial, count)
             },
             false,
@@ -398,8 +387,8 @@ fn writer_contended(error: &WorkspaceError) -> bool {
     };
     matches!(
         error
-            .downcast_ref::<Arc<crate::store::PortError>>()
+            .downcast_ref::<Arc<layerfs_store_service::store::PortError>>()
             .map(Arc::as_ref),
-        Some(crate::store::PortError::History(HistoryError::Busy))
+        Some(layerfs_store_service::store::PortError::History(HistoryError::Busy))
     )
 }

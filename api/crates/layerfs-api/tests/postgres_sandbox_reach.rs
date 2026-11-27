@@ -8,7 +8,7 @@
 //! test says so and passes.
 #![cfg(feature = "machine")]
 use layerfs_api::home::{self, paths};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use std::path::{Path, PathBuf};
 
 fn tempdir(tag: &str) -> PathBuf {

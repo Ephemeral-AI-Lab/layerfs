@@ -14,8 +14,8 @@ mod fixture;
 #[path = "common/host_writes.rs"]
 mod writes;
 
-use layerfs_api::json;
-use layerfs_bridge::control::SdkValue;
+use layerfs_home::json;
+use layerfs_protocol::provision::install::SdkValue;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 use writes::*;

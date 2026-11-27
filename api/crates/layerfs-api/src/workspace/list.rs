@@ -3,9 +3,9 @@
 use crate::calls::table::Kind::{Int, Name, Text};
 use crate::calls::table::{call, opt, Call};
 use crate::calls::{Context, Form, Paging, Part};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::outcome::Outcome;
-use layerfs_sandbox::workspace::list::{list, ListRequest};
+use layerfs_workspace::list::{list, ListRequest};
 
 /// One Workspace: its handle and Branch.
 const ITEM: Form = Form::of(

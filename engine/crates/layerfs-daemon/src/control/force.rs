@@ -16,13 +16,10 @@ use super::{
     serving::{stage, work, Attached, Evidence, Leaving},
 };
 #[cfg(target_os = "linux")]
-use crate::store::BoundWorkspace;
+use layerfs_store_service::store::BoundWorkspace;
 #[cfg(target_os = "linux")]
-use layerfs_bridge::control::{
-    AbortDisposition, DetachDisposition, ForceUnmounted, ForcedCleanup, ForcedFacts, ForcedOutcome,
-    MountPhase, Reply, TeardownStage,
-};
-use layerfs_bridge::control::{Activity, CommitKnowledge, ControlCode, WorkspaceToken};
+use layerfs_protocol::provision::install::{AbortDisposition, DetachDisposition, ForceUnmounted, ForcedCleanup, ForcedFacts, ForcedOutcome, MountPhase, Reply, TeardownStage};
+use layerfs_protocol::provision::install::{Activity, CommitKnowledge, ControlCode, WorkspaceToken};
 #[cfg(target_os = "linux")]
 use layerfs_fuse::{
     mount::AbortWrite,
@@ -406,7 +403,7 @@ impl Service {
         self.leaving(token, MountPhase::Draining);
         match self.job(
             workspace.route(),
-            |job_client: &crate::OwnerClient, job_route| job_client.kernel_revoke(job_route, mount),
+            |job_client: &layerfs_store_service::OwnerClient, job_route| job_client.kernel_revoke(job_route, mount),
         ) {
             Ok(()) => Ok(drained),
             Err(failure) => Err(self.retain(

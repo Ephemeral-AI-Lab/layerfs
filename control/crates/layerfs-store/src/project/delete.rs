@@ -62,8 +62,8 @@ use crate::project::frame::{
 use crate::project::record::ProjectRecord;
 use crate::record::StoreRecord;
 use crate::{lease, service};
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_bridge::sdk_values::{hex, unhex};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
+use layerfs_protocol::sdk::{hex, unhex};
 use layerfs_history::{GcScopeKind, HistoryCatalog, HistoryError, LayerStackId};
 use layerfs_home::events::Events;
 use layerfs_home::home::{now_ms, paths};

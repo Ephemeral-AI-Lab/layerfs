@@ -8,7 +8,7 @@ use super::{
 };
 use crate::history::lookup as args;
 use crate::store::{Store, StorePorts};
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_content::compare::{text::diff_lines, DiffLine, EntryFacts, LineOp};
 use layerfs_content::object::inode_leaf::InodeKind;
 use std::{collections::BTreeMap, sync::Arc};

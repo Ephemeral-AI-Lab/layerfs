@@ -3,7 +3,7 @@
 //! Branch; an absent Commit or Branch is refused `NotFound` (their `NoSuch*`
 //! codes fold into it since the call surface 2.0). #533 review, group calls.
 use layerfs_api::home;
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 

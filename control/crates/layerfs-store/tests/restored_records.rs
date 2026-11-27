@@ -2,8 +2,8 @@
 //! root: the record a restore writes, read back the way `sandbox.create`
 //! reads a project (`layerfs_store::project::discovery::project`, then the
 //! installed manifest).
-use layerfs_bridge::control::SdkValue;
-use layerfs_bridge::provision::{ProviderKind, StoreProfile};
+use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::provision::manifest::{ProviderKind, StoreProfile};
 use layerfs_history::{BranchId, LayerStackId};
 use layerfs_home::home::{paths, private_dir};
 use layerfs_store::backup::restored::{records, Found, Main, Restored};

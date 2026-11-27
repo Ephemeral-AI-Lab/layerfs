@@ -3,7 +3,7 @@
 //! makes when the caller names none. It names the command's record
 //! (`workspace/<id>/exec/<exec id>.json`) and its cgroup, so it is one plain
 //! path component.
-use layerfs_bridge::control::SdkRefusal;
+use layerfs_protocol::provision::install::SdkRefusal;
 use layerfs_home::outcome::refused;
 
 /// The longest exec id.
@@ -17,7 +17,7 @@ impl ExecId {
     /// `text` as an exec id: 1 to 64 ASCII letters, digits, `.`, `_` or
     /// `-`, not starting with `.` or `-`; refused `InvalidInput` otherwise.
     pub fn parse(text: &str) -> Result<Self, SdkRefusal> {
-        if text.len() > MAX || !layerfs_sandbox_backend::cancel::component(text) {
+        if text.len() > MAX || !crate::cancel::component(text) {
             return Err(refused(
                 "InvalidInput",
                 format!(

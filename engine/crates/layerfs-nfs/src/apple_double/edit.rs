@@ -25,8 +25,8 @@ use crate::{
     change::{Sattr, Tickets, Wcc},
     kernel::Kernel,
 };
-use layerfs_mount_ports::operations::write::Stamp;
-use layerfs_workspace::ViewStat;
+use layerfs_vfs::requests::write::Stamp;
+use layerfs_vfs::ViewStat;
 use std::{
     collections::BTreeSet,
     fs::{self, File, OpenOptions},

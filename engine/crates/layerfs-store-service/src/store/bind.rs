@@ -4,7 +4,7 @@ use super::{
     NamedBindRequest, Store,
 };
 use crate::OwnerClient;
-use layerfs_bridge::control::MountPlace;
+use layerfs_protocol::provision::install::MountPlace;
 use layerfs_content::filesystem::{
     attributes::{read_portable, AttributeReadWork},
     directory::decode_directory_page,
@@ -13,7 +13,7 @@ use layerfs_content::filesystem::{
 };
 use layerfs_content::{AuthenticatedObjects, ContentError, ContentResult};
 use layerfs_history::{BranchSnapshot, HistoryCatalog, HistoryName, MountMarkers, NamedSnapshot};
-use layerfs_workspace::{BaseView, CanonicalClient, Workspace};
+use layerfs_vfs::{BaseView, CanonicalClient, Workspace};
 use std::cell::Cell;
 use std::sync::Arc;
 

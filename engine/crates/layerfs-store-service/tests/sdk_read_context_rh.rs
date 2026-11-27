@@ -7,7 +7,7 @@
 #[path = "support/round_trips.rs"]
 mod rt;
 
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use rt::{t, Store};
 
 /// Each call's outcome, with ids masked: refusal code and message, or the

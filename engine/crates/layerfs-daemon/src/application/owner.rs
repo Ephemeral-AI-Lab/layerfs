@@ -1,17 +1,8 @@
 //! One startup lifecycle owner, Store transfer and bounded connection custody.
 use super::retained::{RetainedFailure, RetainedFailures, RetainedSnapshot};
 use super::{ApplicationError, ConnectionFailure};
-use crate::{
-    bootstrap::{open_store_observed, OpenedStore},
-    control::Service,
-    install_types::{InstallFailure, InstalledStore},
-    Owner, OwnerConfig,
-};
-use layerfs_bridge::{
-    control::{DaemonPhase, DaemonStatus, HelloRequest},
-    daemon_setup::DaemonSetup,
-    duplex as transport,
-};
+use {layerfs_store_service::{bootstrap::{open_store_observed, OpenedStore}, Owner, OwnerConfig}, crate::{control::Service, install_types::{InstallFailure, InstalledStore}}};
+use layerfs_protocol::{provision::{install::{DaemonPhase, DaemonStatus, HelloRequest}, daemon_setup::DaemonSetup}, duplex as transport};
 use layerfs_overlay::ProfileConfig;
 use layerfs_persistence::{
     PersistenceConfig, PostgresSelection, SqlitePersistenceProfile, SynchronousCommit,
@@ -393,13 +384,13 @@ pub enum Disposition {
 /// ControlReady (#547 slice 3): close, workspace status, the operator read
 /// model and reclaim (#547 slice 5). Everything else is refused `Capacity`
 /// and the connection is closed.
-pub fn recovery_request(request: &layerfs_bridge::control::Request) -> bool {
-    use layerfs_bridge::control::Request;
+pub fn recovery_request(request: &layerfs_protocol::provision::install::Request) -> bool {
+    use layerfs_protocol::provision::install::Request;
     match request {
         Request::Status(_) | Request::Unmount(_) => true,
         Request::Sdk(call) => {
-            call.method == layerfs_bridge::control::OPERATION
-                || call.method == layerfs_bridge::control::RECLAIM
+            call.method == layerfs_protocol::provision::install::OPERATION
+                || call.method == layerfs_protocol::provision::install::RECLAIM
         }
         _ => false,
     }
@@ -514,7 +505,7 @@ impl Application {
             }
         };
         let selected = match &setup.store {
-            layerfs_bridge::DaemonStore::Sqlite {
+            layerfs_protocol::DaemonStore::Sqlite {
                 install: Some(m),
                 locator,
             } => Some((
@@ -525,7 +516,7 @@ impl Application {
                 m.binding.as_slice(),
                 m.cursor_key,
             )),
-            layerfs_bridge::DaemonStore::Postgres {
+            layerfs_protocol::DaemonStore::Postgres {
                 url,
                 schema,
                 synchronous_commit,
@@ -539,7 +530,7 @@ impl Application {
                 authority.binding.as_slice(),
                 authority.cursor_key,
             )),
-            layerfs_bridge::DaemonStore::Sqlite { install: None, .. } => None,
+            layerfs_protocol::DaemonStore::Sqlite { install: None, .. } => None,
         };
         let existing = match selected {
             Some((selection, binding, cursor_key)) => match open_store_observed(
@@ -559,7 +550,7 @@ impl Application {
                             cause: Box::new(store_failure(&setup.store, cause)),
                         });
                     }
-                    if matches!(setup.store, layerfs_bridge::DaemonStore::Postgres { .. }) {
+                    if matches!(setup.store, layerfs_protocol::DaemonStore::Postgres { .. }) {
                         // the status carries one printable word: `postgresql/17.6`
                         opened.sqlite_version = opened
                             .sqlite_version
@@ -669,7 +660,7 @@ impl Application {
         class: SlotClass,
     ) -> Result<DaemonStatus, crate::control::Failure> {
         use crate::control::Failure;
-        use layerfs_bridge::control::ControlCode;
+        use layerfs_protocol::provision::install::ControlCode;
         let mut state = self.state.lock().map_err(|_| Failure::Poisoned)?;
         if class == SlotClass::Reserved
             && matches!(
@@ -718,7 +709,7 @@ impl Application {
 /// gone (`Closed`) names the server's host; anything else is the Store's own
 /// error.
 fn store_failure(
-    store: &layerfs_bridge::DaemonStore,
+    store: &layerfs_protocol::DaemonStore,
     cause: layerfs_storage::StorageError,
 ) -> ApplicationError {
     let closed = matches!(
@@ -733,7 +724,7 @@ fn store_failure(
             )
     );
     match (store, closed) {
-        (layerfs_bridge::DaemonStore::Postgres { url, .. }, true) => {
+        (layerfs_protocol::DaemonStore::Postgres { url, .. }, true) => {
             ApplicationError::PostgresUnreachable {
                 host: postgres_host(url),
             }

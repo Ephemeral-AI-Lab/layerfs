@@ -8,16 +8,12 @@ use layerfs_content::{
     filesystem::{PathName, SymlinkTarget},
     object::inode_leaf::InodeKind,
 };
-use layerfs_daemon::{
-    bootstrap::open_store,
-    store::{BindRequest, BoundWorkspace, Store, StoreOperation},
-    Owner, OwnerClient, OwnerConfig,
-};
+use layerfs_store_service::{bootstrap::open_store, store::{BindRequest, BoundWorkspace, Store, StoreOperation}, Owner, OwnerClient, OwnerConfig};
 use layerfs_history::WorkspaceId;
 use layerfs_overlay::ProfileConfig;
 use layerfs_storage::ReservationBlocks;
-use layerfs_workspace::Route;
-use layerfs_workspace::{Operation, Outcome, Position, SourceView, Time, ViewStat};
+use layerfs_vfs::Route;
+use layerfs_vfs::{Operation, Outcome, Position, SourceView, Time, ViewStat};
 use std::{
     path::Path,
     sync::{
@@ -36,7 +32,7 @@ pub fn evidence(line: std::fmt::Arguments<'_>) {
 pub fn job<T>(
     owner: &OwnerClient,
     route: Route,
-    command: impl FnOnce(&OwnerClient, Route) -> Result<T, layerfs_daemon::OwnerError>,
+    command: impl FnOnce(&OwnerClient, Route) -> Result<T, layerfs_store_service::OwnerError>,
 ) -> T {
     command(owner, route).unwrap_or_else(|error| panic!("{error:?}"))
 }
@@ -113,7 +109,7 @@ pub fn window<T>(
     let acquired = job(
         operation.overlay(),
         workspace.route(),
-        |job_client: &layerfs_daemon::OwnerClient, job_route| {
+        |job_client: &layerfs_store_service::OwnerClient, job_route| {
             job_client.acquire_base_source(job_route, NEXT.fetch_add(1, Ordering::Relaxed))
         },
     );
@@ -124,7 +120,7 @@ pub fn window<T>(
     job(
         operation.overlay(),
         workspace.route(),
-        |job_client: &layerfs_daemon::OwnerClient, job_route| {
+        |job_client: &layerfs_store_service::OwnerClient, job_route| {
             job_client.release_base_source(job_route, source)
         },
     );
@@ -269,7 +265,7 @@ impl<'a> Session<'a> {
                 Do::Claimed(path, offset, data, source, source_offset) => Operation::Write {
                     serial: resolve(operation, view, path).serial,
                     position: Position::At(offset),
-                    data: layerfs_workspace::WriteData::from(data).claimed(
+                    data: layerfs_vfs::WriteData::from(data).claimed(
                         layerfs_overlay::WriteClaims {
                             source,
                             after: None,
@@ -330,7 +326,7 @@ impl<'a> Session<'a> {
                     job(
                         operation.overlay(),
                         self.workspace.route(),
-                        |job_client: &layerfs_daemon::OwnerClient, _| {
+                        |job_client: &layerfs_store_service::OwnerClient, _| {
                             job_client.reply_attempted(publication)
                         },
                     );
@@ -373,8 +369,8 @@ pub fn recognized(
     serial: u64,
     offset: u64,
     data: &[u8],
-) -> layerfs_workspace::WriteData {
-    use layerfs_mount_ports::ports::Fence;
+) -> layerfs_vfs::WriteData {
+    use layerfs_vfs::ports::mount::Fence;
     use std::{
         sync::mpsc,
         task::{Context, Poll, Wake, Waker},

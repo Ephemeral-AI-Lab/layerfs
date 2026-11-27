@@ -4,9 +4,9 @@ use super::get::field;
 use crate::calls::table::Kind::{Int, Name, Text};
 use crate::calls::table::{a, call, opt, Call};
 use crate::calls::{Context, Form, Paging, Part};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::outcome::Outcome;
-use layerfs_sandbox::inspect::{sandbox_log, Window};
+use layerfs_inspect::{sandbox_log, Window};
 
 /// One line, or a piece of a line longer than a read.
 const LINE: Form = Form::of(&["text"], &["continued"], &["text", "continued"]);

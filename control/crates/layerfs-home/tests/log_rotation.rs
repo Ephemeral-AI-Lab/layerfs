@@ -4,7 +4,7 @@
 //! `trace/calls.lock`. `log/uncertain.jsonl` never rotates (#179 D8). The
 //! logs are made large as sparse files, so no test writes 16 MiB.
 #![cfg(unix)]
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::home::{flock, log_line, paths, records::UNCERTAIN};
 use layerfs_home::logs::{self, ROTATE_AT};
 use std::fs::{self, File, OpenOptions};
@@ -182,7 +182,7 @@ fn the_worker_log_is_in_the_log_folder_of_its_root() {
         Path::new("/layerfs/data/log/worker.log")
     );
     assert_eq!(
-        layerfs_bridge::log_file::rotated(&paths::worker_log(root)),
+        layerfs_home::log::rotate::rotated(&paths::worker_log(root)),
         Path::new("/layerfs/data/log/worker.1.log")
     );
     assert_eq!(

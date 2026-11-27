@@ -4,8 +4,8 @@
 //! resource, the vacant slots and the retained failure count, not a bare
 //! EOF. Nothing is sent by the client and nothing is retried, so the caller
 //! may try again. A daemon that is still starting says so the same way.
-use layerfs_bridge::duplex;
-use layerfs_bridge::duplex::admission::{self, AdmissionNotice, AdmissionReason};
+use layerfs_protocol::duplex;
+use layerfs_protocol::duplex::admission::{self, AdmissionNotice, AdmissionReason};
 use layerfs_sandbox::daemon::pool::Dial;
 use std::io::Read;
 use std::net::{SocketAddr, TcpListener};

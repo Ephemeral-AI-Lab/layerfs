@@ -4,7 +4,7 @@
 //! `store.identity`) error; once the lock goes they pass. Records only plus
 //! one real Store file on `native`; nothing is written to the Store.
 use layerfs_api::home::{self, paths, write_entity};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_history::HistoryCatalogConfig;
 use layerfs_persistence::{PersistenceConfig, SqliteHandles, SqlitePersistenceProfile};
 use layerfs_storage::StoragePolicy;

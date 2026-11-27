@@ -14,7 +14,7 @@ mod support;
 #[allow(dead_code)]
 mod view;
 
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use std::fs;
 use support::{operation, write};
 

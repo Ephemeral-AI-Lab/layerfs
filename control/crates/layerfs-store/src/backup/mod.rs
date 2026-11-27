@@ -20,3 +20,9 @@ pub mod restore;
 #[doc(hidden)]
 pub mod restored;
 pub mod secret;
+pub mod bucket;
+pub mod copy;
+pub mod jobs;
+pub mod providers;
+#[cfg(feature = "s3_api")]
+pub mod s3_api;

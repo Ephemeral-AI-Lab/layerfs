@@ -7,10 +7,7 @@ use super::{
 use crate::{attributes::Identity, RequestDisposition};
 use fuser::{Errno, FileHandle, FileType, INodeNo, ReplyDirectory, ReplyEmpty, Request};
 use layerfs_content::object::inode_leaf::InodeKind;
-use layerfs_mount_ports::{
-    operations::{DirectoryStep, DirectoryStream},
-    ports::{Fence, ServiceError},
-};
+use layerfs_vfs::{requests::{DirectoryStep, DirectoryStream}, ports::mount::{Fence, ServiceError}};
 use std::{ffi::OsStr, io, os::unix::ffi::OsStrExt};
 
 impl KernelFilesystem {
@@ -112,7 +109,7 @@ impl KernelFilesystem {
                     // It only gives back, so a stopped mount never refuses it.
                     let started = std::time::Instant::now();
                     let closed = services.close_directory(mount, serial, handle.0).await;
-                    crate::request::charge(crate::request::Phase::CloseDirectory, started);
+                    layerfs_vfs::requests::phase::charge(layerfs_vfs::requests::phase::Phase::CloseDirectory, started);
                     drop(closed?);
                     Ok::<_, ServiceError>(())
                 }

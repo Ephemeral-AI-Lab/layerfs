@@ -31,7 +31,7 @@ pub fn closed_ports() -> Vec<u16> {
 /// networks, which each Sandbox start then reports itself.
 #[cfg(target_os = "linux")]
 pub fn worker_start() -> Result<String, String> {
-    layerfs_sandbox_backend::network::prepare(&closed_ports())
+    crate::network::prepare(&closed_ports())
         .map(|pool| pool.to_string())
         .map_err(|error| error.to_string())
 }

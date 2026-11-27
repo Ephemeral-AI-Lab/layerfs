@@ -1,7 +1,7 @@
 //! Store statistics (`store get --with stats`, call surface 2.0; it was
 //! `store.stats`) through native SQLite, a real worker, and PostgreSQL.
 use layerfs_api::home::{paths, write_record};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use std::os::unix::fs::PermissionsExt;
 use std::{
     net::TcpListener,
@@ -127,7 +127,7 @@ fn check(home: &Path, kind: &str, test: &str) {
     .unwrap_err();
     assert_eq!(gone.code, "NotFound");
     assert!(!paths::project_record(home, "stats", test).exists());
-    layerfs_api::close_idle(std::time::Duration::ZERO);
+    layerfs_store::admin::with_users::close_idle(std::time::Duration::ZERO);
     std::fs::remove_dir_all(source).unwrap();
 }
 
@@ -163,7 +163,7 @@ fn native_sqlite_and_worker_statistics_use_the_same_counters() {
     );
     check(&home, "sqlite", "w");
     // A stopped worker refuses rather than starting anything.
-    layerfs_api::close_idle(std::time::Duration::ZERO);
+    layerfs_store::admin::with_users::close_idle(std::time::Duration::ZERO);
     std::fs::remove_file(paths::worker_record(&home, "box")).unwrap();
     let refused = layerfs_api::call(
         Some(&home),

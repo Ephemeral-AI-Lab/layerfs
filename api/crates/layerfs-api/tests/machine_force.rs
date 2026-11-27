@@ -1,7 +1,7 @@
 //! Provider-direct force stop preserves storage and avoids a dead worker entirely.
 #![cfg(feature = "machine")]
 use layerfs_api::home::{self, paths, read_record, write_record};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use std::{net::TcpListener, os::unix::fs::PermissionsExt, path::Path};
 fn t(value: &str) -> SdkValue {
     SdkValue::text(value)
@@ -10,7 +10,7 @@ fn call(
     home: &Path,
     name: &str,
     args: &[(&str, SdkValue)],
-) -> Result<SdkValue, layerfs_bridge::control::SdkRefusal> {
+) -> Result<SdkValue, layerfs_protocol::provision::install::SdkRefusal> {
     layerfs_api::call(
         Some(home),
         name,

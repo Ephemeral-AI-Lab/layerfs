@@ -1,9 +1,6 @@
 //! Live Workspace diagnostics over bounded source/list windows, with exact release.
-use crate::{
-    control::Service,
-    store::{BoundWorkspace, StoreOperation},
-};
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use {crate::control::Service, layerfs_store_service::store::{BoundWorkspace, StoreOperation}};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_content::{
     compare::{EntryFacts, TreeTable},
     filesystem::FilesystemRootId,
@@ -18,7 +15,7 @@ use layerfs_store_service::{
         window::Walker,
     },
 };
-use layerfs_workspace::{OverlayRead, SourceView, ViewStat};
+use layerfs_vfs::{OverlayRead, SourceView, ViewStat};
 use std::sync::Arc;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;

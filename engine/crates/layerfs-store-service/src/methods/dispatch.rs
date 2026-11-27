@@ -4,7 +4,7 @@ use crate::methods::args::{self, Answer};
 use crate::methods::{branch, file as fs, project, store};
 use crate::write::files::Source;
 use crate::StoreService;
-use layerfs_bridge::control::{SdkCall, SdkValue};
+use layerfs_protocol::provision::install::{SdkCall, SdkValue};
 
 /// Runs one public Store method once, in this process, on `service`: one
 /// call, so a quarantined PostgreSQL session reopens at most once in it.
@@ -39,20 +39,20 @@ struct One<'s> {
 }
 
 impl Source for One<'_> {
-    fn next(&mut self) -> Result<Option<SdkValue>, layerfs_bridge::control::SdkRefusal> {
+    fn next(&mut self) -> Result<Option<SdkValue>, layerfs_protocol::provision::install::SdkRefusal> {
         match self.change.take() {
             Some(change) => Ok(Some(change)),
             None => self.source.next(),
         }
     }
 
-    fn piece(&mut self) -> Result<Option<&[u8]>, layerfs_bridge::control::SdkRefusal> {
+    fn piece(&mut self) -> Result<Option<&[u8]>, layerfs_protocol::provision::install::SdkRefusal> {
         self.source.piece()
     }
 }
 
 /// A Commit message is checked before any change.
-fn message(args: &SdkValue) -> Result<(), layerfs_bridge::control::SdkRefusal> {
+fn message(args: &SdkValue) -> Result<(), layerfs_protocol::provision::install::SdkRefusal> {
     if let Some(value) = args.get("message") {
         if !matches!(value, SdkValue::Null) {
             let SdkValue::Text(message) = value else {

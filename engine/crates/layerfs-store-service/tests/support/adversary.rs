@@ -29,7 +29,7 @@ use layerfs_store_service::store::{
 use layerfs_store_service::write::mutation::Mutation;
 use layerfs_store_service::{Owner, OwnerConfig, StoreService};
 use layerfs_telemetry::timer::Timing;
-use layerfs_workspace::{Operation, Outcome as Applied, Position, Time};
+use layerfs_vfs::{Operation, Outcome as Applied, Position, Time};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -628,19 +628,19 @@ impl Service {
     pub fn call(
         &self,
         method: &str,
-        fields: Vec<(&str, layerfs_bridge::control::SdkValue)>,
-    ) -> Result<layerfs_bridge::control::SdkValue, layerfs_bridge::control::SdkRefusal> {
-        let mut fields: Vec<(String, layerfs_bridge::control::SdkValue)> = fields
+        fields: Vec<(&str, layerfs_protocol::provision::install::SdkValue)>,
+    ) -> Result<layerfs_protocol::provision::install::SdkValue, layerfs_protocol::provision::install::SdkRefusal> {
+        let mut fields: Vec<(String, layerfs_protocol::provision::install::SdkValue)> = fields
             .into_iter()
             .map(|(name, value)| (name.to_owned(), value))
             .collect();
         fields.push((
             "project".into(),
-            layerfs_bridge::control::SdkValue::text(PROJECT),
+            layerfs_protocol::provision::install::SdkValue::text(PROJECT),
         ));
-        let call = layerfs_bridge::control::SdkCall {
+        let call = layerfs_protocol::provision::install::SdkCall {
             method: method.into(),
-            args: layerfs_bridge::control::SdkValue::Map(fields),
+            args: layerfs_protocol::provision::install::SdkValue::Map(fields),
         };
         layerfs_store_service::methods::call(&self.service, &call)
     }
@@ -745,10 +745,10 @@ pub fn apply(workspace: &BoundWorkspace, op: &Op) -> Result<(), String> {
             match view.lookup(operation.overlay(), serial, &name(part)) {
                 Ok(stat) => serial = stat.serial,
                 Err(
-                    layerfs_workspace::WorkspaceError::Content(
+                    layerfs_vfs::WorkspaceError::Content(
                         layerfs_content::ContentError::PathNotFound,
                     )
-                    | layerfs_workspace::WorkspaceError::Refused(layerfs_workspace::Refusal::Missing),
+                    | layerfs_vfs::WorkspaceError::Refused(layerfs_vfs::Refusal::Missing),
                 ) => return Ok(None),
                 Err(error) => return Err(format!("{path}: {error:?}")),
             }

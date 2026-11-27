@@ -1,0 +1,402 @@
+//! Every record of a layout 3 home, read once: whether it parses, whether
+//! an entity record has `"v": 1`, and the modes of the home's folders
+//! (0700, or 0701 where a namespaces Sandbox passes through; a Store's own
+//! folder is 0700 like the daemon's rule) and record files (0600). A Store
+//! folder with projects and no Store record is reported here too.
+//!
+//! A finding's `fix` is one runnable shell line, or empty when no line
+//! repairs it (a record that does not parse, a symlink in place of a
+//! folder): its message then says what to do by hand.
+use super::findings::Findings;
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
+use layerfs_home::home::{paths, read_record, RECORD_VERSION};
+use layerfs_home::outcome::failed;
+use layerfs_home::outcome::shell_word;
+use layerfs_machine::record::MachineRecord;
+use layerfs_sandbox::record::SandboxRecord;
+use layerfs_store::record::StoreRecord;
+use std::collections::BTreeSet;
+use std::os::unix::fs::PermissionsExt;
+use std::path::Path;
+
+type Result<T> = std::result::Result<T, SdkRefusal>;
+
+/// What the scan read.
+#[derive(Default)]
+pub(super) struct Scanned {
+    /// Machines whose record parses.
+    pub(super) machines: Vec<MachineRecord>,
+    /// Machines with a record file, parsing or not.
+    pub(super) machine_names: BTreeSet<String>,
+    /// Stores whose record parses.
+    pub(super) stores: Vec<StoreRecord>,
+    /// Stores with a record file, parsing or not.
+    pub(super) store_names: BTreeSet<String>,
+    /// Projects (`store`, `project`) with a record file, parsing or not.
+    pub(super) projects: BTreeSet<(String, String)>,
+    /// Sandboxes whose record parses.
+    pub(super) sandboxes: Vec<SandboxRecord>,
+}
+
+fn names(dir: &Path) -> Result<Vec<String>> {
+    paths::names(dir).map_err(failed)
+}
+
+/// The Store names under `home/store`: a real folder, and a link to one, which
+/// the scan reports (the Store guard refuses a link where it wants the Store's
+/// own directory) rather than skipping it as [`paths::names`] does.
+fn store_names(dir: &Path) -> Result<Vec<String>> {
+    let mut names = Vec::new();
+    let entries = match std::fs::read_dir(dir) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(names),
+        other => other.map_err(failed)?,
+    };
+    for entry in entries {
+        let entry = entry.map_err(failed)?;
+        let kind = entry.file_type().map_err(failed)?;
+        if !kind.is_dir() && !kind.is_symlink() {
+            continue;
+        }
+        if let Some(name) = entry.file_name().to_str() {
+            if !name.starts_with('.') {
+                names.push(name.to_owned());
+            }
+        }
+    }
+    names.sort();
+    Ok(names)
+}
+
+/// Reads the home's records and modes.
+pub(super) fn scan(home: &Path, findings: &mut Findings) -> Result<Scanned> {
+    let mut scanned = Scanned::default();
+    let shown = home.display().to_string();
+    folder(home, ("home", &shown), findings);
+    file_mode(&home.join("layerfs.json"), ("home", &shown), findings);
+    for top in ["machine", "store", "sandbox", "backup"] {
+        folder(&home.join(top), ("home", &shown), findings);
+    }
+    for name in names(&home.join("machine"))? {
+        let entity = ("machine", name.as_str());
+        folder(&paths::machine_dir(home, &name), entity, findings);
+        let path = paths::machine_record(home, &name);
+        if path.exists() {
+            scanned.machine_names.insert(name.clone());
+        } else if name == "native" {
+            let (message, fix) = leftover(&paths::machine_dir(home, &name));
+            findings.warning(entity, message, fix);
+        }
+        if let Some(value) = record(&path, entity, true, findings) {
+            scanned
+                .machines
+                .push(MachineRecord::from_record(&name, value));
+        }
+        record(&paths::worker_record(home, &name), entity, false, findings);
+    }
+    for name in store_names(&home.join("store"))? {
+        store(home, &name, &mut scanned, findings)?;
+    }
+    for name in names(&home.join("sandbox"))? {
+        sandbox(home, &name, &mut scanned, findings)?;
+    }
+    for name in names(&home.join("backup"))? {
+        let entity = ("bucket", name.as_str());
+        let path = paths::bucket_record(home, &name);
+        folder(path.parent().unwrap_or(home), entity, findings);
+        record(&path, entity, true, findings);
+    }
+    Ok(scanned)
+}
+
+/// The run root before #819 R, which no call reads any more. Its removal
+/// is offered only when nothing is mounted under it: `rm -rf` would walk
+/// into a Workspace an older daemon still serves and delete its files.
+fn leftover(dir: &Path) -> (String, String) {
+    let left = format!(
+        "{} is left by an earlier development build; nothing reads it",
+        dir.display()
+    );
+    match layerfs_sandbox::spawn::mounts_under(dir) {
+        Ok(mounts) if mounts.is_empty() => (left, format!("rm -rf {}", shell(dir))),
+        Ok(mounts) => {
+            let words: Vec<String> = mounts.iter().map(|mount| shell(mount)).collect();
+            let message = format!("{left}; something is still mounted under it: unmount it (or stop the daemon that serves it), then run doctor again");
+            (message, format!("umount {}", words.join(" ")))
+        }
+        Err(error) => (format!("{left}; the mount table could not be read ({error}): remove it once nothing is mounted under it"), String::new()),
+    }
+}
+
+/// One Store's folder: its record and its projects'.
+fn store(home: &Path, name: &str, scanned: &mut Scanned, findings: &mut Findings) -> Result<()> {
+    let entity = ("store", name);
+    if store_folder(&paths::store_dir(home, name), entity, findings) {
+        return Ok(());
+    }
+    let path = paths::store_record(home, name);
+    let has_record = path.exists();
+    if has_record {
+        scanned.store_names.insert(name.to_owned());
+    }
+    if let Some(value) = record(&path, entity, true, findings) {
+        scanned.stores.push(StoreRecord::from_record(name, value));
+    }
+    let projects = paths::store_dir(home, name).join("project");
+    folder(&projects, entity, findings);
+    for project in names(&projects)? {
+        let full = format!("{name}/{project}");
+        let entity = ("project", full.as_str());
+        folder(&projects.join(&project), entity, findings);
+        let path = paths::project_record(home, name, &project);
+        if path.exists() {
+            scanned.projects.insert((name.to_owned(), project.clone()));
+        }
+        record(&path, entity, true, findings);
+        if !has_record {
+            findings.error(
+                entity,
+                format!(
+                    "project {full} is in store/{name}, which has no Store record; no call reads it: restore {}, or delete {} by hand",
+                    paths::store_record(home, name).display(),
+                    paths::store_dir(home, name).display()
+                ),
+                String::new(),
+            );
+        }
+    }
+    Ok(())
+}
+
+/// One Sandbox's folder: its record, daemon keys and Workspace records.
+fn sandbox(home: &Path, name: &str, scanned: &mut Scanned, findings: &mut Findings) -> Result<()> {
+    let entity = ("sandbox", name);
+    folder(&paths::sandbox_dir(home, name), entity, findings);
+    if let Some(value) = record(&paths::sandbox_record(home, name), entity, true, findings) {
+        scanned
+            .sandboxes
+            .push(SandboxRecord::from_record(name, value));
+    }
+    record(&paths::sandbox_control(home, name), entity, false, findings);
+    let workspaces = paths::workspace_dir(home, name);
+    folder(&workspaces, entity, findings);
+    let entries = match std::fs::read_dir(&workspaces) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        other => other.map_err(failed)?,
+    };
+    let mut files: Vec<_> = (entries.filter_map(|e| e.ok()))
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|x| x == "json"))
+        .filter(|p| {
+            !p.file_name()
+                .is_some_and(|n| n.to_string_lossy().starts_with('.'))
+        })
+        .collect();
+    files.sort();
+    for file in files {
+        let id = file.file_stem().unwrap_or_default().to_string_lossy();
+        let workspace = format!("{name}:{id}");
+        record(&file, ("workspace", &workspace), true, findings);
+    }
+    execs(&workspaces, name, findings)
+}
+
+/// The command records of Sandbox `name`'s Workspaces (R12,
+/// `workspace/<id>/exec/<exec id>.json`, layerfs-project#113): each must
+/// parse as one; one whose owner process is gone is stale, which a cancel,
+/// unmount or close removes; a Workspace folder with no Workspace record
+/// beside it is left over.
+fn execs(workspaces: &Path, name: &str, findings: &mut Findings) -> Result<()> {
+    let folders = match std::fs::read_dir(workspaces) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        other => other.map_err(failed)?,
+    };
+    let mut folders: Vec<_> = (folders.filter_map(|e| e.ok()))
+        .map(|e| e.path())
+        .filter(|p| p.is_dir())
+        .collect();
+    folders.sort();
+    for folder in folders {
+        let id = folder.file_name().unwrap_or_default().to_string_lossy();
+        let workspace = format!("{name}:{id}");
+        self::folder(&folder, ("workspace", &workspace), findings);
+        if !workspaces.join(format!("{id}.json")).exists() {
+            findings.warning(
+                ("workspace", &workspace),
+                format!(
+                    "{} has no Workspace record beside it: its Workspace was unmounted",
+                    folder.display()
+                ),
+                format!("rm -r {}", shell(&folder)),
+            );
+        }
+        let records = match layerfs_sandbox::exec::record::listed(
+            workspaces.parent().unwrap_or(workspaces),
+            Some(&id),
+        ) {
+            Ok(records) => records,
+            Err(refusal) => {
+                findings.error(
+                    ("workspace", &workspace),
+                    format!(
+                        "a command record does not read: {}; repair or remove it under {} by hand",
+                        refusal.message,
+                        folder.display()
+                    ),
+                    String::new(),
+                );
+                continue;
+            }
+        };
+        for (file, found) in records {
+            let entity = format!("{workspace}/{}", found.id);
+            record(&file, ("exec", &entity), true, findings);
+            if !found.owned() {
+                findings.warning(
+                    ("exec", &entity),
+                    format!(
+                        "{} is stale: its owner process is gone; a cancel, the Workspace's unmount or the Sandbox's removal ends what it still runs and removes it",
+                        file.display()
+                    ),
+                    format!(
+                        "layerfs workspace cancel {name}:{} --exec {}",
+                        found.name.as_deref().unwrap_or(&found.path),
+                        found.id,
+                        name = shell_word(name)
+                    ),
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+/// The record at `path`, if it is there and parses; a record that does not
+/// parse, or (`versioned`) whose `v` is not this build's, is an error, and
+/// so is a mode other than 0600.
+fn record(
+    path: &Path,
+    entity: (&str, &str),
+    versioned: bool,
+    findings: &mut Findings,
+) -> Option<SdkValue> {
+    file_mode(path, entity, findings);
+    let value = match read_record(path) {
+        Ok(value) => value?,
+        Err(refusal) => {
+            findings.error(
+                entity,
+                format!(
+                    "{} does not parse: {}; no call reads it: repair or remove it by hand",
+                    path.display(),
+                    refusal.message
+                ),
+                String::new(),
+            );
+            return None;
+        }
+    };
+    if versioned && value.get_int("v") != Some(RECORD_VERSION) {
+        let v = match value.get("v") {
+            None => "none".to_owned(),
+            Some(SdkValue::Int(n)) => n.to_string(),
+            Some(_) => "non-integer".to_owned(),
+        };
+        findings.error(
+            entity,
+            format!(
+                "{} has \"v\" {v}; this build reads \"v\": {RECORD_VERSION}; use the LayerFS build that wrote it, or repair it by hand",
+                path.display()
+            ),
+            String::new(),
+        );
+    }
+    Some(value)
+}
+
+/// The mode bits of `path` itself, if it is there.
+fn mode(path: &Path) -> Option<u32> {
+    let metadata = std::fs::symlink_metadata(path).ok()?;
+    Some(metadata.permissions().mode() & 0o7777)
+}
+
+/// Reports `path` when it is a symbolic link and says whether it did: a
+/// link's own mode (0777) is not the folder's, and a `chmod` through the link
+/// changes what it points at, so neither describes the folder. The Store
+/// guard likewise refuses a link where it wants the Store's own directory.
+fn link(path: &Path, entity: (&str, &str), findings: &mut Findings) -> bool {
+    let Ok(metadata) = std::fs::symlink_metadata(path) else {
+        return false;
+    };
+    if !metadata.file_type().is_symlink() {
+        return false;
+    }
+    findings.error(
+        entity,
+        format!(
+            "{} is a symlink, not a folder; a `chmod` through it would change what it points at: remove the link and make it a real 0700 folder by hand",
+            path.display()
+        ),
+        String::new(),
+    );
+    true
+}
+
+/// A folder others may list or change, or its group may use, is an error;
+/// others may pass through: 0700, or 0701 on the run root's ancestors
+/// under the namespaces backend (`home::traversable`), are both right.
+fn folder(path: &Path, entity: (&str, &str), findings: &mut Findings) {
+    if link(path, entity, findings) {
+        return;
+    }
+    if let Some(mode) = mode(path).filter(|mode| mode & 0o076 != 0) {
+        findings.error(
+            entity,
+            format!(
+                "{} has mode {mode:04o}; the home's folders are 0700, or 0701 where a \
+                 Sandbox's commands pass through",
+                path.display()
+            ),
+            format!("chmod g-rwx,o-rw {}", shell(path)),
+        );
+    }
+}
+
+/// A Store's own folder is held to the daemon's rule (kernel_guard): no
+/// group or other bits at all, not even pass-through, so a folder doctor
+/// calls fine is one the daemon opens. Returns whether `path` is a symlink
+/// (already reported, so the caller stops descending into this entry).
+fn store_folder(path: &Path, entity: (&str, &str), findings: &mut Findings) -> bool {
+    if link(path, entity, findings) {
+        return true;
+    }
+    if let Some(mode) = mode(path).filter(|mode| mode & 0o077 != 0) {
+        findings.error(
+            entity,
+            format!(
+                "{} has mode {mode:04o}; a Store's folder is 0700",
+                path.display()
+            ),
+            format!("chmod 700 {}", shell(path)),
+        );
+    }
+    false
+}
+
+/// A record file others or its group may read is an error.
+fn file_mode(path: &Path, entity: (&str, &str), findings: &mut Findings) {
+    if let Some(mode) = mode(path).filter(|mode| mode & 0o077 != 0) {
+        findings.error(
+            entity,
+            format!(
+                "{} has mode {mode:04o}; the home's records are 0600",
+                path.display()
+            ),
+            format!("chmod 600 {}", shell(path)),
+        );
+    }
+}
+
+/// `path` as one shell word ([`layerfs_home::outcome::shell_word`]).
+pub(crate) fn shell(path: &Path) -> String {
+    shell_word(&path.display().to_string())
+}

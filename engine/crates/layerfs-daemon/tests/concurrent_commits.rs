@@ -11,11 +11,11 @@ mod installed;
 #[allow(dead_code)]
 mod support;
 
-use layerfs_bridge::control::{CommitControl, Reply, Request, SdkValue, UnmountControl};
+use layerfs_protocol::provision::install::{CommitControl, Reply, Request, SdkValue, UnmountControl};
 use layerfs_content::filesystem::PathName;
 use layerfs_daemon::control::Service;
 use layerfs_history::{BranchId, HistoryName, LayerStackId, WorkspaceId};
-use layerfs_workspace::{Operation, Outcome, Position, Time};
+use layerfs_vfs::{Operation, Outcome, Position, Time};
 use std::{fs, sync::Barrier};
 
 const LANE: &str = "lane";
@@ -52,7 +52,7 @@ fn mounted_write(
     id: u8,
     name: &str,
     bytes: &[u8],
-) -> layerfs_bridge::control::WorkspaceToken {
+) -> layerfs_protocol::provision::install::WorkspaceToken {
     let bound = fixture
         .service
         .execute_control(&Request::Mount {
@@ -110,7 +110,7 @@ fn mounted_write(
 /// Commits every Workspace at once and returns each reply, in Workspace order.
 fn commit_together(
     fixture: &Fixture,
-    tokens: &[layerfs_bridge::control::WorkspaceToken],
+    tokens: &[layerfs_protocol::provision::install::WorkspaceToken],
 ) -> Vec<Reply> {
     let barrier = Barrier::new(tokens.len());
     let replies = std::thread::scope(|scope| {

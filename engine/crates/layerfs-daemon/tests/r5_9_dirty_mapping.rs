@@ -38,7 +38,7 @@ mod rig;
 #[allow(dead_code)]
 #[path = "support/host_install.rs"]
 mod support;
-use layerfs_bridge::control::{Activity, WorkspaceToken};
+use layerfs_protocol::provision::install::{Activity, WorkspaceToken};
 use layerfs_fuse::request::Opcode;
 use model::{assert_same, Flat, FILE};
 use mounted::{until, COMMAND};
@@ -198,7 +198,7 @@ fn r5_9_a_still_dirty_mapped_page_is_outside_the_commit_and_in_the_next_after_ms
     let done = done.unwrap_or_else(|failure| panic!("first Commit: {failure:?}"));
     rig::receipt(&done, "R5-9-DIRTY first");
     let first = match &done.reply {
-        layerfs_bridge::control::Reply::Committed(layerfs_history::CommitOutcome::Committed {
+        layerfs_protocol::provision::install::Reply::Committed(layerfs_history::CommitOutcome::Committed {
             record,
             ..
         }) => (**record).clone(),

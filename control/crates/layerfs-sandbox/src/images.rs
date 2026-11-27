@@ -13,14 +13,14 @@
 use crate::deploy::{self, Choice, Side};
 use crate::image_artifact::{self as cache, SidecarInfo};
 use crate::image_lock::{ImageLock, PruneGate};
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::home;
 use layerfs_home::names::MachineName;
 use layerfs_home::outcome::shell_word;
 use layerfs_home::outcome::{failed, refused, with_next, Outcome};
 use layerfs_home::state::{Reason, State};
-use layerfs_sandbox_backend::rootfs::{self, Temporary};
-use layerfs_sandbox_backend::Image;
+use crate::rootfs::{self, Temporary};
+use crate::Image;
 use layerfs_store::place::{self, Executor};
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::ErrorKind;

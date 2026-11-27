@@ -1,7 +1,7 @@
 //! An answer's list and its `<list>_count` companion (call surface 2.0
 //! SCHEMA, conformance R1 F2-F4): the list keeps its first 20, and the
 //! count is set only when the list was cut.
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::helpers::{shown, SHOWN};
 
 fn names(n: usize) -> Vec<SdkValue> {

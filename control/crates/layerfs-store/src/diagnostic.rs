@@ -1,7 +1,7 @@
 //! Observational Store engine entry points, without leases or writable opens.
 use crate::{identity::Identity, record::StoreRecord};
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_bridge::sdk_values::hex;
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
+use layerfs_protocol::sdk::hex;
 /// The project id a project audit takes.
 pub use layerfs_history::LayerStackId;
 use layerfs_home::outcome::refused;
@@ -112,7 +112,7 @@ pub fn postgresql(
             &selection,
             &identity.binding,
             options,
-            &mut layerfs_bridge::network::resolve_all_within,
+            &mut layerfs_os::network::resolve_all_within,
             observer,
         )
         .map_err(|_| {
@@ -149,7 +149,7 @@ fn open_admitted(
             deadline: Some(admission),
             ..options
         },
-        &mut layerfs_bridge::network::resolve_all_within,
+        &mut layerfs_os::network::resolve_all_within,
         &mut |observation| {
             if observation.id == "store.connection.identity" && observation.outcome == Outcome::Pass
             {
@@ -176,7 +176,7 @@ fn open_admitted(
             identity.cursor_key,
             options.deadline,
             admission,
-            &mut layerfs_bridge::network::resolve_all_within,
+            &mut layerfs_os::network::resolve_all_within,
             options.cancelled,
         )
         .map_err(|_| {

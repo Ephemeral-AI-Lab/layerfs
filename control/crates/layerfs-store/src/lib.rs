@@ -56,6 +56,8 @@ mod stats;
 pub mod unknown;
 pub mod upgrade;
 pub mod words;
+pub mod admin;
+pub mod data;
 
 /// The Store connection reaper (not lifecycle, #535 D11), for its test.
 #[doc(hidden)]

@@ -5,11 +5,11 @@
 //! machine has an address of its own. This module is the Store's part: the
 //! check run on the side that dials, and the attachment writes. Which side
 //! dials is the caller's (`layerfs-control`, through the Sandbox route).
-use crate::diagnostic::ConnectionStep;
+use layerfs_persistence::diagnostic::ConnectionStep;
 use crate::open_args::PgSelection;
 use crate::postgresql::connect::SCHEMA;
-use crate::record::{StoreKind, StoreRecord};
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use {layerfs_protocol::StoreKind, crate::record::StoreRecord};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::home;
 use layerfs_home::names::StoreName;
 use layerfs_home::outcome::{public_code, refused, with_next, NEXT};

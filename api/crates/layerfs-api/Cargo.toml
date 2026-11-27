@@ -49,3 +49,23 @@ postgres = "=0.19.14"
 # the store upgrade tests (#804) compare file contents with a fixture
 # manifest's sha256
 sha2 = "=0.11.0"
+
+[[test]]
+name = "worker_upgrade"
+path = "tests/standalone/worker_upgrade.rs"
+
+[[test]]
+name = "worker_upgrade_cancel"
+path = "tests/standalone/worker_upgrade_cancel.rs"
+
+[[test]]
+name = "worker_upgrade_engine"
+path = "tests/standalone/worker_upgrade_engine.rs"
+
+[[test]]
+name = "worker_hello"
+path = "tests/standalone/worker_hello.rs"
+
+[[test]]
+name = "worker_trace"
+path = "tests/standalone/worker_trace.rs"

@@ -1,8 +1,8 @@
 //! CLI uses the same disabled-platform fixture as the SDKs, for the
 //! platforms removed in 2.0.
 mod common;
-use layerfs_api::{json, Kind};
-use layerfs_bridge::control::SdkValue;
+use {layerfs_home::json, layerfs_api::Kind};
+use layerfs_protocol::provision::install::SdkValue;
 use std::net::TcpListener;
 
 #[test]
@@ -12,8 +12,8 @@ fn cli_refuses_every_new_work_route_before_contacting_the_machine() {
         let home = common::tempdir(&format!("disabled-{platform}"));
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         listener.set_nonblocking(true).unwrap();
-        let fixture = include_str!("../../../test/disabled-platforms.json")
-            .replace("$host", layerfs_api::names::HOST_MACHINE)
+        let fixture = include_str!("../../layerfs-api/tests/support/disabled-platforms.json")
+            .replace("$host", layerfs_home::names::HOST_MACHINE)
             .replace("$platform", platform)
             .replace("$address", &listener.local_addr().unwrap().to_string());
         let data = json::parse(&fixture).unwrap();

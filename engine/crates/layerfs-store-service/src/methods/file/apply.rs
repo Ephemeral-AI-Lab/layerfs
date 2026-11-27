@@ -1,7 +1,7 @@
 //! `fs.apply`.
 use crate::methods::args::{commit, invalid, Answer};
 use crate::StoreService;
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 
 /// `apply(changes[], { branch })`: one Commit for every change.
 pub fn apply(service: &StoreService, args: &SdkValue) -> Answer {

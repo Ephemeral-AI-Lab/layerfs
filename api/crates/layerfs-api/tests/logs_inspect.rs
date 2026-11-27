@@ -12,8 +12,8 @@
 //! daemon write theirs. Inspect permits are the process's, and the worker
 //! is in this process, so every test here takes one lock.
 #![cfg(unix)]
-use layerfs_api::home::{self, lease, paths, read_record, write_record};
-use layerfs_bridge::control::SdkValue;
+use {layerfs_api::home::{self, paths, read_record, write_record}, layerfs_store::lease};
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_sandbox::record::{DaemonRecord, Local, WorkspaceRecord};
 use std::collections::BTreeMap;
 use std::net::{SocketAddr, TcpListener};
@@ -142,7 +142,7 @@ fn local_sandbox(root: &Path, log: &str) -> PathBuf {
     let folder = paths::run_root(root).join(name);
     std::fs::create_dir_all(folder.join("overlay")).unwrap();
     std::fs::write(folder.join("daemon.log"), log).unwrap();
-    let me = layerfs_bridge::process::LocalProcess::observe(std::process::id()).unwrap();
+    let me = layerfs_os::process::LocalProcess::observe(std::process::id()).unwrap();
     let daemon = DaemonRecord::local(Local {
         platform: "macos".to_owned(),
         name: name.to_owned(),
@@ -307,7 +307,7 @@ fn the_table_lists_both_calls_with_a_cursor_window() {
         assert!(layerfs_api::find(gone).is_none(), "{gone}: no alias (R1)");
     }
     // discovery: the table front ends build their functions from lists them
-    let table = layerfs_api::json::parse(&layerfs_api::table_json()).unwrap();
+    let table = layerfs_home::json::parse(&layerfs_api::table_json()).unwrap();
     let SdkValue::List(calls) = table else {
         panic!()
     };
@@ -594,10 +594,10 @@ fn a_forwarded_sandbox_s_run_folder_is_read_in_its_machine() {
     let record = layerfs_sandbox::record::sandbox(&home, "s1")
         .unwrap()
         .unwrap();
-    let sizes = layerfs_sandbox::inspect::overlay_sizes(&home, record.machine(), "s1", &namespaces);
+    let sizes = layerfs_sandbox::inspect::overlay::overlay_sizes(&home, record.machine(), "s1", &namespaces);
     let sizes = sizes.unwrap();
     assert_eq!(
-        layerfs_api::json::print(sizes.get("overlay_sizes").unwrap()),
+        layerfs_home::json::print(sizes.get("overlay_sizes").unwrap()),
         r#"[{"namespace":1,"bytes":4096},{"namespace":2,"bytes":null},{"namespace":5,"bytes":12288}]"#
     );
     // with them, the daemon process the worker's record names

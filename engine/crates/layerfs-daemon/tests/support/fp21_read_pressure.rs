@@ -8,7 +8,7 @@ use layerfs_content::{
     },
     AuthenticatedObjects, FinalizedObject, ObjectId, ObjectRole,
 };
-use layerfs_daemon::store::Store;
+use layerfs_store_service::store::Store;
 use layerfs_history::WorkspaceId;
 use layerfs_storage::{policy::POOLED_VALUE_CACHE_BYTES, Storage};
 use std::sync::Arc;

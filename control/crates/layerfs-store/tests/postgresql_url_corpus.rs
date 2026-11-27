@@ -21,7 +21,7 @@
 //! URL holding a `#` gets the `%23` hint, a fix gives the login apart
 //! exactly when the URL may hold one (or the Store is new), and every fix
 //! names the address `<url>` and the user `<user>`, never text of a URL.
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::home::{self, paths, write_entity};
 use layerfs_home::names::StoreName;
 use layerfs_store::postgresql::connect::{holds_login, refuse_login, refuse_url, shown, target};
@@ -865,7 +865,7 @@ fn a_connect_never_rewrites_an_older_url_to_another_host() {
 
 /// A connect of connected Store `pg` with an address alone where nothing
 /// listens, and no new login.
-fn connect_again(home: &Path) -> Result<SdkValue, layerfs_bridge::control::SdkRefusal> {
+fn connect_again(home: &Path) -> Result<SdkValue, layerfs_protocol::provision::install::SdkRefusal> {
     let request = layerfs_store::postgresql::connect::StoreConnect {
         store: StoreName::parse("pg").unwrap(),
         url: "postgres://127.0.0.1:1/app?connect_timeout=5".to_owned(),

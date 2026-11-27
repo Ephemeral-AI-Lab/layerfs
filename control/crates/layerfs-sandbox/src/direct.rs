@@ -18,7 +18,7 @@ use crate::host::{Call, Host, Message, Started};
 use crate::registry::{self, SandboxState, SANDBOXES};
 use crate::unmount_guard;
 use crate::{dispatch, files};
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::helpers;
 use layerfs_home::home::{self, paths};
 use layerfs_home::outcome::shell_word;
@@ -183,7 +183,7 @@ pub fn open(home: &Path, record: &SandboxRecord, started: &Started) -> Opened {
     };
     // the forward's identity, so a reused id is never taken for it
     let process = forward.1.map(|pid| {
-        let observed = layerfs_bridge::process::LocalProcess::observe(pid).ok();
+        let observed = layerfs_os::process::LocalProcess::observe(pid).ok();
         (pid, observed.map(|process| (process.start, process.boot)))
     });
     let forward = Forward::new(forward.0, record.machine(), process);
@@ -328,7 +328,7 @@ pub fn list(home: &Path, record: &SandboxRecord) -> std::result::Result<Outcome,
         Ok(listed) => {
             let namespaces = crate::run_folder::namespaces(&listed);
             let read =
-                crate::inspect::overlay_sizes(home, record.machine(), record.name(), &namespaces)
+                crate::inspect::overlay::overlay_sizes(home, record.machine(), record.name(), &namespaces)
                     .unwrap_or_else(|_| crate::run_folder::not_observed());
             Ok(Ok(crate::run_folder::merged(listed, Some(&read))))
         }

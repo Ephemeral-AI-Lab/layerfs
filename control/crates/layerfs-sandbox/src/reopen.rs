@@ -11,17 +11,17 @@ use crate::record::DaemonRecord;
 #[cfg(target_os = "linux")]
 use crate::runtime::NAMESPACES;
 use crate::runtime::NATIVE;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_bridge::process::LocalProcess;
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
+use layerfs_os::process::LocalProcess;
 use layerfs_home::helpers;
 use layerfs_home::outcome::shell_word;
 use layerfs_home::outcome::{failed, refused, with_fix};
 #[cfg(target_os = "macos")]
-use layerfs_sandbox_backend::process;
-use layerfs_sandbox_backend::LocalRecord;
+use crate::process;
+use crate::LocalRecord;
 #[cfg(target_os = "linux")]
-use layerfs_sandbox_backend::SandboxRecord;
-use layerfs_sandbox_backend::{ContainerId, Sandbox, WireFailure};
+use crate::SandboxRecord;
+use crate::{ContainerId, Sandbox, WireFailure};
 use std::path::PathBuf;
 
 /// A daemon record's runtime id, required.
@@ -91,7 +91,7 @@ pub enum Recorded {
         labels: Vec<(String, String)>,
     },
     #[cfg(target_os = "linux")]
-    Namespaces(layerfs_sandbox_backend::Runtime, ContainerId, SandboxRecord),
+    Namespaces(crate::Runtime, ContainerId, SandboxRecord),
 }
 /// Reads Sandbox `id`'s record's runtime.
 /// The record alone decides (#529): a caller's deployment backend is not
@@ -165,7 +165,7 @@ pub fn unread(value: &DaemonRecord) -> Option<String> {
         value.labels()?;
         if runtime == crate::runtime::NAMESPACES {
             let image = helpers::required(value.image(), "image")?;
-            layerfs_sandbox_backend::Image::parse(image).map_err(failed)?;
+            crate::Image::parse(image).map_err(failed)?;
         }
         Ok(())
     };
@@ -299,7 +299,7 @@ fn namespaces(
     value: &DaemonRecord,
 ) -> Result<Recorded> {
     let image = helpers::required(value.image(), "image")?;
-    let image = layerfs_sandbox_backend::Image::parse(image).map_err(|error| {
+    let image = crate::Image::parse(image).map_err(|error| {
         refused(
             "InvalidInput",
             format!(
@@ -309,7 +309,7 @@ fn namespaces(
         )
     })?;
     let network = value.network().map(str::to_owned);
-    let record = layerfs_sandbox_backend::NamespaceRecord {
+    let record = crate::NamespaceRecord {
         local,
         image,
         network,
@@ -317,7 +317,7 @@ fn namespaces(
     let root = (directory.parent())
         .ok_or_else(|| refused("InvalidInput", "namespaces Sandbox directory"))?;
     let provider =
-        layerfs_sandbox_backend::namespaces::NamespaceProvider::new(root).map_err(|error| {
+        crate::namespaces::NamespaceProvider::new(root).map_err(|error| {
             refused(
                 "Unsupported",
                 format!(
@@ -327,7 +327,7 @@ fn namespaces(
             )
         })?;
     Ok(Recorded::Namespaces(
-        layerfs_sandbox_backend::Runtime::Namespaces(provider),
+        crate::Runtime::Namespaces(provider),
         ContainerId::parse(container(value)?).map_err(failed)?,
         SandboxRecord::Namespaces(record),
     ))

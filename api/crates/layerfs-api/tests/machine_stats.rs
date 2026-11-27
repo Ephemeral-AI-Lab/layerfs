@@ -13,9 +13,9 @@
 //! child that ended. Inspect permits are the process's, and the worker is
 //! in this process, so every test here takes one lock.
 #![cfg(unix)]
-use layerfs_api::home::{self, lease, paths, read_record, write_record};
-use layerfs_bridge::control::SdkValue;
-use layerfs_bridge::process::LocalProcess;
+use {layerfs_api::home::{self, paths, read_record, write_record}, layerfs_store::lease};
+use layerfs_protocol::provision::install::SdkValue;
+use layerfs_os::process::LocalProcess;
 use layerfs_sandbox::record::{DaemonRecord, Local};
 use std::collections::BTreeMap;
 use std::net::{SocketAddr, TcpListener};
@@ -59,7 +59,7 @@ fn map(fields: &[(&str, SdkValue)]) -> SdkValue {
 }
 
 fn print(value: &SdkValue) -> String {
-    layerfs_api::json::print(value)
+    layerfs_home::json::print(value)
 }
 
 /// One call on a thread of its own: an answer that does not come within

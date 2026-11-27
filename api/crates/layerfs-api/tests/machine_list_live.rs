@@ -18,7 +18,7 @@
 //! its process group and reaped (finding 2).
 #![cfg(feature = "machine")]
 use layerfs_api::home::{paths, read_record, write_record};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::os::unix::fs::PermissionsExt;

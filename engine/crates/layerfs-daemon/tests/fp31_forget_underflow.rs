@@ -63,10 +63,8 @@ mod mounted;
 #[allow(dead_code)]
 #[path = "support/mounted_commit.rs"]
 mod rig;
-use layerfs_bridge::control::{
-    Activity, MountPhase, MountWork, Reply, Request, TeardownStage, WorkspaceToken,
-};
-use layerfs_daemon::{control::Failure, OwnerClient};
+use layerfs_protocol::provision::install::{Activity, MountPhase, MountWork, Reply, Request, TeardownStage, WorkspaceToken};
+use {layerfs_daemon::control::Failure, layerfs_store_service::OwnerClient};
 use layerfs_overlay::{CleanupState, KernelMount, KernelMountState};
 use mounted::{mount_entry, Harness};
 use rig::{root, stamp_tree, Rig};
@@ -195,9 +193,9 @@ fn job<T>(
     client: &OwnerClient,
     route: Route,
     command: impl FnOnce(
-        &layerfs_daemon::OwnerClient,
-        layerfs_workspace::Route,
-    ) -> Result<T, layerfs_daemon::OwnerError>,
+        &layerfs_store_service::OwnerClient,
+        layerfs_vfs::Route,
+    ) -> Result<T, layerfs_store_service::OwnerError>,
 ) -> T {
     command(client, route).unwrap_or_else(|error| panic!("{error:?}"))
 }
@@ -205,7 +203,7 @@ fn engine_mount(client: &OwnerClient, route: Route) -> Option<KernelMount> {
     job(
         client,
         route,
-        |job_client: &layerfs_daemon::OwnerClient, job_route| {
+        |job_client: &layerfs_store_service::OwnerClient, job_route| {
             job_client.kernel_retained_mount(job_route)
         },
     )
@@ -214,7 +212,7 @@ fn mount_state(client: &OwnerClient, route: Route, mount: KernelMount) -> Kernel
     job(
         client,
         route,
-        |job_client: &layerfs_daemon::OwnerClient, job_route| {
+        |job_client: &layerfs_store_service::OwnerClient, job_route| {
             job_client.kernel_state(job_route, mount)
         },
     )
@@ -223,7 +221,7 @@ fn cleanup(client: &OwnerClient, route: Route) -> CleanupState {
     job(
         client,
         route,
-        |job_client: &layerfs_daemon::OwnerClient, job_route| job_client.cleanup_state(job_route),
+        |job_client: &layerfs_store_service::OwnerClient, job_route| job_client.cleanup_state(job_route),
     )
 }
 /// One lookup decrement through the public owner port, as
@@ -493,7 +491,7 @@ fn refused_at_the_service(reduced: Reduced) {
     // Later operations answer with the same custody and attempt nothing.
     let later = client.diagnostics().unwrap().jobs.iter().sum::<u64>();
     for request in [
-        Request::Unmount(layerfs_bridge::control::UnmountControl {
+        Request::Unmount(layerfs_protocol::provision::install::UnmountControl {
             token,
             discard: true,
         }),
@@ -565,4 +563,4 @@ fn fp31_a_kernel_forget_of_two_against_a_row_of_one_underflows_and_the_row_keeps
 
 // ------------------------------------------------------------ session scope
 
-use layerfs_workspace::Route;
+use layerfs_vfs::Route;

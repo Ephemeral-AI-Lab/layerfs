@@ -8,7 +8,7 @@ mod fixture;
 #[path = "support/host_install.rs"]
 mod support;
 
-use layerfs_bridge::control::{MountPlace, Reply, Request, SdkValue, WorkspaceToken};
+use layerfs_protocol::provision::install::{MountPlace, Reply, Request, SdkValue, WorkspaceToken};
 use layerfs_history::records::GcScopeKind;
 use layerfs_history::{BranchId, ForkRequest, ForkSource, HistoryName, LayerStackId, WorkspaceId};
 use layerfs_store_service::history::{lookup, removal};
@@ -72,7 +72,7 @@ fn bind_named(f: &fixture::Fixture, tag: u8) -> WorkspaceToken {
 fn unmount(f: &fixture::Fixture, token: WorkspaceToken) {
     let reply = f
         .service
-        .execute_control(&Request::Unmount(layerfs_bridge::control::UnmountControl {
+        .execute_control(&Request::Unmount(layerfs_protocol::provision::install::UnmountControl {
             token,
             discard: true,
         }))
@@ -115,7 +115,7 @@ fn a_placed_daemon_mount_registers_sandbox_machine_and_workspace() {
     assert_eq!(holder.get_text("kind"), Some("mount"));
     assert_eq!(holder.get_text("sandbox"), Some("g4sbx"));
     assert_eq!(holder.get_text("machine"), Some("docker"));
-    let workspace = layerfs_bridge::sdk_values::hex(&[7; 32]);
+    let workspace = layerfs_protocol::sdk::hex(&[7; 32]);
     assert_eq!(holder.get_text("workspace"), Some(workspace.as_str()));
     // the intent records the generation the request place carried
     let intents = f

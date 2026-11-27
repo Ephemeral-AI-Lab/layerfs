@@ -3,7 +3,7 @@
 //! start, so its mounts carry them; a tombstone is written on the removal
 //! paths that stopped the runtime and goes once the name is recreated with a
 //! newer generation. Missing evidence is never death.
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::json::parse;
 use layerfs_home::op::Op;
 use layerfs_sandbox::files::write_started;

@@ -6,7 +6,7 @@ mod installed;
 #[allow(dead_code)]
 mod support;
 
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_content::compare::EntryFacts;
 use layerfs_store_service::read::{file_facts, snapshot};
 use std::fs;
@@ -24,7 +24,7 @@ fn selector(at: &str, path: &str) -> SdkValue {
         ("path", SdkValue::text(path)),
     ])
 }
-fn diff(f: &Fixture, extended: bool) -> Result<SdkValue, layerfs_bridge::control::SdkRefusal> {
+fn diff(f: &Fixture, extended: bool) -> Result<SdkValue, layerfs_protocol::provision::install::SdkRefusal> {
     let mut args = vec![
         ("left", selector("main", "/large")),
         ("right", selector("work", "/large")),

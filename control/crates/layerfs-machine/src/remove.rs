@@ -5,13 +5,13 @@ use super::progress::Phases;
 use super::record::{MachineRecord, REMOVE};
 use super::spec::{self as record, refusal};
 use crate::Related;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::home::{lock, paths};
 use layerfs_home::names::MachineName;
 use layerfs_home::op::Op;
 use layerfs_home::outcome::{failed, refused, Outcome};
-use layerfs_platform::{self as adapters, Code};
+use crate::platform::{self as adapters, Code};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;

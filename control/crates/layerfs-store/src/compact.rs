@@ -34,7 +34,7 @@ use crate::place::{self, Executor};
 use crate::postgresql;
 use crate::record::{self, StoreRecord, StoreRef};
 use crate::sqlite::family::progress;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_history::GcScopeKind;
 use layerfs_home::events::Events;
 use layerfs_home::home::paths;
@@ -430,7 +430,7 @@ fn compact_sqlite(
     let op_id = admission::op_id();
     let (owner_runtime, owner_boot) = admission::owner_tokens(&format!(
         "compact:{}",
-        layerfs_bridge::sdk_values::hex(&op_id)
+        layerfs_protocol::sdk::hex(&op_id)
     ));
     let receipt = handles
         .compact_observed(
@@ -497,7 +497,7 @@ fn compact_postgresql(
         let op_id = admission::op_id();
         let (owner_runtime, owner_boot) = admission::owner_tokens(&format!(
             "compact:{}",
-            layerfs_bridge::sdk_values::hex(&op_id)
+            layerfs_protocol::sdk::hex(&op_id)
         ));
         let receipt = handles
             .compact_observed(

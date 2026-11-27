@@ -66,7 +66,7 @@ pub fn main() -> ExitCode {
 /// Serves the native host's private Unix endpoints until drain completes.
 #[cfg(all(feature = "machine", any(target_os = "macos", target_os = "linux")))]
 pub fn host_main() -> ExitCode {
-    match layerfs_api::home(None).and_then(|home| layerfs_api::worker::serve_host(&home)) {
+    match layerfs_api::home(None).and_then(|home| layerfs_store::admin::host_worker::server(&home)) {
         Ok(_) => ExitCode::SUCCESS,
         Err(refusal) => {
             crate::output::diagnostic(&format!("layerfs host worker: {}", refusal.message));

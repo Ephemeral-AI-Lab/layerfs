@@ -18,8 +18,8 @@ use crate::{
     kernel::Kernel,
     xdr::{Garbage, Reader, Writer},
 };
-use layerfs_mount_ports::operations::write::Stamp;
-use layerfs_workspace::{Time, ViewStat};
+use layerfs_vfs::requests::write::Stamp;
+use layerfs_vfs::{Time, ViewStat};
 
 const FHSIZE: usize = 64;
 const NAME_LIMIT: usize = 4096;

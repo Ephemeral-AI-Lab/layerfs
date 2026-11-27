@@ -3,7 +3,7 @@
 //! these checks in (layerfs-project#105). Each runs at the point it ran
 //! before, under the same locks.
 use crate::lease::Owner;
-use layerfs_bridge::control::SdkRefusal;
+use layerfs_protocol::provision::install::SdkRefusal;
 use std::path::Path;
 
 /// A related-use check on the Store or project `name` in home `home`.

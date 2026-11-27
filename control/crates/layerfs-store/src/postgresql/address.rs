@@ -8,7 +8,7 @@
 //! the Store's login put in and read back by the client ([`with_login`]):
 //! tokio-postgres 0.7, [`layerfs_persistence::PostgresConfig`], the reading
 //! every Store session dials with.
-use layerfs_bridge::control::SdkRefusal;
+use layerfs_protocol::provision::install::SdkRefusal;
 use layerfs_home::outcome::refused;
 use layerfs_persistence::{PostgresConfig as Config, PostgresHost as Host};
 use std::net::IpAddr;

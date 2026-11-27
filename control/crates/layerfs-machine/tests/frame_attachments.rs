@@ -3,7 +3,7 @@
 //! the header's top bit and carries the bytes after its JSON. Malformed or
 //! oversized frames are refused from what they claim, before anything of
 //! that size is allocated or read.
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::json;
 use layerfs_machine::worker::{
     frame_bytes, read_frame, read_frame_within, ATTACHED, MAX_FRAME, MAX_HELLO,

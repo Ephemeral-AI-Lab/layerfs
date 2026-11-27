@@ -3,7 +3,7 @@
 //! caller's next call needs, flat beside them. The control and engine
 //! crates keep their own codes; the dispatcher folds each into its public
 //! one here, and every front end prints or raises the same map.
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::home::with_field;
 use layerfs_home::outcome::{public_code, FIX, NEXT};
 

@@ -11,7 +11,7 @@ mod common;
 use common::{layerfs, run, tempdir, text};
 use layerfs_api::home::{self, paths, write_record};
 use layerfs_api::worker::{read_frame, write_frame};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use std::net::{SocketAddr, TcpListener};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -209,7 +209,7 @@ fn the_exec_id_is_the_first_event_and_travels_to_the_worker() {
     let other = first_id(&events).unwrap();
     assert_ne!(other, id);
     // the short answer of a command that wrote nothing is its code alone
-    assert_eq!(layerfs_api::json::print(&short), r#"{"exit_code":0}"#);
+    assert_eq!(layerfs_home::json::print(&short), r#"{"exit_code":0}"#);
     let frames = seen.lock().unwrap().clone();
     let sent: Vec<_> = frames
         .iter()
@@ -250,7 +250,7 @@ fn cancel_rides_the_sandbox_host_frame() {
         &home,
         &["workspace", "cancel", "d1:one", "--exec", ID, "--detail"],
     ));
-    let long = layerfs_api::json::parse(text(&out.stdout).trim()).unwrap();
+    let long = layerfs_home::json::parse(text(&out.stdout).trim()).unwrap();
     assert_eq!(long.get_text("outcome"), Some("cancelled"), "{long:?}");
     let commands = long.get("commands").unwrap();
     let SdkValue::List(commands) = commands else {

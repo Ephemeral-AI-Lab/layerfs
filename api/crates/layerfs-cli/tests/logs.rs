@@ -12,8 +12,8 @@
 //! a path outside its LayerFS folders refused.
 mod common;
 use common::{layerfs, run, tempdir, text};
-use layerfs_api::json;
-use layerfs_bridge::control::SdkValue;
+use layerfs_home::json;
+use layerfs_protocol::provision::install::SdkValue;
 use std::path::Path;
 
 fn cli(home: &Path, words: &[&str], tag: Option<&str>) -> (Option<i32>, String) {
@@ -143,7 +143,7 @@ fn native_sandbox(home: &Path, log: &str) -> std::path::PathBuf {
         &SdkValue::map([
             ("name", t("s1")),
             ("project", t("shop/api")),
-            ("machine", t(layerfs_api::names::HOST_MACHINE)),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
             ("id", t("s1")),
             ("runtime", t("process")),
             ("daemon", daemon),
@@ -348,21 +348,21 @@ fn the_cli_reads_a_machine_s_files_and_logs_no_line() {
         &[
             "machine",
             "files",
-            layerfs_api::names::HOST_MACHINE,
+            layerfs_home::names::HOST_MACHINE,
             "--depth",
             "deep",
         ],
         &[
             "machine",
             "files",
-            layerfs_api::names::HOST_MACHINE,
+            layerfs_home::names::HOST_MACHINE,
             "/a",
             "/b",
         ],
         &[
             "machine",
             "files",
-            layerfs_api::names::HOST_MACHINE,
+            layerfs_home::names::HOST_MACHINE,
             "--bogus",
         ],
     ] {
@@ -379,14 +379,14 @@ fn the_cli_reads_a_machine_s_files_and_logs_no_line() {
     // yet has no `store`
     let (_, early, _) = run_cli(
         &home,
-        &["machine", "files", layerfs_api::names::HOST_MACHINE],
+        &["machine", "files", layerfs_home::names::HOST_MACHINE],
     );
     assert!(!early.contains("\"stores\""), "{early}");
     for part in ["log", "store"] {
         std::fs::create_dir_all(home.join(part)).unwrap();
     }
     let read = |words: &[&str]| {
-        let mut line = vec!["machine", "files", layerfs_api::names::HOST_MACHINE];
+        let mut line = vec!["machine", "files", layerfs_home::names::HOST_MACHINE];
         line.extend(words);
         let (code, out, err) = run_cli(&home, &line);
         assert_eq!(code, Some(0), "{words:?}: {err}");
@@ -441,20 +441,20 @@ fn the_cli_reads_a_machine_s_files_and_logs_no_line() {
             &[
                 "machine",
                 "files",
-                layerfs_api::names::HOST_MACHINE,
+                layerfs_home::names::HOST_MACHINE,
                 "/etc/hosts",
             ],
             "InvalidInput",
         ),
         (
-            &["machine", "files", layerfs_api::names::HOST_MACHINE, "/"],
+            &["machine", "files", layerfs_home::names::HOST_MACHINE, "/"],
             "InvalidInput",
         ),
         (
             &[
                 "machine",
                 "files",
-                layerfs_api::names::HOST_MACHINE,
+                layerfs_home::names::HOST_MACHINE,
                 &name("config/x"),
             ],
             "InvalidInput",
@@ -463,7 +463,7 @@ fn the_cli_reads_a_machine_s_files_and_logs_no_line() {
             &[
                 "machine",
                 "files",
-                layerfs_api::names::HOST_MACHINE,
+                layerfs_home::names::HOST_MACHINE,
                 "relative",
             ],
             "InvalidInput",
@@ -472,7 +472,7 @@ fn the_cli_reads_a_machine_s_files_and_logs_no_line() {
             &[
                 "machine",
                 "files",
-                layerfs_api::names::HOST_MACHINE,
+                layerfs_home::names::HOST_MACHINE,
                 &name("nothing"),
             ],
             "NotFound",
@@ -481,7 +481,7 @@ fn the_cli_reads_a_machine_s_files_and_logs_no_line() {
             &[
                 "machine",
                 "files",
-                layerfs_api::names::HOST_MACHINE,
+                layerfs_home::names::HOST_MACHINE,
                 &run,
                 "--limit",
                 "0",

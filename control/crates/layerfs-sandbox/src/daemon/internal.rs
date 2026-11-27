@@ -1,10 +1,7 @@
 //! Hidden original-channel access for recovery, diagnostics and external proofs.
 pub use super::channel::{Control, ControlCause, ControlFailure, ControlPhase};
 use crate::{BoundWorkspace, OperationFailure, WorkspaceApi};
-use layerfs_bridge::{
-    control::{CleanupObservation, MountPlace, ReadyMount, WorkspaceStatus, WorkspaceToken},
-    duplex::Connection,
-};
+use layerfs_protocol::{provision::install::{CleanupObservation, MountPlace, ReadyMount, WorkspaceStatus, WorkspaceToken}, duplex::Connection};
 use layerfs_history::{BranchId, WorkspaceId};
 pub use layerfs_project::store::install;
 use std::ops::{Deref, DerefMut};
@@ -75,9 +72,9 @@ pub fn into_connection(control: Control) -> Connection {
 pub fn split_provider(
     sandbox: crate::ProviderSandbox,
 ) -> (
-    Box<layerfs_sandbox_backend::Sandbox>,
+    Box<crate::Sandbox>,
     Control,
-    layerfs_sandbox_backend::CommandIdentity,
+    crate::CommandIdentity,
 ) {
     (sandbox.runtime, sandbox.control, sandbox.command_identity)
 }

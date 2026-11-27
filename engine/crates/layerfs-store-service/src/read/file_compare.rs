@@ -12,7 +12,7 @@ use crate::{
     history::{lookup as args, saved},
     store::Store,
 };
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_content::{
     compare::{line_diff, EntryFacts, MAXIMUM_TEXT_BYTES},
     object::inode_leaf::InodeKind,

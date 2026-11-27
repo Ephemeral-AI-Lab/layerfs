@@ -3,13 +3,11 @@
 //! "LaunchFailure { phase: Listener, … Protocol(…) }"), and so does
 //! `layerfs_home::outcome::failed`, which most refusals of an unexpected
 //! failure go through.
-use layerfs_bridge::control::{
-    Call, ControlCode, ControlError, ControlRefusal, Request, WorkspaceToken,
-};
+use layerfs_protocol::provision::install::{Call, ControlCode, ControlError, ControlRefusal, Request, WorkspaceToken};
 use layerfs_history::WorkspaceId;
 use layerfs_sandbox::internal::{ControlCause, ControlFailure, ControlPhase};
 use layerfs_sandbox::{MountFailure, OperationCause, OperationFailure, SandboxCause};
-use layerfs_sandbox_backend::{LaunchFailure, LaunchPhase, RuntimeError, WireFailure};
+use layerfs_sandbox::{LaunchFailure, LaunchPhase, RuntimeError, WireFailure};
 
 fn no_debug(text: &str) {
     for debug in ["{", "}", "Some(", "Protocol(", "Failure", "Os ", "kind:"] {

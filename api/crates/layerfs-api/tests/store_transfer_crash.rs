@@ -6,7 +6,7 @@
 //! are the ones the refusals and the doctor name. A worker served in this
 //! process stands in for the machine.
 use layerfs_api::home::{self, paths, read_record, write_record};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use std::net::TcpListener;
 use std::panic::AssertUnwindSafe;
 use std::path::{Path, PathBuf};

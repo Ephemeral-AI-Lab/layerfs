@@ -33,7 +33,7 @@
 //! A test whose settings are missing says NOT_RUN and passes.
 #![cfg(feature = "machine")]
 use layerfs_api::home::{self, paths};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use std::path::{Path, PathBuf};
 
 fn tempdir(tag: &str) -> PathBuf {
@@ -221,10 +221,10 @@ fn a_sandbox_runs_where_its_store_can_be_reached() {
     // stopped machine is refused naming its start; elsewhere the support
     // table's reason, word for word (#535 §7.3)
     let (code, message) = create("dev");
-    match layerfs_platform::sandbox_allowed(
-        layerfs_platform::Platform::Lima,
-        layerfs_platform::HostOs::current(),
-        layerfs_platform::StoreKind::Postgresql,
+    match layerfs_machine::platform::sandbox_allowed(
+        layerfs_machine::platform::Platform::Lima,
+        layerfs_machine::platform::HostOs::current(),
+        layerfs_protocol::Postgresql,
     ) {
         Ok(()) => {
             // a machine not attached to the Store is refused first, with
@@ -291,7 +291,7 @@ fn a_sandbox_runs_where_its_store_can_be_reached() {
     let (code, message) = create("box");
     assert_eq!(code, "Unsupported", "{message}");
     assert!(
-        message == layerfs_sandbox_backend::removed_platforms::SSH_REMOVED,
+        message == layerfs_machine::table::removed::SSH_REMOVED,
         "{message}"
     );
     let (code, message) = call(
@@ -390,7 +390,7 @@ fn a_forced_remove_says_why_its_store_s_url_cannot_be_made() {
 /// platform, a sqlite Store on each and one PostgreSQL Store, all records.
 #[test]
 fn every_platform_refusal_is_the_support_table_s() {
-    use layerfs_platform::{sandbox_allowed, HostOs, Platform, StoreKind};
+    use {layerfs_machine::platform::{sandbox_allowed, HostOs, Platform}, layerfs_protocol};
     let home = tempdir("support");
     home::open(&home).unwrap();
     ok(&home, "machine.list", &[]);
@@ -428,8 +428,8 @@ fn every_platform_refusal_is_the_support_table_s() {
         )
         .unwrap();
         for (kind, project) in [
-            (StoreKind::Sqlite, format!("{store}/app")),
-            (StoreKind::Postgresql, "pg/app".to_owned()),
+            (layerfs_protocol::Sqlite, format!("{store}/app")),
+            (layerfs_protocol::Postgresql, "pg/app".to_owned()),
         ] {
             // an allowed pair would start a real Sandbox; only refusals run
             let Err(reason) = sandbox_allowed(platform, HostOs::current(), kind) else {

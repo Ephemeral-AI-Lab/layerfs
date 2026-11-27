@@ -23,13 +23,13 @@ use super::spec::{self as record, machine_of, refusal, save_running, save_unread
 use super::state::{replace_worker, settle};
 use crate::worker::{self, Endpoint};
 use crate::Related;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::home::lock;
 use layerfs_home::op::Op;
 use layerfs_home::outcome::{refused, shell_word, with_fix};
 use layerfs_home::state::{Reason, State};
-use layerfs_platform::{self as adapters, Code, HostOs, Platform, Route};
+use crate::platform::{self as adapters, Code, HostOs, Platform, Route};
 use std::path::Path;
 use std::time::{Duration, Instant};
 

@@ -1,6 +1,6 @@
 //! Cached pages of an open file. A known base install changes no name, byte,
 //! link, attribute or serial of the mounted view, so nothing here acts on it.
-use layerfs_workspace::Refusal;
+use layerfs_vfs::Refusal;
 
 /// How the kernel treats cached pages of one opened file.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

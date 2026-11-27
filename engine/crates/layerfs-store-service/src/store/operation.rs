@@ -3,7 +3,7 @@ use super::{Store, StorePorts};
 use crate::OwnerClient;
 use layerfs_history::{BranchSnapshot, WorkspaceId};
 use layerfs_storage::read::CapturedLocators;
-use layerfs_workspace::{CanonicalClient, Workspace, WorkspaceResult};
+use layerfs_vfs::{CanonicalClient, Workspace, WorkspaceResult};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc, Mutex,
@@ -102,12 +102,12 @@ impl BoundWorkspace {
         self.snapshot
             .lock()
             .map(|snapshot| snapshot.clone())
-            .map_err(|_| layerfs_workspace::WorkspaceError::BindingPoisoned)
+            .map_err(|_| layerfs_vfs::WorkspaceError::BindingPoisoned)
     }
     pub const fn identity(&self) -> WorkspaceId {
         self.identity
     }
-    pub fn route(&self) -> layerfs_workspace::Route {
+    pub fn route(&self) -> layerfs_vfs::Route {
         self.workspace.route()
     }
     /// One lookup in published history on this Workspace's own reader, the

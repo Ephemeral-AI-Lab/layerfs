@@ -4,8 +4,8 @@ use super::{
     registry::{bound_mut, idle},
     Failure, KernelEvidence, Service, Success,
 };
-use crate::store::BoundWorkspace;
-use layerfs_bridge::control::{Activity, ForcedFacts, Reply, UnmountControl, WorkspaceToken};
+use layerfs_store_service::store::BoundWorkspace;
+use layerfs_protocol::provision::install::{Activity, ForcedFacts, Reply, UnmountControl, WorkspaceToken};
 use std::sync::Arc;
 
 /// Original kernel connection receipt carried to Close.
@@ -100,12 +100,12 @@ impl Service {
             Kernel::Exported(_) | Kernel::ExportLeaving(_) | Kernel::ExportKept(_) => {
                 Departure::Export(Box::new(super::export::take(
                     &mut value.kernel,
-                    layerfs_bridge::control::MountPhase::Probing,
+                    layerfs_protocol::provision::install::MountPhase::Probing,
                 )?))
             }
             Kernel::Attaching => {
                 return Err(Failure::kernel(
-                    layerfs_bridge::control::ControlCode::Unknown,
+                    layerfs_protocol::provision::install::ControlCode::Unknown,
                     "unmount:admission",
                     "original Attach outcome retained",
                 ))
@@ -113,7 +113,7 @@ impl Service {
             #[cfg(target_os = "linux")]
             _ => Departure::Session(super::detach::take(
                 &mut value.kernel,
-                layerfs_bridge::control::MountPhase::Probing,
+                layerfs_protocol::provision::install::MountPhase::Probing,
             )?),
         };
         value.enter(Activity::Closing);
@@ -156,10 +156,10 @@ impl Service {
             Ok(()) => Ok(kernel),
             Err(error) => {
                 let failure = match error {
-                    crate::store::CloseError::Owner(cause) => Failure::Owner(cause),
-                    crate::store::CloseError::Intent(cause) => Failure::History(cause),
-                    crate::store::CloseError::Reader(cause) => Failure::Workspace(
-                        layerfs_workspace::WorkspaceError::Service(Box::new(cause)),
+                    layerfs_store_service::store::CloseError::Owner(cause) => Failure::Owner(cause),
+                    layerfs_store_service::store::CloseError::Intent(cause) => Failure::History(cause),
+                    layerfs_store_service::store::CloseError::Reader(cause) => Failure::Workspace(
+                        layerfs_vfs::WorkspaceError::Service(Box::new(cause)),
                     ),
                 };
                 Err(self.unclosed(token, failure, kernel, forced))
@@ -204,7 +204,7 @@ impl Service {
         if kernel.is_some() {
             return self.retain(
                 token,
-                layerfs_bridge::control::TeardownStage::Close,
+                layerfs_protocol::provision::install::TeardownStage::Close,
                 failure.wire().detail,
                 None,
                 Box::new((failure, kernel)),
@@ -236,7 +236,7 @@ impl Service {
             return self.attach_export(&export, token);
         }
         Err(Failure::Rejected(
-            layerfs_bridge::control::ControlCode::Invalid,
+            layerfs_protocol::provision::install::ControlCode::Invalid,
             "kernel serving requires Linux",
         ))
     }

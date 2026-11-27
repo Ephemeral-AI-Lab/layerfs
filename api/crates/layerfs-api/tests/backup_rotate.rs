@@ -6,7 +6,7 @@
 //! cannot be written puts the old secret back, and the call log keeps the
 //! secret's byte count only. Records only: runs on macOS.
 use layerfs_api::home::{self, paths, read_record, write_record};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::names::BucketName;
 use layerfs_store::backup::record::{BucketConnect, BucketRecord};
 use std::io::{BufRead, BufReader, Write};
@@ -140,7 +140,7 @@ fn connect(
     access: &str,
     secret: &str,
     detail: bool,
-) -> Result<SdkValue, layerfs_bridge::control::SdkRefusal> {
+) -> Result<SdkValue, layerfs_protocol::provision::install::SdkRefusal> {
     let mut args = vec![
         ("name".to_owned(), t("b1")),
         ("url".to_owned(), t(url)),
@@ -241,7 +241,7 @@ fn rotation_at_the_same_url_keeps_the_links_and_the_new_key() {
     assert_eq!(credentials.access_key, "AKID-2");
     assert_eq!(credentials.secret_key, "secret-two");
     let driver = bucket.driver(&home).unwrap();
-    layerfs_bucket::backup::list_stores(driver.as_ref()).unwrap();
+    layerfs_store::backup::copy::list_stores(driver.as_ref()).unwrap();
 
     // the long form says it rotated
     fake.allow("AKID-3");
@@ -353,7 +353,7 @@ fn the_call_log_keeps_the_secrets_byte_count_only() {
     connect(&home, &url, "AKID-2", "rotated-s3cr3t-key", false).unwrap();
     let text = std::fs::read_to_string(paths::calls_file(&home)).unwrap();
     assert!(!text.contains("s3cr3t"), "a secret was logged");
-    let last = layerfs_api::json::parse(text.lines().last().unwrap()).unwrap();
+    let last = layerfs_home::json::parse(text.lines().last().unwrap()).unwrap();
     let Some(SdkValue::List(words)) = last.get("argv") else {
         panic!("no argv: {last:?}")
     };

@@ -2,7 +2,7 @@
 use crate::calls::table::Kind::{Int, Name, Text};
 use crate::calls::table::{call, opt, Call};
 use crate::calls::{Context, Form, Paging, Part, Section};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::names::StoreName;
 use layerfs_home::outcome::Outcome;
 use layerfs_store::project::read::ProjectList;
@@ -55,5 +55,5 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         cursor: args.get_text("cursor").map(str::to_owned),
         stats: context.with("stats"),
     };
-    layerfs_control::project::list(&context.home, &request)
+    layerfs_store::data::project::with_users::list(&context.home, &request)
 }

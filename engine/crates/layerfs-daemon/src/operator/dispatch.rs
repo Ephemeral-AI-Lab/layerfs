@@ -2,7 +2,7 @@
 //! (`backend.daemon.workspace.*`) and the read model that lists them
 //! (`sandbox.list_workspaces`). Backend Store calls are unknown here.
 use crate::control::Service;
-use layerfs_bridge::control::{Reply, SdkCall, SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{Reply, SdkCall, SdkRefusal, SdkValue};
 
 /// Whether `method` is on this table; any other SDK name is a Store call.
 pub(crate) fn admits(method: &str) -> bool {

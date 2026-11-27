@@ -5,7 +5,7 @@ mod installed;
 #[path = "support/sdk.rs"]
 mod support;
 
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use std::fs;
 use support::{items, operation, paths, write, Fixture};
 

@@ -3,7 +3,7 @@
 //! quiesced file is the Store's closed bytes. The checkpoint runs after the
 //! call is answered; the wait below is bounded.
 use layerfs_api::home::{self};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::home::paths;
 use layerfs_store::lease;
 use std::os::unix::fs::PermissionsExt;
@@ -64,7 +64,7 @@ fn the_last_call_leaves_an_open_store_with_an_empty_log() {
     let quiesced = std::fs::read(&file).unwrap();
     // the Store was still open in this process: the idle close closes it
     // now, and finds nothing to copy in, so the file is unchanged
-    assert!(layerfs_control::store::close_idle(Duration::ZERO) >= 1);
+    assert!(layerfs_store::admin::with_users::close_idle(Duration::ZERO) >= 1);
     assert_eq!(lease::holders(&home, "shop").unwrap(), Vec::<u32>::new());
     assert_eq!(wal_bytes(&file), 0);
     assert_eq!(std::fs::read(&file).unwrap(), quiesced);

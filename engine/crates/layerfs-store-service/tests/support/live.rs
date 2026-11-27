@@ -4,7 +4,7 @@ use super::support::{Change, Fixture};
 use layerfs_content::filesystem::PathName;
 use layerfs_history::{BranchId, HistoryName, LayerStackId, WorkspaceId};
 use layerfs_store_service::store::{BindRequest, BoundWorkspace};
-use layerfs_workspace::{Operation, Outcome, Position, Time};
+use layerfs_vfs::{Operation, Outcome, Position, Time};
 
 /// The test Store's project.
 pub fn branch(name: &str) -> BranchId {
@@ -188,8 +188,8 @@ pub fn committed(fixture: &Fixture, name: &str, path: &str) -> Option<String> {
         .try_call(
             "fs.read",
             vec![
-                ("branch", layerfs_bridge::control::SdkValue::text(name)),
-                ("path", layerfs_bridge::control::SdkValue::text(path)),
+                ("branch", layerfs_protocol::provision::install::SdkValue::text(name)),
+                ("path", layerfs_protocol::provision::install::SdkValue::text(path)),
             ],
         )
         .ok()

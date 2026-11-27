@@ -2,7 +2,7 @@
 //! Constructor-thread port: each call is one attempt under the Workspace lock.
 use crate::OwnerClient;
 use layerfs_overlay::{CapturedReader, CapturedRunCursor, CapturedRunReply, Inode};
-use layerfs_workspace::{OverlayCapturedRuns, WorkspaceError, WorkspaceResult};
+use layerfs_vfs::{OverlayCapturedRuns, WorkspaceError, WorkspaceResult};
 
 impl OverlayCapturedRuns for OwnerClient {
     fn captured_inode(

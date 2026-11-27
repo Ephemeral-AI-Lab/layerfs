@@ -3,7 +3,7 @@
 //! a worker and a move back with history heads equal, the refusals of a
 //! move, and the InUse refusals of a move and a remove.
 use layerfs_api::home::{self, paths, read_record, write_record};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 
@@ -144,7 +144,7 @@ fn create_list_and_get() {
     // the short form: a ready Store's row leaves its state out
     let short = call(&home, "store.list", &[]).unwrap();
     assert_eq!(
-        layerfs_api::json::print(&short),
+        layerfs_home::json::print(&short),
         r#"{"items":[{"store":"shop","engine":"sqlite","machine":"HOST_MACHINE"}]}"#
             .replace("HOST_MACHINE", layerfs_home::names::HOST_MACHINE)
     );
@@ -164,7 +164,7 @@ fn create_list_and_get() {
 
     let got = call(&home, "store.get", &[("store", t("shop"))]).unwrap();
     assert_eq!(
-        layerfs_api::json::print(&got),
+        layerfs_home::json::print(&got),
         r#"{"engine":"sqlite","state":"ready","machine":"HOST_MACHINE"}"#
             .replace("HOST_MACHINE", layerfs_home::names::HOST_MACHINE)
     );
@@ -187,7 +187,7 @@ fn create_list_and_get() {
     assert_eq!(got.get("observed_at"), None, "{got:?}");
     let short = call(&home, "store.list", &[]).unwrap();
     assert_eq!(
-        layerfs_api::json::print(&short),
+        layerfs_home::json::print(&short),
         r#"{"items":[{"store":"shop","engine":"sqlite","machine":"HOST_MACHINE"}]}"#
             .replace("HOST_MACHINE", layerfs_home::names::HOST_MACHINE)
     );
@@ -541,7 +541,7 @@ fn snapshot_checkpoints_an_unheld_leftover_wal_before_moving_either_way() {
         ],
     )
     .unwrap();
-    layerfs_api::close_idle(std::time::Duration::ZERO);
+    layerfs_store::admin::with_users::close_idle(std::time::Duration::ZERO);
     let store_path = paths::store_file(&home, "shop");
     assert_eq!(wal_bytes(&store_path), 0, "a closed Store keeps no log");
 
@@ -586,7 +586,7 @@ fn snapshot_checkpoints_an_unheld_leftover_wal_before_moving_either_way() {
     .unwrap();
     assert_eq!(read.get_text("text"), Some("from-wal\n"));
 
-    layerfs_api::close_idle(std::time::Duration::ZERO);
+    layerfs_store::admin::with_users::close_idle(std::time::Duration::ZERO);
     std::fs::remove_dir_all(home).unwrap();
     let _ = std::fs::remove_dir_all(root);
     let _ = std::fs::remove_dir_all(folder);

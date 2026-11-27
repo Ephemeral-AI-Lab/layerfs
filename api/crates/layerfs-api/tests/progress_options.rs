@@ -1,6 +1,6 @@
 //! Progress declarations include machine provisioning and retain function-value refusal.
 use layerfs_api::Kind;
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 
 fn declaring(option: &str) -> Vec<String> {
     layerfs_api::calls()

@@ -24,7 +24,7 @@ use crate::record::{self, StoreRecord, StoreRef};
 use crate::sqlite::family::step_on;
 use crate::sqlite::transfer::step::StoreStep;
 use crate::state;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::home::{now_ms, observed, paths, with_field};
 use layerfs_home::op::{self, Standing};
 use layerfs_home::state::{Reason, State};

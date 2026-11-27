@@ -7,8 +7,8 @@ use crate::calls::table::Kind::{Bool, Project};
 use crate::calls::table::{a, call, opt, Call, PROGRESS};
 use crate::calls::Context;
 use crate::doctor::answer::{self, FORM};
-use layerfs_bridge::control::SdkValue;
-use layerfs_control::doctor::{Kind, Options};
+use layerfs_protocol::provision::install::SdkValue;
+use layerfs_inspect::{Kind, Options};
 use layerfs_home::outcome::Outcome;
 
 /// Its table entry.

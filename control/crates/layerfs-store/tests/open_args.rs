@@ -1,6 +1,6 @@
 //! A Store call's open fields read from its `store.call` frame
 //! (layerfs-project#109 R8).
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_store::call::CallFrame;
 use layerfs_store::open_args::ROUTING;
 

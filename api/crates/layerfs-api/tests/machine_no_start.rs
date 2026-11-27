@@ -9,7 +9,7 @@
 //! answers. One test, because it sets the process's environment.
 #![cfg(feature = "machine")]
 use layerfs_api::home::{self, paths, write_record};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use std::net::TcpListener;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};

@@ -17,7 +17,7 @@
 //! `upgrade_support`). A mount of the upgraded Store is not tested here: it
 //! needs a Linux daemon; B covers Commit, merge and compact.
 mod upgrade_support;
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use std::path::Path;
 use upgrade_support::*;
 
@@ -191,7 +191,7 @@ fn golden_then_works(
         )]),
     )]);
     matches_manifest(home, &lib_only, false);
-    layerfs_api::close_idle(std::time::Duration::ZERO);
+    layerfs_store::admin::with_users::close_idle(std::time::Duration::ZERO);
 }
 
 /// INTEGRATION. Families A and B on the SQLite schema-2 fixture.
@@ -232,7 +232,7 @@ fn postgresql_v3_fixture_upgrades_keeping_everything_and_works_afterwards() {
             &["check", "convert"],
         );
     }
-    layerfs_api::close_idle(std::time::Duration::ZERO);
+    layerfs_store::admin::with_users::close_idle(std::time::Duration::ZERO);
     server.drop_database(&db);
     let _ = std::fs::remove_dir_all(home.parent().unwrap());
 }
@@ -240,7 +240,7 @@ fn postgresql_v3_fixture_upgrades_keeping_everything_and_works_afterwards() {
 /// Sets `PRAGMA user_version` of Store `store`'s closed file: the header
 /// alone, which is all `--with format` reads.
 fn set_user_version(home: &Path, store: &str, version: i64) {
-    layerfs_api::close_idle(std::time::Duration::ZERO);
+    layerfs_store::admin::with_users::close_idle(std::time::Duration::ZERO);
     let file = home.join("store").join(store).join("store.sqlite");
     rusqlite::Connection::open(file)
         .unwrap()
@@ -345,7 +345,7 @@ fn the_format_section_reads_each_status_from_the_header_alone() {
             ("status", t("current")),
         ]))
     );
-    layerfs_api::close_idle(std::time::Duration::ZERO);
+    layerfs_store::admin::with_users::close_idle(std::time::Duration::ZERO);
     let _ = std::fs::remove_dir_all(home.parent().unwrap());
 }
 
@@ -389,10 +389,10 @@ fn the_postgresql_format_section_reads_current_and_outdated() {
             got.get("format"),
             Some(&section(Some(4), 4, "current", None))
         );
-        layerfs_api::close_idle(std::time::Duration::ZERO);
+        layerfs_store::admin::with_users::close_idle(std::time::Duration::ZERO);
         server.drop_database(&fresh);
     }
-    layerfs_api::close_idle(std::time::Duration::ZERO);
+    layerfs_store::admin::with_users::close_idle(std::time::Duration::ZERO);
     server.drop_database(&db);
     let _ = std::fs::remove_dir_all(home.parent().unwrap());
 }

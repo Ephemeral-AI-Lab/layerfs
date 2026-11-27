@@ -13,7 +13,7 @@ mod installed;
 #[allow(dead_code)]
 mod support;
 
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_content::compare::{ChangeWalk, Pair};
 use layerfs_content::filesystem::PathName;
 use layerfs_store_service::history::lookup;

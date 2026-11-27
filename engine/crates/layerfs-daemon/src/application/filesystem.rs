@@ -1,11 +1,7 @@
 //! Kernel serving assembly over the daemon's one Store and one overlay owner.
-use crate::{
-    control::{ExportServing, ExportServingConfig, Helper, KernelServing, Mounter, Service},
-    store::Store,
-    Owner,
-};
-use layerfs_bridge::daemon_setup::DaemonSetup;
-use layerfs_bridge::KernelRoute;
+use {crate::control::{ExportServing, ExportServingConfig, Helper, KernelServing, Mounter, Service}, layerfs_store_service::{store::Store, Owner}};
+use layerfs_protocol::provision::daemon_setup::DaemonSetup;
+use layerfs_protocol::KernelRoute;
 use std::{path::Path, sync::Arc};
 
 /// Optional helper command lines (`{port}`, `{dir}` replaced) overriding the
@@ -106,7 +102,7 @@ pub(super) use linux::assemble;
 #[cfg(target_os = "linux")]
 mod linux {
     use crate::control::{KernelConfig, KernelServing};
-    use layerfs_bridge::daemon_setup::DaemonSetup;
+    use layerfs_protocol::provision::daemon_setup::DaemonSetup;
     use nix::{
         fcntl::OFlag,
         unistd::{Gid, Uid},

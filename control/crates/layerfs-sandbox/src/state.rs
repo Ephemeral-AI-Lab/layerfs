@@ -16,7 +16,7 @@
 //!
 //! A Workspace's state comes from its daemon's `activity` ([`activity`]).
 use super::record::SandboxRecord;
-use layerfs_bridge::control::SdkRefusal;
+use layerfs_protocol::provision::install::SdkRefusal;
 use layerfs_home::op::Standing;
 use layerfs_home::outcome::shell_word;
 use layerfs_home::state::{Reason, State};
@@ -131,7 +131,7 @@ pub fn machine_state(home: &Path, name: &str) -> Result<State, SdkRefusal> {
         Err(_) => return Ok(layerfs_machine::state::unreadable(name)),
     };
     let platform = record.platform_name().unwrap_or("");
-    let removed = layerfs_sandbox_backend::removed_platforms::removed_reason(platform).is_some();
+    let removed = layerfs_machine::table::removed::removed_reason(platform).is_some();
     Ok(record.status(removed, 0))
 }
 

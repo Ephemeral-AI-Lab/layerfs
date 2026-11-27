@@ -1,7 +1,7 @@
 //! Namespace counts are path based, pinned and explicit about work
 //! exhaustion; `--at` takes a full id or a prefix. Each `project.stats`
 //! here asks for the long form (`detail`), which names the counted Commit.
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use std::{
     os::unix::fs::{symlink, PermissionsExt},
     path::{Path, PathBuf},
@@ -176,7 +176,7 @@ fn check(home: &Path, tag: &str) {
         0,
         0,
     );
-    layerfs_api::close_idle(std::time::Duration::ZERO);
+    layerfs_store::admin::with_users::close_idle(std::time::Duration::ZERO);
     std::fs::remove_dir_all(source).unwrap();
     std::fs::remove_dir_all(empty).unwrap();
 }
@@ -232,7 +232,7 @@ fn budget_exhaustion_returns_partial_counts() {
     assert_eq!(value.get_int("file_count"), Some(10_000));
     assert_eq!(value.get("partial"), Some(&SdkValue::Bool(true)));
     assert_eq!(value.get_int("size"), Some(0));
-    layerfs_api::close_idle(std::time::Duration::ZERO);
+    layerfs_store::admin::with_users::close_idle(std::time::Duration::ZERO);
     std::fs::remove_dir_all(home).unwrap();
     std::fs::remove_dir_all(source).unwrap();
 }
@@ -278,7 +278,7 @@ fn hidden_paths_are_not_counted() {
     assert_eq!(nested.get_int("file_count"), Some(1), "{nested:?}");
     assert_eq!(nested.get_int("dir_count"), Some(0), "{nested:?}");
     assert_eq!(nested.get_int("size"), Some(2), "{nested:?}");
-    layerfs_api::close_idle(std::time::Duration::ZERO);
+    layerfs_store::admin::with_users::close_idle(std::time::Duration::ZERO);
     std::fs::remove_dir_all(home).unwrap();
     std::fs::remove_dir_all(source).unwrap();
 }

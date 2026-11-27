@@ -5,7 +5,7 @@
 #![allow(dead_code)]
 use super::fixture::Fixture;
 use layerfs_api::worker::{read_host_frame, write_host_frame, HOST_MAX_REPLY, MAX_HELLO};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use postgres::{config::Host, Client as Postgres, Config, NoTls};
 use std::collections::BTreeSet;
 use std::io::{Read, Write};
@@ -42,7 +42,7 @@ pub fn random() -> String {
         .unwrap()
         .read_exact(&mut bytes)
         .unwrap();
-    layerfs_bridge::sdk_values::hex(&bytes)
+    layerfs_protocol::sdk::hex(&bytes)
 }
 
 /// One role and its database; dropped with the test.
@@ -198,7 +198,7 @@ pub fn decode(output: &Output) -> SdkValue {
         &output.stdout
     };
     let text = std::str::from_utf8(bytes).unwrap();
-    layerfs_api::json::parse(text).unwrap_or_else(|error| panic!("{error:?}: {text}"))
+    layerfs_home::json::parse(text).unwrap_or_else(|error| panic!("{error:?}: {text}"))
 }
 
 /// The answer of `layerfs <words>`, or its refusal code.
@@ -260,7 +260,7 @@ pub fn revision(home: &Path) -> String {
 
 pub fn revision_of(home: &Path, store: &str) -> String {
     let record = std::fs::read_to_string(home.join(format!("store/{store}/record.json"))).unwrap();
-    let record = layerfs_api::json::parse(&record).unwrap();
+    let record = layerfs_home::json::parse(&record).unwrap();
     record.get_text("login_revision").unwrap().to_owned()
 }
 

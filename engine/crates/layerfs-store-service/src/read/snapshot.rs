@@ -4,11 +4,11 @@
 //! stack's head Layer and a Branch is its newest node. Reads resolve paths by
 //! walking names from the root of the snapshot's immutable tree; nothing here
 //! reads a live Workspace.
-use crate::history::lookup::{self as args, branch_node, invalid, refuse, short, Answer};
+use {crate::history::lookup::{self as args, branch_node, invalid, refuse, Answer}, layerfs_protocol::sdk::short};
 use crate::history::MAIN;
 use crate::read::cached::Cached;
 use crate::store::{PortError, Store, StorePorts};
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_content::compare::{as_text, EntryFacts, TreeTable, MAXIMUM_TEXT_BYTES};
 use layerfs_content::filesystem::path::PathName;
 use layerfs_content::filesystem::{FilesystemRootId, SymlinkTarget};

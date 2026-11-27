@@ -2,8 +2,8 @@
 //! forward): its id, kernel start time and boot, so a reused id does not
 //! keep a record alive (moved from the Store leases, layerfs-project#103).
 //! The facts come from `layerfs_bridge::process`, not a driver (#112).
-use layerfs_bridge::control::SdkValue;
-use layerfs_bridge::process::LocalProcess;
+use layerfs_protocol::provision::install::SdkValue;
+use layerfs_os::process::LocalProcess;
 use std::sync::OnceLock;
 
 /// This process as leases name it, read once; `None` where the kernel does

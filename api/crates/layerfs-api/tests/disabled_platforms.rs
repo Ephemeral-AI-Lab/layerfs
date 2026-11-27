@@ -1,14 +1,14 @@
 //! Removed-platform policy through the shared public call dispatcher: the
 //! platforms removed in 2.0 (`firecracker`, `ssh`, `microsandbox`), whose
 //! records may remain in a home.
-use layerfs_api::{call, json};
-use layerfs_bridge::control::SdkValue;
-use layerfs_sandbox_backend::removed_platforms::removed_reason;
+use {layerfs_api::call, layerfs_home::json};
+use layerfs_protocol::provision::install::SdkValue;
+use layerfs_machine::table::removed::removed_reason;
 use std::collections::BTreeMap;
 use std::net::TcpListener;
 use std::path::Path;
 
-const CASES: &str = include_str!("../../../test/disabled-platforms.json");
+const CASES: &str = include_str!("support/disabled-platforms.json");
 
 fn snapshot(root: &Path) -> BTreeMap<String, Vec<u8>> {
     fn walk(root: &Path, dir: &Path, out: &mut BTreeMap<String, Vec<u8>>) {
@@ -38,7 +38,7 @@ fn every_new_work_route_refuses_before_writes_or_worker_and_daemon_connections()
             std::env::temp_dir().join(format!("lfs-disabled-{platform}-{}", std::process::id()));
         std::fs::create_dir(&home).unwrap();
         let data = CASES
-            .replace("$host", layerfs_api::names::HOST_MACHINE)
+            .replace("$host", layerfs_home::names::HOST_MACHINE)
             .replace("$platform", platform)
             .replace("$address", &listener.local_addr().unwrap().to_string());
         let data = json::parse(&data).unwrap();

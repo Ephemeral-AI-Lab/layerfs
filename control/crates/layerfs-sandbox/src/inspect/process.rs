@@ -7,7 +7,7 @@
 //! daemon is asked, nothing is opened in a run folder and nothing is
 //! written.
 use crate::record::DaemonRecord;
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use std::path::{Path, PathBuf};
 
 /// This kernel's unified cgroup v2 hierarchy, where the namespaces backend

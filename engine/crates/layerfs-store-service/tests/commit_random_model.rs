@@ -20,7 +20,7 @@ use adversary::{
     apply, assert_linear, commit, random_bytes, seed_tree, tree_of, verdict, Node, Op, Service,
     TestStore, Tree, Verdict,
 };
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::provision::install::SdkValue;
 use layerfs_store_service::store::BoundWorkspace;
 
 const SEEDS: [u64; 8] = [1, 7, 42, 99, 768, 1024, 4096, 65537];

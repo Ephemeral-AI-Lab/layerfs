@@ -8,11 +8,7 @@ mod fusectl;
 #[allow(dead_code)]
 #[path = "support/installed_store.rs"]
 mod installed;
-use layerfs_daemon::{
-    bootstrap::open_store,
-    store::{BindRequest, BoundWorkspace},
-    Owner, OwnerClient, OwnerConfig,
-};
+use layerfs_store_service::{bootstrap::open_store, store::{BindRequest, BoundWorkspace}, Owner, OwnerClient, OwnerConfig};
 use layerfs_fuse::{
     attributes::Identity,
     mount::AbortWrite,
@@ -20,15 +16,10 @@ use layerfs_fuse::{
     MountRequests,
 };
 use layerfs_history::WorkspaceId;
-use layerfs_mount_ports::ports::{
-    Fence, MountServices, RequestServices, ServiceError, ServiceFuture, ServiceReply,
-};
+use layerfs_vfs::ports::mount::{Fence, MountServices, RequestServices, ServiceError, ServiceFuture, ServiceReply};
 use layerfs_overlay::{KernelCookieOffer, KernelMount, OverlayError, ProfileConfig, Publication};
 use layerfs_storage::ReservationBlocks;
-use layerfs_workspace::{
-    BaseView, KernelDirectoryWindow, KernelMutationOutcome, KernelReadOperation, KernelReadOutcome,
-    KernelVisitRequest, KernelWindow, VisitFacts, WorkspaceError, WriteData,
-};
+use layerfs_vfs::{BaseView, KernelDirectoryWindow, KernelMutationOutcome, KernelReadOperation, KernelReadOutcome, KernelVisitRequest, KernelWindow, VisitFacts, WorkspaceError, WriteData};
 use std::{
     fs,
     os::unix::process::CommandExt,
@@ -119,23 +110,23 @@ impl RequestServices for ObserveRequest {
 }
 fn job<T>(
     client: &OwnerClient,
-    route: layerfs_workspace::Route,
-    action: impl FnOnce(&OwnerClient, layerfs_workspace::Route) -> Result<T, layerfs_daemon::OwnerError>,
+    route: layerfs_vfs::Route,
+    action: impl FnOnce(&OwnerClient, layerfs_vfs::Route) -> Result<T, layerfs_store_service::OwnerError>,
 ) -> T {
     action(client, route).unwrap()
 }
-fn state(client: &OwnerClient, route: layerfs_workspace::Route) -> layerfs_overlay::WorkspaceState {
+fn state(client: &OwnerClient, route: layerfs_vfs::Route) -> layerfs_overlay::WorkspaceState {
     job(
         client,
         route,
-        move |owner: &layerfs_daemon::OwnerClient, route| owner.state(route),
+        move |owner: &layerfs_store_service::OwnerClient, route| owner.state(route),
     )
 }
-fn resources(client: &OwnerClient, route: layerfs_workspace::Route) -> layerfs_overlay::Resources {
+fn resources(client: &OwnerClient, route: layerfs_vfs::Route) -> layerfs_overlay::Resources {
     job(
         client,
         route,
-        move |owner: &layerfs_daemon::OwnerClient, route| {
+        move |owner: &layerfs_store_service::OwnerClient, route| {
             owner.workspace_client(route)?.resources()
         },
     )
@@ -225,7 +216,7 @@ fn run(forced: bool, device: bool) {
     let done = job(
         &client,
         route,
-        move |owner: &layerfs_daemon::OwnerClient, route| owner.kernel_mount(route, root),
+        move |owner: &layerfs_store_service::OwnerClient, route| owner.kernel_mount(route, root),
     );
     let mount = done;
     let queue = MountRequests::new(mount);

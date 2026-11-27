@@ -5,7 +5,7 @@ use crate::{
     store::Store,
     StoreService,
 };
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_content::compare::TreeTable;
 use layerfs_content::filesystem::FilesystemRootId;
 use layerfs_history::{
@@ -52,7 +52,7 @@ pub fn stats(service: &StoreService, args: &SdkValue) -> Answer {
         &service.store,
         &stack,
         &reader,
-        &crate::history::lookup::node_text(node),
+        &layerfs_protocol::sdk::node_text(node),
     )?;
     crate::read::tree_stats::count(
         &service.store,

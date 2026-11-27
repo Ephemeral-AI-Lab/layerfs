@@ -58,7 +58,7 @@ mod mounted;
 #[allow(dead_code)]
 #[path = "support/mounted_commit.rs"]
 mod rig;
-use layerfs_bridge::control::{MountPhase, Reply};
+use layerfs_protocol::provision::install::{MountPhase, Reply};
 use layerfs_fuse::request::Opcode;
 use mounted::{mount_entry, until};
 use nix::{

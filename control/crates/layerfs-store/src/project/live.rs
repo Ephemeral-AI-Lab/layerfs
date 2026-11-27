@@ -8,7 +8,7 @@ use crate::project::listing;
 use crate::project::record::ProjectRecord;
 use crate::record::StoreRecord;
 use crate::service;
-use layerfs_bridge::control::SdkRefusal;
+use layerfs_protocol::provision::install::SdkRefusal;
 use layerfs_home::names::StoreName;
 use std::path::Path;
 

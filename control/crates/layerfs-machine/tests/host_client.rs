@@ -1,5 +1,5 @@
 #![cfg(any(target_os = "macos", target_os = "linux"))]
-use layerfs_bridge::{control::SdkValue, sdk_values::hex};
+use layerfs_protocol::{provision::install::SdkValue, sdk::hex};
 use layerfs_home::{helpers::random, home};
 use layerfs_machine::worker::{
     host_check_peer, read_host_frame, write_host_frame, HostHello, HostPaths, ATTACHED,

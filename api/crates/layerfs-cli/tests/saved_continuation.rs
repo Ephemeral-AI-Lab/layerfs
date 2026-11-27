@@ -1,8 +1,8 @@
 //! Every CLI call is a new process: continuations cannot rely on process caches.
 mod common;
 use common::{layerfs, run, tempdir, text};
-use layerfs_api::json;
-use layerfs_bridge::control::SdkValue;
+use layerfs_home::json;
+use layerfs_protocol::provision::install::SdkValue;
 use std::path::Path;
 
 fn call(home: &Path, words: &[&str]) -> SdkValue {
