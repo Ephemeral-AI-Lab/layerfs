@@ -3,6 +3,7 @@
 //! dropped target refusal, declared-loss metadata/SHA verification, and
 //! record-only variant/config (#176 I03).
 use crate::fixture;
+use crate::helper::{test_running, wait_for_release, Helper};
 use fixture::{pax_record, Scratch, Tar};
 use layerfs_home::disk::{self, paths, write_record};
 use layerfs_home::names::MachineName;
@@ -240,27 +241,6 @@ fn filtered_bytes(bytes: &[u8]) -> std::io::Result<Vec<u8>> {
     filtered_with_report(bytes).map(|(out, _)| out)
 }
 
-struct ChildGuard(Option<std::process::Child>);
-
-impl ChildGuard {
-    fn new(child: std::process::Child) -> Self {
-        Self(Some(child))
-    }
-
-    fn kill_and_wait(&mut self) {
-        if let Some(mut child) = self.0.take() {
-            let _ = child.kill();
-            let _ = child.wait();
-        }
-    }
-}
-
-impl Drop for ChildGuard {
-    fn drop(&mut self) {
-        self.kill_and_wait();
-    }
-}
-
 fn run_load(
     docker: &Docker,
     home: &Path,
@@ -405,16 +385,14 @@ fn real_docker_tag_move_leaves_enumerable_part_and_clears_stale_ref_on_publish()
 
     // 2. Move repo_tag in Docker to V2, start loading repo_tag, and kill mid-send.
     guard.retag(&v2_tag, &repo_tag);
-    let mut child = ChildGuard::new(
+    let mut child = Helper::spawn(
         Command::new(std::env::current_exe().unwrap())
             .args(["--exact", "recovery::helper_pause_load", "--nocapture"])
             .env("LP176_REC_PAUSE_HOME", &home)
             .env("LP176_REC_PAUSE_MACHINE", layerfs_home::names::HOST_MACHINE)
             .env("LP176_REC_PAUSE_IMAGE", &repo_tag)
             .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-            .unwrap(),
+            .stderr(Stdio::null()),
     );
     wait_for("child pauses with staged part", || {
         home.join("paused").exists()
@@ -543,16 +521,14 @@ fn prune_reclaims_parts_temps_and_stranded_while_protecting_live_locks_and_in_us
     // 3. Live-locked part + temp dir (held by child process).
     cache::write(&cache_dir, &hex_locked, 0, b"locked-partial-bytes").unwrap();
     fs::create_dir_all(cache_dir.join(format!(".tmp-{hex_locked}.2-cd34/bin"))).unwrap();
-    let mut lock_child = ChildGuard::new(
+    let mut lock_child = Helper::spawn(
         Command::new(std::env::current_exe().unwrap())
             .args(["--exact", "recovery::helper_hold_image_lock", "--nocapture"])
             .env("LP176_REC_LOCK_HOME", &home)
             .env("LP176_REC_LOCK_MACHINE", layerfs_home::names::HOST_MACHINE)
             .env("LP176_REC_LOCK_IMAGE", &id_locked)
             .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-            .unwrap(),
+            .stderr(Stdio::null()),
     );
     wait_for("lock child holds ImageLock", || {
         home.join("lock-held").exists()
@@ -2776,9 +2752,7 @@ fn helper_pause_load() {
                 {
                     paused = true;
                     fs::write(home.join("paused"), b"").unwrap();
-                    while !home.join("proceed").exists() {
-                        std::thread::sleep(Duration::from_millis(20));
-                    }
+                    wait_for_release(&home.join("proceed"));
                 }
             }
         }
@@ -2804,7 +2778,9 @@ fn helper_hold_image_lock() {
     let mut sink = |_: SdkValue| {};
     let _held = ImageLock::take(&home, &machine, &image, &mut Events::new(&mut sink)).unwrap();
     fs::write(home.join("lock-held"), b"").unwrap();
-    for _ in 0..120 {
-        std::thread::sleep(Duration::from_secs(1));
+    // held until the test kills it; ends by itself once the test is gone
+    let start = Instant::now();
+    while test_running(start, Duration::from_secs(60)) {
+        std::thread::sleep(Duration::from_millis(20));
     }
 }
