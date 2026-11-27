@@ -213,9 +213,16 @@ fn refusals_carry_their_detail() {
         Some(cache::cache(&home).to_string_lossy().as_ref()),
         "the refusal names the filesystem it measured"
     );
+    // the host machine was `native` until #835
     assert_eq!(
         error.detail.get_text("fix"),
-        Some("layerfs machine prune native --unused"),
+        Some(
+            format!(
+                "layerfs machine prune {} --unused",
+                layerfs_home::names::HOST_MACHINE
+            )
+            .as_str()
+        ),
         "the refusal says how to free room"
     );
     assert!(

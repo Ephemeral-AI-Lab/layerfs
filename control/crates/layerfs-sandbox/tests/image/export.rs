@@ -3,6 +3,7 @@
 //! images, and home-scoped owned-container recovery under `ImageLock`
 //! (#176 I02).
 use crate::fixture;
+use crate::helper::{wait_for_release, Helper};
 use fixture::{pax_record, Scratch, Tar};
 use layerfs_home::disk;
 use layerfs_home::reply::events::Events;
@@ -477,15 +478,15 @@ fn real_docker_volume_image_leaves_no_anonymous_volumes() {
     // Pause a real `load()` mid-send to inspect the exact anonymous volume ID
     // created for the container, then let `load()` finish normally and assert
     // both container and anonymous volume are gone.
-    let child = Command::new(std::env::current_exe().unwrap())
-        .args(["--exact", "export::helper_load_with_pause", "--nocapture"])
-        .env("LP176_PAUSE_HOME", &home)
-        .env("LP176_PAUSE_MACHINE", layerfs_home::names::HOST_MACHINE)
-        .env("LP176_PAUSE_IMAGE", &img.tag)
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap();
+    let child = Helper::spawn(
+        Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "export::helper_load_with_pause", "--nocapture"])
+            .env("LP176_PAUSE_HOME", &home)
+            .env("LP176_PAUSE_MACHINE", layerfs_home::names::HOST_MACHINE)
+            .env("LP176_PAUSE_IMAGE", &img.tag)
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped()),
+    );
 
     wait_for("child load to pause in send", || {
         home.join("paused").exists()
@@ -494,7 +495,16 @@ fn real_docker_volume_image_leaves_no_anonymous_volumes() {
     let owned = owned_containers(&docker, &home).unwrap();
     assert_eq!(owned.len(), 1, "expected 1 live owned container: {owned:?}");
     let cname = &owned[0].name;
-    assert!(cname.starts_with(&format!("layerfs-export-{}-native-", &home_id[..8])));
+    // the container is named for the machine the load ran on, the host
+    // machine (`native` until #835)
+    assert!(
+        cname.starts_with(&format!(
+            "layerfs-export-{}-{}-",
+            &home_id[..8],
+            layerfs_home::names::HOST_MACHINE
+        )),
+        "{cname}"
+    );
     let vols = container_volumes(cname);
     assert_eq!(
         vols.len(),
@@ -505,7 +515,7 @@ fn real_docker_volume_image_leaves_no_anonymous_volumes() {
     assert!(volume_exists(&vol_id));
 
     fs::write(home.join("proceed"), b"").unwrap();
-    let out = child.wait_with_output().unwrap();
+    let out = child.finish();
     assert!(
         out.status.success(),
         "paused load child failed: {}",
@@ -591,15 +601,15 @@ fn real_docker_killed_load_enumerates_and_recovers_under_lock() {
     let docker = real_docker();
 
     // 1. Spawn child that creates container, stages >= CHUNK bytes, then pauses.
-    let mut child1 = Command::new(std::env::current_exe().unwrap())
-        .args(["--exact", "export::helper_load_with_pause", "--nocapture"])
-        .env("LP176_PAUSE_HOME", &home)
-        .env("LP176_PAUSE_MACHINE", "docker")
-        .env("LP176_PAUSE_IMAGE", &img.tag)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .unwrap();
+    let mut child1 = Helper::spawn(
+        Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "export::helper_load_with_pause", "--nocapture"])
+            .env("LP176_PAUSE_HOME", &home)
+            .env("LP176_PAUSE_MACHINE", "docker")
+            .env("LP176_PAUSE_IMAGE", &img.tag)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null()),
+    );
     wait_for("first killed-to-be child pauses in send", || {
         home.join("paused").exists()
     });
@@ -639,8 +649,7 @@ fn real_docker_killed_load_enumerates_and_recovers_under_lock() {
     assert!(container_exists(&c1.name));
 
     // Kill child1 (no Drop runs).
-    child1.kill().unwrap();
-    child1.wait().unwrap();
+    child1.kill_and_wait();
 
     // After SIGKILL: residual owned container is still enumerable, and
     // cleanup_owned removes both the container and its anonymous volume under I01's lock.
@@ -662,23 +671,22 @@ fn real_docker_killed_load_enumerates_and_recovers_under_lock() {
     // recovers under I01's lock: removes the stale owned container + volume,
     // exports with a new nonce container, resumes from CHUNK, and cleans up.
     let _ = fs::remove_file(home.join("paused"));
-    let mut child2 = Command::new(std::env::current_exe().unwrap())
-        .args(["--exact", "export::helper_load_with_pause", "--nocapture"])
-        .env("LP176_PAUSE_HOME", &home)
-        .env("LP176_PAUSE_MACHINE", "docker")
-        .env("LP176_PAUSE_IMAGE", &img.tag)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .unwrap();
+    let mut child2 = Helper::spawn(
+        Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "export::helper_load_with_pause", "--nocapture"])
+            .env("LP176_PAUSE_HOME", &home)
+            .env("LP176_PAUSE_MACHINE", "docker")
+            .env("LP176_PAUSE_IMAGE", &img.tag)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null()),
+    );
     wait_for("second killed-to-be child pauses in send", || {
         home.join("paused").exists()
     });
     let c2 = owned_containers(&docker, &home).unwrap().remove(0);
     assert_ne!(c2.nonce, c1.nonce);
     let v2 = container_volumes(&c2.name)[0].clone();
-    child2.kill().unwrap();
-    child2.wait().unwrap();
+    child2.kill_and_wait();
 
     std::thread::sleep(Duration::from_millis(2200));
     let (resumed, phases) = run_load(&docker, &home, "docker", &img.tag);
@@ -711,15 +719,15 @@ fn real_docker_different_homes_do_not_collide_or_delete_each_other() {
 
     // Leave a residual container from home1 (via killed helper, plus an old
     // `layerfs.export.started=1` container owned by home1).
-    let mut child = Command::new(std::env::current_exe().unwrap())
-        .args(["--exact", "export::helper_load_with_pause", "--nocapture"])
-        .env("LP176_PAUSE_HOME", &home1)
-        .env("LP176_PAUSE_MACHINE", "docker")
-        .env("LP176_PAUSE_IMAGE", &img.tag)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .unwrap();
+    let mut child = Helper::spawn(
+        Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "export::helper_load_with_pause", "--nocapture"])
+            .env("LP176_PAUSE_HOME", &home1)
+            .env("LP176_PAUSE_MACHINE", "docker")
+            .env("LP176_PAUSE_IMAGE", &img.tag)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null()),
+    );
     wait_for("home1 child pauses in send", || {
         home1.join("paused").exists()
     });
@@ -727,8 +735,7 @@ fn real_docker_different_homes_do_not_collide_or_delete_each_other() {
     assert_eq!(owned1.len(), 1);
     let c1 = owned1[0].name.clone();
     let v1 = container_volumes(&c1)[0].clone();
-    child.kill().unwrap();
-    child.wait().unwrap();
+    child.kill_and_wait();
 
     // Also create an aged container labeled for home1 to ensure STALE_SECS
     // age-based sweeping is gone.
@@ -800,15 +807,15 @@ fn real_docker_next_copy_sweeps_a_killed_copy_without_touching_active() {
     let docker = real_docker();
 
     // 1. SIGKILL a load on (machine="docker", img_killed), leaving container + anonymous volume.
-    let mut killed_child = Command::new(std::env::current_exe().unwrap())
-        .args(["--exact", "export::helper_load_with_pause", "--nocapture"])
-        .env("LP176_PAUSE_HOME", &home)
-        .env("LP176_PAUSE_MACHINE", "docker")
-        .env("LP176_PAUSE_IMAGE", &img_killed.tag)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .unwrap();
+    let mut killed_child = Helper::spawn(
+        Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "export::helper_load_with_pause", "--nocapture"])
+            .env("LP176_PAUSE_HOME", &home)
+            .env("LP176_PAUSE_MACHINE", "docker")
+            .env("LP176_PAUSE_IMAGE", &img_killed.tag)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null()),
+    );
     wait_for("killed-to-be load pauses in send", || {
         home.join("paused").exists()
     });
@@ -817,20 +824,19 @@ fn real_docker_next_copy_sweeps_a_killed_copy_without_touching_active() {
     let c_killed = killed_owned[0].clone();
     let v_killed = container_volumes(&c_killed.name)[0].clone();
     assert!(volume_exists(&v_killed));
-    killed_child.kill().unwrap();
-    killed_child.wait().unwrap();
+    killed_child.kill_and_wait();
     fs::remove_file(home.join("paused")).unwrap();
 
     // 2. Keep a second load actively paused on (machine="lima", img_active).
-    let active_child = Command::new(std::env::current_exe().unwrap())
-        .args(["--exact", "export::helper_load_with_pause", "--nocapture"])
-        .env("LP176_PAUSE_HOME", &home)
-        .env("LP176_PAUSE_MACHINE", "lima")
-        .env("LP176_PAUSE_IMAGE", &img_active.tag)
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap();
+    let active_child = Helper::spawn(
+        Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "export::helper_load_with_pause", "--nocapture"])
+            .env("LP176_PAUSE_HOME", &home)
+            .env("LP176_PAUSE_MACHINE", "lima")
+            .env("LP176_PAUSE_IMAGE", &img_active.tag)
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped()),
+    );
     wait_for("active load pauses in send", || {
         home.join("paused").exists()
     });
@@ -884,7 +890,7 @@ fn real_docker_next_copy_sweeps_a_killed_copy_without_touching_active() {
 
     // 4. Let active_child finish and verify full cleanup.
     fs::write(home.join("proceed"), b"").unwrap();
-    let out = active_child.wait_with_output().unwrap();
+    let out = active_child.finish();
     assert!(
         out.status.success(),
         "active load child failed: {}",
@@ -989,9 +995,7 @@ fn helper_load_with_pause() {
                 {
                     paused = true;
                     fs::write(home.join("paused"), b"").unwrap();
-                    while !home.join("proceed").exists() {
-                        std::thread::sleep(Duration::from_millis(20));
-                    }
+                    wait_for_release(&home.join("proceed"));
                 }
             }
         }
