@@ -85,5 +85,5 @@ pub use machine::files::{machine_files, machine_page};
 pub use machine::space::{machine_space, ENTRIES as SPACE_ENTRIES};
 pub use machine::stats::machine_stats;
 
-mod route;
-pub use route::{ask, in_worker, serve};
+mod serve;
+pub use serve::{ask, in_worker, serve};

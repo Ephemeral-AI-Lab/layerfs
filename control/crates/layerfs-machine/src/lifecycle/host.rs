@@ -1,19 +1,22 @@
 //! The host machine's own start and stop: its recorded state, its worker's
 //! start and drain, and the holders a stop reports, which the Sandbox crate
 //! reads ([`crate::MachineUsers::host_holders`]).
-use crate::{record::MachineRecord, worker::HostPaths};
+use crate::{record::machine::MachineRecord, route::HostPaths};
 use layerfs_home::{
-    events::Events,
-    home::{lock, with_field},
+    disk::with_field,
+    lock::home,
     names::MachineName,
-    outcome::{refused, Outcome},
+    reply::{
+        events::Events,
+        outcome::{refused, Outcome},
+    },
 };
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 
 use std::path::Path;
 
 fn set(home: &Path, name: &MachineName, stopped: bool) -> Result<bool, SdkRefusal> {
-    let _guard = lock::take(home)?;
+    let _guard = home::take(home)?;
     let record = MachineRecord::of(home, name.as_str())?;
     let previous = record.recorded_state() == Some("stopped");
     if previous != stopped {
@@ -77,7 +80,7 @@ pub(crate) fn stop(
         && paths
             .control
             .try_exists()
-            .map_err(layerfs_home::outcome::failed)?
+            .map_err(layerfs_home::reply::outcome::failed)?
     {
         match paths
             .for_management()?

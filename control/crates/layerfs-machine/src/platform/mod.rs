@@ -14,6 +14,8 @@
 #![forbid(unsafe_code)]
 pub(crate) mod adapter;
 pub(crate) mod apple_container;
+#[cfg(feature = "machine")]
+pub(crate) mod available;
 pub(crate) mod dispatch;
 pub(crate) mod docker;
 pub(crate) mod error;

@@ -1,8 +1,8 @@
 //! The host machine's worker as `machine.get` with `live` shows it: one
 //! bounded probe of its control socket and the evidence of what answered.
 //! The host doctor (`layerfs-inspect`) reads the same probe and evidence.
-use crate::worker::{HostObservation, HostPaths, HostProbe};
-use layerfs_home::home::with_field;
+use crate::route::{HostObservation, HostPaths, HostProbe};
+use layerfs_home::disk::with_field;
 use layerfs_protocol::sdk::SdkValue;
 use std::path::Path;
 use std::time::{Duration, Instant};
@@ -77,7 +77,7 @@ pub fn evidence(observation: &HostObservation) -> SdkValue {
             }),
         ));
     }
-    layerfs_home::helpers::map_of(fields)
+    layerfs_home::reply::values::map_of(fields)
 }
 
 /// `machine.get`'s `answer` with its `live` section's `machine_state` and

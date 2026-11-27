@@ -1,8 +1,5 @@
-//! `home.init` and `home.get`: setting a home up on purpose, and reading what
-//! this build would use with it without changing anything. `init` opens the
-//! home as every call does (created when empty; a folder that is not a
-//! LayerFS 2.0 home is refused with the fix that moves it aside) and says which it did
-//! (`outcome`: `created` or `unchanged`).
+//! `home.get`: reading what this build would use with a home without
+//! changing anything (`home.init`, which sets one up, is `init.rs`).
 //! `get` reads files only: no process, Docker, network, lock or log line, so a
 //! client can poll it, and it answers for a home that does not exist yet.
 //! What it answers is the call surface's (2.0): the home's `state` with
@@ -12,10 +9,13 @@
 use layerfs_home::home::layout::{detect, Layout};
 use layerfs_home::home::{generation, read_record, with_field};
 use layerfs_home::names::HOST_MACHINE;
-use layerfs_home::outcome::{refused, Outcome};
+use layerfs_home::outcome::Outcome;
 use layerfs_home::state::{Reason, State};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
+
+#[doc(hidden)]
+pub use super::init::init; // #828 compat
 
 /// The identity of the build making the call (`LAYERFS_BUILD_COMMIT` and
 /// `LAYERFS_BUILD_DIRTY` when it was compiled), compared with the Linux
@@ -35,7 +35,7 @@ pub const BUILD_MARKER: &[u8] = b"layerfs-build-identity:";
 
 /// What a home is, before anything opens it.
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum Found {
+pub(super) enum Found {
     Missing,
     Current,
     Foreign,
@@ -55,41 +55,14 @@ const INIT: &str = "layerfs home init";
 
 /// The home's state and layout, read only; a home the system refuses to
 /// read is refused, as `detect` does.
-fn state(home: &Path) -> Result<(Found, Option<i64>), layerfs_protocol::sdk::SdkRefusal> {
+pub(super) fn state(
+    home: &Path,
+) -> Result<(Found, Option<i64>), layerfs_protocol::sdk::SdkRefusal> {
     Ok(match detect(home)? {
         Layout::Empty => (Found::Missing, None),
         Layout::Foreign => (Found::Foreign, None),
         Layout::Current(file) => (Found::Current, Some(file.layout)),
     })
-}
-
-/// `home.init`: the home ready for calls, as the first call of any other
-/// kind makes it: `{ home, unchanged, outcome, layout, version }`. Refused
-/// inside a machine's worker root, which is not a home, and for a folder
-/// that is not a LayerFS 2.0 home (`Unsupported`, with the fix that moves
-/// it aside).
-pub fn init(home: &Path) -> Outcome {
-    if layerfs_home::home::guest::is_root(home) {
-        return Err(refused(
-            "InvalidInput",
-            "a machine's worker root is not a home; run `layerfs home init` on the host",
-        ));
-    }
-    let (before, _) = state(home)?;
-    let file = layerfs_home::home::open(home)?;
-    #[cfg(feature = "machine")]
-    layerfs_machine::ensure_built_ins(home, &file.id)?;
-    let outcome = match before {
-        Found::Current => "unchanged",
-        _ => "created",
-    };
-    Ok(SdkValue::map([
-        ("home", SdkValue::text(home.display().to_string())),
-        ("unchanged", SdkValue::Bool(before == Found::Current)),
-        ("outcome", SdkValue::text(outcome)),
-        ("layout", SdkValue::Int(file.layout)),
-        ("version", SdkValue::text(env!("CARGO_PKG_VERSION"))),
-    ]))
 }
 
 /// `home.get`: the home's path, `state` (with `reason`, `fix` and the
@@ -175,7 +148,7 @@ fn platforms(home: &Path) -> Outcome {
 /// machine adapters to ask.
 #[cfg(not(feature = "machine"))]
 fn platforms(_home: &Path) -> Outcome {
-    Err(refused(
+    Err(layerfs_home::outcome::refused(
         "Unsupported",
         "this build has no machine adapters, so it lists no platforms",
     ))

@@ -1,6 +1,6 @@
 //! The one in-flight intent (#536 §7.1) and the per-entity lock (§8).
-use layerfs_home::home::entity_lock;
-use layerfs_home::op::{Op, Standing};
+use layerfs_home::lock::entity;
+use layerfs_home::record::intent::{Op, Standing};
 use layerfs_protocol::sdk::SdkValue;
 use std::time::Duration;
 
@@ -75,8 +75,8 @@ fn an_entity_lock_excludes_a_second_holder_until_dropped() {
     let dir = std::env::temp_dir().join(format!("layerfs-entity-lock-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join("lock");
-    let held = entity_lock::take(&path, Duration::ZERO, "Store app was held").unwrap();
-    let refusal = entity_lock::take(&path, Duration::ZERO, "Store app was held").unwrap_err();
+    let held = entity::take(&path, Duration::ZERO, "Store app was held").unwrap();
+    let refusal = entity::take(&path, Duration::ZERO, "Store app was held").unwrap_err();
     assert_eq!(refusal.code, "Unavailable");
     assert!(
         refusal.message.starts_with("Store app was held"),
@@ -84,6 +84,6 @@ fn an_entity_lock_excludes_a_second_holder_until_dropped() {
         refusal.message
     );
     drop(held);
-    entity_lock::take(&path, Duration::ZERO, "Store app was held").unwrap();
+    entity::take(&path, Duration::ZERO, "Store app was held").unwrap();
     std::fs::remove_dir_all(&dir).unwrap();
 }

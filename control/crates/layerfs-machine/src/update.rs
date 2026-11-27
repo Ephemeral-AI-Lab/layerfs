@@ -1,11 +1,11 @@
 //! `machine.update`.
-use super::list::changed;
-use super::spec::machine_of;
+use super::record::adapter_spec::machine_of;
+use super::status::list::changed;
 use crate::platform::HostOs;
 use crate::Related;
-use layerfs_home::home::{lock, paths};
-use layerfs_home::outcome::shell_word;
-use layerfs_home::outcome::{refused, Outcome};
+use layerfs_home::reply::outcome::shell_word;
+use layerfs_home::reply::outcome::{refused, Outcome};
+use layerfs_home::{disk::paths, lock::home};
 use layerfs_protocol::sdk::SdkValue;
 use std::path::Path;
 
@@ -50,7 +50,7 @@ pub struct MachineUpdate {
 pub fn update(home: &Path, request: &MachineUpdate, related: Related) -> Outcome {
     let home = home.to_path_buf();
     let name = request.name.as_str();
-    let _lock = lock::take(&home)?;
+    let _lock = home::take(&home)?;
     let record = machine_of(&home, name)?;
     let kind = record.platform()?;
     let resize = request.cpus.is_some() || request.memory.is_some();
@@ -84,7 +84,7 @@ pub fn update(home: &Path, request: &MachineUpdate, related: Related) -> Outcome
             "InUse",
             format!("machine {name} is running on its Docker socket: stop it before changing the socket"),
         );
-        return Err(layerfs_home::outcome::with_fix(
+        return Err(layerfs_home::reply::outcome::with_fix(
             refusal,
             format!("layerfs machine stop {name}", name = shell_word(name)),
         ));
