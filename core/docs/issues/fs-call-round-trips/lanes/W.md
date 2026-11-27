@@ -761,3 +761,71 @@ constants for the prepare list. The text is unchanged.
 
 Production LOC: 230,600 -> 230,815 (delta +215), engine
 layerfs-persistence +208, layerfs-store-service +7.
+
+## W7 — join the membership locate with the base chain (M3): not built
+
+**Condition.** Build W7 only if a per-statement trace of a cold create shows
+a membership locate immediately followed by a dependent read of what it
+returned (writes.md W7; costly pattern 8).
+
+**Trace.** The trace is a cold `apply.10_writes` (W0 probe,
+`FS818_CASES=apply.10_writes`) at the W4 tip `b7dd8bfd48`. It used server
+statement logging on `rt818_w` (`log_min_duration_statement = 0`, reset
+afterwards).
+- Receipts: `receipts/W7/trace-apply10-cold.txt` holds the cold call's
+  window, with writer backend 39669 and Workspace reader 39670.
+  `receipts/W7/trace-probe.log` holds the probe's counts.
+- Statement names are server prepare names: `s145` is the writer's plain
+  chain locate (`locate_chains`, ROOTS) and `s117` the reader's.
+
+**What the trace shows.**
+
+1. **The membership locate has no dependent read.** It is the writer's one
+   multi-id `s145` at 57.835, in W0's `finish`. The writer's next statements
+   are the signature read transaction (`LOCK history_meta`, `s168`) and then
+   the pack `COPY`. Nothing reads what the locate returned, so there is no
+   sequential wait to join. This is the demand W7 names.
+2. **The construct's base-path demands do show locate → read pairs.** They
+   run on the writer from 57.679 to 57.689. Each is a single-id `s145`:
+   - first locate, then the whole read of pack 4295 (`s146`);
+   - second locate, then the chain packs' directories `{2,4289,4291,4293}`
+     (`s147`); the ranges of those packs (`s148`) follow one locate later;
+   - later locates are followed by inode value blocks (`s149`).
+
+   These pairs are covered by W0's construct cold total of 18 = 13
+   statements + 5 prepares. The construct has 8 locates; the warm construct
+   has 1 range read and no locate.
+3. **The Commit Save already has the join.** It is `locate_for_save` with
+   packs, through `Save::joining_metadata_reads` (`store/commit.rs`,
+   b829bda882). Core gates it off for single-id demands:
+   `layerfs-storage/src/read/fetch.rs:360` (`ids.len() > 1`) and `:410`
+   (`page.len() > 1`). The joined statement (`chain_whole_packs.sql`)
+   returns whole packs only for non-delta metadata roots: roles 6–9, empty
+   ancestors, domain 0, FULL directory, within 256 KiB.
+   - Of the pairs above, only the first (the whole read of pack 4295) has
+     that shape.
+   - The second pair is a delta chain, and the joined statement excludes it
+     (non-empty ancestors).
+   - The inode value blocks are outside the join.
+
+**Decision: not built.**
+- The demand W7 names, the membership locate, has no dependent read.
+- Lifting the single-id gate for the construct's base path saves at most 1
+  cold trip of 80: the `s146` statement folds in, and the joined text's
+  prepare replaces `s146`'s. Warm saves 0.
+- That gate is in core `layerfs-storage`, outside lane W's files, and
+  costly pattern 8 records the Commit-construction join as a measured miss.
+
+Predicted 0 trips; nothing changed, so nothing was measured.
+
+**Follow-up for the coordinator (not built).** The writer's construct
+re-locates the same base-path objects the call's Workspace reader located
+in `store.bind`, about 180 ms earlier: the reader's `s117` at 57.499–57.506
+and the writer's `s145` at 57.679–57.688 have the same object ids.
+- Reusing those answers in the Save would remove up to the 6 construct
+  locates and their reads on a cold create.
+- The Save takes captured locators only from the Commit's own captured
+  reader (`LocatorMode::Reuse`, `store/captured.rs`), not from the call's
+  read cache.
+- That is a hand-off from the call's reader to the Save (W6 territory,
+  `store/pipeline.rs`), not a join.
