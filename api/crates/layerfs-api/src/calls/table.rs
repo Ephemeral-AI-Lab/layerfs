@@ -13,8 +13,8 @@ use super::form::{Form, Paging, Part, Profile, Section};
 use super::platform_policy::Policy;
 use super::scope::Rule;
 use super::Context;
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::outcome::Outcome;
+use layerfs_protocol::sdk::SdkValue;
 
 /// What one argument accepts.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

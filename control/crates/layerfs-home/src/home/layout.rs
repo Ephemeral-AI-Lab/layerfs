@@ -8,7 +8,7 @@
 //! build writes nothing in it. Reading never changes anything.
 use super::records::{private_dir, read_record, unreadable, write_record};
 use crate::outcome::{refused, shell_word, with_fix};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 
 /// The layout this build writes.

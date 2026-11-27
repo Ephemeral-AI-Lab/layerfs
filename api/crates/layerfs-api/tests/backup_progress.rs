@@ -7,7 +7,7 @@
 //! variables tests/minio_service.sh of layerfs-bucket prints; without
 //! them the test says NOT_RUN and passes.
 use layerfs_api::home;
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 

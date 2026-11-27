@@ -10,8 +10,8 @@
 //! Nothing runs and no cgroup is touched: the hierarchy is a folder this
 //! test writes, with the files the kernel would show.
 #![cfg(unix)]
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::json::print;
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_sandbox::inspect::process;
 use layerfs_sandbox::record::{DaemonRecord, Local};
 use layerfs_sandbox::run_folder;

@@ -4,8 +4,8 @@
 //! choice: `layerfs_machine::docker_socket`), whatever machine an image is
 //! going to, so the machine and its images are in one Engine. Reads have a
 //! deadline; nothing here pulls or builds an image.
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::outcome::refused;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};

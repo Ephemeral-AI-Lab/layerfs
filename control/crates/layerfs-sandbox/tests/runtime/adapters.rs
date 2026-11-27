@@ -2,26 +2,26 @@
 //! capabilities), and the Runtime enum's refusal of a bind where the backend
 //! does not bind. The docker backend is retired (D-8, layerfs-project#111).
 #![cfg(unix)]
-use {layerfs_machine::table::backend, layerfs_sandbox::{IsolationModel, MountDriver}};
+use layerfs_sandbox::{Backend, IsolationModel, MountDriver};
 
 /// Records keep their values: `Backend::Process` is stored as `"native"` (G6).
 #[test]
 fn stored_names_parse_back_and_do_not_follow_the_rust_names() {
-    let names: Vec<&str> = backend::ALL.iter().map(|b| b.stored_name()).collect();
+    let names: Vec<&str> = Backend::ALL.iter().map(|b| b.stored_name()).collect();
     assert_eq!(names, ["process", "namespaces"]);
-    for backend in backend::ALL {
-        assert_eq!(backend::parse(backend.stored_name()), Some(backend));
+    for backend in Backend::ALL {
+        assert_eq!(Backend::parse(backend.stored_name()), Some(backend));
         assert!(!backend.description().is_empty(), "{backend:?}");
     }
-    assert_eq!(backend::parse("host_process"), None);
-    assert_eq!(backend::parse("Native"), None);
+    assert_eq!(Backend::parse("host_process"), None);
+    assert_eq!(Backend::parse("Native"), None);
     // a record of the retired docker backend names no backend
-    assert_eq!(backend::parse("docker"), None);
+    assert_eq!(Backend::parse("docker"), None);
 }
 
 #[test]
 fn each_backend_fixes_its_capabilities() {
-    let host = backend::Process.capabilities();
+    let host = layerfs_sandbox::backend_capabilities(Backend::Process);
     assert_eq!(
         (host.name, host.isolation, host.mount_driver),
         (
@@ -31,7 +31,7 @@ fn each_backend_fixes_its_capabilities() {
         )
     );
     assert!(!host.requires_image);
-    let namespaces = backend::Namespaces.capabilities();
+    let namespaces = layerfs_sandbox::backend_capabilities(Backend::Namespaces);
     assert_eq!(
         (
             namespaces.name,
@@ -53,7 +53,10 @@ fn each_backend_fixes_its_capabilities() {
 #[cfg(target_os = "macos")]
 #[test]
 fn a_bind_is_refused_where_the_backend_does_not_bind() {
-    use layerfs_sandbox::{Bind, CommandIdentity, LaunchRequest, ProcessProvider, ProviderLaunchOptions, Runtime, RuntimeError};
+    use layerfs_sandbox::{
+        Bind, CommandIdentity, LaunchRequest, ProcessProvider, ProviderLaunchOptions, Runtime,
+        RuntimeError,
+    };
     use std::time::Duration;
     let bind = Bind::store(std::path::Path::new("/srv/store/store.sqlite")).unwrap();
     let request = LaunchRequest {

@@ -1,8 +1,8 @@
 //! Concurrent homes and binary-only rebuilds share one import on each Engine.
 #![cfg(feature = "machine")]
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::home;
 use layerfs_machine::{docker_default, ensure_built_ins, record::MachineRecord};
+use layerfs_protocol::sdk::SdkValue;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 

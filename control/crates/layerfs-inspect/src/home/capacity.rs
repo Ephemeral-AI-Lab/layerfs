@@ -2,7 +2,7 @@
 //! by one bounded `df` and judged by the doctors' one room rule (a nearly
 //! full disk is a warning).
 use super::{Budget, Checks};
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};

@@ -12,8 +12,8 @@
 //! daemon write theirs. Inspect permits are the process's, and the worker
 //! is in this process, so every test here takes one lock.
 #![cfg(unix)]
-use {layerfs_api::home::{self, paths, read_record, write_record}, layerfs_store::lease};
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_api::home::{self, lease, paths, read_record, write_record};
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_sandbox::record::{DaemonRecord, Local, WorkspaceRecord};
 use std::collections::BTreeMap;
 use std::net::{SocketAddr, TcpListener};
@@ -594,7 +594,12 @@ fn a_forwarded_sandbox_s_run_folder_is_read_in_its_machine() {
     let record = layerfs_sandbox::record::sandbox(&home, "s1")
         .unwrap()
         .unwrap();
-    let sizes = layerfs_sandbox::inspect::overlay::overlay_sizes(&home, record.machine(), "s1", &namespaces);
+    let sizes = layerfs_sandbox::inspect::overlay::overlay_sizes(
+        &home,
+        record.machine(),
+        "s1",
+        &namespaces,
+    );
     let sizes = sizes.unwrap();
     assert_eq!(
         layerfs_home::json::print(sizes.get("overlay_sizes").unwrap()),

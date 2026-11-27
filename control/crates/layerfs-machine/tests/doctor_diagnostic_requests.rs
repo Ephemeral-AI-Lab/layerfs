@@ -1,10 +1,10 @@
 //! Allowlisted diagnostic streaming preserves deadlines and original uncertainty.
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::outcome::refused;
 use layerfs_machine::worker::{
     diagnostic_connect, read_frame, read_frame_within, write_frame, DiagnosticOperation, Endpoint,
     Hello, MAX_HELLO, PROTOCOL,
 };
+use layerfs_protocol::sdk::SdkValue;
 use std::net::TcpListener;
 use std::time::{Duration, Instant};
 fn t(s: &str) -> SdkValue {

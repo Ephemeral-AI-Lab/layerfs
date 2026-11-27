@@ -11,8 +11,8 @@ mod installed;
 #[allow(dead_code)]
 mod support;
 
-use layerfs_protocol::provision::install::{SdkCall, SdkValue};
 use layerfs_history::HistoryName;
+use layerfs_protocol::sdk::{SdkCall, SdkValue};
 use layerfs_store_service::operator::{self, WorkspaceView};
 use std::fs;
 use support::{write, Fixture};

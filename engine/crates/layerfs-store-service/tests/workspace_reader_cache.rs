@@ -10,9 +10,9 @@ mod installed;
 #[allow(dead_code)]
 mod support;
 
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_content::{object::inode_leaf::InodeKind, AuthenticatedObjects};
 use layerfs_history::WorkspaceId;
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_store_service::read::window;
 use support::Fixture;
 

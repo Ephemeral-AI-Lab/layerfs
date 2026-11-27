@@ -1,3 +1,10 @@
+/// `crate::doctor::budget`, as `src/home/bucket.rs` (included by the
+/// bucket tests) names it.
+mod doctor {
+    pub mod budget {
+        pub use layerfs_inspect::doctor::budget::{Budget, Checks};
+    }
+}
 mod backup_target;
 mod fixes_sandbox_backup;
 mod fixes_store;

@@ -2,12 +2,12 @@
 //! process for a Store on this computer, through its machine's worker
 //! (`store.file` step `heads`, within the worker read budget) for any
 //! other. Starts nothing; a machine that does not answer is a message.
-use crate::place::{self, Executor};
-use {layerfs_protocol::StoreKind, crate::record::StoreRecord};
-use crate::sqlite::transfer::step::{StepFrame, StoreStep};
-use layerfs_protocol::sdk::hex;
 use crate::backup::copy as remote;
+use crate::place::{self, Executor};
+use crate::record::{StoreKind, StoreRecord};
+use crate::sqlite::transfer::step::{StepFrame, StoreStep};
 use layerfs_home::home::paths;
+use layerfs_protocol::sdk::hex;
 use std::path::Path;
 
 /// Store `record`'s heads digest as hex, or why it could not be read.

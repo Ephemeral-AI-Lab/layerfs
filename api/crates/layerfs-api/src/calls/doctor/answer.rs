@@ -6,8 +6,8 @@
 //! `not_checked` entry name their thing by its own word. A doctor exits 0
 //! once its report is made; only a thing it cannot find is a refusal.
 use crate::calls::{Context, Form, Part, THING};
-use layerfs_inspect::{Kind, Options, Thing};
 use layerfs_home::outcome::Outcome;
+use layerfs_inspect::{Kind, Options, Thing};
 
 /// The words a finding or a `not_checked` entry names its thing by.
 const THINGS: &[&str] = &[

@@ -1,9 +1,15 @@
 //! Original file publication and opened-Store custody during kernel installation.
-use layerfs_store_service::{bootstrap::OpenedStore, store::PortError};
-use layerfs_protocol::{provision::{install::{ControlError, InstallPhase, InstallRefusal, RefusalKind}, manifest::StoreManifest}, duplex::ChannelError};
 use layerfs_content::ContentError;
 use layerfs_history::HistoryError;
+use layerfs_protocol::{
+    duplex::ChannelError,
+    provision::{
+        install::{ControlError, InstallPhase, InstallRefusal, RefusalKind},
+        manifest::StoreManifest,
+    },
+};
 use layerfs_storage::{ReservationBlocks, StorageError};
+use layerfs_store_service::{bootstrap::OpenedStore, store::PortError};
 use std::{fmt, io, path::PathBuf, sync::Arc};
 
 /// Fixed startup resources; none is a total Store/namespace/file size limit.

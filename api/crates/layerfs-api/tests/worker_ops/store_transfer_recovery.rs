@@ -4,11 +4,11 @@
 //! the record's `incoming_on` names that machine; and a `store move` to
 //! `native` asks a machine's worker once for each piece: a lost answer is
 //! the call's outcome, never asked again.
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::home::{paths, private_dir, write_entity, write_record};
 use layerfs_home::names::StoreName;
 use layerfs_machine::worker::{read_frame, read_frame_within, write_frame, Hello, MAX_HELLO};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_store::record::StoreRecord;
 use layerfs_store::sqlite::transfer::step::{StepFrame, StoreStep};
 use layerfs_store::sqlite::{create, remove, transfer::phases};
@@ -69,9 +69,7 @@ fn home_with_box(tag: &str) -> (PathBuf, PathBuf) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let address = listener.local_addr().unwrap().to_string();
     let guest = root.clone();
-    std::thread::spawn(move || {
-        layerfs_api::worker::serve::serve(listener, "k".to_owned(), guest)
-    });
+    std::thread::spawn(move || layerfs_api::worker::serve::serve(listener, "k".to_owned(), guest));
     box_machine(&home, &address);
     (home, root)
 }

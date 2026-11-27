@@ -2,7 +2,9 @@
 //! ranged GET, HEAD, DELETE and ListObjectsV2 paging. One attempt per
 //! request, on a connection the client kept alive from an earlier reply or
 //! a new one.
-use crate::backup::bucket::driver::{check_metadata, open_span, Driver, Listed, Metadata, Span, Stat, MAX_LIST_PAGES};
+use crate::backup::bucket::driver::{
+    check_metadata, open_span, Driver, Listed, Metadata, Span, Stat, MAX_LIST_PAGES,
+};
 use crate::backup::bucket::error::{local, RemoteError};
 use crate::backup::bucket::limits::Limits;
 use crate::backup::s3_api::config::S3Config;

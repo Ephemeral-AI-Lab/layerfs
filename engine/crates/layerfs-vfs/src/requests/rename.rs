@@ -1,7 +1,7 @@
 //! RENAME, including replacement: both names in one atomic owner job.
 use super::{mutation::Declined, unsupported};
-use layerfs_content::filesystem::PathName;
 use crate::Operation;
+use layerfs_content::filesystem::PathName;
 
 /// `flags` are the kernel's rename flags. No destination path is supplied:
 /// when a directory changes parent, the publishing job proves it is not moved

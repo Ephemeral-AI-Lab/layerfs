@@ -8,7 +8,22 @@ use std::{
 };
 // a process daemon's start (macOS only)
 #[cfg(target_os = "macos")]
-use {super::{listener, search_path::search_path}, crate::backend::process::instance::handle::Sandbox, layerfs_os::process::LocalProcess, nix::fcntl::OFlag, std::{fs::{File, OpenOptions, Permissions}, io::Write, os::unix::{fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt}, process::CommandExt}, process::{Command, Stdio}, time::Duration}};
+use {
+    super::{listener, search_path::search_path},
+    crate::backend::process::instance::handle::Sandbox,
+    layerfs_os::process::LocalProcess,
+    nix::fcntl::OFlag,
+    std::{
+        fs::{File, OpenOptions, Permissions},
+        io::Write,
+        os::unix::{
+            fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt},
+            process::CommandExt,
+        },
+        process::{Command, Stdio},
+        time::Duration,
+    },
+};
 
 /// A local Sandbox's daemon output file in its directory, stdout and
 /// stderr together.
@@ -61,8 +76,11 @@ pub enum LocalPhase {
 #[cfg(target_os = "macos")]
 #[derive(Debug)]
 pub struct LocalCreateFailure {
+    /// The create phase that failed.
     pub phase: LocalPhase,
+    /// What the create made before it failed, for the caller to stop.
     pub sandbox: Option<Sandbox>,
+    /// Why it failed.
     pub cause: RuntimeError,
 }
 

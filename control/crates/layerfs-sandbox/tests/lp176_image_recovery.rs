@@ -6,11 +6,11 @@
 #[path = "support/image.rs"]
 mod fixture;
 use fixture::{pax_record, Scratch, Tar};
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::events::Events;
 use layerfs_home::home::{self, paths, write_record};
 use layerfs_home::names::MachineName;
 use layerfs_machine::worker::{read_frame, read_frame_within, write_frame, MAX_HELLO, PROTOCOL};
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_sandbox::docker::Docker;
 use layerfs_sandbox::image_artifact::{self as cache, architecture, Sidecar, CHUNK};
 use layerfs_sandbox::image_load::{load, ImageLock, Loaded, Target};
@@ -267,7 +267,7 @@ fn run_load(
     home: &Path,
     machine: &str,
     image: &str,
-) -> Result<Loaded, layerfs_protocol::provision::install::SdkRefusal> {
+) -> Result<Loaded, layerfs_protocol::sdk::SdkRefusal> {
     let mut sink = |_: SdkValue| {};
     let mut events = Events::new(&mut sink);
     load(
@@ -291,7 +291,7 @@ fn image_rows(home: &Path) -> Vec<SdkValue> {
     }
 }
 
-fn step(home: &Path, args: SdkValue) -> Result<SdkValue, layerfs_protocol::provision::install::SdkRefusal> {
+fn step(home: &Path, args: SdkValue) -> Result<SdkValue, layerfs_protocol::sdk::SdkRefusal> {
     cache::step(&layerfs_sandbox::deploy::Side::Home(home), &args)
 }
 

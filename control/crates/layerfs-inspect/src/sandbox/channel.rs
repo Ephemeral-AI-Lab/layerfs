@@ -1,12 +1,13 @@
 //! One bounded authenticated daemon observation; no pool, lease or reconnect:
 //! `sandbox.daemon_keys` to `sandbox.daemon_ready`, the daemon's Workspace
 //! list (`workspace_target`) and `sandbox.session`.
-use super::workspace_target::{Listed, Listing};
-use {super::{cause, Budget, Checks}, layerfs_sandbox::state::remove_fix};
+use super::{cause, remove_fix, Budget, Checks};
 use crate::doctor::report::NoVerdict;
-use layerfs_protocol::provision::install::{DaemonPhase, HelloRequest, Reply, Request, SdkCall, SdkValue};
-use layerfs_protocol::duplex::{initiate_observed, ChannelError};
+use crate::sandbox::workspace::{Listed, Listing};
 use layerfs_home::secrets;
+use layerfs_protocol::daemon::{DaemonPhase, HelloRequest, Reply, Request};
+use layerfs_protocol::duplex::{initiate_observed, ChannelError};
+use layerfs_protocol::sdk::{SdkCall, SdkValue};
 use layerfs_sandbox::daemon::channel::Control;
 use std::net::{Shutdown, SocketAddr, TcpStream};
 use std::sync::mpsc;

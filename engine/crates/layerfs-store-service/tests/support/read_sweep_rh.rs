@@ -28,8 +28,8 @@
 //! At the end no backend of the Store is left idle in a transaction.
 use super::adversary::{self, Service, TestStore};
 use super::fault_proxy::{Fault, FaultProxy};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_persistence::StoreSelection;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 
 const SEED: &[(&str, &[u8])] = &[
     ("/seed", b"seed\n"),

@@ -1,9 +1,9 @@
 //! `InUse` from `store.disconnect` fills `detail.related` with
 //! `{kind, name}` entries (#536 §10b refusal detail): another process's
 //! lease on the Store.
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::home::{paths, private_dir, write_entity};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::PathBuf;
 
 fn t(s: &str) -> SdkValue {
@@ -51,7 +51,9 @@ fn store_disconnect_names_another_process_s_lease() {
     )
     .unwrap();
     let name = layerfs_home::names::StoreName::parse("g").unwrap();
-    let refusal = refused(|_| layerfs_store::admin::with_users::disconnect(&home, &name));
+    let refusal = refused(|_| {
+        layerfs_store::admin::with_users::disconnect(&home, &name, &layerfs_sandbox::users::STORE)
+    });
     let _ = holder.kill();
     let _ = holder.wait();
     assert_eq!(refusal.code, "InUse", "{refusal:?}");

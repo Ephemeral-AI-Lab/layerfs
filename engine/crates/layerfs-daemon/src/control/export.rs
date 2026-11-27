@@ -35,10 +35,14 @@ use super::{
     registry::{bound_mut, idle},
     Failure, Service, Success,
 };
-use layerfs_store_service::store::BoundWorkspace;
-use layerfs_protocol::provision::install::{AbortDisposition, Activity, ControlCode, DetachDisposition, ForceUnmounted, ForcedCleanup, ForcedFacts, ForcedOutcome, MountPhase, MountReceipt, MountStatus, MountWork, ReadyMount, Reply, TeardownStage, WorkspaceToken, MOUNT_DIRECTORY_LIMIT};
 use layerfs_nfs::{ExportConfig, Released, Server};
 use layerfs_overlay::{CleanupState, KernelMount};
+use layerfs_protocol::daemon::{
+    AbortDisposition, Activity, ControlCode, DetachDisposition, ForceUnmounted, ForcedCleanup,
+    ForcedFacts, ForcedOutcome, MountPhase, MountReceipt, MountStatus, MountWork, ReadyMount,
+    Reply, TeardownStage, WorkspaceToken, MOUNT_DIRECTORY_LIMIT,
+};
+use layerfs_store_service::store::BoundWorkspace;
 use std::{
     net::{IpAddr, Ipv4Addr, TcpListener},
     path::PathBuf,
@@ -428,7 +432,7 @@ impl Service {
         if let Err(error) = operation.workspace().prepare_serials(operation.ports()) {
             let failure = match operation.ports().failure() {
                 Ok(Some(cause)) => match cause.as_ref() {
-                    layerfs_store_service::store::PortError::History(error) => Failure::History(error.clone()),
+                    crate::store::PortError::History(error) => Failure::History(error.clone()),
                     _ => Failure::Workspace(error),
                 },
                 Ok(None) | Err(_) => Failure::Workspace(error),
@@ -443,7 +447,7 @@ impl Service {
                 format!("mount directory {text}: {error}"),
             )));
         }
-        let mount = match self.job(workspace.route(), |client: &layerfs_store_service::OwnerClient, route| {
+        let mount = match self.job(workspace.route(), |client: &crate::OwnerClient, route| {
             client.kernel_mount(route, root)
         }) {
             Ok(mount) => mount,
@@ -528,7 +532,7 @@ impl Service {
         released: Option<Released>,
         failure: Failure,
     ) -> Stop {
-        match self.job(workspace.route(), |client: &layerfs_store_service::OwnerClient, route| {
+        match self.job(workspace.route(), |client: &crate::OwnerClient, route| {
             client.kernel_revoke(route, mount)
         }) {
             Ok(()) => Stop::Unattached(failure),
@@ -615,8 +619,8 @@ impl Service {
         // the rest is revalidated on the client's own schedule.
         let _ = workspace.stale_after_install(shown, installed, |found| {
             stale.insert(match found {
-                layerfs_store_service::store::Stale::Inode(serial) => serial,
-                layerfs_store_service::store::Stale::Entry { parent, .. } => parent,
+                crate::store::Stale::Inode(serial) => serial,
+                crate::store::Stale::Entry { parent, .. } => parent,
             });
             if stale.len() >= REFRESHED {
                 return Err(std::io::Error::other("refresh bound"));
@@ -728,7 +732,7 @@ impl Service {
                 ))
             }
         };
-        if let Err(failure) = self.job(workspace.route(), |client: &layerfs_store_service::OwnerClient, route| {
+        if let Err(failure) = self.job(workspace.route(), |client: &crate::OwnerClient, route| {
             client.kernel_revoke(route, mount)
         }) {
             let custody = ExportKept {

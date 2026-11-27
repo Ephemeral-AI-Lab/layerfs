@@ -6,18 +6,18 @@
 //! a Sandbox root refuses.
 #![cfg(target_os = "linux")]
 #[allow(dead_code)]
-mod support {
-    pub mod image;
-}
-use layerfs_sandbox::{namespaces::rootfs::{self, ImageRoot}, Image};
+#[path = "../support/image.rs"]
+mod image;
+use image::{archive, hex, legacy_archive, pax_record, unpacked_at, Scratch, Tar, DIGEST, OTHER};
+use layerfs_sandbox::{
+    namespaces::rootfs::{self, ImageRoot},
+    Image,
+};
 use std::{
     fs, io,
     os::unix::fs::{MetadataExt, PermissionsExt},
     path::{Path, PathBuf},
     time::{Duration, Instant},
-};
-use support::image::{
-    archive, hex, legacy_archive, pax_record, unpacked_at, Scratch, Tar, DIGEST, OTHER,
 };
 
 /// Two layers: the first holds the image, the second hides part of it and adds

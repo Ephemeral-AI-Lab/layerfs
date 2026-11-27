@@ -11,18 +11,18 @@
 //! `sandbox.host` (D-11), and a worker that does not answer gives
 //! `unknown`, nothing changed. Nothing here times a command: there is no
 //! implicit timeout, Commit or unmount.
+use crate::route::dispatch::call as dispatch;
+use crate::route::send::at;
+use layerfs_home::events::Events;
+use layerfs_home::outcome::shell_word;
+use layerfs_home::outcome::{with_fix, with_next, Outcome as Answer};
+use layerfs_machine::worker::Unreached;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_sandbox::exec::cancel::{self, Outcome};
 use layerfs_sandbox::exec::id::ExecId;
 use layerfs_sandbox::exec::record::{self, ExecRecord, Route, Running};
 use layerfs_sandbox::host::{Call, Message};
 use layerfs_sandbox::route::{on_machine, reach, Asked};
-use crate::route::send::at;
-use crate::route::dispatch::call as dispatch;
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
-use layerfs_home::events::Events;
-use layerfs_home::outcome::shell_word;
-use layerfs_home::outcome::{with_fix, with_next, Outcome as Answer};
-use layerfs_machine::worker::Unreached;
 use layerfs_sandbox::Stop;
 use std::io::ErrorKind;
 use std::path::Path;
@@ -119,7 +119,12 @@ pub fn exec(home: &Path, events: &mut Events<'_>, request: &ExecRequest) -> Answ
                         let mut none = |_| {};
                         let mut quiet = Events::new(&mut none);
                         let place = (at.home.as_path(), &at.record);
-                        layerfs_sandbox::exec::remote::remote(&mut quiet, place, kept, Duration::ZERO);
+                        layerfs_sandbox::exec::remote::remote(
+                            &mut quiet,
+                            place,
+                            kept,
+                            Duration::ZERO,
+                        );
                     }
                 }
                 None => events.event(event),

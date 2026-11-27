@@ -8,17 +8,20 @@
 //!
 //! The permits are the process's, so every test here takes one lock.
 #![cfg(any(target_os = "linux", target_os = "macos"))]
-use layerfs_protocol::provision::install::SdkValue;
-use layerfs_os::process::LocalProcess;
 use layerfs_home::home::{self, paths, write_record};
 use layerfs_home::names::MachineName;
-use {layerfs_inspect::{self, Window}, layerfs_sandbox::inspect::owner::{HARD, PERMITS, SOFT}};
+use layerfs_os::process::LocalProcess;
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_sandbox::record::{DaemonRecord, Local};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{mpsc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
+use {
+    layerfs_inspect::{self, Window},
+    layerfs_sandbox::inspect::owner::{HARD, PERMITS, SOFT},
+};
 
 static PROCESS: Mutex<()> = Mutex::new(());
 static NEXT: AtomicU32 = AtomicU32::new(0);
@@ -114,7 +117,7 @@ fn texts(answer: &SdkValue) -> Vec<String> {
         .collect()
 }
 
-fn code(outcome: Result<SdkValue, layerfs_protocol::provision::install::SdkRefusal>) -> String {
+fn code(outcome: Result<SdkValue, layerfs_protocol::sdk::SdkRefusal>) -> String {
     match outcome {
         Ok(value) => format!("ok {value:?}"),
         Err(refusal) => refusal.code,
@@ -163,8 +166,12 @@ fn the_third_request_is_busy_and_a_stuck_one_is_abandoned_at_the_hard_deadline()
     assert!(asked.elapsed() < Duration::from_millis(500));
     assert!(did_run.try_recv().is_err(), "refused work ran");
     // the Local route of a call takes its permit from the same two
-    assert_eq!(code(layerfs_inspect::sandbox_log(&home, "s1", &window)), "Busy");
-    let sizes = layerfs_inspect::overlay_sizes(&home, layerfs_home::names::HOST_MACHINE, "s1", &[1]);
+    assert_eq!(
+        code(layerfs_inspect::sandbox_log(&home, "s1", &window)),
+        "Busy"
+    );
+    let sizes =
+        layerfs_inspect::overlay_sizes(&home, layerfs_home::names::HOST_MACHINE, "s1", &[1]);
     assert_eq!(sizes.unwrap_err().code, "Busy");
 
     // each caller is answered at the hard deadline, before its work ends
@@ -177,7 +184,10 @@ fn the_third_request_is_busy_and_a_stuck_one_is_abandoned_at_the_hard_deadline()
     }
     // the abandoned helpers still hold both permits: still `Busy`
     assert_eq!(layerfs_inspect::running(), 2);
-    assert_eq!(code(layerfs_inspect::sandbox_log(&home, "s1", &window)), "Busy");
+    assert_eq!(
+        code(layerfs_inspect::sandbox_log(&home, "s1", &window)),
+        "Busy"
+    );
     // once they end, requests are admitted again
     until(Duration::from_secs(4), "the helpers' end", || {
         layerfs_inspect::running() == 0
@@ -212,7 +222,11 @@ fn work_past_its_soft_budget_answers_what_it_has_so_far() {
     assert!(after >= SOFT && after < HARD, "{after:?}");
     assert_eq!(answer.get_text("reason"), Some("deadline"));
     assert!(answer.get_int("entries").unwrap() > 40, "{answer:?}");
-    assert_eq!(layerfs_inspect::running(), 0, "the permit is free with the answer");
+    assert_eq!(
+        layerfs_inspect::running(),
+        0,
+        "the permit is free with the answer"
+    );
     // work that ends in time never sees its budget spent
     let quick = layerfs_inspect::admit(|budget| Ok(SdkValue::Bool(budget.spent()))).unwrap();
     assert_eq!(quick, SdkValue::Bool(false));
@@ -390,7 +404,8 @@ fn overlay_sizes_are_read_by_stat_without_opening_a_file() {
     // the answer, as a worker sends it and the home side answers it: null
     // for a Workspace with no overlay file (2) and for the link (4)
     let sizes =
-        layerfs_inspect::overlay_sizes(&home, layerfs_home::names::HOST_MACHINE, "s1", &asked).unwrap();
+        layerfs_inspect::overlay_sizes(&home, layerfs_home::names::HOST_MACHINE, "s1", &asked)
+            .unwrap();
     // with them, what this side sees of the Sandbox's daemon process
     // (layerfs-project#164): the record names this test, a host process,
     // which has no cgroup for its Workspaces either
@@ -409,7 +424,8 @@ fn overlay_sizes_are_read_by_stat_without_opening_a_file() {
         )
     );
     // a Sandbox with no Workspace is asked for its process alone
-    let none = layerfs_inspect::overlay_sizes(&home, layerfs_home::names::HOST_MACHINE, "s1", &[]).unwrap();
+    let none = layerfs_inspect::overlay_sizes(&home, layerfs_home::names::HOST_MACHINE, "s1", &[])
+        .unwrap();
     assert_eq!(none.get("overlay_sizes"), Some(&SdkValue::List(Vec::new())));
     assert_eq!(none.get("daemon"), sizes.get("daemon"));
     // the request by its kind is the same read
@@ -444,7 +460,8 @@ fn overlay_sizes_are_read_by_stat_without_opening_a_file() {
         assert_eq!(refused.unwrap_err().code, "InvalidInput");
     }
     let lost =
-        layerfs_inspect::overlay_sizes(&home, layerfs_home::names::HOST_MACHINE, "s2", &asked).unwrap_err();
+        layerfs_inspect::overlay_sizes(&home, layerfs_home::names::HOST_MACHINE, "s2", &asked)
+            .unwrap_err();
     assert_eq!(lost.code, "NoSuchSandbox", "{lost:?}");
     for name in ["overlay.sqlite", "1.sqlite", "3.sqlite"] {
         let path = overlay.join(name);

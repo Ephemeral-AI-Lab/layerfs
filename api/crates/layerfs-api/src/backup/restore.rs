@@ -3,8 +3,8 @@
 use crate::calls::table::Kind::Name;
 use crate::calls::table::{a, call, Call, PROGRESS};
 use crate::calls::{Context, Form, Part};
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::outcome::Outcome;
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_store::backup::family::BackupRestore;
 
 /// Its answer: the projects found in it, or `ok` for an empty Store.
@@ -47,5 +47,10 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         file: text("file"),
     };
     let (home, events) = context.parts();
-    layerfs_store::backup::jobs::restore::restore(home, events, &request)
+    layerfs_store::backup::jobs::restore::restore(
+        home,
+        events,
+        &request,
+        &layerfs_sandbox::users::STORE,
+    )
 }

@@ -23,11 +23,11 @@ use crate::image_artifact::{self as cache, CHUNK};
 pub use crate::image_lock::ImageLock;
 use crate::image_tar::{Filtered, TarReport};
 use crate::images::{refused_with, stopped};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::home;
 use layerfs_home::outcome::shell_word;
 use layerfs_home::outcome::{failed, refused, with_fix, Outcome};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_store::place::Worker;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
@@ -753,8 +753,7 @@ fn send(
             whole.update(&buffer[..n]);
             left -= n as u64;
         }
-        let matched =
-            left == 0 && Some(layerfs_protocol::sdk::hex(&head.finalize())) == prefix;
+        let matched = left == 0 && Some(layerfs_protocol::sdk::hex(&head.finalize())) == prefix;
         if !matched {
             return Ok(None);
         }

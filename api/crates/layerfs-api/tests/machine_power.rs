@@ -13,7 +13,7 @@
 //! process's environment.
 #![cfg(feature = "machine")]
 use layerfs_api::home::{self, paths, read_record, write_record};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::os::unix::fs::PermissionsExt;

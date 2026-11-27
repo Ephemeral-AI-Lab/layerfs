@@ -5,11 +5,11 @@ use crate::calls::table::{a, call, Call, PROGRESS};
 use crate::calls::Context;
 use crate::calls::{Form, Policy};
 #[cfg(feature = "machine")]
-use layerfs_protocol::provision::install::SdkValue;
-#[cfg(feature = "machine")]
 use layerfs_home::names::MachineName;
 #[cfg(feature = "machine")]
 use layerfs_home::outcome::Outcome;
+#[cfg(feature = "machine")]
+use layerfs_protocol::sdk::SdkValue;
 
 /// Its answer: `ok`, or `unchanged` when it was running already.
 const FORM: Form = Form::of(
@@ -36,7 +36,7 @@ pub(crate) const CALL: Call = call(
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let machine = MachineName::parse(args.get_text("machine").unwrap_or(""))?;
     let (home, events) = context.parts();
-    layerfs_machine::with_users::start(home, events, &machine)
+    layerfs_machine::with_users::start(home, events, &machine, &layerfs_sandbox::users::MACHINE)
 }
 
 // without the `machine` feature (the guest worker's build) it is

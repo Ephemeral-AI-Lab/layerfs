@@ -1,14 +1,13 @@
 //! Facts read from provider and guest output: one string field of a JSON
 //! answer, free bytes from `df -kP`, and whether a port listens in
 //! `/proc/net/tcp`.
-use layerfs_home::json::Json;
-use layerfs_sandbox::RuntimeError;
+use layerfs_home::json::{Json, JsonError};
 use std::io::Read;
 
 /// The string at `path` in a JSON document; an array on the way stands for
 /// its first element. `None` when the path is absent, not a string, or longer
 /// than 128 bytes.
-pub(crate) fn json_string(text: &str, path: &[&str]) -> Result<Option<String>, RuntimeError> {
+pub(crate) fn json_string(text: &str, path: &[&str]) -> Result<Option<String>, JsonError> {
     let mut json = Json::new(text.as_bytes());
     let found = descend(&mut json, path, 0)?;
     Ok(found)
@@ -18,9 +17,9 @@ fn descend<R: Read>(
     json: &mut Json<R>,
     path: &[&str],
     depth: u8,
-) -> Result<Option<String>, RuntimeError> {
+) -> Result<Option<String>, JsonError> {
     if depth > 32 {
-        return Err(RuntimeError::Protocol("JSON depth"));
+        return Err(JsonError("JSON depth".to_owned()));
     }
     json.whitespace()?;
     match (json.peek()?, path.split_first()) {

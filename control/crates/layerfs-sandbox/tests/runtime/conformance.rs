@@ -24,7 +24,11 @@
 #![cfg(unix)]
 #[path = "../support/json.rs"]
 mod support_json;
-use {layerfs_machine::table::backend, layerfs_sandbox::{Bind, CommandIdentity, ContainerId, HelperSpec, Image, LaunchPhase, LaunchRequest, LocalRecord, MountDriver, NamespaceRecord, ProviderLaunchOptions, Runtime, RuntimeError, SandboxRecord}};
+use layerfs_sandbox::{
+    Backend, Bind, CommandIdentity, ContainerId, HelperSpec, Image, LaunchPhase, LaunchRequest,
+    LocalRecord, MountDriver, NamespaceRecord, ProviderLaunchOptions, Runtime, RuntimeError,
+    SandboxRecord,
+};
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -45,8 +49,8 @@ enum Binds {
 
 fn binds(backend: Backend) -> Binds {
     match backend {
-        backend::Process => Binds::Refused,
-        backend::Namespaces => Binds::Accepted,
+        Backend::Process => Binds::Refused,
+        Backend::Namespaces => Binds::Accepted,
     }
 }
 
@@ -57,11 +61,11 @@ fn options(backend: Backend) -> ProviderLaunchOptions {
         gid: nix::unistd::Gid::effective().as_raw(),
     };
     match backend {
-        backend::Process => ProviderLaunchOptions::Local {
+        Backend::Process => ProviderLaunchOptions::Local {
             command_identity,
             environment: Vec::new(),
         },
-        backend::Namespaces => ProviderLaunchOptions::Namespaces {
+        Backend::Namespaces => ProviderLaunchOptions::Namespaces {
             command_identity,
             environment: Vec::new(),
             image: image(),
@@ -82,8 +86,8 @@ fn record(backend: Backend) -> SandboxRecord {
         labels: Vec::new(),
     };
     match backend {
-        backend::Process => SandboxRecord::Local(local),
-        backend::Namespaces => SandboxRecord::Namespaces(NamespaceRecord {
+        Backend::Process => SandboxRecord::Local(local),
+        Backend::Namespaces => SandboxRecord::Namespaces(NamespaceRecord {
             local,
             image: image(),
             network: None,
@@ -94,8 +98,8 @@ fn record(backend: Backend) -> SandboxRecord {
 /// The backend a record names.
 fn record_backend(record: &SandboxRecord) -> Backend {
     match record {
-        SandboxRecord::Local(_) => backend::Process,
-        SandboxRecord::Namespaces(_) => backend::Namespaces,
+        SandboxRecord::Local(_) => Backend::Process,
+        SandboxRecord::Namespaces(_) => Backend::Namespaces,
     }
 }
 
@@ -105,11 +109,9 @@ fn record_backend(record: &SandboxRecord) -> Backend {
 fn runtime(backend: Backend, root: &Path) -> Option<Result<Runtime, RuntimeError>> {
     match backend {
         #[cfg(target_os = "macos")]
-        backend::Process => {
-            Some(layerfs_sandbox::ProcessProvider::new(root).map(Runtime::Process))
-        }
+        Backend::Process => Some(layerfs_sandbox::ProcessProvider::new(root).map(Runtime::Process)),
         #[cfg(target_os = "linux")]
-        backend::Namespaces => {
+        Backend::Namespaces => {
             Some(layerfs_sandbox::NamespaceProvider::new(root).map(Runtime::Namespaces))
         }
         _ => None,
@@ -128,8 +130,8 @@ enum Lifecycle {
 
 fn lifecycle(backend: Backend) -> Lifecycle {
     match backend {
-        backend::Process => Lifecycle::Runs,
-        backend::Namespaces => Lifecycle::NeedsRoot,
+        Backend::Process => Lifecycle::Runs,
+        Backend::Namespaces => Lifecycle::NeedsRoot,
     }
 }
 
@@ -145,14 +147,14 @@ fn image() -> Image {
 fn each_stored_name_round_trips_and_is_unique() {
     let mut names = BTreeSet::new();
     let mut capability_names = BTreeSet::new();
-    for backend in backend::ALL {
+    for backend in Backend::ALL {
         let name = backend.stored_name();
         assert!(!name.is_empty(), "{backend:?}");
         assert!(names.insert(name), "{name} stored twice");
-        assert_eq!(backend::parse(name), Some(backend));
-        assert_eq!(backend::parse(&name.to_uppercase()), None, "{name}");
+        assert_eq!(Backend::parse(name), Some(backend));
+        assert_eq!(Backend::parse(&name.to_uppercase()), None, "{name}");
         assert!(!backend.description().is_empty(), "{backend:?}");
-        let capabilities = backend.capabilities();
+        let capabilities = layerfs_sandbox::backend_capabilities(backend);
         assert!(capability_names.insert(capabilities.name), "{backend:?}");
     }
 }
@@ -175,13 +177,17 @@ fn each_backends_mount_driver_serves_its_support_rows_kernel_route() {
             assert_eq!(row.kernel, None, "{at}: a kernel route with no backend");
             continue;
         };
-        let backend = backend::parse(name).unwrap_or_else(|| panic!("{at}: {name}"));
+        let backend = Backend::parse(name).unwrap_or_else(|| panic!("{at}: {name}"));
         let kernel = row.kernel.as_deref();
         assert!(kernel.is_some(), "{at}: a backend with no kernel route");
-        assert_eq!(route(backend.capabilities().mount_driver), kernel, "{at}");
+        assert_eq!(
+            route(layerfs_sandbox::backend_capabilities(backend).mount_driver),
+            kernel,
+            "{at}"
+        );
         assert!(row.description.ends_with(backend.description()), "{at}");
     }
-    for backend in backend::ALL {
+    for backend in Backend::ALL {
         let named = rows
             .iter()
             .any(|r| r.backend.as_deref() == Some(backend.stored_name()));
@@ -239,7 +245,7 @@ impl Drop for Root {
 
 #[test]
 fn a_backend_that_takes_no_bind_refuses_one_before_any_effect() {
-    for backend in backend::ALL
+    for backend in Backend::ALL
         .into_iter()
         .filter(|b| binds(*b) == Binds::Refused)
     {
@@ -269,7 +275,7 @@ fn a_backend_that_binds_carries_its_binds_through_the_helper_spec() {
         guest: PathBuf::from("/mnt/shared"),
         read_write: false,
     };
-    for backend in backend::ALL
+    for backend in Backend::ALL
         .into_iter()
         .filter(|b| binds(*b) == Binds::Accepted)
     {
@@ -323,7 +329,7 @@ fn native_backend_here() -> Option<Backend> {
         .expect("a native row for this host");
     row.backend
         .as_deref()
-        .map(|name| backend::parse(name).unwrap())
+        .map(|name| Backend::parse(name).unwrap())
 }
 
 #[test]
@@ -335,13 +341,16 @@ fn each_runtime_here_is_its_backend_or_refused_before_any_effect() {
             "this host's native backend {native:?} has no runtime here"
         );
     }
-    for backend in backend::ALL {
+    for backend in Backend::ALL {
         let root = Root::new("runtime");
         match runtime(backend, &root.0) {
             None => {}
             Some(Ok(runtime)) => {
                 assert_eq!(runtime.backend(), backend);
-                assert_eq!(runtime.capabilities().unwrap(), backend.capabilities());
+                assert_eq!(
+                    runtime.capabilities().unwrap(),
+                    layerfs_sandbox::backend_capabilities(backend)
+                );
             }
             Some(Err(error)) => {
                 assert!(matches!(error, RuntimeError::Unsupported(_)), "{error:?}");
@@ -353,14 +362,14 @@ fn each_runtime_here_is_its_backend_or_refused_before_any_effect() {
 
 #[test]
 fn each_runtime_refuses_another_backends_options_and_records() {
-    for backend in backend::ALL {
+    for backend in Backend::ALL {
         let root = Root::new("foreign");
         let Some(Ok(runtime)) = runtime(backend, &root.0) else {
             continue;
         };
         let daemon = root.0.join("absent-daemon");
         let id = ContainerId::parse(&"1".repeat(64)).unwrap();
-        for other in backend::ALL.into_iter().filter(|o| *o != backend) {
+        for other in Backend::ALL.into_iter().filter(|o| *o != backend) {
             let at = format!("{backend:?} given {other:?}'s");
             let mut launch = request(other, &daemon, "foreign-1");
             launch.options = options(other);
@@ -407,7 +416,7 @@ fn stand_in_daemon(root: &Root, port: u16) -> PathBuf {
 
 #[test]
 fn each_backend_runs_the_lifecycle_it_can_run_here() {
-    for (i, backend) in backend::ALL.into_iter().enumerate() {
+    for (i, backend) in Backend::ALL.into_iter().enumerate() {
         let root = Root::new("life");
         let Some(Ok(runtime)) = runtime(backend, &root.0) else {
             continue;

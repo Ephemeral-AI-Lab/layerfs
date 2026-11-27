@@ -16,7 +16,7 @@
 //! the same read. Paths are found as the Dirty check finds them.
 use super::dirty::{join, Names, WALK};
 use super::{Failure, Service};
-use layerfs_store_service::store::BoundWorkspace;
+use crate::store::BoundWorkspace;
 use layerfs_content::compare::{locate, TreeTable};
 use layerfs_content::filesystem::attributes::{read_portable, AttributeReadWork};
 use layerfs_content::filesystem::{FilesystemRootId, PathName};

@@ -2,11 +2,11 @@
 #[path = "../support/doctor_own.rs"]
 mod doctor_own;
 use doctor_own::{complete, outcome, own, own_within};
-use layerfs_protocol::provision::install::SdkValue;
-use layerfs_inspect::{Kind, Options};
 use layerfs_home::home::{paths, private_dir, write_entity, write_record};
 use layerfs_home::names::HOST_MACHINE;
 use layerfs_home::op::Op;
+use layerfs_inspect::{Kind, Options};
+use layerfs_protocol::sdk::SdkValue;
 use std::collections::BTreeMap;
 use std::net::TcpListener;
 use std::os::unix::fs::MetadataExt;

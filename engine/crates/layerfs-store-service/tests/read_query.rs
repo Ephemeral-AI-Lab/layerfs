@@ -1,5 +1,5 @@
 //! Numbered page admission does not turn bounded replay into missing results.
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_store_service::read::query::{result_page, Work, MAXIMUM_QUERY_WORK};
 
 fn args(fields: &[(&str, i64)]) -> SdkValue {

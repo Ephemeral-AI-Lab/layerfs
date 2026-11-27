@@ -7,8 +7,8 @@ use crate::{
     read::{paged_reads, query, reads, search, visibility},
     StoreService,
 };
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_content::compare::memo::Memo;
+use layerfs_protocol::sdk::SdkValue;
 
 /// `grep(pattern, { branch, commit?, path?, pageSize?, pagePos? })`: literal matches per line in text files.
 pub fn grep(service: &StoreService, args: &SdkValue) -> Answer {

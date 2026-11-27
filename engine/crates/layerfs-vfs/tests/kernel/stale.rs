@@ -23,7 +23,11 @@ use layerfs_content::{
     ContentError,
 };
 use layerfs_overlay::{Inode, KernelDirectory, KernelMount, OpenFile, OverlayError};
-use layerfs_vfs::{CanonicalCache, CanonicalClient, JobOutcome, KernelDirectoryRead, KernelInput, KernelReadDecision, KernelReadOperation, KernelVisitRequest, Operation, Refusal, VisitFacts, WorkspaceError, WorkspaceResult};
+use layerfs_vfs::{
+    CanonicalCache, CanonicalClient, JobOutcome, KernelDirectoryRead, KernelInput,
+    KernelReadDecision, KernelReadOperation, KernelVisitRequest, Operation, Refusal, VisitFacts,
+    WorkspaceError, WorkspaceResult,
+};
 use std::sync::Arc;
 
 /// A memory-only client over a cache that holds nothing.

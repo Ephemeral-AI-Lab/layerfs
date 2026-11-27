@@ -3,7 +3,6 @@
 use super::snapshot;
 use crate::history::lookup as args;
 use crate::store::StorePorts;
-use layerfs_protocol::provision::install::SdkRefusal;
 use layerfs_content::{
     compare::{memo::Memo, EntryFacts},
     filesystem::{
@@ -14,6 +13,7 @@ use layerfs_content::{
     object::inode_leaf::{InodeKind, InodeValue},
     AuthenticatedObjects,
 };
+use layerfs_protocol::sdk::SdkRefusal;
 
 /// Names and inode demands acquired together, bounded independently of the tree.
 const DIRECTORY_WINDOW: usize = 64;

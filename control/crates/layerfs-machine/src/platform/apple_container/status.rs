@@ -11,13 +11,13 @@
 //! `volume delete` removes the disk.
 use crate::platform::error::{Code, MachineError};
 use crate::setup::facts;
-use crate::table::profile::HostOs;
-use crate::setup::probe::first_line;
 use crate::setup::guest::Guest;
+use crate::setup::probe::first_line;
+use crate::setup::spec::Spec;
 use crate::setup::vm::{call, CALL};
 use crate::setup::{tool, worker};
 use crate::setup::{with_worker, State, Status};
-use crate::setup::spec::Spec;
+use crate::table::profile::HostOs;
 
 pub(super) const CLI: &str = "container";
 pub(super) const DEFAULT_IMAGE: &str = "debian:trixie-slim";

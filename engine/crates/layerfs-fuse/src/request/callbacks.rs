@@ -15,7 +15,11 @@ use fuser::{
     ReplyPoll, ReplyStatfs, ReplyWrite, ReplyXattr, Request, TimeOrNow, WriteFlags,
 };
 use layerfs_content::filesystem::PathName;
-use layerfs_vfs::requests::{create, flush, link, remove, rename, unsupported, write::{self, AttributeChange, Stamp}, Declined, MutationInput};
+use layerfs_vfs::requests::{
+    create, flush, link, remove, rename, unsupported,
+    write::{self, AttributeChange, Stamp},
+    Declined, MutationInput,
+};
 use layerfs_vfs::{KernelReadOperation, Position};
 use std::{ffi::OsStr, io, os::unix::ffi::OsStrExt, path::Path, time::SystemTime};
 

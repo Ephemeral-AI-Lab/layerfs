@@ -3,9 +3,9 @@
 //! L2-D1): the worker's own record (manifest, no `created`) takes the
 //! caller's fields; a record of a removed project of the same name (another
 //! `created`) is replaced.
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::home::{paths, read_record, write_record};
 use layerfs_machine::worker::{self, Endpoint};
+use layerfs_protocol::sdk::SdkValue;
 use std::path::{Path, PathBuf};
 
 fn tempdir(tag: &str) -> PathBuf {
@@ -65,9 +65,7 @@ fn a_worker_inited_project_keeps_its_manifest() {
         secret: "k".to_owned(),
     };
     let guest = root.clone();
-    std::thread::spawn(move || {
-        layerfs_api::worker::serve::serve(listener, "k".to_owned(), guest)
-    });
+    std::thread::spawn(move || layerfs_api::worker::serve::serve(listener, "k".to_owned(), guest));
     for _ in 0..200 {
         if worker::ping(&endpoint).is_ok() {
             break;

@@ -3,10 +3,10 @@ use crate::intent::{self, WORKER_CLOSE};
 use crate::lease::Owner;
 use crate::record::{self, StoreRecord, StoreRef};
 use crate::Related;
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::home::{self, with_field};
 use layerfs_home::op::{self, Op, Standing};
 use layerfs_home::outcome::refused;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;

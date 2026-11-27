@@ -6,8 +6,8 @@
 //! outcome. Each case drives `sandbox.remove`, the close its side runs, or
 //! `sandbox.create`, never the tombstone write alone. Nothing runs a daemon.
 #![cfg(any(target_os = "linux", target_os = "macos"))]
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::home::{self, paths, read_record, write_record};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_sandbox::family::{remove, RemoveRequest, Removed};
 use layerfs_sandbox::host::{Host, Message};
 use std::path::{Path, PathBuf};
@@ -40,7 +40,7 @@ fn removed(home: &Path, name: &str, force: bool) -> Result<Removed, SdkRefusal> 
         name: name.to_owned(),
         force,
     };
-    remove(home, &mut events, &request)
+    remove(home, &mut events, &request, local)
 }
 
 /// The `left` of a remove that answered the Sandbox gone.
@@ -345,7 +345,7 @@ fn the_close_forgets_docker_and_unread_records_without_a_tombstone() {
         docker_daemon(),
         &[],
     );
-    let answer = layerfs_sandbox::lifecycle::close(&host("s1"), false, &[]).unwrap();
+    let answer = layerfs_sandbox::lifecycle::close(&host("s1"), false, &[], &NoDrain).unwrap();
     assert_eq!(answer.get_text("kind"), Some("Forgotten"), "{answer:?}");
     assert!(!paths::sandbox_dir(&home, "s1").exists());
     assert!(!tombstoned(&home, layerfs_home::names::HOST_MACHINE, "s1"));
@@ -357,7 +357,7 @@ fn the_close_forgets_docker_and_unread_records_without_a_tombstone() {
         unread_daemon(&home, "s2"),
         &[],
     );
-    let answer = layerfs_sandbox::lifecycle::close(&host("s2"), false, &[]).unwrap();
+    let answer = layerfs_sandbox::lifecycle::close(&host("s2"), false, &[], &NoDrain).unwrap();
     assert_eq!(answer.get_text("kind"), Some("Forgotten"), "{answer:?}");
     assert!(!paths::sandbox_dir(&home, "s2").exists());
     assert!(!tombstoned(&home, layerfs_home::names::HOST_MACHINE, "s2"));
@@ -438,4 +438,20 @@ fn a_recreate_drops_the_older_tombstone() {
         "the older tombstone stayed"
     );
     let _ = std::fs::remove_dir_all(&home);
+}
+
+/// A close here has no mounted Workspace to drain.
+struct NoDrain;
+
+impl layerfs_sandbox::lifecycle::WorkspaceDrain for NoDrain {
+    fn drain(&self, _: &layerfs_sandbox::host::Host, _: &str) {}
+}
+
+/// The in-process runner `remove` takes (the workspace crate's dispatch in
+/// the product): the Sandbox's own dispatch, with no Workspace to drain.
+fn local(
+    host: layerfs_sandbox::host::Host,
+    call: layerfs_sandbox::host::Call,
+) -> layerfs_home::outcome::Outcome {
+    layerfs_sandbox::dispatch::call(host, call, &NoDrain)
 }

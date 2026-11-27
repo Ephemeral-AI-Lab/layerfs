@@ -1,10 +1,11 @@
 //! Read-only host worker health and evidence for management calls.
 use super::super::doctor::budget::{Budget, Checks};
-use layerfs_protocol::provision::install::SdkValue;
-use layerfs_home::home::{paths, with_field};
+use layerfs_home::home::paths;
+use layerfs_machine::status::worker::{evidence, observe};
 use layerfs_machine::worker::{HostObservation, HostPaths, HostProbe};
+use layerfs_protocol::sdk::SdkValue;
 use std::path::Path;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 const ENDPOINT: &str = "machine.worker.endpoint";
 const AUTH: &str = "machine.worker.auth";
@@ -14,81 +15,13 @@ const RETAINED: &str = "machine.worker.retained";
 
 const TIMEOUT: Duration = Duration::from_secs(2);
 
-fn observe(home: &Path, timeout: Duration) -> HostObservation {
-    match HostPaths::new(home) {
-        Ok(paths) => paths.observe(Instant::now() + timeout),
-        Err(error) => HostObservation::Unreachable(HostProbe::Endpoint, error),
-    }
-}
-
-pub(super) fn holder(home: &Path, store: &str, live: &[u32], budget: &Budget) -> Option<u32> {
+pub(crate) fn holder(home: &Path, store: &str, live: &[u32], budget: &Budget) -> Option<u32> {
     let HostObservation::Ready(reply) = observe(home, budget.limit(TIMEOUT)) else {
         return None;
     };
     let owner = layerfs_store::lease::Owner::decode(&reply)?;
     let pid = u32::try_from(reply.get_int("pid")?).ok()?;
     (live.contains(&pid) && owner.holds(home, store).ok() == Some(true)).then_some(pid)
-}
-
-fn evidence(observation: &HostObservation) -> SdkValue {
-    use HostObservation::*;
-    let (health, reply) = match observation {
-        Absent => ("absent", None),
-        Stale => ("stale", None),
-        Owned => ("owned", None),
-        Ready(reply) => ("ready", Some(reply)),
-        Draining(hello) => ("draining", Some(hello)),
-        Incompatible(error) => ("unreachable", error.detail.get("worker")),
-        Unreachable(_, _) => ("unreachable", None),
-    };
-    let mut fields = vec![("health", SdkValue::text(health))];
-    fields.extend(
-        [
-            "pid",
-            "pid_start",
-            "pid_boot",
-            "build",
-            "generation",
-            "admitted",
-            "queued",
-            "stores",
-            "postgresql",
-            "last_close",
-        ]
-        .into_iter()
-        .map(|key| {
-            (
-                key,
-                reply.and_then(|v| v.get(key)).cloned().unwrap_or_default(),
-            )
-        }),
-    );
-    if let Incompatible(error) = observation {
-        fields.push(("compatible", SdkValue::Bool(false)));
-        fields.push((
-            "expected_build",
-            SdkValue::opt_text(
-                error
-                    .detail
-                    .get("expected")
-                    .and_then(|value| value.get_text("build")),
-            ),
-        ));
-    }
-    if let Unreachable(stage, error) = observation {
-        fields.push(("code", SdkValue::text(&error.code)));
-        fields.push((
-            "stage",
-            SdkValue::text(match stage {
-                HostProbe::Endpoint => "endpoint",
-                HostProbe::Connect => "connect",
-                HostProbe::Peer => "peer",
-                HostProbe::Hello => "hello",
-                HostProbe::Ping => "ping",
-            }),
-        ));
-    }
-    layerfs_home::helpers::map_of(fields)
 }
 
 pub(super) fn diagnose(home: &Path, budget: &Budget, checks: &mut Checks) {
@@ -191,7 +124,7 @@ pub(super) fn retained(home: &Path, checks: &mut Checks) {
     }
 }
 
-pub(super) fn directory(home: &Path, checks: &mut Checks) {
+pub(crate) fn directory(home: &Path, checks: &mut Checks) {
     use std::os::unix::fs::MetadataExt;
     let directory = paths::machine_dir(home, layerfs_home::names::HOST_MACHINE);
     if std::fs::symlink_metadata(&directory)
@@ -221,16 +154,4 @@ pub(super) fn directory(home: &Path, checks: &mut Checks) {
             ]),
         );
     }
-}
-
-pub(crate) fn live(home: &Path, answer: SdkValue) -> SdkValue {
-    let probe = observe(home, TIMEOUT);
-    let live = answer.get("live").cloned().unwrap_or_default();
-    let state = if answer.get_text("state") == Some("stopped") {
-        "stopped"
-    } else {
-        "enabled"
-    };
-    let live = with_field(live, "machine_state", SdkValue::text(state));
-    with_field(answer, "live", with_field(live, "worker", evidence(&probe)))
 }

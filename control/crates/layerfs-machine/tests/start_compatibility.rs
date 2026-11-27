@@ -1,10 +1,10 @@
 //! A started or already-running incompatible worker is never declared ready.
 #![cfg(all(feature = "machine", target_os = "macos"))]
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::home;
 use layerfs_home::state::{Reason, State};
 use layerfs_machine::worker::{read_frame_within, write_frame, MAX_HELLO};
 use layerfs_machine::{ensure_built_ins, record::MachineRecord, running, Related};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::fs;
 use std::net::TcpListener;
 use std::os::unix::fs::PermissionsExt;

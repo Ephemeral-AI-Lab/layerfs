@@ -3,9 +3,9 @@
 //! a server close, a closed idle connection or a reply read to its close
 //! is not reused; a failure on a kept connection, and a reply body cut
 //! short, are `Uncertain` and the request is never sent again.
+use layerfs_store::backup::bucket::{Credentials, Driver, RemoteError, Span};
 use layerfs_store::backup::providers::s3;
 use layerfs_store::backup::s3_api::{S3Client, S3Config, MIN_PART};
-use layerfs_store::backup::bucket::{Credentials, Driver, RemoteError, Span};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{Shutdown, TcpListener, TcpStream};
 use std::sync::mpsc::{channel, Receiver, Sender};

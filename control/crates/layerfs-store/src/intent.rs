@@ -13,10 +13,10 @@
 //! outcome is known or [`leave`] when it is not. A marker refuses no lease
 //! and no Store call (`StoreRecord::unblocked`).
 use crate::record::{self, StoreRecord};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::home::with_field;
 use layerfs_home::op::{self, Op, Standing};
 use layerfs_home::time;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;

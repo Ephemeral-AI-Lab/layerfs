@@ -2,11 +2,11 @@
 //! that holds sqlite Store `shop`: the home and the root are two folders
 //! of one scratch directory, and calls on `shop` take the worker route.
 #![allow(dead_code)]
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::home::{self, paths, read_record, write_record};
 use layerfs_home::names::{ProjectRef, StoreName};
 use layerfs_machine::worker::{self, Endpoint, MAX_HELLO};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_store::project::family::ProjectInit;
 use std::net::{TcpListener, TcpStream};
 use std::os::unix::fs::PermissionsExt;
@@ -168,7 +168,7 @@ pub fn stats(home: &Path) -> Result<SdkValue, SdkRefusal> {
         &mut Events::new(&mut sink),
         "shop",
         with,
-        layerfs_store::admin::with_users::reads(),
+        layerfs_sandbox::users::reads(),
     )
 }
 

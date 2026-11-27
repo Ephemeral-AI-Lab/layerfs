@@ -5,11 +5,11 @@ use crate::calls::table::Kind::{Int, Name, Text};
 use crate::calls::table::{a, call, opt, Call};
 use crate::calls::{Context, Form, Paging, Part};
 use crate::sandbox::files::{self, LIMIT};
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::home::with_field;
 use layerfs_home::names::MachineName;
 use layerfs_home::outcome::Outcome;
 use layerfs_inspect::{machine_files, FilesRequest};
+use layerfs_protocol::sdk::SdkValue;
 
 /// One entry of a folder page.
 const ENTRY: Form = Form::of(

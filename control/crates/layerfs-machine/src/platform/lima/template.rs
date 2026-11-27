@@ -1,7 +1,7 @@
 //! `lima` template: see `mod.rs`.
 use super::status::disk_name;
-use crate::setup::vm::mib;
 use crate::setup::spec::{Spec, WORKER_PORT};
+use crate::setup::vm::mib;
 
 const UBUNTU: &str =
     "https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg";

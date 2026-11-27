@@ -2,8 +2,8 @@
 use crate::calls::table::Kind::Name;
 use crate::calls::table::{a, call, Call, PROGRESS};
 use crate::calls::{Context, Form, Policy};
-use layerfs_bridge::control::SdkValue;
 use layerfs_home::outcome::Outcome;
+use layerfs_protocol::sdk::SdkValue;
 
 /// Its answer: the bytes moved.
 const FORM: Form = Form::of(
@@ -36,5 +36,11 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let text = |name: &str| args.get_text(name).unwrap_or("").to_owned();
     let (store, machine) = (text("store"), text("machine"));
     let (home, events) = context.parts();
-    layerfs_control::store::move_to(home, events, &store, &machine)
+    layerfs_store::admin::with_users::move_to(
+        home,
+        events,
+        &store,
+        &machine,
+        &layerfs_sandbox::users::STORE,
+    )
 }

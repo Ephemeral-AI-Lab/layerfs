@@ -19,8 +19,8 @@ static ALLOCATOR: allocation::Observed = allocation::Observed;
 #[allow(dead_code)]
 #[path = "../tests/support/host_install.rs"]
 mod support;
-use layerfs_store_service::{store::BindRequest, Owner, OwnerConfig};
 use layerfs_history::{BranchId, WorkspaceId};
+use layerfs_store_service::{store::BindRequest, Owner, OwnerConfig};
 use std::{
     fs,
     io::Write,

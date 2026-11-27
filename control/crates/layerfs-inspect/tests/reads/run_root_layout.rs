@@ -9,16 +9,16 @@
 //! recorded daemon is no process. Scratch folders are under the build's
 //! own temporary folder.
 #![cfg(any(target_os = "linux", target_os = "macos"))]
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::home::{self, paths, write_record};
 use layerfs_home::names::HOST_MACHINE;
-use {layerfs_inspect, layerfs_sandbox::deploy::Side};
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_sandbox::record::{DaemonRecord, Local};
 use layerfs_sandbox::{force, sweep};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime};
+use {layerfs_inspect, layerfs_sandbox::deploy::Side};
 
 static NEXT: AtomicU32 = AtomicU32::new(0);
 /// The inspect permits are the process's: the tests that take one take
@@ -212,7 +212,8 @@ fn inspection_reads_run_folders_in_the_named_run_root_only() {
         "{refused:?}"
     );
     // the machine's folders list the named run root
-    let roots = layerfs_inspect::machine_page(&side, &SdkValue::Map(Vec::new()), &|| false).unwrap();
+    let roots =
+        layerfs_inspect::machine_page(&side, &SdkValue::Map(Vec::new()), &|| false).unwrap();
     assert!(
         format!("{roots:?}").contains(&run.display().to_string()),
         "{roots:?}"
@@ -232,9 +233,10 @@ fn inspection_reads_run_folders_in_the_named_run_root_only() {
         ("sandboxes", SdkValue::List(vec![t("s1")])),
     ]);
     let home_for = home.clone();
-    let space =
-        layerfs_inspect::admit(move |budget| layerfs_inspect::serve(&Side::Home(&home_for), &request, budget))
-            .unwrap();
+    let space = layerfs_inspect::admit(move |budget| {
+        layerfs_inspect::serve(&Side::Home(&home_for), &request, budget)
+    })
+    .unwrap();
     let SdkValue::List(rows) = space.get("sandboxes").cloned().unwrap() else {
         panic!("{space:?}");
     };

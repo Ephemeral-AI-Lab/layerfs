@@ -1,6 +1,7 @@
 //! The Sandbox runtime layer's command line, its presence check and the
 //! search path a command gets under it (R5).
-use layerfs_sandbox::backend::namespaces::linux::runtime::{command, holds, search_path, GUEST, LOADER};
+use layerfs_os::runtime::{command, holds, LOADER};
+use layerfs_sandbox::backend::namespaces::linux::runtime::{search_path, GUEST};
 use std::{ffi::OsStr, path::Path};
 
 #[test]

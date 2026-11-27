@@ -138,10 +138,7 @@ fn run(store: &TestStore, lost: &mut Lost, name: &str, shape: Shape, k: Option<i
         let mover = store.open();
         let moving = mover.bind(branch);
         change(&moving, &mut tree, name, "/mover", 3);
-        assert!(matches!(
-            verdict(&commit(&moving)),
-            Verdict::Committed(_)
-        ));
+        assert!(matches!(verdict(&commit(&moving)), Verdict::Committed(_)));
         mover.unmount(moving);
         close(mover);
     }
@@ -178,7 +175,8 @@ fn run(store: &TestStore, lost: &mut Lost, name: &str, shape: Shape, k: Option<i
     // The same Workspace's next Commit lands the change.
     let again = verdict(&commit(&workspace));
     match (&answer, &again) {
-        (Verdict::Committed(_), Verdict::UpToDate) | (Verdict::Refused(_), Verdict::Committed(_)) => {}
+        (Verdict::Committed(_), Verdict::UpToDate)
+        | (Verdict::Refused(_), Verdict::Committed(_)) => {}
         _ => panic!("{label}: first {answer:?}, then {again:?}"),
     }
     // Another Workspace on the same service, and one more change here.
@@ -241,10 +239,7 @@ fn sweep(store: &TestStore, tag: &str, shape: Shape, ks: std::ops::RangeInclusiv
     println!("Y_AUDIT {{\"kind\":\"{kind:?}\",\"tag\":\"{tag}\",\"failures\":\"{audit:?}\"}}");
     // The audit cancelled at its own 30 s deadline on a large Store is INCOMPLETE, not a
     // finding; any other failure is.
-    let real: Vec<_> = audit
-        .iter()
-        .filter(|f| !f.contains("Cancelled"))
-        .collect();
+    let real: Vec<_> = audit.iter().filter(|f| !f.contains("Cancelled")).collect();
     assert!(real.is_empty(), "{kind:?}: {audit:#?}");
     let _ = packs(store);
 }

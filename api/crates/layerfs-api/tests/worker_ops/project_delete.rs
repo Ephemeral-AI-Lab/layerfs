@@ -7,14 +7,14 @@
 //! caller and worker entries, and the next call finishes them with only the
 //! entry-removal frame. The successful path releases the admission after the
 //! marker.
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
-use layerfs_protocol::sdk::hex;
 use layerfs_history::records::{GcIntent, GcIntentKind, GcScopeKind};
 use layerfs_history::{HistoryName, LayerStackId, NamedSnapshot};
 use layerfs_home::events::Events;
 use layerfs_home::home::{self, paths};
 use layerfs_home::names::{ProjectRef, StoreName};
 use layerfs_machine::worker::{self, read_frame, read_frame_within, write_frame, Hello, MAX_HELLO};
+use layerfs_protocol::sdk::hex;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_store::open_args::OpenArgs;
 use layerfs_store::project::add::{add_project, ProjectAdd};
 use layerfs_store::record::StoreRecord;
@@ -127,6 +127,7 @@ fn remove(home: &Path) -> Result<SdkValue, SdkRefusal> {
         home,
         &mut Events::new(&mut sink),
         &ProjectRef::parse("shop/app").unwrap(),
+        &layerfs_sandbox::users::STORE,
     )
 }
 
@@ -205,9 +206,7 @@ fn the_worker_path_writes_the_sidecar_then_admits_and_releases_after_the_marker(
     .unwrap();
     place_store(&home, "shop", "box");
     let served = root.clone();
-    std::thread::spawn(move || {
-        layerfs_api::worker::serve::serve(listener, "k".to_owned(), served)
-    });
+    std::thread::spawn(move || layerfs_api::worker::serve::serve(listener, "k".to_owned(), served));
 
     let worker = worker_open(&root, &record);
 

@@ -6,10 +6,10 @@
 //! no layout or records; the bundle is checked only where a recorded
 //! machine needs it; a check that waits on an unreadable layout or record
 //! set is not made.
-use super::findings::Findings;
 use super::super::doctor::budget::{Budget, Checks};
-use layerfs_protocol::provision::install::SdkValue;
+use super::findings::Findings;
 use layerfs_home::home::{detect, Layout};
+use layerfs_protocol::sdk::SdkValue;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
@@ -23,7 +23,7 @@ mod inventory;
 const LAYOUT: &str = "home.layout";
 const RECORDS: &str = "home.records";
 
-pub(super) fn diagnose(
+pub(crate) fn diagnose(
     home: &Path,
     build: crate::home::get::Build<'_>,
     budget: &Budget,

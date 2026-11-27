@@ -1,8 +1,6 @@
 //! The pinned snapshot and its depth-first walk, encoded as bounded
 //! `tree::Record` parts for the writer (here or in a worker).
 use crate::project::tree::{header, Record};
-use layerfs_protocol::provision::install::SdkRefusal;
-use layerfs_protocol::sdk::{hex, node_text, short};
 use layerfs_content::compare::{memo::Memo, tree::TreeTable, EntryFacts};
 use layerfs_content::file::FileView;
 use layerfs_content::filesystem::{
@@ -17,6 +15,8 @@ use layerfs_content::object::inode_leaf::{InodeKind, InodeValue};
 use layerfs_content::{AuthenticatedObjects, ContentError};
 use layerfs_history::NodeId;
 use layerfs_home::outcome::refused;
+use layerfs_protocol::sdk::SdkRefusal;
+use layerfs_protocol::sdk::{hex, node_text, short};
 use layerfs_store_service::history::{lookup, resolve, saved, MAIN};
 use layerfs_store_service::read::cached::Cached;
 use layerfs_store_service::read::visibility::Visibility;

@@ -13,18 +13,27 @@
 //! child that ended. The inspect permits are the process's, so every test
 //! that asks takes one lock.
 #![cfg(any(target_os = "linux", target_os = "macos"))]
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
-use layerfs_os::process::LocalProcess;
 use layerfs_home::home::{self, paths, write_record};
 use layerfs_home::names::MachineName;
+use layerfs_os::process::LocalProcess;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_sandbox::inspect::process::KernelStat;
-use {layerfs_inspect, layerfs_sandbox::{inspect::{process, owner::{HARD, SOFT}}, deploy::Side}};
 use layerfs_sandbox::record::{DaemonRecord, Local};
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, Instant};
+use {
+    layerfs_inspect,
+    layerfs_sandbox::{
+        deploy::Side,
+        inspect::{
+            owner::{HARD, SOFT},
+            process,
+        },
+    },
+};
 
 static PROCESS: Mutex<()> = Mutex::new(());
 static NEXT: AtomicU32 = AtomicU32::new(0);
@@ -827,8 +836,10 @@ fn a_worker_s_rows_read_each_sandbox_s_record_on_its_side() {
     ]);
     let served = {
         let root = root.clone();
-        layerfs_inspect::admit(move |budget| layerfs_inspect::serve(&Side::Worker(&root), &request, budget))
-            .unwrap()
+        layerfs_inspect::admit(move |budget| {
+            layerfs_inspect::serve(&Side::Worker(&root), &request, budget)
+        })
+        .unwrap()
     };
     let rows = listed(served.get("sandboxes").unwrap(), "items");
     let row = |at: usize| layerfs_home::json::print(&rows[at]);

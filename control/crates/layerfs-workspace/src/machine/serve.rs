@@ -9,6 +9,13 @@
 //! recorded in its Sandbox's folder, `workspace/<id>.json`, with the name
 //! its mount gave it, if any (unique in the Sandbox; the other calls take
 //! it in place of the path, [`by_name`]).
+use layerfs_history::{BranchId, CommitId, WorkspaceId};
+use layerfs_home::helpers::{lock, random, required};
+use layerfs_home::names::WorkspaceName;
+use layerfs_home::outcome::shell_word;
+use layerfs_home::outcome::{failed, with_next, Outcome};
+use layerfs_protocol::daemon::{CommitControl, Reply};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_sandbox::daemon::values;
 use layerfs_sandbox::host::Host;
 use layerfs_sandbox::internal::workspace;
@@ -17,12 +24,6 @@ use layerfs_sandbox::record::{DaemonRecord, WorkspaceRecord};
 use layerfs_sandbox::registry::{sandbox, sandbox_live, Mount};
 use layerfs_sandbox::OperationCause;
 use layerfs_sandbox::Unmounted;
-use layerfs_protocol::provision::install::{CommitControl, Reply, SdkRefusal, SdkValue};
-use layerfs_history::{BranchId, CommitId, WorkspaceId};
-use layerfs_home::helpers::{lock, random, required};
-use layerfs_home::names::WorkspaceName;
-use layerfs_home::outcome::shell_word;
-use layerfs_home::outcome::{failed, with_next, Outcome};
 
 /// A mount's `NoSuchSandbox`: `refusal` (its detail kept) with the next
 /// step in its message, which agents read.
@@ -130,7 +131,7 @@ pub fn mount(host: &Host, branch: Option<&str>, name: Option<&str>) -> Outcome {
         fields.push(("container".to_owned(), SdkValue::text(state.name.as_str())));
         // a forwarded Sandbox's runtime is its machine's: its record says
         let image = match &state.runtime {
-            Some(runtime) => layerfs_sandbox::runtime::image(runtime),
+            Some(runtime) => layerfs_sandbox::backend::select::image(runtime),
             None => saved.image().unwrap_or_default().to_owned(),
         };
         fields.push(("image".to_owned(), SdkValue::text(image)));
@@ -138,7 +139,7 @@ pub fn mount(host: &Host, branch: Option<&str>, name: Option<&str>) -> Outcome {
         fields.push(("platform".to_owned(), platform_of(&saved)));
         fields.push((
             "runtime".to_owned(),
-            SdkValue::text(layerfs_sandbox::runtime::runtime_name(&saved)),
+            SdkValue::text(layerfs_sandbox::backend::select::runtime_name(&saved)),
         ));
     }
     if let SdkValue::Map(fields) = &mut value {
@@ -219,11 +220,16 @@ pub fn status(host: &Host, path: Option<&str>, under: Option<&str>) -> Outcome {
 /// The changes of the Workspace at `path` at or below `under`, from the
 /// daemon's one bounded overlay read: `{ entries: [{ path, change, type
 /// }], partial }`.
-pub fn changed(control: &mut layerfs_sandbox::internal::Control, path: &str, under: Option<&str>) -> Outcome {
+pub fn changed(
+    control: &mut layerfs_sandbox::internal::Control,
+    path: &str,
+    under: Option<&str>,
+) -> Outcome {
     let mut args = vec![("path".to_owned(), SdkValue::text(path))];
     args.extend(under.map(|under| ("under".to_owned(), SdkValue::text(under))));
     let method = layerfs_sandbox::daemon::operator::CHANGED;
-    layerfs_sandbox::daemon::operator::call(control, method, SdkValue::Map(args)).map_err(values::sdk_error)
+    layerfs_sandbox::daemon::operator::call(control, method, SdkValue::Map(args))
+        .map_err(values::sdk_error)
 }
 
 /// Reads a Branch's head (Branch id and name), or `None` when it could not.
@@ -260,7 +266,7 @@ pub fn status_with(
 /// the daemon's changed-path read (`found`). The phase and start are kept
 /// only while the activity that read observed is the Status record's.
 fn changes_of(
-    status: &layerfs_protocol::provision::install::WorkspaceStatus,
+    status: &layerfs_protocol::daemon::WorkspaceStatus,
     found: &SdkValue,
 ) -> Vec<(String, SdkValue)> {
     let held = |name: &str| found.get(name).cloned().unwrap_or_default();
@@ -338,7 +344,7 @@ fn moved_from_expected(
         return None;
     };
     let moved = match (expected, refused.code, &refused.moved) {
-        (Some(_), layerfs_protocol::provision::install::ControlCode::HeadMoved, Some(moved)) => moved,
+        (Some(_), layerfs_protocol::daemon::ControlCode::HeadMoved, Some(moved)) => moved,
         _ => return None,
     };
     let head = layerfs_protocol::sdk::node_text(moved.actual_head.map_or(
@@ -496,7 +502,13 @@ pub fn unmount(host: &Host, path: Option<&str>, discard: bool, force: bool) -> O
     // its running commands (D-10): `Busy`, or with `force` cancelled first
     let wsid = layerfs_protocol::sdk::hex(&token.workspace.to_bytes());
     let unreached = &mut layerfs_sandbox::exec::cancel::unreached;
-    layerfs_sandbox::exec::cancel::settle(&state.directory, &state.id, Some(&wsid), force, unreached)?;
+    layerfs_sandbox::exec::cancel::settle(
+        &state.directory,
+        &state.id,
+        Some(&wsid),
+        force,
+        unreached,
+    )?;
     // One short deadline, not the full admission wait: a Workspace unmount
     // must not hold the folder guard while a refusing daemon keeps the
     // ordinary 60 s control wait running (#540).
@@ -573,7 +585,10 @@ pub fn unmount(host: &Host, path: Option<&str>, discard: bool, force: bool) -> O
             }
             // its commands' output files, beside the daemon's log
             if let Ok(runtime) = state.runtime() {
-                layerfs_sandbox::output::remove(&layerfs_sandbox::runtime::scratch(runtime), &wsid)?;
+                layerfs_sandbox::output::remove(
+                    &layerfs_sandbox::backend::select::scratch(runtime),
+                    &wsid,
+                )?;
             }
             lock(&state.mounts)?.remove(path);
             Ok(())
@@ -587,7 +602,11 @@ pub fn unmount(host: &Host, path: Option<&str>, discard: bool, force: bool) -> O
 
 /// A Dirty refusal of the Workspace at `path`, with what [`dirty_fields`]
 /// lists from one bounded overlay read and V22-7's fix.
-fn dirty(state: &layerfs_sandbox::registry::SandboxState, path: &str, refusal: SdkRefusal) -> SdkRefusal {
+fn dirty(
+    state: &layerfs_sandbox::registry::SandboxState,
+    path: &str,
+    refusal: SdkRefusal,
+) -> SdkRefusal {
     let read = state
         .controls
         .lend()

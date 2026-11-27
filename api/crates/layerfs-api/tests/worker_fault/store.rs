@@ -5,13 +5,13 @@
 //! uncertain log, and the `project delete` that settles that Init removes
 //! the copy (spec v20). Empty without the `worker-fault` cargo feature:
 //!
-//! `cargo test -p layerfs-control --features worker-fault --test worker_fault_store`
+//! `cargo test -p layerfs-api --features worker-fault --test worker_fault`
 #![cfg(feature = "worker-fault")]
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_api::worker::fault::{Faults, OpFault};
 use layerfs_home::home::paths;
 use layerfs_home::names::StoreName;
 use layerfs_machine::worker;
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_store::project::frame::ExportFrame;
 use layerfs_store::sqlite::transfer::step::{StepFrame, StoreStep};
 use std::io::Read;
@@ -181,6 +181,7 @@ fn a_lost_init_names_its_copy_and_its_delete_removes_it() {
         &placed.home,
         &mut layerfs_home::events::Events::new(&mut sink),
         &project,
+        &layerfs_sandbox::users::STORE,
     )
     .unwrap_or_else(|refusal| panic!("project delete: {refusal:?}"));
     assert_eq!(deleted.get_text("outcome"), Some("deleted"), "{deleted:?}");

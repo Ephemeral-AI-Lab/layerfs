@@ -11,11 +11,11 @@ pub(crate) mod image_cache;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 pub(crate) mod lifecycle;
 mod profile;
+pub(crate) mod socket;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 pub(crate) mod status;
 #[cfg(not(any(target_os = "linux", target_os = "macos")))]
 pub(crate) mod unsupported;
-pub(crate) mod socket;
 pub(crate) use adapter::ADAPTER;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 pub(crate) use image_cache::cached_image;
@@ -25,4 +25,6 @@ pub(crate) use profile::PROFILE;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 pub(crate) use status::{guest, provider_state, status};
 #[cfg(not(any(target_os = "linux", target_os = "macos")))]
-pub(crate) use unsupported::{cached_image, guest, load_image, provider_state, start, status, stop};
+pub(crate) use unsupported::{
+    cached_image, guest, load_image, provider_state, start, status, stop,
+};

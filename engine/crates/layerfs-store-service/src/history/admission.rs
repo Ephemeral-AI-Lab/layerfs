@@ -1,7 +1,6 @@
 //! Store-service side of GC admission: operation ids, intent builders and the
 //! short-lived guard a shared Init/merge holds.
 use crate::history::lookup;
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_history::records::{
     GcAuditAfter, GcAuditPage, GcBranchAuditPage, GcIntent, GcIntentDone, GcIntentKind,
     GcReconcile, GcScopeKind,
@@ -10,6 +9,7 @@ use layerfs_history::{
     BranchRecord, HistoryCatalog, HistoryResult, LayerStackId, LayerStackRecord, PlaceAuthority,
     PlaceView,
 };
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -264,7 +264,7 @@ pub fn mount_intent(
     workspace: layerfs_history::WorkspaceId,
     snapshot: &layerfs_history::BranchSnapshot,
     project: Option<&str>,
-    place: &layerfs_protocol::provision::install::MountPlace,
+    place: &layerfs_protocol::daemon::MountPlace,
     authority: PlaceAuthority,
 ) -> GcIntent {
     let body: [u8; 32] = workspace.as_slice().try_into().unwrap_or([0u8; 32]);

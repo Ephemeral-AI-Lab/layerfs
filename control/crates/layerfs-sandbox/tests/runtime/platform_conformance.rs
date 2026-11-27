@@ -32,7 +32,10 @@
 mod standin;
 #[path = "../support/json.rs"]
 mod support_json;
-use {layerfs_machine::{platform::{self as machine, self, sandbox_allowed, Backend, CallSite, Code, ExecutorKind, Forward, HostOs, How, MachineError, OptKind, Platform, Route, Spec}, table::support}, layerfs_protocol::{self, self}};
+use layerfs_machine::platform::{
+    self as machine, platforms, sandbox_allowed, support, Backend, CallSite, Code, ExecutorKind,
+    Forward, HostOs, How, KernelRoute, MachineError, OptKind, Platform, Route, Spec, StoreKind,
+};
 use layerfs_sandbox::MountDriver;
 use standin::Scratch;
 use std::collections::BTreeSet;
@@ -49,8 +52,8 @@ fn every_host() -> impl Iterator<Item = HostOs> {
 /// The mount driver a backend must have to serve `route`.
 fn driver(route: KernelRoute) -> MountDriver {
     match route {
-        layerfs_protocol::Fuse => MountDriver::Fuse,
-        layerfs_protocol::Nfs => MountDriver::LoopbackNfs,
+        KernelRoute::Fuse => MountDriver::Fuse,
+        KernelRoute::Nfs => MountDriver::LoopbackNfs,
     }
 }
 
@@ -103,7 +106,11 @@ fn each_profile_is_its_support_rows_on_every_host() {
             // a backend serves exactly one kernel route, which it can mount
             assert_eq!(row.backend.is_some(), row.kernel.is_some(), "{at}");
             if let (Some(backend), Some(route)) = (row.backend, row.kernel) {
-                assert_eq!(backend.capabilities().mount_driver, driver(route), "{at}");
+                assert_eq!(
+                    layerfs_sandbox::backend_capabilities(backend).mount_driver,
+                    driver(route),
+                    "{at}"
+                );
             }
             match row.backend {
                 Some(backend) => assert_eq!(
@@ -123,8 +130,8 @@ fn each_refusal_comes_from_the_table_and_postgresql_needs_sqlite() {
         for host in every_host() {
             let row = support(platform, host);
             let at = format!("{platform:?} on {host:?}");
-            let sqlite = sandbox_allowed(platform, host, layerfs_protocol::Sqlite);
-            let postgresql = sandbox_allowed(platform, host, layerfs_protocol::Postgresql);
+            let sqlite = sandbox_allowed(platform, host, StoreKind::Sqlite);
+            let postgresql = sandbox_allowed(platform, host, StoreKind::Postgresql);
             // a Sandbox runs exactly where the platform is on the host with a backend
             assert_eq!(sqlite.is_ok(), row.backend.is_some(), "{at}");
             if let Err(reason) = sqlite {
@@ -160,7 +167,7 @@ fn each_platform_row_in_support_json_is_its_table_row() {
             );
             assert_eq!(
                 file.kernel.as_deref(),
-                table.kernel.map(layerfs_protocol::as_str),
+                table.kernel.map(KernelRoute::as_str),
                 "{at}"
             );
             assert_eq!(

@@ -6,15 +6,20 @@
 #[path = "../support/worker_store.rs"]
 mod worker_store;
 
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::names::StoreName;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use worker_store::placed;
 
 fn upgrade(home: &std::path::Path) -> Result<SdkValue, SdkRefusal> {
     let mut sink = |_| {};
     let name = StoreName::parse("shop").unwrap();
-    layerfs_store::admin::with_users::upgrade(home, &mut Events::new(&mut sink), &name)
+    layerfs_store::admin::with_users::upgrade(
+        home,
+        &mut Events::new(&mut sink),
+        &name,
+        &layerfs_sandbox::users::STORE,
+    )
 }
 
 #[test]

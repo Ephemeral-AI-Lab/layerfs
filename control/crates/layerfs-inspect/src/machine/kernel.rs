@@ -5,7 +5,7 @@
 //!
 //! Linux reads `/proc/meminfo`, and `/proc/stat` for the processor
 //! counters (layerfs-project#182 L1). macOS has no such files: one run of
-//! `/usr/sbin/sysctl` (the tool `layerfs_bridge::process` reads the boot
+//! `/usr/sbin/sysctl` (the tool `layerfs_os::process` reads the boot
 //! id with) prints the five memory numbers, with no new system call
 //! binding; its processor ticks need `host_statistics`, an `unsafe` call
 //! this crate forbids, so they are not read.

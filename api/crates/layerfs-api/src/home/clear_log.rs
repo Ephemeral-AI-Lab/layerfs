@@ -1,8 +1,8 @@
 //! `home.clear_log`: clears this home's call log.
 use crate::calls::table::{call, Call};
 use crate::calls::{Context, Form};
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::outcome::Outcome;
+use layerfs_protocol::sdk::SdkValue;
 
 /// Its answer: nothing to say in the short form.
 const FORM: Form = Form::of(&["ok"], &[], &["ok", "outcome", "line_count"]);

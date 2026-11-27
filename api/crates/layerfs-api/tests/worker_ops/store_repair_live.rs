@@ -11,7 +11,6 @@
 #[path = "../support/worker_store.rs"]
 mod worker_store;
 
-use layerfs_protocol::provision::install::{SdkCall, SdkRefusal, SdkValue};
 use layerfs_history::records::{GcIntent, GcIntentKind, GcScopeKind};
 use layerfs_history::PlaceAuthority;
 use layerfs_home::events::Events;
@@ -19,6 +18,7 @@ use layerfs_home::home::{paths, write_entity};
 use layerfs_home::names::StoreName;
 use layerfs_machine::record::MachineRecord;
 use layerfs_machine::worker;
+use layerfs_protocol::sdk::{SdkCall, SdkRefusal, SdkValue};
 use layerfs_store::calls::branch::{BranchFork, BranchRemove};
 use layerfs_store::calls::file::FileRead;
 use layerfs_store::open_args::OpenArgs;
@@ -354,6 +354,7 @@ fn compact(placed: &worker_store::Placed) -> Result<SdkValue, SdkRefusal> {
         &placed.home,
         &mut events,
         &StoreName::parse("shop").unwrap(),
+        &layerfs_sandbox::users::STORE,
     )
 }
 

@@ -43,8 +43,11 @@ use crate::{
     read::{failure, read_failure, Answer, Refused},
 };
 use layerfs_content::{filesystem::PathName, object::inode_leaf::InodeKind};
-use layerfs_vfs::{requests::{KernelData, KernelRead, MutationFailure, ReadDataInput}, ports::mount::{Fence, MountServices, RequestServices}};
 use layerfs_overlay::{KernelMount, READ_WINDOW};
+use layerfs_vfs::{
+    ports::mount::{Fence, MountServices, RequestServices},
+    requests::{KernelData, KernelRead, MutationFailure, ReadDataInput},
+};
 use layerfs_vfs::{KernelReadOperation, ViewStat};
 use std::{
     collections::{HashMap, HashSet},

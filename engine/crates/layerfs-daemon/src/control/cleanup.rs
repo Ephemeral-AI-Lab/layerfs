@@ -1,7 +1,7 @@
 //! Explicit terminal namespace observation, independent of registry retention.
 use super::{Failure, Service, Success};
-use layerfs_protocol::provision::install::{CleanupObservation, Reply, WorkspaceToken};
 use layerfs_overlay::CleanupState;
+use layerfs_protocol::daemon::{CleanupObservation, Reply, WorkspaceToken};
 
 impl Service {
     pub(super) fn cleanup(&self, token: WorkspaceToken) -> Result<Success, Failure> {

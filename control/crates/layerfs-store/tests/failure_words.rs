@@ -122,7 +122,7 @@ fn an_old_format_store_is_named_by_its_version_refusal() {
 /// The refusal an open of sqlite Store `shop` gets once its header says
 /// schema version 2 (`user_version` 36, at offset 60 of the closed file);
 /// `None` where this filesystem cannot hold a directly opened Store.
-fn schema_2_open_refusal() -> Option<layerfs_protocol::provision::install::SdkRefusal> {
+fn schema_2_open_refusal() -> Option<layerfs_protocol::sdk::SdkRefusal> {
     use std::os::unix::fs::PermissionsExt;
     let home = std::path::Path::new(env!("CARGO_TARGET_TMPDIR"))
         .join(format!("layerfs-old-format-{}", std::process::id()));

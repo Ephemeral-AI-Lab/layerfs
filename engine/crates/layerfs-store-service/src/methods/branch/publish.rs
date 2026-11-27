@@ -4,7 +4,7 @@ use crate::{
     history::{branch, lookup},
     StoreService,
 };
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 
 /// `publish({ branch, at?, expected?, force? })`: one new main Layer holding
 /// the Commit `at` (the Branch head when absent), refused `HeadMoved` when

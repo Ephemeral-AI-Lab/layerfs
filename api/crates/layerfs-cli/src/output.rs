@@ -2,8 +2,8 @@
 //! or a readable form (`--text`, the default on a terminal); a refusal on
 //! stderr in the same form, exit 125.
 use crate::run::REFUSED;
-use {layerfs_home::json, layerfs_api::{Form, Part}};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
+use layerfs_api::{json, Form, Part};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::io::{self, Write};
 use std::process::ExitCode;
 

@@ -1,12 +1,12 @@
 //! Every finding of the Store and project doctors carries its fix, or no fix
 //! with the reason, and redacted evidence (layerfs-project#159). Doctor stays
 //! observational: these cases read the report and never run a fix.
-use layerfs_protocol::provision::install::SdkValue;
-use layerfs_inspect::{self, Kind, Options, Thing};
 use layerfs_history::HistoryCatalogConfig;
 use layerfs_home::events::Events;
 use layerfs_home::home::{self, paths, with_field, write_entity};
+use layerfs_inspect::{self, Kind, Options, Thing};
 use layerfs_persistence::{PersistenceConfig, SqliteHandles, SqlitePersistenceProfile};
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_storage::StoragePolicy;
 use std::path::{Path, PathBuf};
 

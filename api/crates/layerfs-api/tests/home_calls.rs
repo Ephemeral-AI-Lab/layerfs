@@ -6,7 +6,7 @@
 //! Both answer in the call surface's forms (2.0): `home.get` its `state`
 //! with `reason` and `fix`, the build's `version` and the home's
 //! `generation`; `home.init` its `outcome` and the build's `version`.
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 

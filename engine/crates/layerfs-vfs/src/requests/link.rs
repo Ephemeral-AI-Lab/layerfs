@@ -1,6 +1,6 @@
 //! LINK: one more name for an existing file or symlink inode.
-use layerfs_content::filesystem::PathName;
 use crate::Operation;
+use layerfs_content::filesystem::PathName;
 
 /// Aliases share one serial, so the kernel keeps one inode, one attribute set
 /// and one page cache for every name. A symlink keeps its opaque target;

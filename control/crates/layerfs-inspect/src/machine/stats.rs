@@ -14,18 +14,21 @@
 //! entry and its cgroup's small files on the side that runs it, never
 //! anything inside the Sandbox's own root or namespaces.
 use super::live::{self, Checked, DEADLINE};
-use layerfs_sandbox::inspect::process::{self, NOT_OBSERVED};
-use {super::kernel, layerfs_sandbox::{inspect::owner::Budget, deploy::Side}};
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::home::{self, paths};
 use layerfs_home::names::{MachineName, StoreName};
 use layerfs_home::outcome::Outcome;
 use layerfs_machine::record::MachineRecord;
+use layerfs_protocol::sdk::SdkValue;
+use layerfs_sandbox::inspect::process::{self, NOT_OBSERVED};
 use std::os::unix::fs::MetadataExt;
 use std::path::Path;
+use {
+    super::kernel,
+    layerfs_sandbox::{deploy::Side, inspect::owner::Budget},
+};
 
 /// The inspect kind.
-pub(super) const KIND: &str = "machine_stats";
+pub(crate) const KIND: &str = "machine_stats";
 
 /// `machine.stats(machine)`: `{ machine, platform, observed_at, worker,
 /// resources, data_disk, stores, sandboxes, complete, reason? }`.
@@ -59,7 +62,7 @@ pub fn machine_stats(home: &Path, machine: &MachineName) -> Outcome {
     let name = machine.as_str();
     let placed = placed(home, name)?;
     let recorded = i64::try_from(placed.sandboxes.len()).unwrap_or(i64::MAX);
-    let answer = layerfs_sandbox::inspect::route::ask(home, name, KIND, placed.request())?;
+    let answer = crate::ask(home, name, KIND, placed.request())?;
     let (record, platform) = (placed.record, placed.platform);
 
     let part = |field: &str| answer.get(field).cloned().unwrap_or_default();
@@ -136,10 +139,7 @@ impl Placed {
 }
 
 /// What the home records on machine `name`.
-pub(super) fn placed(
-    home: &Path,
-    name: &str,
-) -> Result<Placed, layerfs_protocol::provision::install::SdkRefusal> {
+pub(super) fn placed(home: &Path, name: &str) -> Result<Placed, layerfs_protocol::sdk::SdkRefusal> {
     let record = MachineRecord::read(home, name)?;
     // a built-in machine with no record yet has the platform of its name
     let built_in = layerfs_home::names::built_in_platform(name);
@@ -208,7 +208,7 @@ fn volume(_: &Path, _: Option<&MachineRecord>) -> Option<String> {
 /// }, complete, reason? }`. `worker` is what the worker's `inspect` operation
 /// put on the request (who it is and since when); this process is no
 /// worker on `Side::Home`.
-pub(super) fn serve(side: &Side<'_>, request: &SdkValue, budget: &Budget) -> Outcome {
+pub(crate) fn serve(side: &Side<'_>, request: &SdkValue, budget: &Budget) -> Outcome {
     let (root, worker) = match side {
         Side::Home(root) => (*root, SdkValue::Null),
         Side::Worker(root) => (*root, request.get("worker").cloned().unwrap_or_default()),

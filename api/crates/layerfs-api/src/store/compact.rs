@@ -6,9 +6,9 @@
 use crate::calls::table::Kind::Name;
 use crate::calls::table::{a, call, Call, PROGRESS};
 use crate::calls::{Context, Form};
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::names::StoreName;
 use layerfs_home::outcome::Outcome;
+use layerfs_protocol::sdk::SdkValue;
 
 /// Its answer: the bytes freed, and in the long form the flattened report.
 const FORM: Form = Form::of(
@@ -50,5 +50,5 @@ pub(crate) const CALL: Call = call(
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let store = StoreName::parse(args.get_text("store").unwrap_or(""))?;
     let (home, events) = context.parts();
-    layerfs_store::admin::with_users::compact(home, events, &store)
+    layerfs_store::admin::with_users::compact(home, events, &store, &layerfs_sandbox::users::STORE)
 }

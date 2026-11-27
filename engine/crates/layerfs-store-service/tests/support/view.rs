@@ -37,8 +37,8 @@ pub struct Viewer {
 
 impl Viewer {
     pub fn open(store: &Path, binding: &[u8], cursor: [u8; 32]) -> Self {
-        let config = PersistenceConfig::sqlite(store)
-            .with_sqlite_profile(SqlitePersistenceProfile::Normal);
+        let config =
+            PersistenceConfig::sqlite(store).with_sqlite_profile(SqlitePersistenceProfile::Normal);
         let handles = SqliteHandles::open_read_only(config, binding, cursor).unwrap();
         Self {
             storage: Storage::new(handles.storage).unwrap(),

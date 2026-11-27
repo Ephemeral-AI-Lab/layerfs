@@ -3,9 +3,9 @@
 //! removals. Reads, listings, file writes and merges never build or send it,
 //! and the view a worker frame or a caller installed is kept, never replaced.
 use layerfs_history::PlaceView;
+use layerfs_persistence::{has_place_view, with_place_view};
 use layerfs_store::open_args::OpenArgs;
 use layerfs_store::place_view::{admits, scoped};
-use layerfs_persistence::{has_place_view, with_place_view};
 
 #[test]
 fn only_the_exclusive_removals_read_the_place_view() {

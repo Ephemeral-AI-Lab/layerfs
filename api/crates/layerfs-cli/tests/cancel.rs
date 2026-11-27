@@ -16,7 +16,7 @@
 //! running. The live halves need the native daemon at LAYERFS_DAEMON;
 //! without it, they say NOT_RUN.
 use layerfs_api::home;
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use std::io::{BufRead, BufReader};
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::process::CommandExt;
@@ -80,7 +80,8 @@ fn started(home: &Path, ws: &str, script: &str) -> (Child, String) {
     BufReader::new(child.stderr.take().unwrap())
         .read_line(&mut first)
         .unwrap();
-    let event = layerfs_home::json::parse(first.trim()).unwrap_or_else(|e| panic!("{first}: {e:?}"));
+    let event =
+        layerfs_home::json::parse(first.trim()).unwrap_or_else(|e| panic!("{first}: {e:?}"));
     // a progress event is `{ phase, done, total }` itself (call surface 2.0
     // `progress_event`); the start event adds the exec id
     assert_eq!(event.get_text("phase"), Some("start"), "{first}");
@@ -157,7 +158,7 @@ fn exec_ids_records_and_cancel_on_native() {
         Some(&home),
         "machine.update",
         SdkValue::map([
-            ("machine", SdkValue::text(layerfs_home::names::HOST_MACHINE)),
+            ("machine", SdkValue::text(layerfs_api::names::HOST_MACHINE)),
             ("daemon", SdkValue::text(daemon.as_str())),
         ]),
         &mut |_| {},
@@ -184,7 +185,7 @@ fn exec_ids_records_and_cancel_on_native() {
     let sandbox = [
         ("project", t("shop/api")),
         ("name", t("s1")),
-        ("machine", t(layerfs_home::names::HOST_MACHINE)),
+        ("machine", t(layerfs_api::names::HOST_MACHINE)),
     ];
     ok(&home, "sandbox.create", &sandbox);
     let mount = [("sandbox", t("s1")), ("branch", t("dev")), ("name", t("w"))];
@@ -442,7 +443,7 @@ fn two_commands_run_at_once_in_one_workspace_on_native() {
         Some(&home),
         "machine.update",
         SdkValue::map([
-            ("machine", SdkValue::text(layerfs_home::names::HOST_MACHINE)),
+            ("machine", SdkValue::text(layerfs_api::names::HOST_MACHINE)),
             ("daemon", SdkValue::text(daemon.as_str())),
         ]),
         &mut |_| {},
@@ -469,7 +470,7 @@ fn two_commands_run_at_once_in_one_workspace_on_native() {
     let sandbox = [
         ("project", t("shop/api")),
         ("name", t("s1")),
-        ("machine", t(layerfs_home::names::HOST_MACHINE)),
+        ("machine", t(layerfs_api::names::HOST_MACHINE)),
     ];
     ok(&home, "sandbox.create", &sandbox);
     let mount = [("sandbox", t("s1")), ("branch", t("dev")), ("name", t("w"))];
@@ -552,7 +553,7 @@ fn forced_native_machine_stop_cancels_running_commands() {
         Some(&home),
         "machine.update",
         SdkValue::map([
-            ("machine", SdkValue::text(layerfs_home::names::HOST_MACHINE)),
+            ("machine", SdkValue::text(layerfs_api::names::HOST_MACHINE)),
             ("daemon", SdkValue::text(daemon.as_str())),
         ]),
         &mut |_| {},
@@ -581,7 +582,7 @@ fn forced_native_machine_stop_cancels_running_commands() {
     let sandbox = [
         ("project", t("shop/api")),
         ("name", t("s1")),
-        ("machine", t(layerfs_home::names::HOST_MACHINE)),
+        ("machine", t(layerfs_api::names::HOST_MACHINE)),
     ];
     ok(&home, "sandbox.create", &sandbox);
     let mount = [("sandbox", t("s1")), ("branch", t("dev")), ("name", t("w"))];
@@ -604,7 +605,7 @@ fn forced_native_machine_stop_cancels_running_commands() {
         .get_int("pgid")
         .unwrap();
     let force = [
-        ("machine", t(layerfs_home::names::HOST_MACHINE)),
+        ("machine", t(layerfs_api::names::HOST_MACHINE)),
         ("force", SdkValue::Bool(true)),
     ];
     let stopped = ok(&home, "machine.stop", &force);

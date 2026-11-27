@@ -5,8 +5,8 @@
 //! SQLite and PostgreSQL paths cannot disagree on a key: the report is flat,
 //! every byte total ends in `_bytes`, a zero field is named by its key in
 //! this answer, and `residue_reason` is null unless something remains.
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_persistence::{CompactPath, CompactReceipt, CompactStatus};
+use layerfs_protocol::sdk::SdkValue;
 
 /// The key of this answer a §11 report field (`wire`, as the engine names
 /// it) is answered under: what a `zero_reasons` entry names.

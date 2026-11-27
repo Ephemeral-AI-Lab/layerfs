@@ -15,7 +15,7 @@
 #![cfg(unix)]
 use layerfs_api::home::{self, paths, write_record};
 use layerfs_api::worker::{read_frame, write_frame, Hello};
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use std::io::Write;
 use std::net::{SocketAddr, TcpListener};
 use std::os::unix::fs::PermissionsExt;

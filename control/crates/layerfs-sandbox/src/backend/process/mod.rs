@@ -15,13 +15,13 @@
 //! Its adapter (stored name `"process"`, capabilities) builds on every Unix
 //! host; the backend itself on macOS only.
 mod adapter;
+pub(crate) mod instance;
 #[cfg(target_os = "macos")]
 pub(crate) mod macos;
 #[cfg(target_os = "macos")]
 mod provider;
-pub(crate) mod instance;
 pub(crate) use adapter::ADAPTER;
 #[cfg(target_os = "macos")]
-pub use provider::ProcessProvider;
-#[cfg(target_os = "macos")]
 pub use instance::handle::Sandbox;
+#[cfg(target_os = "macos")]
+pub use provider::ProcessProvider;

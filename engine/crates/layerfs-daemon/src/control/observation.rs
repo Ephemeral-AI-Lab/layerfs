@@ -1,14 +1,14 @@
 //! Transient observations of already-owned service state; no ownership job.
 use super::Service;
 use super::{registry::bound, Failure};
-use layerfs_protocol::provision::install::{Reply, Request, WorkspaceToken};
+use layerfs_protocol::daemon::{Reply, Request, WorkspaceToken};
 use std::sync::Arc;
 
 impl Service {
     pub(crate) fn operator_workspace(
         &self,
         directory: &str,
-    ) -> Result<Arc<layerfs_store_service::store::BoundWorkspace>, Failure> {
+    ) -> Result<Arc<crate::store::BoundWorkspace>, Failure> {
         let entries = self.entries.lock().map_err(|_| Failure::Poisoned)?;
         entries
             .values()
@@ -26,7 +26,7 @@ impl Service {
                 _ => None,
             })
             .ok_or(Failure::Rejected(
-                layerfs_protocol::provision::install::ControlCode::Missing,
+                layerfs_protocol::daemon::ControlCode::Missing,
                 "Workspace path absent",
             ))
     }
@@ -39,7 +39,7 @@ impl Service {
     pub(crate) fn operator_activity(
         &self,
         directory: &str,
-    ) -> Option<(layerfs_protocol::provision::install::Activity, &'static str, i64)> {
+    ) -> Option<(layerfs_protocol::daemon::Activity, &'static str, i64)> {
         let entries = self.entries.lock().ok()?;
         entries.values().find_map(|entry| match entry {
             super::registry::Entry::Bound(value)
@@ -56,13 +56,13 @@ impl Service {
         })
     }
 
-    pub(crate) fn observed_store(&self) -> Arc<layerfs_store_service::store::Store> {
+    pub(crate) fn observed_store(&self) -> Arc<crate::store::Store> {
         self.store.clone()
     }
     pub(crate) fn observed_overlay(
         &self,
         token: WorkspaceToken,
-    ) -> Result<layerfs_store_service::OwnerClient, Failure> {
+    ) -> Result<crate::OwnerClient, Failure> {
         let entries = self.entries.lock().map_err(|_| Failure::Poisoned)?;
         let workspace = &bound(&entries, token)?.workspace;
         workspace

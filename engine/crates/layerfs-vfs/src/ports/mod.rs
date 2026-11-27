@@ -7,9 +7,9 @@ pub use captured_namespace::OverlayCapturedNamespace;
 pub use captured_runs::OverlayCapturedRuns;
 pub use digests::{FileDigestRow, FileDigests, FILE_DIGEST_WINDOW};
 mod lengths;
+pub mod mount;
 mod operation_record;
 mod overlay;
-pub mod mount;
 pub use files::OverlayFileRead;
 pub use lengths::FileLengths;
 pub use operation_record::{

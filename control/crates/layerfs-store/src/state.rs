@@ -14,10 +14,10 @@
 //! not be made answers it (`live`).
 use crate::intent;
 use crate::record::{StoreRecord, StoreRef};
-use layerfs_protocol::provision::install::SdkRefusal;
 use layerfs_home::op::Standing;
 use layerfs_home::outcome::shell_word;
 use layerfs_home::state::{Reason, State};
+use layerfs_protocol::sdk::SdkRefusal;
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;

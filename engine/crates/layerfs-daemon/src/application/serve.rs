@@ -1,7 +1,14 @@
 //! Exact one-time installation admission and original Store-to-Service transfer.
 use super::{Application, ApplicationError, ConnectionFailure};
 use crate::install_types::StoreSettings;
-use layerfs_protocol::{provision::{install::{DaemonPhase, InstallPhase, InstallRefusal, InstallReply, RefusalKind}, manifest::StoreManifest}, duplex::Connection};
+use layerfs_protocol::daemon::DaemonPhase;
+use layerfs_protocol::{
+    duplex::Connection,
+    provision::{
+        install::{InstallPhase, InstallRefusal, InstallReply, RefusalKind},
+        manifest::StoreManifest,
+    },
+};
 use layerfs_storage::ReservationBlocks;
 
 impl Application {

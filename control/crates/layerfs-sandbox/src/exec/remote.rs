@@ -9,8 +9,8 @@ use super::record::ExecRecord;
 use crate::host::Call;
 use crate::record::SandboxRecord;
 use crate::route::reach;
-use layerfs_protocol::provision::install::SdkRefusal;
 use layerfs_home::events::Events;
+use layerfs_protocol::sdk::SdkRefusal;
 use std::path::Path;
 use std::time::Duration;
 
@@ -31,7 +31,7 @@ pub fn remote(
         workspace: Some(found.workspace.clone()),
     };
     // a Sandbox reached directly runs on a machine: its worker answers
-    match reach(home, events, record, call, crate::dispatch::call) {
+    match reach(home, events, record, call, crate::dispatch::unclosing) {
         Ok(Ok(answer)) => Outcome::read(&answer),
         Ok(Err(refusal)) if refusal.code == "NoSuchSandbox" => Outcome::Ended,
         Ok(Err(_)) | Err(_) => Outcome::Unknown,

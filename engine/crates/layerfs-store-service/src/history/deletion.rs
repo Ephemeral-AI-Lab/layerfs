@@ -9,9 +9,9 @@
 //! caller has the stack id, and a hidden project has no name to resolve.
 use crate::history::lookup;
 use crate::store::Store;
-use layerfs_protocol::provision::install::SdkRefusal;
 use layerfs_history::records::{GcDeletion, GcIntent};
 use layerfs_history::LayerStackId;
+use layerfs_protocol::sdk::SdkRefusal;
 use std::sync::Arc;
 
 /// What the Store side of project.delete found or did.

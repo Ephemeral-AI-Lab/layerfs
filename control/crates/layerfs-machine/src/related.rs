@@ -1,14 +1,47 @@
 //! What a machine holds that its own records do not say: its Stores and
-//! Sandboxes, read from their records by `layerfs-control`, which passes
-//! these reads in (layerfs-project#104). A machine call runs each at the
-//! point it ran before, under the same locks.
-use layerfs_protocol::provision::install::SdkRefusal;
+//! Sandboxes, read from their records by the crates above this one, which
+//! pass these reads in (layerfs-project#104), and the steps a machine call
+//! takes on them ([`MachineUsers`]). A machine call runs each at the point
+//! it ran before, under the same locks.
+#[cfg(feature = "machine")]
+use layerfs_home::outcome::Outcome;
+use layerfs_protocol::sdk::SdkRefusal;
 use std::path::Path;
 
 /// A read of the names on machine `name` in home `home`.
 type Names = fn(home: &Path, name: &str) -> Result<Vec<String>, SdkRefusal>;
 /// An `InUse` check on machine `name` in home `home`.
 type Check = fn(home: &Path, name: &str) -> Result<(), SdkRefusal>;
+
+/// Settles, in each Store on machine `machine`, the mount intents an
+/// earlier worker incarnation left, with incarnation `incarnation`.
+type Reconcile = fn(home: &Path, machine: &str, incarnation: &str) -> Result<(), SdkRefusal>;
+/// Forgets removed machine `name` where the records of its users name it.
+type Forget = fn(home: &Path, name: &str) -> Result<(), SdkRefusal>;
+/// A forced stop of machine `name` and its Sandboxes, its machine lock
+/// held, reporting on `phases`.
+#[cfg(feature = "machine")]
+type ForceStop = fn(home: &Path, name: &str, phases: crate::Phases<'_, '_>) -> Outcome;
+
+/// What a machine call reads from and does to the Stores and Sandboxes on
+/// the machine, passed in by the crates that own them.
+#[derive(Clone, Copy)]
+pub struct MachineUsers {
+    /// The reads and `InUse` checks.
+    pub related: Related,
+    /// `machine.start`: settles a previous incarnation's mount intents.
+    pub reconcile: Reconcile,
+    /// `machine.remove`: forgets the machine's PostgreSQL Store
+    /// attachments and its image copy locks.
+    pub forget: Forget,
+    /// `machine.stop` of the host machine: what still holds it (Sandboxes
+    /// not stopped, and Stores another process or a call here holds), each
+    /// named; this process's idle Store copies are closed first.
+    pub host_holders: Names,
+    /// `machine.stop --force`.
+    #[cfg(feature = "machine")]
+    pub force_stop: ForceStop,
+}
 
 /// The reads and `InUse` checks over a machine's Stores and Sandboxes.
 #[derive(Clone, Copy)]

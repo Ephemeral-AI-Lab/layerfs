@@ -3,7 +3,7 @@
 //! again at once by the thread that holds it, and concurrent first calls
 //! on a fresh home all succeed.
 use layerfs_api::home::{self, lock, paths, read_record, write_record};
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use std::path::{Path, PathBuf};
 use std::sync::{mpsc, Arc, Barrier};
 use std::time::Duration;

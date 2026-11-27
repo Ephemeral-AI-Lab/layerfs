@@ -273,8 +273,8 @@ fn request_kind(failure: &ConnectionFailure) -> Option<&'static str> {
     }
 }
 
-fn kind(request: &layerfs_protocol::provision::install::Request) -> &'static str {
-    use layerfs_protocol::provision::install::Request;
+fn kind(request: &layerfs_protocol::daemon::Request) -> &'static str {
+    use layerfs_protocol::daemon::Request;
     match request {
         Request::Mount { .. } => "mount",
         Request::MountNamed { .. } => "mount",

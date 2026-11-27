@@ -7,11 +7,12 @@
 //! commands directly; its control connections (`pool`) each carry one
 //! exchange at a time, and concurrent calls take separate connections.
 use crate::host::Host;
+use crate::CommandIdentity;
 use crate::MountedWorkspace;
-use layerfs_protocol::provision::install::{SdkRefusal, WorkspaceToken};
 use layerfs_home::helpers::lock;
 use layerfs_home::outcome::refused;
-use crate::CommandIdentity;
+use layerfs_protocol::daemon::WorkspaceToken;
+use layerfs_protocol::sdk::SdkRefusal;
 use std::collections::BTreeMap;
 use std::sync::{Arc, LazyLock, Mutex};
 

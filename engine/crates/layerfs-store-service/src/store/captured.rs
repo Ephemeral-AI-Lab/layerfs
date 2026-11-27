@@ -15,7 +15,10 @@ use layerfs_content::{
 use layerfs_overlay::{Capture, IndexedOperationRecordScope};
 use layerfs_storage::{Save, SaveSink};
 use layerfs_telemetry::timer::{Timing, TimingNode, TimingReport};
-use layerfs_vfs::{CapturedNamespace, CapturedNamespaceAttempt, ConstructedObjects, IndexedEditRecords, WorkspaceError};
+use layerfs_vfs::{
+    CapturedNamespace, CapturedNamespaceAttempt, ConstructedObjects, IndexedEditRecords,
+    WorkspaceError,
+};
 use std::{cell::RefCell, convert::Infallible, sync::Arc};
 
 pub(super) struct Candidate {

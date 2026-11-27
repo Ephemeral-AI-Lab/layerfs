@@ -1,7 +1,7 @@
 //! Bounded original Workspace observations, never a hidden Store refresh.
 use super::WorkspaceApi;
 use crate::OperationFailure;
-use layerfs_protocol::provision::install::{Reply, Request, WorkspaceStatus, WorkspaceToken};
+use layerfs_protocol::daemon::{Reply, Request, WorkspaceStatus, WorkspaceToken};
 
 impl WorkspaceApi<'_> {
     /// Observes existing maintained state once. No unknown outcome is settled.

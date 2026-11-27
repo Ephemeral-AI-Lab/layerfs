@@ -3,7 +3,7 @@
 //! command's own code; 125 stays for refusals. The live half needs the
 //! native daemon at LAYERFS_DAEMON; without it, it says NOT_RUN.
 use layerfs_api::home;
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -58,7 +58,7 @@ fn exec_stream_passes_output_and_the_commands_exit_code() {
         Some(&home),
         "machine.update",
         SdkValue::map([
-            ("machine", SdkValue::text(layerfs_home::names::HOST_MACHINE)),
+            ("machine", SdkValue::text(layerfs_api::names::HOST_MACHINE)),
             ("daemon", SdkValue::text(daemon.as_str())),
         ]),
         &mut |_| {},
@@ -88,7 +88,7 @@ fn exec_stream_passes_output_and_the_commands_exit_code() {
         &[
             ("project", t("shop/api")),
             ("name", t("s1")),
-            ("machine", t(layerfs_home::names::HOST_MACHINE)),
+            ("machine", t(layerfs_api::names::HOST_MACHINE)),
         ],
     );
     let mounted = ok(

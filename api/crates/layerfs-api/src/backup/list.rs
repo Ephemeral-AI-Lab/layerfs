@@ -3,8 +3,8 @@
 use crate::calls::table::Kind::Name;
 use crate::calls::table::{call, opt, Call};
 use crate::calls::{Context, Form, Part};
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::outcome::Outcome;
+use layerfs_protocol::sdk::SdkValue;
 
 /// One Store file: its bucket and name, and what is news about it.
 const ITEM: Form = Form::of(

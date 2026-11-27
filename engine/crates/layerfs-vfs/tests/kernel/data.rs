@@ -14,7 +14,9 @@ use layerfs_overlay::{
     Inode, InodeKind, KernelDecision, KernelMount, OverlayError, StatementKind, StoredCounts,
     WorkspaceState, READ_WINDOW,
 };
-use layerfs_vfs::{CanonicalCache, CanonicalClient, KernelWindow, Operation, Refusal, WorkspaceError};
+use layerfs_vfs::{
+    CanonicalCache, CanonicalClient, KernelWindow, Operation, Refusal, WorkspaceError,
+};
 use std::sync::Arc;
 
 const SMALL: &[u8] = b"original\0\xff";

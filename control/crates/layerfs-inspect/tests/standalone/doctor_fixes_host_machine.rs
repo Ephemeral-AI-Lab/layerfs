@@ -8,14 +8,14 @@
 #[path = "../support/doctor_own.rs"]
 mod doctor_own;
 use doctor_own::{own, own_within, rows};
-use layerfs_protocol::provision::install::SdkValue;
-use layerfs_inspect::{Kind, Options};
 use layerfs_home::events::Events;
 use layerfs_home::home::{self, paths, private_dir, write_entity, write_record};
 use layerfs_home::names::MachineName;
 use layerfs_home::names::HOST_MACHINE;
+use layerfs_inspect::{Kind, Options};
 use layerfs_machine::record::MachineRecord;
 use layerfs_machine::worker::{read_frame_within, write_frame, MAX_HELLO, PROTOCOL};
+use layerfs_protocol::sdk::SdkValue;
 use std::net::TcpListener;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -541,8 +541,13 @@ fn machine_record(f: &Fixture, name: &str, fields: Vec<(&str, SdkValue)>) {
 fn remove_machine(f: &Fixture, name: &str) {
     let mut sink = |_| {};
     let mut events = Events::new(&mut sink);
-    layerfs_machine::with_users::remove(&f.home, &mut events, &MachineName::parse(name).unwrap())
-        .unwrap();
+    layerfs_machine::with_users::remove(
+        &f.home,
+        &mut events,
+        &MachineName::parse(name).unwrap(),
+        &layerfs_sandbox::users::MACHINE,
+    )
+    .unwrap();
 }
 
 #[test]

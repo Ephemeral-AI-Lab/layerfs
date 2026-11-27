@@ -2,7 +2,7 @@
 mod common;
 use common::{layerfs, run, tempdir, text};
 use layerfs_home::json;
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 
 #[test]
 fn version_identifies_source_and_features_without_a_home() {
@@ -33,7 +33,7 @@ fn version_identifies_source_and_features_without_a_home() {
     );
     assert_eq!(
         features.contains(&SdkValue::text("sandbox-runtime")),
-        layerfs_sandbox::backend::namespaces::linux::runtime::LOADER.is_some()
+        layerfs_os::runtime::LOADER.is_some()
     );
     // the Store formats this build writes (#804 §2)
     assert_eq!(

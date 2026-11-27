@@ -8,12 +8,15 @@ use super::{
     serving::{stage, Attached, Evidence, Kept, Leaving},
     Failure, Service, Success,
 };
-use layerfs_store_service::store::BoundWorkspace;
-use layerfs_protocol::provision::install::{AbortDisposition, Activity, CommitKnowledge, ControlCode, DetachDisposition, ForcedFacts, MountPhase, TeardownStage, WorkspaceToken};
 use layerfs_fuse::{
     mount::AbortWrite,
     session::{Detach, DrainStage, Forced, SessionObserver},
 };
+use layerfs_protocol::daemon::{
+    AbortDisposition, Activity, CommitKnowledge, ControlCode, DetachDisposition, ForcedFacts,
+    MountPhase, TeardownStage, WorkspaceToken,
+};
+use layerfs_store_service::store::BoundWorkspace;
 use std::{fmt, sync::Arc};
 
 /// Abort effects after normal admission, which established no Commit custody
@@ -147,7 +150,7 @@ impl Service {
         // Drain barrier holds: one fixed logical mark, then indexed retirement.
         match self.job(
             workspace.route(),
-            |job_client: &layerfs_store_service::OwnerClient, job_route| job_client.kernel_revoke(job_route, mount),
+            |job_client: &crate::OwnerClient, job_route| job_client.kernel_revoke(job_route, mount),
         ) {
             Ok(()) => {}
             Err(failure) => {

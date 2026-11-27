@@ -11,10 +11,14 @@ mod target {
 mod backup_target;
 #[path = "../../../layerfs-store/tests/support/doctor_s3.rs"]
 mod peer;
-use layerfs_protocol::{provision::install::{Answer, Call, DaemonPhase, DaemonStatus, Reply, Request, SdkValue}, duplex};
-use layerfs_inspect::{Kind, Options};
 use layerfs_home::home::{self, paths, private_dir, write_entity, write_record};
 use layerfs_home::process;
+use layerfs_inspect::{Kind, Options};
+use layerfs_protocol::{
+    daemon::{Answer, Call, DaemonPhase, DaemonStatus, Reply, Request},
+    duplex,
+    sdk::SdkValue,
+};
 use peer::{Mode, Server};
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
@@ -511,7 +515,7 @@ fn daemon_instance_and_ready_findings() {
     server.join().unwrap();
     std::fs::remove_dir_all(home).unwrap();
     // a startup that failed and is retained
-    let home = layerfs_home::home();
+    let home = self::home();
     sandbox(&home, layerfs_home::names::HOST_MACHINE, local_record());
     let server = daemon(&home, 52, 9, DaemonPhase::Retained, Vec::new());
     let report = run(&home);

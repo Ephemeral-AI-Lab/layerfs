@@ -2,7 +2,7 @@
 #![allow(dead_code)]
 use crate::fixture::Fixture;
 use layerfs_api::home::{entity_lock, paths};
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Output, Stdio};
 use std::time::{Duration, Instant};

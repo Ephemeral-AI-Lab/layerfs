@@ -1,8 +1,8 @@
 //! Host worker on the real home, with separate admission for management
 //! and for streamed writes.
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::outcome::{failed, refused, Outcome};
 use layerfs_machine::worker::{HostHello, HostPaths, HOST_HELD_WRITES};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use nix::poll::{poll, PollFd, PollFlags};
 use std::collections::VecDeque;
 use std::io::{self, Read, Write};
@@ -60,7 +60,7 @@ const WRITES: Lane = Lane {
 /// handed over and not yet answered; at it the ordinary thread answers the
 /// call `Unavailable` at once, unrun, and never waits on this lane. Calls
 /// whose caller has gone are dropped unrun.
-const POSTGRES: Lane = Lane {
+pub(crate) const POSTGRES: Lane = Lane {
     index: 2,
     slots: 64,
     threads: crate::postgresql::pool::PER_PROCESS,
@@ -68,34 +68,34 @@ const POSTGRES: Lane = Lane {
 };
 
 #[derive(Clone, Copy)]
-struct Lane {
-    index: usize,
-    slots: usize,
+pub(crate) struct Lane {
+    pub(crate) index: usize,
+    pub(crate) slots: usize,
     threads: usize,
     name: &'static str,
 }
 
-struct Pending {
-    stream: UnixStream,
+pub(crate) struct Pending {
+    pub(crate) stream: UnixStream,
     /// A PostgreSQL read's request, already read by an ordinary thread.
-    request: Option<SdkValue>,
+    pub(crate) request: Option<SdkValue>,
 }
 
 #[derive(Default)]
-struct Queue {
-    pending: VecDeque<Pending>,
+pub(crate) struct Queue {
+    pub(crate) pending: VecDeque<Pending>,
     /// Accepted sockets in this lane, including the queue and all exchanges.
-    outstanding: usize,
+    pub(crate) outstanding: usize,
 }
 
-struct Activity {
-    lanes: [Queue; 4],
-    last_call: Instant,
-    admitted: usize,
-    draining: bool,
-    answered: u64,
+pub(crate) struct Activity {
+    pub(crate) lanes: [Queue; 4],
+    pub(crate) last_call: Instant,
+    pub(crate) admitted: usize,
+    pub(crate) draining: bool,
+    pub(crate) answered: u64,
     last_close: Option<SdkValue>,
-    writes: super::write_queue::Writes,
+    pub(crate) writes: super::write_queue::Writes,
 }
 
 impl Activity {
@@ -131,26 +131,26 @@ impl Activity {
     }
 }
 
-pub(super) struct HostServer {
+pub(crate) struct HostServer {
     pub(super) hello: HostHello,
-    home: PathBuf,
+    pub(crate) home: PathBuf,
     home_id: String,
     identity: Vec<(&'static str, SdkValue)>,
     activity: Mutex<Activity>,
-    queued: [Condvar; 4],
+    pub(crate) queued: [Condvar; 4],
     /// Wakes a write thread: a write is held, or the worker drains.
-    writable: Condvar,
+    pub(crate) writable: Condvar,
     wake: UnixStream,
 }
 
 impl HostServer {
-    fn lock(&self) -> MutexGuard<'_, Activity> {
+    pub(crate) fn lock(&self) -> MutexGuard<'_, Activity> {
         self.activity
             .lock()
             .unwrap_or_else(|error| error.into_inner())
     }
 
-    fn notify(&self) {
+    pub(crate) fn notify(&self) {
         // A full nonblocking wake socket already has a readable notification.
         let _ = (&self.wake).write(&[1]);
     }
@@ -184,7 +184,7 @@ impl HostServer {
             let mut admitted = false;
             let serve = |stream: &UnixStream, request, admitted: &mut bool| {
                 std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    layerfs_api::worker::connection::serve_host_connection(
+                    super::connection::serve_host_connection(
                         self,
                         stream,
                         endpoint(lane),
@@ -222,7 +222,7 @@ impl HostServer {
     }
 
     /// One connection of `lane` ended, with `result`.
-    fn finish(&self, lane: Lane, admitted: bool, result: &std::thread::Result<Served>) {
+    pub(crate) fn finish(&self, lane: Lane, admitted: bool, result: &std::thread::Result<Served>) {
         {
             let mut activity = self.lock();
             activity.lanes[lane.index].outstanding -= 1;
@@ -278,7 +278,7 @@ impl HostServer {
         mut wake_read: UnixStream,
         unpublish: &dyn Fn(),
     ) -> io::Result<()> {
-        let mut limited = layerfs_api::worker::serve::Limited {
+        let mut limited = layerfs_machine::worker::accept::Limited {
             every: Duration::from_secs(10),
             kinds: Vec::new(),
         };
@@ -357,7 +357,7 @@ impl HostServer {
                 }
                 if events.contains(PollFlags::POLLIN) {
                     if let Err(error) = self.accept(listener, lane) {
-                        let Some(kind) = layerfs_api::worker::serve::passing(&error) else {
+                        let Some(kind) = layerfs_machine::worker::accept::passing(&error) else {
                             return Err(error);
                         };
                         if limited.due(kind).is_some() {
@@ -373,7 +373,10 @@ impl HostServer {
     /// The one admission step of every call and write: refused before any
     /// effect while draining, otherwise counted as admitted under the
     /// returned lock.
-    fn admit(&self, admitted: &mut bool) -> Result<MutexGuard<'_, Activity>, SdkRefusal> {
+    pub(crate) fn admit(
+        &self,
+        admitted: &mut bool,
+    ) -> Result<MutexGuard<'_, Activity>, SdkRefusal> {
         let mut activity = self.lock();
         if activity.draining {
             let mut error = refused("Unavailable", "the host worker is draining");
@@ -398,8 +401,7 @@ impl HostServer {
         if control && op == "drain" {
             return self.drain_answer();
         }
-        let stores =
-            (control && op == "ping").then(|| crate::open::host_store_count(&self.home));
+        let stores = (control && op == "ping").then(|| crate::open::host_store_count(&self.home));
         enum Operation {
             Ping,
             CloseStore,
@@ -515,8 +517,7 @@ impl HostServer {
     }
 
     fn close_store(&self, args: &SdkValue) -> Outcome {
-        let report =
-            crate::host_maintenance::close_at(&self.home, &self.hello.generation, args);
+        let report = crate::host_maintenance::close_at(&self.home, &self.hello.generation, args);
         self.record_close(
             args.get_text("store").unwrap_or_default(),
             "maintenance",
@@ -595,7 +596,7 @@ impl HostServer {
 /// its request until its `go` and never shuts down only its write side
 /// (which macOS `poll` may report as `POLLHUP`), so this serves both the
 /// queued PostgreSQL reads and the writes waiting for a write thread.
-fn peer_gone(stream: &UnixStream) -> bool {
+pub(crate) fn peer_gone(stream: &UnixStream) -> bool {
     use nix::sys::socket::{recv, MsgFlags};
     let mut ready = [PollFd::new(stream.as_fd(), PollFlags::POLLIN)];
     let Ok(_) = poll(&mut ready, 0u16) else {
@@ -626,7 +627,7 @@ fn peer_gone(stream: &UnixStream) -> bool {
 
 /// Which endpoint a connection came in on.
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub(super) enum Endpoint {
+pub(crate) enum Endpoint {
     Ordinary,
     Control,
     /// Streamed writes only (S2.2).
@@ -642,7 +643,7 @@ fn endpoint(lane: Lane) -> Endpoint {
 }
 
 /// What one connection came to on its thread.
-pub(super) enum Served {
+pub(crate) enum Served {
     /// Answered (`true`) or ended without an answer.
     Answered(bool),
     /// A PostgreSQL read whose request was read, for its own lane.
@@ -667,7 +668,7 @@ fn queued(listener: &UnixListener) -> io::Result<bool> {
     }
 }
 
-fn log(message: &str) {
+pub(crate) fn log(message: &str) {
     let _ = writeln!(io::stderr(), "layerfs host worker: {message}");
 }
 
@@ -677,7 +678,7 @@ fn run(
     home: PathBuf,
     home_id: String,
     unpublish: &dyn Fn(),
-) -> io::Result<layerfs_api::worker::serve::Served> {
+) -> io::Result<layerfs_machine::worker::accept::Served> {
     for listener in &listeners {
         listener.set_nonblocking(true)?;
     }
@@ -707,7 +708,7 @@ fn run(
                         })?;
                 }
             }
-            for _ in 0..write::WRITE_THREADS {
+            for _ in 0..super::write_queue::WRITE_THREADS {
                 std::thread::Builder::new()
                     .name("layerfs-host-write".to_owned())
                     .spawn_scoped(scope, move || server.work_writes())?;
@@ -723,12 +724,12 @@ fn run(
     server.close_drained_stores();
     served?;
     let requests = server.lock().answered;
-    Ok(layerfs_api::worker::serve::Served { requests })
+    Ok(layerfs_machine::worker::accept::Served { requests })
 }
 
 /// Runs the host worker with the real home and its lifetime lock.
 /// This entry runs in its own process, above the Store and machine crates.
-pub fn serve_host(home: &Path) -> Result<layerfs_api::worker::serve::Served, SdkRefusal> {
+pub fn serve_host(home: &Path) -> Result<layerfs_machine::worker::accept::Served, SdkRefusal> {
     // before any request, which may carry a PostgreSQL password, is read
     crate::host_postgresql::limit_core_dumps();
     let paths = HostPaths::new(home)?;

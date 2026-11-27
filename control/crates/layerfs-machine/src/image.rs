@@ -7,10 +7,10 @@
 //! A cached image is inspected before reuse; an import is one attempt.
 use super::spec::{self as record, refusal};
 use crate::bundle::IMAGE_ARCHIVE;
-use layerfs_protocol::provision::install::SdkRefusal;
+use crate::platform as adapters;
 use layerfs_home::home::lock;
 use layerfs_home::outcome::refused;
-use crate::platform as adapters;
+use layerfs_protocol::sdk::SdkRefusal;
 use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 

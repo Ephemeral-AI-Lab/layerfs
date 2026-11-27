@@ -19,7 +19,7 @@ mod fault_proxy;
 #[path = "support/round_trips.rs"]
 mod rt;
 
-use layerfs_protocol::provision::install::{SdkCall, SdkRefusal, SdkValue};
+use layerfs_protocol::sdk::{SdkCall, SdkRefusal, SdkValue};
 use rt::{branch_arg as branch, path_arg as path, t, Opened, Store};
 
 fn apply(opened: &Opened, changes: Vec<SdkValue>) -> Result<SdkValue, SdkRefusal> {

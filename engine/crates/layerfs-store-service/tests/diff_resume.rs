@@ -13,9 +13,9 @@ mod installed;
 #[allow(dead_code)]
 mod support;
 
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_content::compare::{ChangeWalk, Pair};
 use layerfs_content::filesystem::PathName;
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_store_service::history::lookup;
 use layerfs_store_service::read::snapshot;
 use std::fs;

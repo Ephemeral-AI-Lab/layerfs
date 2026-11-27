@@ -7,10 +7,10 @@ use super::super::records::daemon_fix;
 use super::super::scan::{shell, Scanned};
 use super::{executable, Checks};
 use crate::home::get::{Build, HostDaemon};
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::home::read_record;
 use layerfs_home::names::HOST_MACHINE;
 use layerfs_machine::{bundle_dir, IMAGE_ARCHIVE};
+use layerfs_protocol::sdk::SdkValue;
 use std::path::Path;
 
 /// `home.build`: the calling program exists and can run.

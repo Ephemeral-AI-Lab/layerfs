@@ -116,20 +116,20 @@ fn each_profile_names_its_platform_and_how() {
 
 #[test]
 fn kernel_routes_follow_the_backend() {
-    use layerfs_protocol;
-    assert_eq!(Platform::Host.kernel(HostOs::Macos), Some(layerfs_protocol::Nfs));
+    use layerfs_machine::platform::KernelRoute;
+    assert_eq!(Platform::Host.kernel(HostOs::Macos), Some(KernelRoute::Nfs));
     assert_eq!(
         Platform::Host.kernel(HostOs::Linux),
-        Some(layerfs_protocol::Fuse)
+        Some(KernelRoute::Fuse)
     );
     assert_eq!(Platform::Host.kernel(HostOs::Windows), None);
     for host in HostOs::NAMED {
         for kind in Platform::ALL.into_iter().skip(1) {
-            assert_eq!(kind.kernel(host), Some(layerfs_protocol::Fuse), "{kind:?}");
+            assert_eq!(kind.kernel(host), Some(KernelRoute::Fuse), "{kind:?}");
         }
     }
-    assert_eq!(layerfs_protocol::Fuse.as_str(), "fuse");
-    assert_eq!(layerfs_protocol::Nfs.as_str(), "nfs");
+    assert_eq!(KernelRoute::Fuse.as_str(), "fuse");
+    assert_eq!(KernelRoute::Nfs.as_str(), "nfs");
 }
 
 #[test]

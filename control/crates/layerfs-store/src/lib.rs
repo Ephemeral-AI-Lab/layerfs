@@ -9,12 +9,14 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
+pub mod admin;
 #[doc(hidden)]
 pub mod backup;
 pub mod call;
 #[doc(hidden)]
 pub mod calls;
 pub mod compact;
+pub mod data;
 pub mod diagnostic;
 pub mod formats;
 pub mod get;
@@ -56,11 +58,9 @@ mod stats;
 pub mod unknown;
 pub mod upgrade;
 pub mod words;
-pub mod admin;
-pub mod data;
 
 /// The Store connection reaper (not lifecycle, #535 D11), for its test.
 #[doc(hidden)]
 pub use open::close_idle;
 pub use record::stores;
-pub use related::Related;
+pub use related::{Related, StoreUsers};

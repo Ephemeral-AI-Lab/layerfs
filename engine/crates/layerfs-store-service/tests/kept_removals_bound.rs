@@ -18,9 +18,9 @@
 mod adversary;
 
 use adversary::{verdict, write, Service, TestStore, Verdict};
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_content::filesystem::FilesystemRootId;
 use layerfs_history::PathRemovalRecord;
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_store_service::removal::KEPT_REMOVAL_BYTES;
 
 const SEED: &[(&str, &[u8])] = &[("/a", b"a\n"), ("/b", b"b\n")];

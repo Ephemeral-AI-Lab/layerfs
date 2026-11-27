@@ -1,8 +1,8 @@
 //! `branch.merge`.
 use crate::methods::args::{invalid, project, text, Answer};
 use crate::{history::branch, StoreService};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_content::merge::MergeUnit;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 
 /// `merge(branch, with, { name?, expected?, message?, units? })`: `with`
 /// merged into `branch`, the result a new Branch `name` when given, else

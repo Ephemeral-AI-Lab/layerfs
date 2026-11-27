@@ -2,9 +2,9 @@
 //! keep their JSON as read: field order, null against absent, unknown and
 //! mistyped fields; a changed field keeps its place and a new one comes
 //! last, as the untyped records did.
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::json::{parse, print};
 use layerfs_home::op::Op;
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_sandbox::host::Started;
 use layerfs_sandbox::record::{DaemonRecord, SandboxRecord, WorkspaceRecord};
 
@@ -132,9 +132,9 @@ fn unmount_guard_forceable_rejects_crashed_and_already_forced_records() {
 
         let write_rec = |name: &str, text: &str| {
             let p = ws.join(name);
-            let bytes = layerfs_protocol::provision::install::Answer {
+            let bytes = layerfs_protocol::daemon::Answer {
                 id: 1,
-                reply: layerfs_protocol::provision::install::Reply::Sdk(value(text)),
+                reply: layerfs_protocol::daemon::Reply::Sdk(value(text)),
             }
             .encode()
             .unwrap();

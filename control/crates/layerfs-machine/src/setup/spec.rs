@@ -15,10 +15,12 @@ pub const WORKER_PORT: u16 = 7070;
 pub struct Spec {
     /// The machine's name (`dev`).
     pub name: String,
+    /// The machine's kind.
     pub kind: Platform,
     /// The provider's name for the machine's VM or worker container,
     /// `<prefix><machine>`, chosen by the caller.
     pub vm_name: String,
+    /// Virtual CPUs.
     pub cpus: u32,
     /// Bytes.
     pub memory: u64,
@@ -42,6 +44,7 @@ pub struct Spec {
     pub incarnation: Option<String>,
     /// A folder of the caller's for this machine: its logs.
     pub work_dir: PathBuf,
+    /// The provider tools to run, as the caller found them.
     pub tools: Tools,
 }
 
@@ -61,7 +64,9 @@ pub struct Lasting {
 /// files by manifest identity; `hash` remains the worker compatibility seal.
 #[derive(Clone, Debug)]
 pub struct Bundle {
+    /// The folder that holds the bundle's files.
     pub dir: PathBuf,
+    /// The bundle's seal: the worker compatibility hash.
     pub hash: String,
 }
 
@@ -139,6 +144,7 @@ pub fn search_path(path: &OsString, fallbacks: &[PathBuf]) -> OsString {
 pub struct Endpoint {
     /// A host loopback address.
     pub address: SocketAddr,
+    /// The secret every request's first frame carries.
     pub secret: String,
 }
 
@@ -160,20 +166,26 @@ impl std::fmt::Debug for Endpoint {
 pub struct Forward {
     /// A host loopback address.
     pub address: SocketAddr,
+    /// The `ssh -L` process that carries the port, if one does.
     pub pid: Option<u32>,
 }
 
 /// A started machine: its endpoint, and the lasting state to record.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Running {
+    /// Where the started worker answers.
     pub endpoint: Endpoint,
+    /// The guest state to record for the next call.
     pub lasting: Lasting,
 }
 
 /// Guest paths every VM machine shares.
 pub const DATA: &str = "/layerfs/data";
+/// The guest folder the sealed bundle is copied to.
 pub const BUNDLE: &str = "/layerfs/bundle";
+/// The guest folder of state that outlives one call.
 pub const STATE: &str = "/layerfs/state";
+/// The guest folder the Sandbox image archive is copied to.
 pub const IMAGE: &str = "/layerfs/image";
 /// The worker's log on every machine kind: on the data disk, so it stays
 /// across restarts and, on docker, across the containers each start makes

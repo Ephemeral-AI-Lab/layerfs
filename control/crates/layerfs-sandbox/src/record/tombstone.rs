@@ -29,8 +29,8 @@
 //! proves the old placements dead) or the operator repairs it. A missing
 //! tombstone and a missing record are both "no proof", never death.
 use super::sandbox::SandboxRecord;
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::home::{self, paths, read_record, write_entity};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;

@@ -2,9 +2,9 @@
 //! as its adapter reports it: `tool:<cli>` for a command not on the search
 //! path, `host:<fact>` for what the host lacks. A probe starts nothing.
 use crate::platform::adapter::adapter;
-use crate::table::profile::{HostOs, Platform};
-use crate::setup::tool;
 use crate::setup::spec::Tools;
+use crate::setup::tool;
+use crate::table::profile::{HostOs, Platform};
 use std::path::Path;
 use std::process::Command;
 use std::time::Duration;
@@ -12,8 +12,11 @@ use std::time::Duration;
 /// One kind's readiness on this host.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Probe {
+    /// The machine kind probed.
     pub kind: Platform,
+    /// Whether this host can run it now.
     pub ready: bool,
+    /// The host tools it needs and does not find.
     pub missing: Vec<String>,
     /// The provider tool's version, when it answers.
     pub version: Option<String>,

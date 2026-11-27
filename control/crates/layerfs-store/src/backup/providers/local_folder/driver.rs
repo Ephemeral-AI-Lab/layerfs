@@ -1,6 +1,8 @@
 //! Files under `root/objects/<name>`, metadata under `root/metadata/<name>`.
 //! An upload writes a `.uploading` sibling and renames it into place.
-use crate::backup::bucket::driver::{check_metadata, check_name, open_span, Driver, Listed, Metadata, Span, Stat};
+use crate::backup::bucket::driver::{
+    check_metadata, check_name, open_span, Driver, Listed, Metadata, Span, Stat,
+};
 use crate::backup::bucket::error::{local, RemoteError};
 use crate::backup::bucket::limits::Limits;
 use std::fs::{self, File, OpenOptions};

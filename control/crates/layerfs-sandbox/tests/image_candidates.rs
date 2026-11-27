@@ -7,7 +7,7 @@ mod fixture;
 #[path = "support/standin.rs"]
 mod standin;
 use fixture::Scratch;
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_sandbox::docker::{candidates, need, Docker};
 use standin::Standin;
 

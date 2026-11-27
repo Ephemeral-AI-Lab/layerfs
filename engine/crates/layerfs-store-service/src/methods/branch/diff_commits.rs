@@ -4,7 +4,7 @@ use crate::{
     read::{compare, snapshot},
     StoreService,
 };
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 
 /// `diff_commits({ from, to })`: path-level changes between two Commits.
 pub fn diff_commits(service: &StoreService, args: &SdkValue) -> Answer {

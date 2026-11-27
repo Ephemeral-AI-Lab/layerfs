@@ -628,19 +628,19 @@ impl Service {
     pub fn call(
         &self,
         method: &str,
-        fields: Vec<(&str, layerfs_protocol::provision::install::SdkValue)>,
-    ) -> Result<layerfs_protocol::provision::install::SdkValue, layerfs_protocol::provision::install::SdkRefusal> {
-        let mut fields: Vec<(String, layerfs_protocol::provision::install::SdkValue)> = fields
+        fields: Vec<(&str, layerfs_protocol::sdk::SdkValue)>,
+    ) -> Result<layerfs_protocol::sdk::SdkValue, layerfs_protocol::sdk::SdkRefusal> {
+        let mut fields: Vec<(String, layerfs_protocol::sdk::SdkValue)> = fields
             .into_iter()
             .map(|(name, value)| (name.to_owned(), value))
             .collect();
         fields.push((
             "project".into(),
-            layerfs_protocol::provision::install::SdkValue::text(PROJECT),
+            layerfs_protocol::sdk::SdkValue::text(PROJECT),
         ));
-        let call = layerfs_protocol::provision::install::SdkCall {
+        let call = layerfs_protocol::sdk::SdkCall {
             method: method.into(),
-            args: layerfs_protocol::provision::install::SdkValue::Map(fields),
+            args: layerfs_protocol::sdk::SdkValue::Map(fields),
         };
         layerfs_store_service::methods::call(&self.service, &call)
     }

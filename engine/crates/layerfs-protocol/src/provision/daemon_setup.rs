@@ -1,5 +1,8 @@
 //! Bounded private deployment configuration, kept out of container env/argv.
-use crate::{provision::{install::ControlError, store::DaemonStore}, wire::{Reader, Writer}};
+use crate::{
+    provision::{install::ControlError, store::DaemonStore},
+    wire::{Reader, Writer},
+};
 use std::fmt;
 const MAGIC: &[u8] = b"LFSD\x09";
 /// Explicit daemon startup resources; these are windows/admission, not file caps.

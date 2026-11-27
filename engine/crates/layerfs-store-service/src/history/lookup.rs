@@ -5,7 +5,6 @@
 //! identity. Every refusal has a stable code the JavaScript SDK maps to a
 //! typed error.
 use crate::store::{PortError, Store};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_content::{ContentError, ObjectId};
 use layerfs_history::{
     error::{HolderKind, HolderState, Missing, NameSource, NameTakenState, RemovedState},
@@ -13,6 +12,7 @@ use layerfs_history::{
     BranchRecord, CommitId, CommitRecord, HistoryError, HistoryName, LayerId, LayerRecord,
     LayerStackRecord, NodeId, UnknownOutcomeState,
 };
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::sync::Arc;
 
 pub use layerfs_protocol::sdk::{commit_value, hex, layer_value, node_text, short, unhex};

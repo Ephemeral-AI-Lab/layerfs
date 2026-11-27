@@ -5,7 +5,7 @@
 //! directory, outside the worker's root.
 use layerfs_api::home::{self, paths, read_record, write_record};
 use layerfs_api::worker::{self, Endpoint};
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -86,9 +86,7 @@ fn home_with_box(tag: &str, listener: &TcpListener) -> PathBuf {
 
 fn serve(listener: TcpListener, root: &Path) {
     let root = root.to_owned();
-    std::thread::spawn(move || {
-        layerfs_api::worker::serve::serve(listener, "k".to_owned(), root)
-    });
+    std::thread::spawn(move || layerfs_api::worker::serve::serve(listener, "k".to_owned(), root));
 }
 
 fn store_call(home: &Path, name: &str, project: &str, path: &str) -> SdkValue {

@@ -1,7 +1,5 @@
 //! Observational Store engine entry points, without leases or writable opens.
 use crate::{identity::Identity, record::StoreRecord};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
-use layerfs_protocol::sdk::hex;
 /// The project id a project audit takes.
 pub use layerfs_history::LayerStackId;
 use layerfs_home::outcome::refused;
@@ -10,6 +8,8 @@ pub use layerfs_persistence::diagnostic::{
 };
 /// How long a PostgreSQL connection may take to be made and logged in.
 pub use layerfs_persistence::POSTGRESQL_HANDSHAKE;
+use layerfs_protocol::sdk::hex;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 
 /// Diagnoses the authoritative same-kernel SQLite file without modifying it.

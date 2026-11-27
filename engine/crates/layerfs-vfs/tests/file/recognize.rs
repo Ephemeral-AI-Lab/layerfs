@@ -5,7 +5,10 @@ mod common;
 
 use common::{fixture_with, Fixture};
 use layerfs_overlay::{WriteClaims, RUN_BYTES, WRITE_CLAIMS};
-use layerfs_vfs::{BaseView, CanonicalCache, CanonicalClient, Recognition, RecognizeWork, WriteRun, RECOGNIZE_BYTES, UNMATCHED_BYTES};
+use layerfs_vfs::{
+    BaseView, CanonicalCache, CanonicalClient, Recognition, RecognizeWork, WriteRun,
+    RECOGNIZE_BYTES, UNMATCHED_BYTES,
+};
 use std::sync::Arc;
 
 const KIB: usize = 1024;

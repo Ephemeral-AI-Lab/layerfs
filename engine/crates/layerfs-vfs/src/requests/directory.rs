@@ -2,9 +2,9 @@
 //! prefix, one publishing visit. Nothing is held in the engine between them
 //! or after the reply.
 use crate::ports::mount::{BaseDemandFailed, Fenced, RequestServices, ServiceError};
+use crate::{KernelDirectoryBatch, KernelDirectoryEntry, KernelDirectoryWindow, ViewStat};
 use layerfs_content::object::inode_leaf::InodeKind;
 use layerfs_overlay::{KernelMount, OverlayError};
-use crate::{KernelDirectoryBatch, KernelDirectoryEntry, KernelDirectoryWindow, ViewStat};
 use std::{fmt, sync::Arc};
 
 /// One kernel READDIR on an open directory handle. It owns plain values

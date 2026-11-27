@@ -3,8 +3,8 @@
 //! of the sealed bundle it runs from. The caller compares both with its own
 //! before it sends anything: a worker of another build is refused, and its
 //! machine is stopped and started again to run this build's worker.
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::outcome::refused;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 
 /// The worker protocol this build speaks. The first worker answered its

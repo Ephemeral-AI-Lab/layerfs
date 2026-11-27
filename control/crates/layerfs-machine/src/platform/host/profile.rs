@@ -1,8 +1,9 @@
 //! `host`'s profile: Sandboxes on the host's own OS, with no VM. The
 //! machine is not the host: its executor, loopback and backend are what
 //! make it special, and they differ by host (Windows has no backend).
-use {crate::table::profile::{ExecutorKind, HostOs, How, Profile, ANY_HOST}, layerfs_protocol::KernelRoute};
-use crate::table::backend as Backend;
+use crate::table::backend::Backend;
+use crate::table::profile::{ExecutorKind, HostOs, How, Profile, ANY_HOST};
+use layerfs_protocol::KernelRoute;
 use std::net::Ipv4Addr;
 
 pub(crate) const PROFILE: Profile = Profile {

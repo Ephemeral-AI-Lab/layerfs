@@ -1,5 +1,9 @@
 //! One attempted authenticated control exchange, retaining the original unknown.
-use layerfs_protocol::{provision::install::{Answer, Call, ControlError, Reply, Request}, duplex::{ChannelError, CloseHandle, Connection}};
+use layerfs_protocol::{
+    daemon::{Answer, Call, Reply, Request},
+    duplex::{ChannelError, CloseHandle, Connection},
+    provision::install::ControlError,
+};
 use std::fmt;
 /// One sequential control connection. Concurrent callers may use separate channels.
 pub struct Control {

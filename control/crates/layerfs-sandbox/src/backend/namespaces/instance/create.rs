@@ -5,7 +5,15 @@
 //! (forwarding on, no forward chain that drops it, a free pool, a resolver
 //! the Sandbox reaches). Nothing is retried, and a failure returns what it
 //! made so the caller can end and delete it once.
-use super::{cgroup, super::{linux::host_checks, rootfs::{self, ImageRoot}}, paths::Paths, handle::Sandbox};
+use super::{
+    super::{
+        linux::host_checks,
+        rootfs::{self, ImageRoot},
+    },
+    cgroup,
+    handle::Sandbox,
+    paths::Paths,
+};
 use crate::network::{self, pool::Ipv4Net, resolver::Resolver};
 use crate::spawn::listener;
 use crate::spawn::{search_path::search_path, Local, LocalPhase};
@@ -406,7 +414,7 @@ fn copy_runtime(source: &Path, target: &Path) -> Result<(), RuntimeError> {
             }
             let file = into.join(entry.file_name());
             fs::copy(entry.path(), &file)?;
-            let loader = crate::backend::namespaces::linux::runtime::LOADER;
+            let loader = layerfs_os::runtime::LOADER;
             let mode = match loader.is_some_and(|loader| entry.file_name() == loader) {
                 true => 0o755,
                 false => mode,

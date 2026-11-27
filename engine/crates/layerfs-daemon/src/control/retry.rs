@@ -9,10 +9,10 @@ use super::{
     serving::{Evidence, Kept, Leaving},
     Failure, Service, Success,
 };
-use layerfs_store_service::store::BoundWorkspace;
-use layerfs_protocol::provision::install::{Activity, ForcedFacts, MountPhase, WorkspaceToken};
+use crate::store::BoundWorkspace;
 use layerfs_fuse::session::{Drained, SessionObserver, Undrained};
 use layerfs_overlay::KernelMount;
+use layerfs_protocol::daemon::{Activity, ForcedFacts, MountPhase, WorkspaceToken};
 use std::sync::Arc;
 
 /// A retained forced connection taken out of its entry for one more detach.
@@ -111,7 +111,7 @@ impl Service {
             drained,
             mut facts,
         } = retried;
-        facts.detach = layerfs_protocol::provision::install::DetachDisposition::Detached;
+        facts.detach = layerfs_protocol::daemon::DetachDisposition::Detached;
         let drained = self.revoke(token, &workspace, mount, &observer, drained, &facts)?;
         self.close(token, &workspace, Some(drained))
     }

@@ -1,5 +1,8 @@
 //! Bounded authenticated install control records, with no object/Save RPCs.
-use crate::{provision::manifest::StoreManifest, wire::{Reader, Writer}};
+use crate::{
+    provision::manifest::StoreManifest,
+    wire::{Reader, Writer},
+};
 use std::fmt;
 /// Final sender marker, emitted only after exact sealed length and EOF checks.
 pub const INSTALL_FINISH: &[u8] = b"LFSF\x01";
@@ -160,13 +163,3 @@ fn boolean(value: u8) -> Result<bool, ControlError> {
         _ => Err(ControlError("control boolean")),
     }
 }
-
-pub use crate::daemon::capacity::{AdmissionModel, CapacityModel, RetainedFailureModel, RetainedModel, OPERATION, RECLAIM};
-pub use crate::daemon::forced::{AbortDisposition, CommitKnowledge, DetachDisposition, ForceUnmounted, ForcedCleanup, ForcedFacts, ForcedOutcome};
-pub use crate::daemon::commit::{CommitControl, ConflictReport, MergedCommit, TEXT_FIELD_LIMIT};
-pub use crate::daemon::mount::{MountPhase, MountReceipt, MountStatus, MountWork, ReadyMount, TeardownCustody, TeardownStage, MOUNT_DIRECTORY_LIMIT};
-pub use crate::sdk::{SdkCall, SdkRefusal, SdkValue, MAXIMUM_NAME_BYTES, MAXIMUM_VALUE_DEPTH};
-pub use crate::daemon::request::{Activity, Answer, Call, CleanupObservation, ControlCode, ControlRefusal, LocalObservation, MountPlace, Reply, Request, WorkspaceStatus, WorkspaceToken, HISTORY_WINDOW};
-pub use crate::daemon::unmount::{DirtyReport, UnmountControl};
-
-pub use crate::daemon::hello::{DaemonPhase, DaemonStatus, HelloRequest};

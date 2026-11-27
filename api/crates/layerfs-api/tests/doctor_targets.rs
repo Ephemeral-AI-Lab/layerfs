@@ -5,7 +5,7 @@
 //! machine's doctors, which ask a provider, are `doctor_home_machine.rs`'s.
 use layerfs_api::home::{paths, write_entity};
 use layerfs_home::json;
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 

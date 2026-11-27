@@ -3,8 +3,8 @@
 //! while that call's idle checkpoint is still running. Its own test binary:
 //! `close_idle` acts on every Store this process holds.
 use layerfs_api::home::{self};
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::home::paths;
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_store::lease;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -51,14 +51,20 @@ fn a_one_shot_process_close_folds_the_log_after_a_fork() {
         "project.init",
         &[("project", "lane/p"), ("folder", &folder_text)],
     );
-    assert_eq!(layerfs_store::admin::with_users::close_idle(Duration::ZERO), 0);
+    assert_eq!(
+        layerfs_store::admin::with_users::close_idle(Duration::ZERO),
+        0
+    );
     ok(
         &home,
         "branch.fork",
         &[("project", "lane/p"), ("name", "lane"), ("from", "main")],
     );
     // the CLI's close right after the call: no wait, nothing else in between
-    assert_eq!(layerfs_store::admin::with_users::close_idle(Duration::ZERO), 1);
+    assert_eq!(
+        layerfs_store::admin::with_users::close_idle(Duration::ZERO),
+        1
+    );
     let file = paths::store_file(&home, "lane");
     let mut wal = file.as_os_str().to_os_string();
     wal.push("-wal");

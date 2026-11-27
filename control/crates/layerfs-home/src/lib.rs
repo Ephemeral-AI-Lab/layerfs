@@ -12,6 +12,7 @@ pub mod events;
 pub mod helpers;
 pub mod home;
 pub mod json;
+pub mod log;
 pub mod logs;
 pub mod names;
 pub mod op;
@@ -25,4 +26,3 @@ pub mod time;
 #[doc(hidden)]
 pub mod trace;
 pub mod wipe;
-pub mod log;

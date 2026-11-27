@@ -7,7 +7,7 @@
 //! daemon is asked, nothing is opened in a run folder and nothing is
 //! written.
 use crate::record::DaemonRecord;
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use std::path::{Path, PathBuf};
 
 /// This kernel's unified cgroup v2 hierarchy, where the namespaces backend
@@ -153,7 +153,7 @@ impl KernelStat {
     }
 }
 
-/// A recorded process start (`layerfs_bridge::process::LocalProcess`
+/// A recorded process start (`layerfs_os::process::LocalProcess`
 /// `start`) as milliseconds since the epoch. macOS records microseconds
 /// since the epoch, so this is exact and needs no boot time.
 #[cfg(target_os = "macos")]
@@ -161,7 +161,7 @@ pub fn started_at(start: u64, _boot: Option<u64>) -> Option<i64> {
     i64::try_from(start / 1000).ok()
 }
 
-/// A recorded process start (`layerfs_bridge::process::LocalProcess`
+/// A recorded process start (`layerfs_os::process::LocalProcess`
 /// `start`) as milliseconds since the epoch. Linux records clock ticks
 /// since boot (`/proc/<pid>/stat` field 22), so this is the boot time
 /// `boot` (`btime` of `/proc/stat`, whole seconds, [`KernelStat`]) plus
@@ -189,7 +189,7 @@ pub fn usage(daemon: &DaemonRecord, root: &Path) -> (SdkValue, Option<&'static s
             Some(id) => usage_in(root, id),
             None => (SdkValue::Null, Some(NO_CGROUP)),
         },
-        Some(crate::runtime::NATIVE) => (SdkValue::Null, Some(HOST_PROCESS)),
+        Some(crate::backend::select::NATIVE) => (SdkValue::Null, Some(HOST_PROCESS)),
         _ => (SdkValue::Null, Some(NOT_SUPPORTED)),
     }
 }
@@ -309,7 +309,7 @@ pub fn workspaces(daemon: &DaemonRecord, root: &Path) -> Vec<(String, SdkValue)>
             Some(id) => sandbox_group(root, id).map(|group| workspace_groups(&group)),
             None => Err(NO_CGROUP),
         },
-        Some(crate::runtime::NATIVE) => Err(HOST_PROCESS),
+        Some(crate::backend::select::NATIVE) => Err(HOST_PROCESS),
         _ => Err(NOT_SUPPORTED),
     };
     match groups {

@@ -3,8 +3,8 @@ use super::{
     mutation::{Declined, MutationInput},
     unsupported,
 };
-use layerfs_overlay::WRITE_WINDOW;
 use crate::{Operation, Position, Refusal, Time};
+use layerfs_overlay::WRITE_WINDOW;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Permission and special bits a mode request can carry; the file type bits

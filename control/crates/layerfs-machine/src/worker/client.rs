@@ -1,8 +1,8 @@
 //! The caller's side: one request per connection, sent once.
 use super::frame::{frame_bytes, read_frame, read_frame_within, write_frame, MAX_HELLO};
 use super::hello::Hello;
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::outcome::{refused, Outcome};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpStream};
 use std::time::{Duration, Instant};

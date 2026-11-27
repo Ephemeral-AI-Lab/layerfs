@@ -7,9 +7,14 @@
 //! counted as a violation). It can also refuse serial reservations, as a
 //! contended allocator does.
 use super::client::Wire;
-use layerfs_vfs::ports::mount::{MountServices, RequestServices, ServiceError, ServiceFuture, ServiceReply};
 use layerfs_overlay::{KernelCookieOffer, KernelMount, Publication};
-use layerfs_vfs::{BaseView, KernelDirectoryWindow, KernelMutationOutcome, KernelReadOperation, KernelReadOutcome, KernelVisitRequest, KernelWindow, VisitFacts, WriteData};
+use layerfs_vfs::ports::mount::{
+    MountServices, RequestServices, ServiceError, ServiceFuture, ServiceReply,
+};
+use layerfs_vfs::{
+    BaseView, KernelDirectoryWindow, KernelMutationOutcome, KernelReadOperation, KernelReadOutcome,
+    KernelVisitRequest, KernelWindow, VisitFacts, WriteData,
+};
 use std::{
     sync::{
         atomic::{AtomicU64, Ordering},
@@ -141,9 +146,7 @@ impl RequestServices for Request {
         let future = self.inner.mutate_visit(request);
         Box::pin(async move {
             let reply = future.await?;
-            if let Ok(layerfs_vfs::JobOutcome::Applied { publication, .. }) =
-                &reply.get().result
-            {
+            if let Ok(layerfs_vfs::JobOutcome::Applied { publication, .. }) = &reply.get().result {
                 watch.published.fetch_add(1, Ordering::AcqRel);
                 let sent = watch.wire.counts.lock().unwrap().0;
                 watch.owed.lock().unwrap().push((*publication, sent));

@@ -5,14 +5,14 @@ use crate::identity::{Identity, Kind};
 use crate::project::add;
 use crate::project::record::ProjectRecord;
 use crate::record::StoreRecord;
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
-use layerfs_protocol::provision::manifest::{StoreManifest, StoreProfile};
-use layerfs_protocol::sdk::hex;
 use layerfs_history::{
     BranchId, HistoryCatalog, HistoryName, HistoryResult, LayerStackId, NamedSnapshot,
 };
 use layerfs_home::home::{self, paths};
 use layerfs_home::outcome::{failed, refused};
+use layerfs_protocol::provision::manifest::{StoreManifest, StoreProfile};
+use layerfs_protocol::sdk::hex;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::{Path, PathBuf};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;

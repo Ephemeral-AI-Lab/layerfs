@@ -153,7 +153,10 @@ fn busy_rounds(label: &str, sizes: &[usize]) {
         let after_busy = *counters.last().unwrap();
         let result = commit(&workspace);
         let answer = verdict(&result);
-        assert!(matches!(answer, Verdict::Committed(_)), "{kind:?}: {answer:?}");
+        assert!(
+            matches!(answer, Verdict::Committed(_)),
+            "{kind:?}: {answer:?}"
+        );
         let landed = result.unwrap();
         assert_eq!(landed.storage.policy, 0, "{kind:?}: the kept handle");
         let new: Vec<_> = value_blocks(&store)
@@ -188,7 +191,10 @@ fn busy_rounds(label: &str, sizes: &[usize]) {
                 "{kind:?}: {skipped} kept ordinals skipped, more than the refused attempts assigned ({bound})"
             );
             assert_eq!(
-                (landed.storage.initial_reservations, landed.storage.reservation_refills),
+                (
+                    landed.storage.initial_reservations,
+                    landed.storage.reservation_refills
+                ),
                 (0, 0),
                 "{kind:?}: the kept rest served the Commit"
             );
@@ -266,7 +272,10 @@ fn busy_handle_handed_on_at_unmount() {
         files(&second, &mut second_tree, "/second", 40);
         let result = commit(&second);
         let answer = verdict(&result);
-        assert!(matches!(answer, Verdict::Committed(_)), "{kind:?}: {answer:?}");
+        assert!(
+            matches!(answer, Verdict::Committed(_)),
+            "{kind:?}: {answer:?}"
+        );
         let landed = result.unwrap();
         if after_busy.next_ordinal > before.next_ordinal {
             assert_eq!(

@@ -1,8 +1,10 @@
 //! Explicit Commit over the existing daemon constructor/publication owner.
 use super::WorkspaceApi;
 use crate::OperationFailure;
-use layerfs_protocol::provision::install::{CommitControl, ConflictReport, MergedCommit, Reply, Request, WorkspaceToken};
 use layerfs_history::CommitOutcome;
+use layerfs_protocol::daemon::{
+    CommitControl, ConflictReport, MergedCommit, Reply, Request, WorkspaceToken,
+};
 
 /// The daemon's answer to one Workspace Commit.
 #[derive(Clone, Debug, Eq, PartialEq)]

@@ -6,13 +6,13 @@
 //! reads or writes a Store record's fields but through [`StoreRecord`].
 use crate::backup::record::StoreLink;
 use crate::intent;
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
-pub use layerfs_protocol::StoreKind;
 use layerfs_home::home::entity_lock::{self, EntityLock};
 use layerfs_home::home::{self, paths, read_record, with_field, write_entity};
 use layerfs_home::op::{self, Op};
 use layerfs_home::outcome::shell_word;
 use layerfs_home::outcome::{failed, refused, with_fix, with_next};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
+pub use layerfs_protocol::StoreKind;
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;

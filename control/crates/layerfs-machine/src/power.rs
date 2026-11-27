@@ -11,15 +11,15 @@ use super::progress::Phases;
 use super::record::{MachineRecord, STOP};
 use super::spec::{self as record, machine_of, refusal};
 use super::state::settle;
+use crate::platform::{self as adapters, Code, Platform};
 use crate::Related;
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::events::Events;
 use layerfs_home::home::{lock, paths};
 use layerfs_home::names::MachineName;
 use layerfs_home::op::Op;
 use layerfs_home::outcome::{failed, with_fix, Outcome};
 use layerfs_home::state::State;
-use crate::platform::{self as adapters, Code, Platform};
+use layerfs_protocol::sdk::SdkValue;
 use std::path::Path;
 use std::time::{Duration, Instant};
 

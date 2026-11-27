@@ -13,10 +13,10 @@
 use super::findings::Findings;
 use super::scan::{shell, Scanned};
 use crate::home::get::Build;
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::home::paths;
 use layerfs_home::op::{Op, Standing};
 use layerfs_home::outcome::shell_word;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_store::lease;
 use layerfs_store::record::{StoreRecord, StoreRef};
 use std::path::Path;

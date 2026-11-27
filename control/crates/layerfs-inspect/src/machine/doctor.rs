@@ -25,13 +25,13 @@
 //! is blocked), else what blocks the things on it (the frame's `blocked_by`
 //! reason), or `Err(None)` when a check gave no verdict.
 use super::super::doctor::budget::{Budget, Checks};
-use layerfs_protocol::provision::install::SdkValue;
 #[cfg(feature = "machine")]
 use layerfs_home::outcome::shell_word;
+use layerfs_protocol::sdk::SdkValue;
 use std::path::Path;
 
 #[cfg(not(feature = "machine"))]
-pub(super) fn diagnose(
+pub(crate) fn diagnose(
     home: &Path,
     name: &str,
     _budget: &Budget,
@@ -71,7 +71,7 @@ pub(super) fn diagnose(
 }
 
 #[cfg(feature = "machine")]
-pub(super) fn diagnose(
+pub(crate) fn diagnose(
     home: &Path,
     name: &str,
     budget: &Budget,
@@ -79,7 +79,8 @@ pub(super) fn diagnose(
 ) -> Result<(), Option<&'static str>> {
     use layerfs_machine::platform::{HostOs, Route};
     let (record, kind) = record(home, name, checks).map_err(Some)?;
-    let sandboxes = layerfs_sandbox::status::inventory::sandboxes_on(home, name).map_or(0, |on| on.len());
+    let sandboxes =
+        layerfs_sandbox::status::inventory::sandboxes_on(home, name).map_or(0, |on| on.len());
     if let Some(gate) = operation(&record, checks) {
         return Err(Some(gate));
     }
@@ -236,14 +237,14 @@ fn record(
     checks.pass(ID, format!("its record is valid and names {}", kind.name()));
     checks.evidence(
         ID,
-        layerfs_protocol::provision::install::SdkValue::map([
+        layerfs_protocol::sdk::SdkValue::map([
             (
                 "platform",
-                layerfs_protocol::provision::install::SdkValue::text(kind.name()),
+                layerfs_protocol::sdk::SdkValue::text(kind.name()),
             ),
             (
                 "recorded_state",
-                layerfs_protocol::provision::install::SdkValue::opt_text(
+                layerfs_protocol::sdk::SdkValue::opt_text(
                     record.recorded_state().map(str::to_owned),
                 ),
             ),
@@ -361,7 +362,9 @@ impl Machine<'_> {
                 // a record with no 2.0 name: the line that removes what is
                 // on it first, as its remove's `InUse` refusal carries
                 if record.nameless() {
-                    if let Ok(held) = layerfs_sandbox::status::inventory::Held::read(self.home, self.name) {
+                    if let Ok(held) =
+                        layerfs_sandbox::status::inventory::Held::read(self.home, self.name)
+                    {
                         let chain = layerfs_machine::record::no_vm_name_fix;
                         fix = Some(chain(self.name, held.holders()));
                     }
@@ -393,9 +396,9 @@ impl Machine<'_> {
         &mut self,
         spec: &layerfs_machine::platform::Spec,
     ) -> Result<Option<layerfs_machine::platform::Status>, Option<&'static str>> {
-        use layerfs_protocol::provision::install::SdkValue;
         use layerfs_machine::platform::{self, Code, State};
         use layerfs_machine::state::start_docker;
+        use layerfs_protocol::sdk::SdkValue;
         use std::time::{Duration, Instant};
         const ID: &str = "machine.provider";
         let name = self.name;
@@ -648,7 +651,7 @@ impl Machine<'_> {
         let answer = diagnostic_connect(endpoint, stop).and_then(|worker| {
             worker.diagnose(
                 DiagnosticOperation::Network,
-                layerfs_protocol::provision::install::SdkValue::Null,
+                layerfs_protocol::sdk::SdkValue::Null,
                 &mut |_| Ok(()),
             )
         });
@@ -732,7 +735,7 @@ impl Machine<'_> {
     /// (`reclaimable_image_bytes`, from the machine's image listing); that
     /// prune is the fix only when there are such bytes.
     fn capacity(&mut self, free: Option<u64>) {
-        use layerfs_protocol::provision::install::SdkValue;
+        use layerfs_protocol::sdk::SdkValue;
         const ID: &str = "machine.capacity";
         let reclaimable = layerfs_home::names::MachineName::parse(self.name)
             .ok()
@@ -747,9 +750,7 @@ impl Machine<'_> {
             bytes.map_or(SdkValue::Null, SdkValue::Int),
         )];
         match free {
-            Some(free) => {
-                super::room::room(self.checks, ID, "its data disk", free, fix, evidence)
-            }
+            Some(free) => super::room::room(self.checks, ID, "its data disk", free, fix, evidence),
             None => self.checks.unknown(
                 ID,
                 "neither its provider nor its worker measured its data disk",
@@ -831,9 +832,9 @@ fn valid_saved_fields(record: &layerfs_machine::record::MachineRecord) -> bool {
 fn operation_evidence(
     op: &layerfs_home::op::Op,
     standing: layerfs_home::op::Standing,
-) -> layerfs_protocol::provision::install::SdkValue {
-    use layerfs_protocol::provision::install::SdkValue;
+) -> layerfs_protocol::sdk::SdkValue {
     use layerfs_home::op::Standing;
+    use layerfs_protocol::sdk::SdkValue;
     let id = op.id();
     let valid_id = id.len() == 19
         && id

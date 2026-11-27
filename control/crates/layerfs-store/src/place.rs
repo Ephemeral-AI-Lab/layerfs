@@ -7,10 +7,10 @@
 //! A Sandbox's daemon reached directly (G4) is not an executor here: its
 //! Workspace calls take that route in `sandbox/direct.rs`.
 use crate::record::StoreRef;
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::outcome::shell_word;
 use layerfs_home::outcome::{refused, with_fix, with_next, Outcome, FIX};
 use layerfs_machine::worker::{self, Budget, Endpoint, EventSink, Unreached};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 

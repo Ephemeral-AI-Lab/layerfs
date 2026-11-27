@@ -8,9 +8,9 @@ use super::{
 };
 use crate::history::lookup as args;
 use crate::store::{Store, StorePorts};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_content::compare::{text::diff_lines, DiffLine, EntryFacts, LineOp};
 use layerfs_content::object::inode_leaf::InodeKind;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::{collections::BTreeMap, sync::Arc};
 
 /// One request's ancestry/row and payload budget, shared across all paths.

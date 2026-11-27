@@ -12,10 +12,11 @@
 //!   paging  statements of one grep, glob and list page at page 1 and 100
 //!   time    one whole-tree grep
 //!   calls   one call kind per process: statements, object ids, pack work, time
-use layerfs_protocol::provision::install::{Answer, Reply, SdkCall, SdkValue};
-use layerfs_protocol::provision::manifest::StoreManifest;
 use layerfs_content::object::inode_leaf::InodeKind;
 use layerfs_persistence::{PersistenceConfig, SqlitePersistenceProfile};
+use layerfs_protocol::daemon::{Answer, Reply};
+use layerfs_protocol::provision::manifest::StoreManifest;
+use layerfs_protocol::sdk::{SdkCall, SdkValue};
 use layerfs_store_service::{
     bootstrap::open_store_observed,
     read::{snapshot, window},

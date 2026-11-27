@@ -2,11 +2,11 @@
 //! Store method that does it, its answer the call's full map (the keys of
 //! its long form; the dispatcher shapes it).
 use super::op::{next_fields, on_project, Names, StoreOp};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::cursor;
 use layerfs_home::events::Events;
 use layerfs_home::helpers::shown;
 use layerfs_home::outcome::{refused, with_fix, Outcome};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 
 /// `branch.list(project, { prefix, exclude_prefix, limit, cursor })`.

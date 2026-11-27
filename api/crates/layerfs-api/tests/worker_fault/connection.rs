@@ -5,12 +5,12 @@
 //! feature (`worker_server::fault`), which also shortens the waits; this
 //! file is empty without it:
 //!
-//! `cargo test -p layerfs-control --features worker-fault --test worker_fault`
+//! `cargo test -p layerfs-api --features worker-fault --test worker_fault`
 #![cfg(feature = "worker-fault")]
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_api::worker::fault::{Faults, OpFault};
 use layerfs_home::home::paths;
 use layerfs_machine::worker::{self, Endpoint};
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_store::sqlite::transfer::step::{StepFrame, StoreStep};
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -42,12 +42,8 @@ fn worker(tag: &str, faults: Faults) -> Worker {
     let (stop, stopped) = mpsc::channel();
     let (serving, served) = (faults.clone(), root.clone());
     std::thread::spawn(move || {
-        let ended = layerfs_api::worker::serve::serve_with(
-            listener,
-            SECRET.to_owned(),
-            served,
-            serving,
-        );
+        let ended =
+            layerfs_api::worker::serve::serve_with(listener, SECRET.to_owned(), served, serving);
         let _ = stop.send(ended.expect_err("serve returns only when its listener fails"));
     });
     Worker {

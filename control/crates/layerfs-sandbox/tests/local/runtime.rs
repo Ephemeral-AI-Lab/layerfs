@@ -1,4 +1,4 @@
-//! The local runtime root on Linux (`layerfs_sandbox_backend::shared`), which
+//! The local runtime root on Linux (`layerfs_sandbox::backend::confined`), which
 //! the namespaces backend builds on: where a root may be, how its Sandboxes
 //! are named and where their parts go, and the process identity a record
 //! keeps (`LocalProcess`: id, start time and boot). The native

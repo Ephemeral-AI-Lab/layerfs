@@ -123,7 +123,8 @@ pub(super) fn run(arguments: &[OsString]) -> Result<i32, String> {
         // searches this PATH, in the Sandbox's root
         let path = (std::env::var_os("PATH").filter(|path| !path.is_empty()))
             .unwrap_or_else(|| CONTAINER_PATH.into());
-        let path = layerfs_sandbox::backend::namespaces::linux::runtime::search_path(&path, runtime);
+        let path =
+            layerfs_sandbox::backend::namespaces::linux::runtime::search_path(&path, runtime);
         command.env("PATH", path);
     }
     layerfs_sandbox::namespaces::deny_user_namespaces(&mut command);
@@ -162,7 +163,7 @@ fn start(process: &OneThread, command: &mut Command, group: Option<&File>) -> io
         let error = command.exec();
         let code = error.raw_os_error().unwrap_or(nix::libc::EIO);
         let _ = (&told).write_all(&code.to_ne_bytes());
-        std::process::exit(super::main::EXIT_FAILURE)
+        std::process::exit(super::EXIT_FAILURE)
     };
     drop(told);
     let child = pid(child);

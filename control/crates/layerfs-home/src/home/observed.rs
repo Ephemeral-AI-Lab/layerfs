@@ -5,7 +5,7 @@
 //! that polls a live read is not told to read every record again. A
 //! records-only read answers it as `observed_at`.
 use super::records::{read_record, with_field, write_record};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 

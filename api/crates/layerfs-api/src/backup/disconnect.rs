@@ -2,9 +2,9 @@
 use crate::calls::table::Kind::Name;
 use crate::calls::table::{a, call, Call};
 use crate::calls::{Context, Form, Part};
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::names::BucketName;
 use layerfs_home::outcome::Outcome;
+use layerfs_protocol::sdk::SdkValue;
 
 /// Its answer: `ok`, or the Stores whose link to it was removed.
 const FORM: Form = Form::of(

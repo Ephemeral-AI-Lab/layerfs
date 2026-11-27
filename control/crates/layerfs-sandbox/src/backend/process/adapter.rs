@@ -7,12 +7,6 @@ pub(crate) struct NativeBackend;
 pub(crate) static ADAPTER: NativeBackend = NativeBackend;
 
 impl BackendAdapter for NativeBackend {
-    fn stored_name(&self) -> &'static str {
-        "process"
-    }
-    fn description(&self) -> &'static str {
-        "Sandboxes run as this user's processes, served over loopback NFS"
-    }
     fn capabilities(&self) -> ProviderCapabilities {
         ProviderCapabilities {
             name: "process-macos",

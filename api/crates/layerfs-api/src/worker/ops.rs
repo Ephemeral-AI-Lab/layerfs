@@ -1,8 +1,8 @@
 //! The worker's operations: what each request's `op` runs on this machine,
 //! and which of them are read-only.
 use super::serve::Server;
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::outcome::{refused, Outcome};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_store::project::delete::{
     admit_project, delete_project, release_project, remove_project_entry,
 };
@@ -61,14 +61,14 @@ fn about(server: &Server) -> SdkValue {
 #[cfg(not(feature = "worker-fault"))]
 fn inspect(server: &Server, args: SdkValue) -> Outcome {
     let args = layerfs_home::home::with_field(args, "worker", about(server));
-    layerfs_sandbox::inspect::route::in_worker(&server.root, args)
+    layerfs_inspect::in_worker(&server.root, args)
 }
 
 /// [`inspect`] with the fault switch of its helper thread: what
 /// `inspect::in_worker` does, with the switch met first, under the permit.
 #[cfg(feature = "worker-fault")]
 fn inspect(server: &Server, args: SdkValue) -> Outcome {
-    use layerfs_sandbox::{inspect::{owner::admit, route::serve}, deploy::Side};
+    use layerfs_inspect::{admit, serve, Side};
     let args = layerfs_home::home::with_field(args, "worker", about(server));
     let (root, faults) = (server.root.clone(), server.faults.clone());
     admit(move |budget| {
@@ -112,9 +112,7 @@ pub(super) fn run(
         layerfs_sandbox::inspect::route::OP => inspect(server, args),
         // the Workspace records of named Sandboxes, read as files
         // (`workspace.list`, call surface 2.0)
-        layerfs_workspace::list::OP => {
-            layerfs_workspace::list::in_worker(root, &args)
-        }
+        layerfs_workspace::list::OP => layerfs_workspace::list::in_worker(root, &args),
         "machine.images" => layerfs_sandbox::images::in_worker(root, args),
         "machine.prune" => layerfs_sandbox::images::prune_in_worker(root, args),
         "doctor.sandbox" => layerfs_inspect::diagnose_worker_sandbox(root, args),
@@ -142,7 +140,7 @@ pub(super) fn run(
             let place = layerfs_store_service::history::admission::decode_place_view(
                 call.fields.get("place_view"),
             );
-            layerfs_persistence::with_place_view(place, || {
+            layerfs_store_service::history::admission::with_place_view(place, || {
                 layerfs_store::open::run(&call.method, &open, call.fields, Some(lease))
             })
         }
@@ -177,7 +175,7 @@ pub(super) fn run(
             let place = layerfs_store_service::history::admission::decode_place_view(
                 args.get("place_view"),
             );
-            layerfs_persistence::with_place_view(place, || {
+            layerfs_store_service::history::admission::with_place_view(place, || {
                 layerfs_store::service::with_service(&open, |service| {
                     layerfs_store_service::history::admission::reconcile_machine(
                         service.store.history(),
@@ -215,7 +213,7 @@ pub(super) fn run(
             let place = layerfs_store_service::history::admission::decode_place_view(
                 args.get("place_view"),
             );
-            layerfs_persistence::with_place_view(place, || {
+            layerfs_store_service::history::admission::with_place_view(place, || {
                 layerfs_store::repair::repair_at(&open, &request)
             })
         }
@@ -273,7 +271,7 @@ pub(super) fn run(
             let place = layerfs_store_service::history::admission::decode_place_view(
                 args.get("place_view"),
             );
-            layerfs_persistence::with_place_view(place, || {
+            layerfs_store_service::history::admission::with_place_view(place, || {
                 delete_project(&root, &DeleteFrame::decode(&args)?)
             })
         }
@@ -284,7 +282,7 @@ pub(super) fn run(
             let place = layerfs_store_service::history::admission::decode_place_view(
                 args.get("place_view"),
             );
-            layerfs_persistence::with_place_view(place, || {
+            layerfs_store_service::history::admission::with_place_view(place, || {
                 admit_project(&root, &DeleteAdmitFrame::decode(&args)?)
             })
         }
@@ -295,7 +293,7 @@ pub(super) fn run(
             let place = layerfs_store_service::history::admission::decode_place_view(
                 args.get("place_view"),
             );
-            layerfs_persistence::with_place_view(place, || {
+            layerfs_store_service::history::admission::with_place_view(place, || {
                 release_project(&root, &DeleteReleaseFrame::decode(&args)?)
             })
         }
@@ -307,7 +305,7 @@ pub(super) fn run(
             remove_project_entry(&root, &DeleteEntryFrame::decode(&args)?)
         }
         // reads the Store's own filtered project listing under this worker
-        // root, the same `layerfs_project::store::projects` a local Store
+        // root, the same `layerfs_inspect::projects` a local Store
         // uses (2.0, T4.5c): `{ store, store_record? }`
         "project.list" => list_projects(root, &ListingFrame::decode(&args)?),
         // writes or discards one part of a caller's folder copy under this

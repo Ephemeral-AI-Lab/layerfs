@@ -12,7 +12,9 @@ use layerfs_content::{
 };
 use layerfs_overlay::{ClaimedRange, IndexedOperationRecordScope, WriteClaims};
 use layerfs_telemetry::timer::Timing;
-use layerfs_vfs::{CapturedFileAttempt, CapturedFileEdits, Operation, OverlayOperationRecords, Position, WriteData};
+use layerfs_vfs::{
+    CapturedFileAttempt, CapturedFileEdits, Operation, OverlayOperationRecords, Position, WriteData,
+};
 
 /// The base file the fixture commits, and its bytes.
 const BASE_FILE: u64 = 8;

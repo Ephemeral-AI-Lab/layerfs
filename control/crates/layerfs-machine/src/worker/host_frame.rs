@@ -1,7 +1,7 @@
 //! The bounded plain JSON frames of the host-worker read exchange.
 use super::frame::ATTACHED;
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::{home::host_socket, json, outcome::refused};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::io::{self, Read, Write};
 use std::os::unix::net::UnixStream;
 use std::time::{Duration, Instant};

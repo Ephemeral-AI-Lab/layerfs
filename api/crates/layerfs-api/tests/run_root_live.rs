@@ -5,7 +5,7 @@
 //! there.
 #![cfg(all(target_os = "macos", feature = "machine"))]
 use layerfs_api::home::{self, paths, read_record};
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use std::path::{Path, PathBuf};
 
 fn t(value: &str) -> SdkValue {

@@ -17,12 +17,12 @@ use crate::sqlite::transfer::resolve::{note_incoming, retired};
 use crate::sqlite::transfer::step::{StepFrame, StoreStep};
 use crate::sqlite::transfer::steps::CHUNK;
 use crate::Related;
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::home::{self, with_field};
 use layerfs_home::op::{self, Op};
 use layerfs_home::outcome::shell_word;
 use layerfs_home::outcome::{refused, with_fix, Outcome};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;

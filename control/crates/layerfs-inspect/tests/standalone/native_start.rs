@@ -3,10 +3,10 @@
 //! daemon when one is found, else the home doctor (UI pass 1 FAIL 1: an
 //! old pinned daemon could not open a Store this build made). One test,
 //! since it sets `XDG_CACHE_HOME` for the whole process.
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
-use layerfs_inspect::home::get::{native_start, Build};
 use layerfs_home::home::{paths, write_entity};
 use layerfs_home::names::HOST_MACHINE;
+use layerfs_inspect::home::get::{native_start, Build};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::{Path, PathBuf};
 
 const OURS: &str = "1111111111111111111111111111111111111111";

@@ -2,7 +2,7 @@
 //! entity each is about, in the order the checks made them. The home's
 //! doctor publishes them under its records check (`host_target`).
 use super::super::doctor::budget::Checks;
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 
 /// How bad a finding is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

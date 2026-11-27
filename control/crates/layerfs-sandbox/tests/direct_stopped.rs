@@ -1,7 +1,7 @@
 //! A Sandbox whose daemon port its machine forwards, on a machine that is
 //! not running (conformance R3 F5): refused `Unavailable` with the command
 //! that starts the machine as its `fix`.
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_sandbox::record::SandboxRecord;
 
 #[test]

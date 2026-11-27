@@ -2,7 +2,9 @@
 //! outside provider IO.
 use crate::{OwnerClient, OwnerError};
 use layerfs_overlay::{BaseSource, Cell, DirectoryEntry, DirectoryEntryWindow, Inode, LocalRead};
-use layerfs_vfs::{JobOutcome, NamespaceJob, OverlayJobs, OverlayRead, WorkspaceError, WorkspaceResult};
+use layerfs_vfs::{
+    JobOutcome, NamespaceJob, OverlayJobs, OverlayRead, WorkspaceError, WorkspaceResult,
+};
 fn error(error: OwnerError) -> WorkspaceError {
     WorkspaceError::Service(Box::new(error))
 }

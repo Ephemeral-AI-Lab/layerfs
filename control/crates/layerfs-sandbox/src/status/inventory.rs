@@ -5,12 +5,12 @@
 //! Sandboxes), and the checks the calls that need them make. Layout 3
 //! keeps each Sandbox at `sandbox/<name>/`: a Sandbox by name is one read;
 //! only the relationships (by machine, Store or project) list `sandbox/*`.
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
+use crate::state::remove_fix;
 use layerfs_home::home::paths;
 use layerfs_home::outcome::{failed, refused, shell_word, with_fix, with_next};
 use layerfs_home::state::State;
 use layerfs_machine::record::{Holders, MachineRecord};
-use crate::state::remove_fix;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_store::lease;
 use layerfs_store::record::StoreRef;
 use std::path::Path;

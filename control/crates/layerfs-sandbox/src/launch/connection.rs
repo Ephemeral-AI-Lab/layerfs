@@ -1,7 +1,11 @@
 //! One shared TCP/Noise/Hello pipeline, retaining progress through every failure.
 use super::create::{hello, SandboxCause, SandboxPhase};
 use crate::internal::Control;
-use layerfs_protocol::{provision::install::{ControlError, DaemonPhase, DaemonStatus, HelloRequest}, duplex::{initiate_observed, ChannelWork}};
+use layerfs_protocol::{
+    daemon::{DaemonPhase, DaemonStatus, HelloRequest},
+    duplex::{initiate_observed, ChannelWork},
+    provision::install::ControlError,
+};
 use std::{
     net::{SocketAddr, TcpStream},
     time::Duration,

@@ -4,8 +4,8 @@
 //! answer carries no warning list since the call surface 2.0), and anything
 //! it cannot tell is null. One test, since it sets `LAYERFS_BUNDLE` for the
 //! whole process.
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_inspect::home::get::{get, stamp, Build, With, BUILD_MARKER};
+use layerfs_protocol::sdk::SdkValue;
 use std::path::PathBuf;
 
 const OURS: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";

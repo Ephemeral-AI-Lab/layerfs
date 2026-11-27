@@ -27,6 +27,7 @@ pub enum Code {
 }
 
 impl Code {
+    /// The code's word as the call surface shows it.
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Exists => "Exists",
@@ -46,13 +47,18 @@ impl Code {
 /// made: the caller keeps it and records the machine as `failed`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MachineError {
+    /// What kind of failure it is.
     pub code: Code,
+    /// What failed, in words.
     pub message: String,
+    /// The host tools the call needed and did not find.
     pub missing: Vec<String>,
+    /// Whether the provider's VM was made before the failure.
     pub vm_exists: bool,
 }
 
 impl MachineError {
+    /// A failure of `code` with `message`, nothing missing and no VM made.
     pub fn new(code: Code, message: impl Into<String>) -> Self {
         Self {
             code,

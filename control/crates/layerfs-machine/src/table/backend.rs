@@ -1,8 +1,5 @@
 //! How a Sandbox runs on a machine (`layerfs-platform`'s `Platform::backend`);
 //! callers never choose it.
-use layerfs_sandbox::backend::adapter::adapter;
-use layerfs_sandbox::ProviderCapabilities;
-
 /// How a Sandbox runs on a machine; callers never choose it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Backend {
@@ -18,7 +15,10 @@ impl Backend {
     /// The value records and listings store and show: `"process"` (for
     /// `Process`, G6) or `"namespaces"`.
     pub fn stored_name(self) -> &'static str {
-        adapter(self).stored_name()
+        match self {
+            Backend::Process => "process",
+            Backend::Namespaces => "namespaces",
+        }
     }
 
     /// The backend whose stored name is `name`.
@@ -28,11 +28,9 @@ impl Backend {
 
     /// One line: how a Sandbox runs on this backend.
     pub fn description(self) -> &'static str {
-        adapter(self).description()
-    }
-
-    /// What this backend supports.
-    pub fn capabilities(self) -> ProviderCapabilities {
-        adapter(self).capabilities()
+        match self {
+            Backend::Process => "Sandboxes run as this user's processes, served over loopback NFS",
+            Backend::Namespaces => "Sandboxes run in Linux namespaces and a cgroup",
+        }
     }
 }

@@ -8,8 +8,8 @@ use crate::project::listing;
 use crate::project::record::ProjectRecord;
 use crate::record::StoreRecord;
 use crate::service;
-use layerfs_protocol::provision::install::SdkRefusal;
 use layerfs_home::names::StoreName;
+use layerfs_protocol::sdk::SdkRefusal;
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;

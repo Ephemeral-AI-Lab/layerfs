@@ -9,16 +9,16 @@
 //! the one it needs did not fail; a daemon that is not seen ready blocks its
 //! Workspaces (`blocked_by` the thing at the root: the Sandbox, or its
 //! machine's worker) and none of their checks is tried.
-use super::super::doctor::runner::Probe;
-use super::super::doctor::report::{NoVerdict, Node, NotChecked};
 use super::super::doctor::budget::{Budget, Checks};
+use super::super::doctor::report::{NoVerdict, Node, NotChecked};
+use super::super::doctor::runner::Probe;
 use super::workspace::{self, Listing, Seen};
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::home::{paths, read_record, RECORD_VERSION};
 use layerfs_home::names::{self, MachineName, SandboxName};
 use layerfs_home::op::Standing;
 use layerfs_home::outcome::shell_word;
 use layerfs_home::state::{BlockedBy, Reason, State};
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_sandbox::record::SandboxRecord;
 use layerfs_sandbox::state::remove_fix;
 use layerfs_store::record::{StoreRecord, StoreRef};
@@ -31,7 +31,7 @@ mod remote;
 #[path = "runtime.rs"]
 mod runtime;
 
-pub(crate) use remote::worker_diagnose;
+pub use remote::worker_diagnose;
 
 /// How the doctor reaches a Sandbox's daemon.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -73,7 +73,7 @@ fn recorded_state(home: &Path, record: &SandboxRecord) -> State {
 
 /// The `sandbox` kind's run: its checks into `node`, then its Workspaces'
 /// nodes as `node`'s children, unless what it found blocks them.
-pub(super) fn doctor(probe: &Probe<'_>, node: &mut Node) {
+pub(crate) fn doctor(probe: &Probe<'_>, node: &mut Node) {
     let name = probe.thing.name.as_str();
     let mut checks = Checks::default();
     let mut seen = Observed::default();

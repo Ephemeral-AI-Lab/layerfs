@@ -2,9 +2,9 @@
 //! bucket's record) and the remote file of each Store under its name
 //! ([`store_object`]): Store `NAME` is the file `NAME/store.sqlite` in the
 //! bucket's prefix (plus its pieces when split).
-use crate::backup::providers::s3::{self, MinioSettings};
-use crate::backup::providers::r2::{self, R2Settings};
 use crate::backup::bucket::{Driver, RemoteError};
+use crate::backup::providers::r2::{self, R2Settings};
+use crate::backup::providers::s3::{self, MinioSettings};
 
 /// The file name of every Store on a remote, under the Store's name.
 pub const STORE_FILE: &str = "store.sqlite";

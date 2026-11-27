@@ -89,7 +89,7 @@ fn home_leftovers_and_home_prune_are_gone() {
             "home",
             "leftovers",
             "--machine",
-            layerfs_home::names::HOST_MACHINE,
+            layerfs_api::names::HOST_MACHINE,
         ],
         &["home", "prune", "native:image_tmp:x"],
         &["doctor", "fix", "native:image_tmp:x"],

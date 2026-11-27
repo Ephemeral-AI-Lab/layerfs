@@ -2,12 +2,12 @@
 use super::frame::MAX_HELLO;
 use super::host_frame::{self, HOST_MAX_REPLY, HOST_MAX_REQUEST};
 use super::host_hello::{build_identity, executable, token, HostHello, CORRELATION_LEN};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::{
     home::{self, flock, host_socket, paths},
     outcome::{refused, Outcome},
     trace,
 };
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::fs::{self, File};
 use std::io;
 use std::os::unix::{

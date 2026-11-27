@@ -2,10 +2,10 @@
 //! answers its secret with its protocol and bundle hash, and a caller sends
 //! nothing to a worker of another protocol or bundle (an old worker, whose
 //! hello names no protocol, included); the matching worker answers.
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_machine::worker::{
     self, read_frame, read_frame_within, write_frame, Endpoint, Hello, MAX_HELLO, PROTOCOL,
 };
+use layerfs_protocol::sdk::SdkValue;
 use std::net::TcpListener;
 use std::path::PathBuf;
 use std::sync::mpsc;
@@ -161,9 +161,7 @@ fn the_library_worker_says_its_protocol_and_answers() {
     let address = listener.local_addr().unwrap();
     let root = std::env::temp_dir().join(format!("layerfs-hello-root-{}", std::process::id()));
     let served = root.clone();
-    std::thread::spawn(move || {
-        layerfs_api::worker::serve::serve(listener, "k".to_owned(), served)
-    });
+    std::thread::spawn(move || layerfs_api::worker::serve::serve(listener, "k".to_owned(), served));
     let endpoint = Endpoint {
         address,
         secret: "k".to_owned(),

@@ -3,13 +3,15 @@
 //! it without calling it, one progress event per finished thing, counts
 //! and status), the one report's long form, and every kind's check ids
 //! against calls.json `doctor.checks` through `doctor_checks_pending.json`.
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
-use layerfs_inspect::doctor::report::{Coverage, Verdict};
-use layerfs_inspect::doctor::budget::Checks;
-use layerfs_inspect::{doctor::kinds, run_with, CheckId, Kind, KindDoctor, Located, Node, Options, Probe, Registry, Thing};
 use layerfs_home::events::Events;
 use layerfs_home::json;
 use layerfs_home::state::{BlockedBy, State};
+use layerfs_inspect::doctor::budget::Checks;
+use layerfs_inspect::doctor::report::{Coverage, Verdict};
+use layerfs_inspect::{
+    kinds, run_with, CheckId, Kind, KindDoctor, Located, Node, Options, Probe, Registry, Thing,
+};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;

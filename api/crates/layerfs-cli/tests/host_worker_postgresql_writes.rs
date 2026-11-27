@@ -13,8 +13,8 @@ mod fixture;
 mod pg;
 
 use fixture::Fixture;
-use layerfs_home::names::HOST_MACHINE;
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_api::names::HOST_MACHINE;
+use layerfs_protocol::sdk::SdkValue;
 use pg::*;
 use std::path::Path;
 use std::time::{Duration, Instant};

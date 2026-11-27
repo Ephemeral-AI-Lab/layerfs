@@ -3,7 +3,7 @@
 //! replace the worker: `machine stop`, then `machine start` (#535 D11).
 use layerfs_api::home::{self, paths, write_record};
 use layerfs_api::worker::{read_frame, read_frame_within, write_frame, MAX_HELLO};
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use std::net::TcpListener;
 use std::sync::mpsc;
 use std::time::Duration;

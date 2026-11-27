@@ -6,7 +6,7 @@ use crate::{
     read::{blame, visibility},
     StoreService,
 };
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 
 /// `blame(path, { branch, commit?, fromLine? })`: each line with the Commit that last changed it.
 pub fn blame(service: &StoreService, args: &SdkValue) -> Answer {

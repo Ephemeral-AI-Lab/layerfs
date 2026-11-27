@@ -23,11 +23,11 @@
 //! The test creates and drops its own database, because `store.status` reads
 //! the one schema a 2.0 PostgreSQL Store uses (`layerfs`); a shared schema
 //! would collide with another run. Without the variable it reports NOT_RUN.
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_history::HistoryCatalogConfig;
 use layerfs_home::events::Events;
 use layerfs_home::home;
 use layerfs_persistence::{PostgresHandles, PostgresSelection};
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_storage::StoragePolicy;
 use layerfs_store::get::With;
 use layerfs_store::record::StoreRecord;
@@ -232,7 +232,7 @@ fn wait_gone(admin: &mut postgres::Client, pid: i32, start: &str) {
 fn machines(
     home: &Path,
     name: &str,
-) -> Result<layerfs_home::state::State, layerfs_protocol::provision::install::SdkRefusal> {
+) -> Result<layerfs_home::state::State, layerfs_protocol::sdk::SdkRefusal> {
     Ok(
         match layerfs_machine::record::MachineRecord::read(home, name)? {
             Some(record) => record.status(false, 0),

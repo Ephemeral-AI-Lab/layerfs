@@ -32,9 +32,9 @@ use adversary::{
     commit, verdict, wait_until, write, Gate, Node, Service, TestStore, Verdict, CURSOR,
 };
 use fault_proxy::{Fault, FaultProxy};
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_history::{BranchId, CommitOutcome, HistoryError};
 use layerfs_persistence::{CompactRequest, Handles};
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_store_service::store::BoundWorkspace;
 use std::time::Duration;
 

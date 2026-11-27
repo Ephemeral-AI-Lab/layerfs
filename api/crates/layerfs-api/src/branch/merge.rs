@@ -3,8 +3,8 @@ use crate::calls::scope::Rule;
 use crate::calls::table::Kind::{Json, Name, Project};
 use crate::calls::table::{a, call, opt, Call, MESSAGE};
 use crate::calls::{Context, Form, Policy};
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::outcome::Outcome;
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_store::calls::branch::{merge, BranchMerge};
 
 /// `parent` and `second_parent` are the two heads merged; `overwritten`

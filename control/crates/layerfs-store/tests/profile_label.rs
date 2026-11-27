@@ -1,7 +1,7 @@
 //! A sqlite Store record's profile label (owner, 2026-11-23): new and
 //! restored records are written `normal`, and a record written before then,
 //! which says `disposable`, reads as `normal` without being rewritten.
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_store::record::{profile, StoreRecord, PROFILE};
 
 fn record(label: Option<&str>) -> StoreRecord {

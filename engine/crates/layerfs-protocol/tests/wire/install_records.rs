@@ -1,5 +1,8 @@
 //! Checked control metadata and exact remote publication knowledge.
-use layerfs_protocol::provision::{install::{InstallPhase, InstallRefusal, InstallReply, RefusalKind}, manifest::{ProviderKind, StoreManifest, StoreProfile}};
+use layerfs_protocol::provision::{
+    install::{InstallPhase, InstallRefusal, InstallReply, RefusalKind},
+    manifest::{ProviderKind, StoreManifest, StoreProfile},
+};
 fn manifest() -> StoreManifest {
     StoreManifest {
         provider: ProviderKind::Sqlite,

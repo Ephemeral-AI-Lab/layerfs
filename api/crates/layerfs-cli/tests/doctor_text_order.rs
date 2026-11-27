@@ -1,8 +1,8 @@
 //! The readable doctor form prints findings worst first (frozen
 //! `doctor.worst_first`: error, warning, notice), report order within one
 //! severity; the count line is unchanged.
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_cli::output::doctor_text;
+use layerfs_protocol::sdk::SdkValue;
 
 fn finding(severity: &str, check: &str) -> SdkValue {
     SdkValue::map([

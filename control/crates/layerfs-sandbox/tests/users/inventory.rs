@@ -3,11 +3,11 @@
 //! the `InUse`/`Busy` refusals built from them, with their texts. Layout 3: a
 //! Sandbox is read from `sandbox/<name>/` alone; a layout 2 folder under a
 //! machine is never read.
-use layerfs_protocol::provision::install::SdkValue;
-use layerfs_sandbox::status::inventory;
 use layerfs_home::home::{paths, write_record};
 use layerfs_home::json::parse;
 use layerfs_home::names::HOST_MACHINE;
+use layerfs_protocol::sdk::SdkValue;
+use layerfs_sandbox::status::inventory;
 use layerfs_store::record::StoreRecord;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -273,8 +273,7 @@ fn a_move_checks_the_stores_side() {
         "pg",
         r#"{"name":"pg","kind":"postgresql","url":"postgresql://u@h/d"}"#,
     );
-    let code =
-        |result: Result<String, layerfs_protocol::provision::install::SdkRefusal>| result.unwrap_err().code;
+    let code = |result: Result<String, layerfs_protocol::sdk::SdkRefusal>| result.unwrap_err().code;
     // to or from this computer: the machine it goes from
     assert_eq!(
         can_move(&home, &on_dev, layerfs_home::names::HOST_MACHINE).unwrap(),

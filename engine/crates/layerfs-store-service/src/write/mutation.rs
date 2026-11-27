@@ -1,9 +1,9 @@
 //! Private Workspace mutations used by one atomic public filesystem call.
 use crate::history::lookup as args;
 use crate::store::{BoundWorkspace, StoreOperation};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_content::filesystem::PathName;
 use layerfs_content::object::inode_leaf::InodeKind;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_vfs::{Operation, Outcome, OverlayJobs, SourceView, Time, ViewStat, WorkspaceError};
 pub type Result<T> = std::result::Result<T, SdkRefusal>;
 pub struct Mutation<'a> {

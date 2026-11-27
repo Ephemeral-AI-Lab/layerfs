@@ -5,7 +5,7 @@ use std::io::{self, Write};
 
 pub(super) fn owner<W: Write>(
     rows: &mut Records<'_, W>,
-    work: Option<layerfs_store_service::OwnerWork>,
+    work: Option<crate::OwnerWork>,
 ) -> io::Result<()> {
     rows.row(36, 0, Some(&[layerfs_overlay::StatementKind::COUNT as u64]))?;
     rows.row(37, 0, Some(&[3]))?;
@@ -137,7 +137,7 @@ fn statement<W: Write>(
 }
 pub(super) fn store<W: Write>(
     rows: &mut Records<'_, W>,
-    store: &layerfs_store_service::store::Store,
+    store: &crate::store::Store,
 ) -> io::Result<()> {
     let w = store.work();
     rows.row(
@@ -198,7 +198,7 @@ pub(super) fn sql<W: Write>(
     let Some(w) = work else {
         return rows.row(section, index, None);
     };
-    let scalars = layerfs_store_service::telemetry::sql_values(&w);
+    let scalars = crate::telemetry::sql_values(&w);
     let (phased, wire) = scalars.split_at(layerfs_store_service::telemetry::SQL_PHASED);
     let mut values = phased.to_vec();
     for phase in w.statement_phases.iter().chain(&w.commit_phases) {
@@ -213,7 +213,7 @@ pub(super) fn sql<W: Write>(
 pub(crate) fn commit_parts(
     outcome: &Result<Success, Failure>,
 ) -> (
-    Option<&layerfs_store_service::store::CapturedConstruction>,
+    Option<&crate::store::CapturedConstruction>,
     Option<&layerfs_storage::Diagnostics>,
 ) {
     match outcome {

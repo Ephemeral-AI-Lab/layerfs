@@ -14,8 +14,8 @@ mod mounted;
 #[allow(dead_code)]
 #[path = "support/mounted_commit.rs"]
 mod rig;
-use layerfs_protocol::provision::install::{Activity, ControlCode, MountPhase};
 use layerfs_daemon::control::Failure;
+use layerfs_protocol::daemon::{Activity, ControlCode, MountPhase};
 use mounted::{mount_entry, COMMAND};
 use rig::{bash_in, passed, root, Rig};
 use std::fs;

@@ -2,9 +2,9 @@
 //! the records were typed (#536 §10 "Result keys stay stable"), byte for
 //! byte as JSON text, and reads past a layout-3 `v`; a project's record
 //! gives the fields every project answer carries (call surface 2.0).
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::json::{parse, print};
 use layerfs_home::outcome::View;
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_store::backup::record::BucketRecord;
 use layerfs_store::project::record::ProjectRecord;
 use layerfs_store::record::StoreRecord;
@@ -258,7 +258,7 @@ fn a_store_state_from_its_records_is_busy_unresolved_blocked_broken_or_ready() {
     use layerfs_home::op::Op;
     use layerfs_home::state::{Reason, State};
     use layerfs_store::state::{held, recorded};
-    let machines = &layerfs_store::admin::with_users::machine_state;
+    let machines = &layerfs_sandbox::users::machine_state;
     let home = std::env::temp_dir().join(format!("layerfs-store-state-{}", std::process::id()));
     std::fs::create_dir_all(&home).unwrap();
     let on = |machine: &str, more: &str| {

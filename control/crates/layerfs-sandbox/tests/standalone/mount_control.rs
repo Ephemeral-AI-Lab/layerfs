@@ -6,9 +6,9 @@ mod held_writer;
 #[allow(dead_code)]
 #[path = "../../../../../engine/crates/layerfs-daemon/tests/support/host_install.rs"]
 mod support;
-use layerfs_protocol::provision::install::{Activity, ControlCode, Reply, Request, WorkspaceToken};
 use layerfs_daemon::control::Service;
 use layerfs_history::{BranchId, CommitOutcome, WorkspaceId};
+use layerfs_protocol::daemon::{Activity, ControlCode, Reply, Request, WorkspaceToken};
 use layerfs_sandbox::internal::Control;
 use layerfs_sandbox::OperationCause;
 use std::sync::{
@@ -38,7 +38,10 @@ fn committed(client: &mut Control, token: WorkspaceToken) -> layerfs_history::Co
         other => panic!("{other:?}"),
     }
 }
-fn status(client: &mut Control, token: WorkspaceToken) -> layerfs_protocol::provision::install::WorkspaceStatus {
+fn status(
+    client: &mut Control,
+    token: WorkspaceToken,
+) -> layerfs_protocol::daemon::WorkspaceStatus {
     layerfs_sandbox::internal::workspace(client)
         .status(token)
         .unwrap()
@@ -75,7 +78,7 @@ fn serve(
                     );
                 }
             }
-            let done = matches!(served.call.request,Request::Unmount(layerfs_protocol::provision::install::UnmountControl { token, .. }) if token.workspace==last)
+            let done = matches!(served.call.request,Request::Unmount(layerfs_protocol::daemon::UnmountControl { token, .. }) if token.workspace==last)
                 && served.outcome.is_ok();
             drop(served);
             if done {
@@ -148,7 +151,7 @@ fn original_lost_control_reply_is_not_replayed_or_settled_by_an_observer() {
     let failure = calling.join().unwrap().unwrap_err();
     assert_eq!(
         failure.request,
-        Request::Commit(layerfs_protocol::provision::install::CommitControl {
+        Request::Commit(layerfs_protocol::daemon::CommitControl {
             token,
             force: false,
             message: None,
@@ -219,7 +222,7 @@ fn another_control_channel_observes_running_commit_and_refuses_unmount_before_ef
     let (token, original) = mount(&mut client, identity(88), branch);
     fixture::write(&f.service, token, b'R');
     let calling = std::thread::spawn(move || {
-        client.call(Request::Commit(layerfs_protocol::provision::install::CommitControl {
+        client.call(Request::Commit(layerfs_protocol::daemon::CommitControl {
             token,
             force: false,
             message: None,
@@ -244,7 +247,7 @@ fn another_control_channel_observes_running_commit_and_refuses_unmount_before_ef
     assert!(observed.local.as_ref().unwrap().captured.is_some());
     assert_eq!(f.statements(), sql);
     assert!(
-        matches!(observer.call(Request::Unmount(layerfs_protocol::provision::install::UnmountControl { token, discard: true })).unwrap(),Reply::Refused(value) if value.code==ControlCode::Busy)
+        matches!(observer.call(Request::Unmount(layerfs_protocol::daemon::UnmountControl { token, discard: true })).unwrap(),Reply::Refused(value) if value.code==ControlCode::Busy)
     );
     observing.join();
     send_release.send(()).unwrap();
@@ -301,7 +304,7 @@ fn an_original_local_unknown_blocks_another_commit_and_normal_unmount() {
     let (token, binding) = mount(&mut client, identity(89), branch);
     fixture::write(&f.service, token, b'U');
     assert!(
-        matches!(client.call(Request::Commit(layerfs_protocol::provision::install::CommitControl { token, force: false, message: None, expected: None })).unwrap(),Reply::Refused(value) if value.code==ControlCode::Unknown)
+        matches!(client.call(Request::Commit(layerfs_protocol::daemon::CommitControl { token, force: false, message: None, expected: None })).unwrap(),Reply::Refused(value) if value.code==ControlCode::Unknown)
     );
     let observed = status(&mut client, token);
     assert_eq!(observed.activity, Activity::Uncertain);
@@ -309,14 +312,14 @@ fn an_original_local_unknown_blocks_another_commit_and_normal_unmount() {
     assert!(observed.published.is_none());
     assert!(observed.local.unwrap().captured.is_some());
     assert!(
-        matches!(f.service.execute_control(&Request::Commit(layerfs_protocol::provision::install::CommitControl { token, force: false, message: None, expected: None })),
+        matches!(f.service.execute_control(&Request::Commit(layerfs_protocol::daemon::CommitControl { token, force: false, message: None, expected: None })),
         Err(layerfs_daemon::control::Failure::Custody(value)) if value.code == ControlCode::Unknown && value.published.is_none())
     );
     assert!(
-        matches!(client.call(Request::Unmount(layerfs_protocol::provision::install::UnmountControl { token, discard: true })).unwrap(),Reply::Refused(value) if value.code==ControlCode::Unknown)
+        matches!(client.call(Request::Unmount(layerfs_protocol::daemon::UnmountControl { token, discard: true })).unwrap(),Reply::Refused(value) if value.code==ControlCode::Unknown)
     );
     assert!(
-        matches!(client.call(Request::Commit(layerfs_protocol::provision::install::CommitControl { token, force: false, message: None, expected: None })).unwrap(),Reply::Refused(value) if value.code==ControlCode::Unknown)
+        matches!(client.call(Request::Commit(layerfs_protocol::daemon::CommitControl { token, force: false, message: None, expected: None })).unwrap(),Reply::Refused(value) if value.code==ControlCode::Unknown)
     );
     let retained = worker.join();
     assert!(retained.outcome.is_err());
@@ -375,7 +378,7 @@ fn a_store_unknown_before_publication_folds_back_and_admits_a_commit() {
     let (token, binding) = mount(&mut client, identity(90), branch);
     fixture::write(&f.service, token, b'U');
     let reply = client
-        .call(Request::Commit(layerfs_protocol::provision::install::CommitControl {
+        .call(Request::Commit(layerfs_protocol::daemon::CommitControl {
             token,
             force: false,
             message: None,
@@ -446,7 +449,7 @@ fn status_retains_known_publication_when_the_engine_is_unavailable() {
     let (token, binding) = mount(&mut client, identity(90), branch);
     fixture::write(&f.service, token, b'V');
     let calling = std::thread::spawn(move || {
-        let reply = client.call(Request::Commit(layerfs_protocol::provision::install::CommitControl {
+        let reply = client.call(Request::Commit(layerfs_protocol::daemon::CommitControl {
             token,
             force: false,
             message: None,
@@ -473,7 +476,7 @@ fn status_retains_known_publication_when_the_engine_is_unavailable() {
         before
     );
     assert!(
-        matches!(client.call(Request::Unmount(layerfs_protocol::provision::install::UnmountControl { token, discard: true })).unwrap(),Reply::Refused(value) if value.code==ControlCode::Unknown)
+        matches!(client.call(Request::Unmount(layerfs_protocol::daemon::UnmountControl { token, discard: true })).unwrap(),Reply::Refused(value) if value.code==ControlCode::Unknown)
     );
     let original = worker.join();
     assert!(original.outcome.is_err());
@@ -513,7 +516,7 @@ fn product_control_commit_captures_the_frontier_releases_its_owners_and_is_then_
     let sql = f.statements();
     assert!(matches!(
         f.service
-            .execute_control(&Request::Commit(layerfs_protocol::provision::install::CommitControl {
+            .execute_control(&Request::Commit(layerfs_protocol::daemon::CommitControl {
                 token: WorkspaceToken {
                     namespace: token.namespace + 1,
                     ..token
@@ -532,7 +535,7 @@ fn product_control_commit_captures_the_frontier_releases_its_owners_and_is_then_
     // The product route: no caller constructor exists on this path.
     let done = f
         .service
-        .execute_control(&Request::Commit(layerfs_protocol::provision::install::CommitControl {
+        .execute_control(&Request::Commit(layerfs_protocol::daemon::CommitControl {
             token,
             force: false,
             message: None,
@@ -568,7 +571,7 @@ fn product_control_commit_captures_the_frontier_releases_its_owners_and_is_then_
     // Unchanged: the same head and root, no new Commit record.
     let again = f
         .service
-        .execute_control(&Request::Commit(layerfs_protocol::provision::install::CommitControl {
+        .execute_control(&Request::Commit(layerfs_protocol::daemon::CommitControl {
             token,
             force: false,
             message: None,
@@ -603,16 +606,20 @@ fn product_control_commit_captures_the_frontier_releases_its_owners_and_is_then_
         other => panic!("{other:?}"),
     };
     f.service
-        .execute_control(&Request::Unmount(layerfs_protocol::provision::install::UnmountControl {
-            token: other,
-            discard: true,
-        }))
+        .execute_control(&Request::Unmount(
+            layerfs_protocol::daemon::UnmountControl {
+                token: other,
+                discard: true,
+            },
+        ))
         .unwrap();
     f.service
-        .execute_control(&Request::Unmount(layerfs_protocol::provision::install::UnmountControl {
-            token,
-            discard: true,
-        }))
+        .execute_control(&Request::Unmount(
+            layerfs_protocol::daemon::UnmountControl {
+                token,
+                discard: true,
+            },
+        ))
         .unwrap();
     f.cleanup();
 }
@@ -695,7 +702,10 @@ fn forced_unmount_refuses_a_workspace_without_a_connection_before_any_effect() {
 }
 #[test]
 fn a_definite_commit_failure_whose_capture_is_not_resolved_answers_unknown() {
-    use {layerfs_daemon::control::Failure, layerfs_store_service::store::{CommitError, CommitPhase}};
+    use {
+        layerfs_daemon::control::Failure,
+        layerfs_store_service::store::{CommitError, CommitPhase},
+    };
     let f = fixture::Fixture::new("control-unresolved");
     let branch = f.host.project.branch.branch.id;
     let service = f.service.clone();
@@ -731,7 +741,7 @@ fn a_definite_commit_failure_whose_capture_is_not_resolved_answers_unknown() {
     let (token, binding) = mount(&mut client, identity(93), branch);
     fixture::write(&f.service, token, b'W');
     let calling = std::thread::spawn(move || {
-        let reply = client.call(Request::Commit(layerfs_protocol::provision::install::CommitControl {
+        let reply = client.call(Request::Commit(layerfs_protocol::daemon::CommitControl {
             token,
             force: false,
             message: None,
@@ -790,8 +800,8 @@ fn a_definite_commit_failure_whose_capture_is_not_resolved_answers_unknown() {
 /// answer alone may carry. The moved state stays in the detail text.
 #[test]
 fn an_unresolved_moved_head_failure_is_answered_and_not_dropped() {
-    use {layerfs_daemon::control::Failure, layerfs_store_service::store::CommitError};
     use layerfs_history::{error::MovedState, HistoryError};
+    use {layerfs_daemon::control::Failure, layerfs_store_service::store::CommitError};
     let f = fixture::Fixture::new("control-unresolved-moved");
     let record = f.host.project.branch.branch.clone();
     let branch = record.id;
@@ -834,7 +844,7 @@ fn an_unresolved_moved_head_failure_is_answered_and_not_dropped() {
     let (token, _) = mount(&mut client, identity(94), branch);
     fixture::write(&f.service, token, b'W');
     let calling = std::thread::spawn(move || {
-        let reply = client.call(Request::Commit(layerfs_protocol::provision::install::CommitControl {
+        let reply = client.call(Request::Commit(layerfs_protocol::daemon::CommitControl {
             token,
             force: false,
             message: None,

@@ -11,7 +11,9 @@ use layerfs_content::filesystem::{
 };
 use layerfs_content::object::inode_leaf::{InodeKind, InodeMetadata, InodeValue};
 use layerfs_content::ObjectId;
-use layerfs_vfs::{BaseView, CanonicalCache, CanonicalClient, FileLengths, Need, VisitFacts, WorkspaceResult};
+use layerfs_vfs::{
+    BaseView, CanonicalCache, CanonicalClient, FileLengths, Need, VisitFacts, WorkspaceResult,
+};
 use std::sync::{Arc, Mutex};
 
 const FILES: u64 = 300;

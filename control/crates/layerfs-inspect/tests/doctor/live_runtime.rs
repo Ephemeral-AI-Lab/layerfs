@@ -1,10 +1,10 @@
 //! Opt-in negative observations against exclusively owned, real runtime fixtures.
 #![cfg(all(unix, feature = "machine"))]
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 #[path = "../support/doctor_own.rs"]
 mod doctor_own;
-use layerfs_inspect::{Kind, Options};
 use layerfs_home::home::{paths, private_dir, read_record, write_record};
+use layerfs_inspect::{Kind, Options};
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},

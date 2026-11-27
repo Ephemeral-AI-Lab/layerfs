@@ -17,11 +17,13 @@
 //! keeps there are neither counted nor read. It stops at [`ENTRIES`]
 //! entries or the request's soft budget, and then answers `complete:
 //! false` with what it counted, each number a lower bound.
-use {super::{live, stats}, layerfs_sandbox::{inspect::{route, owner::Budget}, deploy::Side}};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
+use super::{live, stats};
 use layerfs_home::home::{self, paths};
 use layerfs_home::names::{MachineName, StoreName};
 use layerfs_home::outcome::Outcome;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
+use layerfs_sandbox::deploy::Side;
+use layerfs_sandbox::inspect::{owner::Budget, route};
 use std::collections::HashSet;
 use std::fs::Metadata;
 use std::io::ErrorKind;
@@ -29,7 +31,7 @@ use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 
 /// The inspect kind.
-pub(super) const KIND: &str = "machine_space";
+pub(crate) const KIND: &str = "machine_space";
 /// The most directory entries one walk measures.
 pub const ENTRIES: usize = 250_000;
 /// The most files with several names whose identity a walk keeps, so a
@@ -62,7 +64,7 @@ const LINKED: usize = 1 << 20;
 pub fn machine_space(home: &Path, machine: &MachineName) -> Outcome {
     let name = machine.as_str();
     let placed = stats::placed(home, name)?;
-    let answer = layerfs_sandbox::inspect::route::ask(home, name, KIND, placed.request())?;
+    let answer = crate::ask(home, name, KIND, placed.request())?;
     let part = |field: &str| answer.get(field).cloned().unwrap_or_default();
     let (_, holds) = stats::scopes(&placed.platform);
     let disk = match part("disk") {
@@ -93,7 +95,7 @@ pub fn machine_space(home: &Path, machine: &MachineName) -> Outcome {
 /// home or the worker's root: `{ observed_at, disk: { total, used, free,
 /// path, fs }, layerfs, outside, parts, stores, sandboxes, unreadable,
 /// complete, reason? }`.
-pub(super) fn serve(side: &Side<'_>, request: &SdkValue, budget: &Budget) -> Outcome {
+pub(crate) fn serve(side: &Side<'_>, request: &SdkValue, budget: &Budget) -> Outcome {
     let (Side::Home(root) | Side::Worker(root)) = side;
     let root: &Path = root;
     let stores = live::listed(request, "stores")?;

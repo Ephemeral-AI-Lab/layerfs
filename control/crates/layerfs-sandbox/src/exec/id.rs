@@ -3,8 +3,8 @@
 //! makes when the caller names none. It names the command's record
 //! (`workspace/<id>/exec/<exec id>.json`) and its cgroup, so it is one plain
 //! path component.
-use layerfs_protocol::provision::install::SdkRefusal;
 use layerfs_home::outcome::refused;
+use layerfs_protocol::sdk::SdkRefusal;
 
 /// The longest exec id.
 pub const MAX: usize = 64;

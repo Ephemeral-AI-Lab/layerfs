@@ -3,8 +3,10 @@ use super::{
     registry::{bound, Entry},
     Failure, Service, Success,
 };
-use layerfs_protocol::provision::install::{ControlCode, LocalObservation, Reply, WorkspaceStatus, WorkspaceToken};
 use layerfs_history::WorkspaceId;
+use layerfs_protocol::daemon::{
+    ControlCode, LocalObservation, Reply, WorkspaceStatus, WorkspaceToken,
+};
 impl Service {
     /// Observation by incarnation for a caller that holds no namespace. The
     /// registry supplies the token; nothing is replayed, bound or settled.
@@ -47,7 +49,7 @@ impl Service {
         };
         let observed = self.job(
             workspace.route(),
-            |job_client: &layerfs_store_service::OwnerClient, job_route| job_client.observe_state(job_route),
+            |job_client: &crate::OwnerClient, job_route| job_client.observe_state(job_route),
         );
         let (local, observation_failure) = match observed {
             Ok(state) => (

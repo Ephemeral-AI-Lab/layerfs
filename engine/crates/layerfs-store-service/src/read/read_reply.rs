@@ -1,7 +1,7 @@
 //! Reserve saved-reference/header space before returning a bounded text window.
 use super::{file_facts, query, window};
 use crate::history::lookup as args;
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 
 fn set(fields: &mut Vec<(String, SdkValue)>, name: &str, value: SdkValue) {
     match fields.iter_mut().find(|(key, _)| key == name) {

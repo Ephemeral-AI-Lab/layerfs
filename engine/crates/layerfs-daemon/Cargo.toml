@@ -9,12 +9,11 @@ license.workspace = true
 [dependencies]
 layerfs-overlay = { path = "../layerfs-overlay" }
 layerfs-store-service = { path = "../layerfs-store-service" }
-layerfs-workspace = { path = "../layerfs-workspace" }
+layerfs-vfs = { path = "../layerfs-vfs" }
 layerfs-fuse = { path = "../layerfs-fuse" }
-layerfs-mount-ports = { path = "../layerfs-mount-ports" }
 # NFS kernel serving: the native route's mount entry beside FUSE.
 layerfs-nfs = { path = "../layerfs-nfs" }
-layerfs-bridge = { path = "../layerfs-bridge" }
+layerfs-protocol = { path = "../layerfs-protocol" }
 layerfs-content = { path = "../../../core/crates/layerfs-content" }
 layerfs-storage = { path = "../../../core/crates/layerfs-storage" }
 layerfs-history = { path = "../../../core/crates/layerfs-history" }
@@ -23,6 +22,7 @@ layerfs-telemetry = { path = "../../../core/crates/layerfs-telemetry" }
 layerfs-persistence = { path = "../layerfs-persistence" }
 
 nix = { version = "=0.31.3", features = ["fs", "user", "process", "resource"] }
+layerfs-os = { path = "../layerfs-os" }
 
 [dev-dependencies]
 blake3 = { version = "=1.8.5", default-features = false }

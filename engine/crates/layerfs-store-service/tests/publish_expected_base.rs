@@ -13,7 +13,7 @@ mod installed;
 #[allow(dead_code)]
 mod support;
 
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use support::{paths, write, Fixture};
 
 /// One Branch's field from `project.list_branches`.

@@ -8,16 +8,18 @@
 //! for a sqlite Store on another machine. The walk writes nothing to the
 //! Store; its visited set is a private temporary database removed when the
 //! walk ends (the engine's project audit, through `layerfs_store::diagnostic`).
-use super::super::doctor::runner::{CheckId, Probe};
-use super::super::doctor::report::Node;
 use super::super::doctor::budget::Checks;
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
-use layerfs_protocol::sdk::{hex, unhex};
+use super::super::doctor::report::Node;
+use super::super::doctor::runner::{CheckId, Probe};
 use layerfs_home::home::paths;
 use layerfs_home::outcome::shell_word;
 use layerfs_home::outcome::{refused, Outcome as CallOutcome};
 use layerfs_home::state::BlockedBy;
-use {layerfs_store::diagnostic, layerfs_history::LayerStackId, layerfs_persistence::diagnostic::{Observation, Options, Outcome, ProjectCoverage}};
+use layerfs_protocol::sdk::{hex, unhex};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
+use layerfs_store::diagnostic::{
+    self, LayerStackId, Observation, Options, Outcome, ProjectCoverage,
+};
 use layerfs_store::identity::{self, Identity};
 use layerfs_store::place::{self, Executor};
 use layerfs_store::project::live;
@@ -31,7 +33,7 @@ const LISTED: &str = "project.listed";
 const DATA: &str = diagnostic::PROJECT_CHECK;
 
 /// A project's checks, in the frozen order; the data walk is Full only.
-pub(super) const CHECKS: &[CheckId] = &[
+pub(crate) const CHECKS: &[CheckId] = &[
     CheckId::own(RECORD),
     CheckId::own(LISTED),
     CheckId::full(DATA),
@@ -46,7 +48,7 @@ const KEPT: usize = 64;
 const MESSAGE: usize = 512;
 
 /// Checks project `probe.thing` (`<store>/<project>`) into `node`.
-pub(super) fn run(probe: &Probe<'_>, node: &mut Node) {
+pub(crate) fn run(probe: &Probe<'_>, node: &mut Node) {
     if let Some(by) = probe.blocked {
         *node = Node::blocked(probe.thing.clone(), by.clone());
         return;

@@ -6,8 +6,8 @@
 //! are forgotten; `machines` lists the attached machines with their reach;
 //! a Store whose password is not saved is not dialled. A failed check is `not_connected` (the one case a machine's
 //! loopback hint is added) only when no server answered.
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::home::{self, observed, paths, write_entity};
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_store::observed::{self as seen, Reach};
 use layerfs_store::postgresql::connect::{machines, shown};
 use layerfs_store::postgresql::login;

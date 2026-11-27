@@ -20,7 +20,11 @@ use crate::{
     names,
 };
 use layerfs_content::{filesystem::PathName, object::inode_leaf::InodeKind};
-use layerfs_vfs::requests::{create, link, remove, rename, write::{self, AttributeChange, Stamp}, Declined, KernelMutation, MutationFailure, MutationInput, MutationRequest, Published};
+use layerfs_vfs::requests::{
+    create, link, remove, rename,
+    write::{self, AttributeChange, Stamp},
+    Declined, KernelMutation, MutationFailure, MutationInput, MutationRequest, Published,
+};
 
 /// Pre- and post-operation attributes of one inode or directory.
 pub type Wcc = (Option<ViewStat>, Option<ViewStat>);

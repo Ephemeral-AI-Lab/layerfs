@@ -1,9 +1,9 @@
 //! `apple_container` create: see `mod.rs`.
 use super::status::{host_check, observe, CAPABILITIES, CLI, DEFAULT_IMAGE, MAIN};
 use crate::platform::error::{kept, Code, MachineError};
+use crate::setup::spec::{Bundle, Running, Spec, DATA, WORKER_PORT};
 use crate::setup::vm::{call, checked, data_volume, exists, mib, new_port, CALL, CREATE};
 use crate::setup::State;
-use crate::setup::spec::{Bundle, Running, Spec, DATA, WORKER_PORT};
 
 pub(crate) fn create(spec: &Spec, bundle: &Bundle) -> Result<Running, MachineError> {
     host_check(spec)?;
@@ -82,9 +82,9 @@ pub(crate) fn remove(spec: &Spec) -> Result<(), MachineError> {
 
 // `apple_container` power: see `mod.rs`.
 use super::status::{gateway, guest};
+use crate::setup::spec::Lasting;
 use crate::setup::vm::{not_found, recorded_port};
 use crate::setup::worker;
-use crate::setup::spec::Lasting;
 
 /// Starts a stopped container, and tries a failed one once: `container
 /// start` runs its main process again over the same volume, and the

@@ -5,9 +5,9 @@ use crate::calls::table::Kind::{Bool, Name};
 use crate::calls::table::{a, call, opt, Call};
 use crate::calls::Context;
 use crate::doctor::answer::{self, FORM};
-use layerfs_protocol::provision::install::SdkValue;
-use layerfs_inspect::{Kind, Options};
 use layerfs_home::outcome::Outcome;
+use layerfs_inspect::{Kind, Options};
+use layerfs_protocol::sdk::SdkValue;
 
 /// Its table entry.
 pub(crate) const CALL: Call = call(

@@ -1,6 +1,6 @@
 [package]
-name = "layerfs-workspace"
-description = "Workspace filesystem semantics over public content APIs and daemon overlay jobs."
+name = "layerfs-vfs"
+description = "Workspace filesystem semantics under FUSE and NFS: the effective view over public content APIs and daemon overlay jobs, and the route-neutral kernel ports and requests both kernel routes serve."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -13,3 +13,4 @@ layerfs-telemetry = { path = "../../../core/crates/layerfs-telemetry" }
 
 [dev-dependencies]
 layerfs-daemon = { path = "../layerfs-daemon" }
+layerfs-store-service = { path = "../layerfs-store-service" }

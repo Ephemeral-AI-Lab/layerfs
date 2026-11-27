@@ -5,15 +5,16 @@
 use super::deploy::{self, Side};
 use super::record::SandboxRecord;
 use crate::host::{Call, Deploy, Host, Message, Op, Sent, StoreUrl};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::home::{self, paths};
 use layerfs_home::outcome::{failed, refused, Outcome};
 use layerfs_machine::worker::Unreached;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_store::open_args::PgSelection;
 use layerfs_store::place::{self, Executor};
+use layerfs_store::postgresql::connect::dialled;
 use layerfs_store::project::record::ProjectRecord;
-use {layerfs_protocol::StoreKind, layerfs_store::record::StoreRecord};
+use layerfs_store::record::{StoreKind, StoreRecord};
 use layerfs_store::resolve;
 use std::path::{Path, PathBuf};
 
@@ -107,43 +108,6 @@ pub fn reached(
     record: &StoreRecord,
 ) -> Result<(PgSelection, Option<String>)> {
     dialled(home, machine, record, layerfs_store::record::url(record)?)?
-}
-
-/// [`reached`] dialling `url`, the Store's address with a login in it
-/// (`store.connect` checks a new address or login from each attached
-/// machine before it saves them), with the refusal of a URL the machine
-/// cannot dial (`layerfs_machine::platform::reach`: a loopback or socket
-/// of this host it does not share, or a URL it cannot read to check) kept
-/// apart, as `Ok(Err(refusal))`, from every other failure (an
-/// unreadable machine record), which is `Err`.
-pub fn dialled(
-    home: &Path,
-    machine: &str,
-    record: &StoreRecord,
-    url: String,
-) -> Result<Result<(PgSelection, Option<String>)>> {
-    // a build without machines (the guest's) runs its own Sandboxes on the
-    // machine it is, which shares its loopback
-    #[cfg(feature = "machine")]
-    let (url, hint) = {
-        let spec =
-            layerfs_machine::machine_spec(home, &layerfs_machine::machine_of(home, machine)?)?;
-        let store = record.name();
-        let hint = layerfs_machine::platform::loopback_hint(&spec, store, &url);
-        match layerfs_machine::platform::reach(&spec, store, &url) {
-            Ok(url) => (url, hint),
-            Err(error) => return Ok(Err(layerfs_machine::machine_refusal(error))),
-        }
-    };
-    #[cfg(not(feature = "machine"))]
-    let hint = {
-        let _ = (home, machine);
-        None
-    };
-    Ok(Ok((
-        layerfs_store::postgresql::connect::selection_at(record, url),
-        hint,
-    )))
 }
 
 /// The reach check of a PostgreSQL Sandbox's create (#535 §7.4 step 4), on

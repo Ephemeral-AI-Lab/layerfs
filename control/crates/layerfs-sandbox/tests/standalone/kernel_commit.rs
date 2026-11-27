@@ -35,9 +35,15 @@ mod rig;
 #[allow(dead_code)]
 #[path = "../../../../../engine/crates/layerfs-daemon/tests/support/host_install.rs"]
 mod support;
-use layerfs_protocol::{provision::{install::{Activity, DaemonPhase, HelloRequest, ReadyMount, Reply, Request, WorkspaceToken}, daemon_setup::{DaemonLimits, DaemonSetup}}, duplex};
-use layerfs_protocol::{DaemonStore, KernelRoute};
 use layerfs_history::{BranchId, CommitOutcome, CommitRecord, WorkspaceId};
+use layerfs_protocol::daemon::{
+    Activity, DaemonPhase, HelloRequest, ReadyMount, Reply, Request, WorkspaceToken,
+};
+use layerfs_protocol::{
+    duplex,
+    provision::daemon_setup::{DaemonLimits, DaemonSetup},
+};
+use layerfs_protocol::{DaemonStore, KernelRoute};
 use layerfs_sandbox::internal::Control;
 use model::{assert_same, Flat};
 use mounted::COMMAND;

@@ -7,15 +7,17 @@ use super::super::setup::guest::Guest;
 use super::super::setup::worker;
 use crate::platform::adapter::{adapter, refused};
 use crate::platform::error::{Code, MachineError};
-use crate::table::profile::{HostOs, Platform, Route};
 use crate::setup::spec::{Bundle, Forward, NameLimit, Running, Spec};
+use crate::table::profile::{HostOs, Platform, Route};
 use std::path::Path;
 use std::time::Instant;
 
 /// A machine's state as its provider reports it now.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum State {
+    /// The VM or container runs.
     Running,
+    /// The VM or container is stopped.
     Stopped,
     /// The provider reports the VM broken, or a failed create kept it.
     Failed,
@@ -24,6 +26,7 @@ pub enum State {
 }
 
 impl State {
+    /// The state's word as the call surface shows it.
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Running => "running",
@@ -55,7 +58,9 @@ pub struct Status {
     pub worker: Option<bool>,
     /// Free bytes of the data disk at `/layerfs/data`, as the guest sees them.
     pub free_disk: Option<u64>,
+    /// The provider tool's version, when it answers.
     pub tool_version: Option<String>,
+    /// Why the machine is down, when the provider says.
     pub down_reason: Option<String>,
 }
 

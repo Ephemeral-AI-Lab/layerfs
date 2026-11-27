@@ -9,7 +9,7 @@
 //! One test, because it sets the process's environment.
 #![cfg(feature = "machine")]
 use layerfs_api::home::{self, paths, read_record, write_record};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 

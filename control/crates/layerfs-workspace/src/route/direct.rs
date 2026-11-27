@@ -2,16 +2,16 @@
 //! Commit, unmount and status straight to its daemon, and the directory of
 //! a Workspace an exec runs in (moved from `sandbox/direct.rs`,
 //! layerfs-project#106).
-use layerfs_sandbox::direct::host;
-use layerfs_sandbox::host::{Call, Message};
-use layerfs_sandbox::record::{SandboxRecord, WorkspaceRecord};
 use crate::machine::serve;
-use layerfs_sandbox::{dispatch, files, unmount_guard};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_history::{BranchId, CommitId};
 use layerfs_home::events::Events;
 use layerfs_home::helpers;
 use layerfs_home::outcome::{refused, Outcome};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
+use layerfs_sandbox::direct::host;
+use layerfs_sandbox::host::{Call, Message};
+use layerfs_sandbox::record::{SandboxRecord, WorkspaceRecord};
+use layerfs_sandbox::{dispatch, files, unmount_guard};
 use layerfs_store::call::store_call;
 use layerfs_store::calls::commit::CommitGet;
 use layerfs_store::calls::{Page, StoreOp};
@@ -96,7 +96,7 @@ pub fn call(
                 },
             )
         }
-        Call::ListWorkspaces { .. } => dispatch::call(host, call),
+        Call::ListWorkspaces { .. } => dispatch::unclosing(host, call),
         _ => Err(refused(
             "InvalidInput",
             format!(

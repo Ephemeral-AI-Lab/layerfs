@@ -18,12 +18,12 @@ use crate::host::{Call, Host, Message, Started};
 use crate::registry::{self, SandboxState, SANDBOXES};
 use crate::unmount_guard;
 use crate::{dispatch, files};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::helpers;
 use layerfs_home::home::{self, paths};
 use layerfs_home::outcome::shell_word;
 use layerfs_home::outcome::{refused, Outcome};
 use layerfs_machine::worker::Unreached;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_store::resolve::{self, Target};
 use std::net::SocketAddr;
 use std::path::Path;
@@ -327,9 +327,13 @@ pub fn list(home: &Path, record: &SandboxRecord) -> std::result::Result<Outcome,
         Err(refusal) => Ok(Err(refusal)),
         Ok(listed) => {
             let namespaces = crate::run_folder::namespaces(&listed);
-            let read =
-                crate::inspect::overlay::overlay_sizes(home, record.machine(), record.name(), &namespaces)
-                    .unwrap_or_else(|_| crate::run_folder::not_observed());
+            let read = crate::inspect::overlay::overlay_sizes(
+                home,
+                record.machine(),
+                record.name(),
+                &namespaces,
+            )
+            .unwrap_or_else(|_| crate::run_folder::not_observed());
             Ok(Ok(crate::run_folder::merged(listed, Some(&read))))
         }
     }
@@ -352,7 +356,7 @@ fn served(home: &Path, record: &SandboxRecord, call: Call) -> Outcome {
         machine.not_held()?;
     }
     let target = resolve::target(&home, record.project().unwrap_or(""))?;
-    dispatch::call(host(&home, record, &target, Message::Absent), call)
+    dispatch::unclosing(host(&home, record, &target, Message::Absent), call)
 }
 
 /// The Workspaces forwarded Sandbox `record` holds, which its close sends

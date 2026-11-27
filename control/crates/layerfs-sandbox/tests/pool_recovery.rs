@@ -6,7 +6,7 @@
 //! Nothing runs: a stand-in daemon admits at most `cap` connections at a
 //! time and answers the next with a capacity notice before any handshake,
 //! as a full daemon does.
-use layerfs_protocol::provision::install::{Answer, Call, DaemonPhase, DaemonStatus, Reply, Request};
+use layerfs_protocol::daemon::{Answer, Call, DaemonPhase, DaemonStatus, Reply, Request};
 use layerfs_protocol::duplex;
 use layerfs_protocol::duplex::admission::{self, AdmissionNotice, AdmissionReason};
 use layerfs_sandbox::daemon::pool::{Controls, Dial, CONNECTIONS, RECOVER};

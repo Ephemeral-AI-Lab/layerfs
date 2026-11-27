@@ -2,9 +2,9 @@
 use crate::calls::table::Kind::{Int, Name, Text};
 use crate::calls::table::{call, opt, Call};
 use crate::calls::{Context, Form, Paging, Part, Section};
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::names::StoreName;
 use layerfs_home::outcome::Outcome;
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_store::project::read::ProjectList;
 
 /// One project: its state when not ready, with that state's companion;
@@ -55,5 +55,9 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         cursor: args.get_text("cursor").map(str::to_owned),
         stats: context.with("stats"),
     };
-    layerfs_store::data::project::with_users::list(&context.home, &request)
+    layerfs_store::data::project::with_users::list(
+        &context.home,
+        &request,
+        &layerfs_sandbox::users::STORE,
+    )
 }

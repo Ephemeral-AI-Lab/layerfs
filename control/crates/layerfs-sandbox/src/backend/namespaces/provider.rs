@@ -3,7 +3,16 @@
 //! its own mount, PID and IPC namespaces and its own cgroup, and its commands
 //! entering them as a nonroot identity. The VM that holds this kernel is the
 //! boundary; the namespaces keep Sandboxes on one Store out of each other.
-use super::{instance::{cgroup, create::{self, CreateFailure, Options}, paths::Paths, handle::Sandbox}, linux::host_checks, rootfs};
+use super::{
+    instance::{
+        cgroup,
+        create::{self, CreateFailure, Options},
+        handle::Sandbox,
+        paths::Paths,
+    },
+    linux::host_checks,
+    rootfs,
+};
 use crate::spawn::{Local, LocalPaths};
 use crate::{Bind, ContainerId, RuntimeError, WireFailure};
 use crate::{LaunchFailure, LaunchPhase, LaunchRequest, ProviderLaunchOptions, SandboxRecord};
@@ -191,7 +200,7 @@ impl NamespaceProvider {
 /// loader and libraries, as before.
 fn runtime(daemon: &Path) -> Option<PathBuf> {
     let runtime = daemon.parent()?.join(RUNTIME);
-    crate::backend::namespaces::linux::runtime::holds(&runtime).then_some(runtime)
+    layerfs_os::runtime::holds(&runtime).then_some(runtime)
 }
 
 /// A launch refused before any effect.

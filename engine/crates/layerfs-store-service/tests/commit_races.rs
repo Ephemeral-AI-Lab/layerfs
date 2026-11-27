@@ -27,8 +27,8 @@ use adversary::{
     assert_linear, commit, seed_tree, text_bytes, verdict, write, Gate, Kind, Node, Service,
     TestStore, Verdict,
 };
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_history::CommitId;
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_store_service::store::BoundWorkspace;
 
 const SEED: &[(&str, &[u8])] = &[("/seed", b"seed\n"), ("/dir/inner", b"inner\n")];

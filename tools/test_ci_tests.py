@@ -22,7 +22,7 @@ class SelectionAgainstTheTree(unittest.TestCase):
         fast = set(ci_tests.fast_targets(self.meta))
         self.assertFalse(fast & (ci_tests.NIGHTLY | set(ci_tests.mount_targets(self.meta))))
         self.assertIn(("layerfs-overlay", "captured_namespace"), fast)
-        self.assertNotIn(("layerfs-workspace", "captured_namespace"), fast)
+        self.assertNotIn(("layerfs-vfs", "captured_namespace"), fast)
         flags = ci_tests.test_flags(ci_tests.lane_targets("fast", self.meta)).split()
         self.assertEqual(flags.count("--test"), len({name for _, name in fast}))
         self.assertNotIn("mount_control", flags)
@@ -36,8 +36,7 @@ class SelectionAgainstTheTree(unittest.TestCase):
             self.assertIn(f'#![cfg(feature = "{feature}")]', sources[(package, name)].read_text().splitlines())
             self.assertNotIn((package, name), ci_tests.NIGHTLY)
         groups = list(ci_tests.featured_groups())
-        targets = "--test worker_fault --test worker_fault_inspect --test worker_fault_store"
-        self.assertIn(("layerfs-control", "worker-fault", targets), groups)
+        self.assertIn(("layerfs-api", "worker-fault", "--test worker_fault"), groups)
         self.assertEqual(len(groups), len({(package, feature) for package, feature, _ in groups}))
 
     def test_mount_group_includes_moved_sdk_targets(self):
@@ -46,8 +45,8 @@ class SelectionAgainstTheTree(unittest.TestCase):
         self.assertIn("forced_unavailable", names)
         self.assertIn("kernel_application", names)
         self.assertNotIn("lane_merge", names)
-        self.assertIn(("layerfs-control", "kernel_application"), mount)
-        self.assertIn(("layerfs-control", "observed_application"), mount)
+        self.assertIn(("layerfs-sandbox", "kernel_application"), mount)
+        self.assertIn(("layerfs-sandbox", "observed_application"), mount)
         self.assertIn(("layerfs-daemon", "forced_unavailable"), mount)
 
     def test_fast_filter_excludes_the_nightly_groups_and_nightly_selects_them(self):
@@ -55,7 +54,7 @@ class SelectionAgainstTheTree(unittest.TestCase):
         nightly = ci_tests.filter_for("nightly", self.meta)
         self.assertTrue(fast.startswith("not ("))
         self.assertIn("binary_id(layerfs-store-service::scale_lineage_cap)", fast)
-        self.assertIn("binary_id(layerfs-control::mount_control)", fast)
+        self.assertIn("binary_id(layerfs-sandbox::mount_control)", fast)
         self.assertIn("binary_id(layerfs-daemon::forced_unavailable)", fast)
         self.assertNotIn("forced_unavailable", nightly)
         self.assertEqual(nightly.count("binary_id("), len(ci_tests.NIGHTLY))

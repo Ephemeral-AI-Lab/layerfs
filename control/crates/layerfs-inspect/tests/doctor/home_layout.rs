@@ -46,13 +46,13 @@ fn a_missing_or_empty_home_is_empty_and_gets_a_layout_and_id() {
 }
 
 /// One call-log line.
-fn line() -> layerfs_protocol::provision::install::SdkValue {
-    use layerfs_protocol::provision::install::SdkValue;
+fn line() -> layerfs_protocol::sdk::SdkValue {
+    use layerfs_protocol::sdk::SdkValue;
     SdkValue::map([("call", SdkValue::text("home.get"))])
 }
 
 /// The fix a refusal of a foreign folder carries.
-fn fix(refusal: &layerfs_protocol::provision::install::SdkRefusal) -> Option<&str> {
+fn fix(refusal: &layerfs_protocol::sdk::SdkRefusal) -> Option<&str> {
     refusal.detail.get_text("fix")
 }
 

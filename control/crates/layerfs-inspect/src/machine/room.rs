@@ -4,7 +4,7 @@
 //! and the next Store, image or Commit may not fit); anything more passes.
 //! The free bytes are the evidence, as `disk_free_bytes` (review fix 16).
 use super::super::doctor::budget::Checks;
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 
 /// Free bytes under which a disk is nearly full: 2 GiB.
 pub(super) const ROOM: u64 = 2 << 30;
@@ -23,7 +23,7 @@ fn shown(bytes: u64) -> String {
 /// Judges check `id` on `disk` (`its data disk`, `the disk that holds the
 /// home`) with `free` bytes free: a warning with `fix` under [`ROOM`], else
 /// a pass; `evidence` is extended with `disk_free_bytes`.
-pub(super) fn room(
+pub(crate) fn room(
     checks: &mut Checks,
     id: &str,
     disk: &str,

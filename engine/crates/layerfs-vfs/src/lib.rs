@@ -6,32 +6,32 @@
 #![forbid(unsafe_code)]
 
 mod base;
+pub(crate) mod binding;
 mod construction;
 pub(crate) mod job;
 mod operations;
-pub(crate) mod binding;
 pub(crate) use operations::attributes;
 
 pub(crate) use base::cache;
 pub(crate) use base::fetch as client;
+pub(crate) use binding::install;
 pub(crate) use job::eval;
 pub(crate) use job::facts;
-pub(crate) use job::run as job;
 pub(crate) use operations::namespace::create;
 pub(crate) use operations::namespace::list;
 pub(crate) use operations::outcomes as operation;
-pub(crate) use binding::install;
-mod ports;
+pub mod ports;
 pub mod requests;
+pub(crate) use binding::serials;
+pub(crate) use binding::view;
 pub(crate) use operations::namespace::remove;
 pub(crate) use operations::namespace::rename;
 pub(crate) use ports as port;
-pub(crate) use binding::serials;
-pub(crate) use binding::view;
 
 pub(crate) use operations::file::write;
 
 pub use base::{BaseContent, BaseRead, BaseStat, BaseView, DIRECTORY_COUNT_CAPACITY};
+pub use binding::{Workspace, WorkspaceError, WorkspaceResult};
 pub use cache::{CanonicalCache, ConstructedObjects};
 pub use client::{CanonicalClient, ClientWork};
 pub use construction::{
@@ -47,18 +47,26 @@ pub use construction::{
 };
 pub use facts::{BaseFacts, Need, VisitFacts};
 pub use install::PreparedBase;
-pub use job::{JobOutcome, NamespaceJob};
-pub use list::ViewListing;
 pub use job::plan::{MutationInputFailure, MutationPlan, MutationStage};
+pub use job::run::{JobOutcome, NamespaceJob};
+pub use list::ViewListing;
 pub use operation::{Operation, Outcome, Position, Refusal, Time, WriteData};
 pub use operations::file::recognize::{
     Recognition, RecognizeWork, WriteRun, RECOGNIZE_BYTES, UNMATCHED_BYTES,
 };
-pub use operations::kernel::read::{KernelDataVisit, KernelWindow};
-pub use operations::kernel::directory::{KernelDirectoryBatch, KernelDirectoryEntry, KernelDirectoryListing, KernelDirectoryRead, KernelDirectoryVisit, KernelDirectoryWindow};
+pub use operations::kernel::directory::{
+    KernelDirectoryBatch, KernelDirectoryEntry, KernelDirectoryListing, KernelDirectoryRead,
+    KernelDirectoryVisit, KernelDirectoryWindow,
+};
+pub use operations::kernel::lookup::{
+    Decided, KernelReadDecision, KernelReadFailure, KernelReadOperation, KernelReadOutcome,
+    KernelReadValue,
+};
 pub use operations::kernel::mutation::KernelMutationOutcome;
-pub use operations::kernel::lookup::{Decided, KernelReadDecision, KernelReadFailure, KernelReadOperation, KernelReadOutcome, KernelReadValue};
-pub use operations::kernel::visit::{KernelInput, KernelMutationVisit, KernelReadVisit, KernelVisitRequest};
+pub use operations::kernel::read::{KernelDataVisit, KernelWindow};
+pub use operations::kernel::visit::{
+    KernelInput, KernelMutationVisit, KernelReadVisit, KernelVisitRequest,
+};
 pub use port::OverlayCapturedNamespace;
 pub use port::{FileDigestRow, FileDigests, FILE_DIGEST_WINDOW};
 pub use port::{FileLengths, OverlayCapturedRuns, OverlayFileRead, OverlayJobs, OverlayRead};
@@ -68,12 +76,5 @@ pub use port::{
 };
 pub use serials::{InodeSerials, SERIAL_REFILL};
 pub use view::{SourceView, ViewStat};
-pub use binding::{Workspace, WorkspaceError, WorkspaceResult};
 
 pub use binding::Route;
-
-// The route-neutral kernel ports (`ports`), operation handlers
-// (`operations`) and phase timing (`phase`) that FUSE and NFS both serve
-// over Workspace semantics. No kernel protocol lives here.
-#![forbid(unsafe_code)]
-

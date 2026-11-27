@@ -10,13 +10,13 @@
 //! `refused` with its refusal in `message`). Rows are ordered by Sandbox,
 //! then name, and paged by cursor: a cursor carries the `--sandbox` filter
 //! and the last row's place.
-use layerfs_sandbox::files;
-use layerfs_sandbox::record::{sandboxes, SandboxRecord, WorkspaceRecord};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::home::paths;
 use layerfs_home::json;
 use layerfs_home::outcome::{refused, Outcome};
 use layerfs_home::state::State;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
+use layerfs_sandbox::files;
+use layerfs_sandbox::record::{sandboxes, SandboxRecord, WorkspaceRecord};
 use layerfs_store::place::{self, Executor};
 use std::collections::BTreeMap;
 use std::path::Path;

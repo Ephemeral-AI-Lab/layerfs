@@ -1,8 +1,8 @@
 //! A worker's root under layout 3 (#536 H10, §6): a Sandbox call writes the
 //! Store's thin record `{ v, name, kind }` only when it changed (#535 R5).
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::home::{self, paths, read_record};
 use layerfs_machine::worker::{self, Endpoint};
+use layerfs_protocol::sdk::SdkValue;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
@@ -21,9 +21,7 @@ fn worker(root: &Path) -> Endpoint {
         secret: "k".to_owned(),
     };
     let guest = root.to_owned();
-    std::thread::spawn(move || {
-        layerfs_api::worker::serve::serve(listener, "k".to_owned(), guest)
-    });
+    std::thread::spawn(move || layerfs_api::worker::serve::serve(listener, "k".to_owned(), guest));
     for _ in 0..200 {
         if worker::ping(&endpoint).is_ok() {
             return endpoint;

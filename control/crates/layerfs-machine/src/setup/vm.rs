@@ -1,8 +1,8 @@
 //! What the VM adapters share: sizes as provider CLIs write them, the data
 //! volume's name, the worker's host port, and one provider call.
 use crate::platform::error::{Code, MachineError};
-use crate::setup::tool::{self, Output};
 use crate::setup::spec::Spec;
+use crate::setup::tool::{self, Output};
 use std::time::Duration;
 
 pub(crate) const CALL: Duration = Duration::from_secs(30);

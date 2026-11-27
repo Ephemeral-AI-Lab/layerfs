@@ -7,13 +7,13 @@
 #[path = "../support/worker_store.rs"]
 mod worker_store;
 
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::home::{self, paths, write_record};
 use layerfs_home::names::StoreName;
 use layerfs_home::op::{Op, Standing};
 use layerfs_machine::worker;
 use layerfs_persistence::upgrade::{Format, FormatStatus};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_store::intent;
 use layerfs_store::record::StoreRecord;
 use layerfs_store::upgrade::{Running, CANCEL_OP, FORMAT_OP, WORKER_OP};
@@ -55,7 +55,12 @@ fn upgrade(home: &Path) -> (Result<SdkValue, SdkRefusal>, Vec<SdkValue>) {
     let mut seen = Vec::new();
     let mut sink = |event| seen.push(event);
     let name = StoreName::parse("shop").unwrap();
-    let outcome = layerfs_store::admin::with_users::upgrade(home, &mut Events::new(&mut sink), &name);
+    let outcome = layerfs_store::admin::with_users::upgrade(
+        home,
+        &mut Events::new(&mut sink),
+        &name,
+        &layerfs_sandbox::users::STORE,
+    );
     (outcome, seen)
 }
 
@@ -372,7 +377,7 @@ fn only_with_format_adds_the_section() {
     let plain = get(&home, false).unwrap();
     assert!(plain.get("format").is_none(), "{plain:?}");
     let listed =
-        layerfs_store::list::list(&home, None, false, layerfs_store::admin::with_users::reads()).unwrap();
+        layerfs_store::list::list(&home, None, false, layerfs_sandbox::users::reads()).unwrap();
     let SdkValue::List(items) = listed.get("items").unwrap() else {
         panic!("{listed:?}");
     };
@@ -447,7 +452,7 @@ fn get(home: &Path, format: bool) -> Result<SdkValue, SdkRefusal> {
         &mut Events::new(&mut sink),
         "shop",
         with,
-        layerfs_store::admin::with_users::reads(),
+        layerfs_sandbox::users::reads(),
     )
 }
 
@@ -459,7 +464,7 @@ fn get_format(home: &Path) -> Option<SdkValue> {
 /// Each `store list --with format` item's section.
 fn list_formats(home: &Path) -> Vec<SdkValue> {
     let listed =
-        layerfs_store::list::list_with(home, None, false, true, layerfs_store::admin::with_users::reads())
+        layerfs_store::list::list_with(home, None, false, true, layerfs_sandbox::users::reads())
             .unwrap();
     let Some(SdkValue::List(items)) = listed.get("items") else {
         panic!("{listed:?}");

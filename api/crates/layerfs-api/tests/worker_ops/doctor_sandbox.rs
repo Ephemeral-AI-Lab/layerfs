@@ -5,10 +5,14 @@
 #[path = "../../../../../control/crates/layerfs-inspect/tests/support/doctor_own.rs"]
 mod doctor_own;
 use doctor_own::complete;
-use layerfs_protocol::{provision::install::{Answer, Call, DaemonPhase, DaemonStatus, Reply, Request, SdkRefusal, SdkValue}, duplex};
-use layerfs_inspect::{Kind, Options};
 use layerfs_home::home::{paths, private_dir, write_entity, write_record};
 use layerfs_home::process;
+use layerfs_inspect::{Kind, Options};
+use layerfs_protocol::{
+    daemon::{Answer, Call, DaemonPhase, DaemonStatus, Reply, Request},
+    duplex,
+    sdk::{SdkRefusal, SdkValue},
+};
 use std::collections::BTreeMap;
 use std::net::TcpListener;
 use std::os::unix::fs::MetadataExt;

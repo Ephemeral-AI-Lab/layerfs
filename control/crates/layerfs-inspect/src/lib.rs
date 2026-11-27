@@ -33,17 +33,16 @@ pub use layerfs_store_service::methods::call;
 // removes it itself where nothing can own it (spec v20,
 // `layerfs_sandbox::sweep` and the sweeps of image copies and backups).
 
-
-pub use doctor::runner::{run, run_with, CheckId, KindDoctor, Located, Options, Probe, Registry};
 pub use doctor::kinds::kinds;
 pub use doctor::report::{Kind, Node, Report, Thing};
+pub use doctor::runner::{run, run_with, CheckId, KindDoctor, Located, Options, Probe, Registry};
 
-pub(crate) use machine::network::{inspect_in_worker as inspect_network_in_worker, OP as NETWORK_OP};
-pub(crate) use sandbox::doctor::worker_diagnose as diagnose_worker_sandbox;
 pub(crate) use home::scan::shell;
+pub use machine::network::{inspect_in_worker as inspect_network_in_worker, OP as NETWORK_OP};
+pub use sandbox::doctor::worker_diagnose as diagnose_worker_sandbox;
 #[path = "home/bucket.rs"]
 mod backup_target;
-pub(crate) use store::doctor::in_worker as diagnose_store_in_worker;
+pub use store::doctor::in_worker as diagnose_store_in_worker;
 
 // Inspection (layerfs-project#178, #179 A): reads of a machine and its
 // Sandboxes that clients poll, on one route for every machine kind.
@@ -73,14 +72,18 @@ pub(crate) use store::doctor::in_worker as diagnose_store_in_worker;
 // deadlines are `owner`'s; the caller's wait for a worker is
 // `place::READ`.
 
-pub use layerfs_sandbox::deploy::Side;
-pub use files::walk::{sandbox_files, sandbox_page, FilesRequest, DEPTH, ENTRIES, MAX_DEPTH, MAX_ENTRIES, MAX_WINDOW, WINDOW};
 pub use files::log::{machine_log, sandbox_log, Window};
-pub use machine::files::{machine_files, machine_page};
+pub use files::walk::{
+    sandbox_files, sandbox_page, FilesRequest, DEPTH, ENTRIES, MAX_DEPTH, MAX_ENTRIES, MAX_WINDOW,
+    WINDOW,
+};
+pub use layerfs_sandbox::deploy::Side;
 pub use layerfs_sandbox::inspect::overlay::overlay_sizes;
 pub use layerfs_sandbox::inspect::owner::{admit, on_owner, running, Budget, HARD, PERMITS, SOFT};
-pub use layerfs_sandbox::inspect::route::{ask, in_worker, serve, OP};
+pub use layerfs_sandbox::inspect::route::OP;
+pub use machine::files::{machine_files, machine_page};
 pub use machine::space::{machine_space, ENTRIES as SPACE_ENTRIES};
 pub use machine::stats::machine_stats;
 
-use layerfs_sandbox::inspect::route::run_folder;
+mod route;
+pub use route::{ask, in_worker, serve};

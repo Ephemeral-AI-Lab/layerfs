@@ -4,7 +4,6 @@
 //! keep the storage reader's byte bounds and are dropped with the call.
 use crate::history::lookup as args;
 use crate::store::{PortError, StorePorts};
-use layerfs_protocol::provision::install::SdkRefusal;
 use layerfs_content::{
     compare::{DirectoryMemo, EntryFacts, TreeTable},
     file::{mapping::FILE_STATE_CANONICAL_BYTES, FileView},
@@ -15,6 +14,7 @@ use layerfs_content::{
     policy::WHOLE_FILE_CANONICAL_OVERHEAD,
     AuthenticatedObjects, ContentError, ContentResult, ObjectId,
 };
+use layerfs_protocol::sdk::SdkRefusal;
 use layerfs_storage::ReadCache;
 use std::{
     cell::{RefCell, RefMut},

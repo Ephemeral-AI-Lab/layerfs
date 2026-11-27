@@ -5,8 +5,9 @@
 //! Store calls are not served here (#352 F-020), so nothing reads them: the
 //! bytes a call declares are read and dropped before its answer, a record at
 //! a time, so the connection stays in step.
-use layerfs_protocol::provision::install::{Request, SdkValue};
+use layerfs_protocol::daemon::Request;
 use layerfs_protocol::duplex::{ChannelError, Receiver};
+use layerfs_protocol::sdk::SdkValue;
 
 /// The declared bodies of the call being served.
 pub(super) struct Bodies<'a> {

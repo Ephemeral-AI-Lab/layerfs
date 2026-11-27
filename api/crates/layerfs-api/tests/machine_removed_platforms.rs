@@ -5,8 +5,8 @@
 //! only, saying what it left. No tool runs.
 #![cfg(feature = "machine")]
 use layerfs_api::home::{paths, write_record};
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_machine::table::removed::removed_reason;
+use layerfs_protocol::sdk::SdkValue;
 use std::path::{Path, PathBuf};
 
 fn tempdir(tag: &str) -> PathBuf {

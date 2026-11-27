@@ -23,7 +23,7 @@ pub(crate) enum Loopback {
 /// The URL `spec`'s daemon dials for `url`, a URL of PostgreSQL Store
 /// `store`, given how its machine reaches the caller's loopback: `url`
 /// itself, or a refusal. Every host the URL names is checked, read as its
-/// client reads them ([`layerfs_sandbox_backend::url_hosts`]): its host
+/// client reads them ([`crate::table::postgresql_url::url_hosts`]): its host
 /// list and its `host` and `hostaddr` parameters. Nothing is resolved: a
 /// name is dialled as given.
 pub(crate) fn dial(
@@ -77,9 +77,13 @@ pub(crate) fn hint(spec: &Spec, (store, url): (&str, &str), loopback: Loopback) 
         return None;
     }
     let named = |host: &String| {
-        !crate::table::postgresql_url::socket(host) && crate::table::postgresql_url::ip(host).is_none()
+        !crate::table::postgresql_url::socket(host)
+            && crate::table::postgresql_url::ip(host).is_none()
     };
-    if !crate::table::postgresql_url::url_hosts(url)?.iter().any(named) {
+    if !crate::table::postgresql_url::url_hosts(url)?
+        .iter()
+        .any(named)
+    {
         return None;
     }
     Some(format!(

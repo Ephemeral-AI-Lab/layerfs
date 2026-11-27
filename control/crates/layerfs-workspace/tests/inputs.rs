@@ -2,8 +2,8 @@
 //! daemon is asked (call surface 2.0): a Workspace's default name from its
 //! Branch, the folder a command starts in, its environment, and a stream
 //! past the 1 MiB inline window spilled to a named file with its tail kept.
-use layerfs_workspace::exec::run::{checked_env, start_folder};
 use layerfs_sandbox::output::{self, Place, Spool, INLINE};
+use layerfs_workspace::exec::run::{checked_env, start_folder};
 use layerfs_workspace::route::send::default_name;
 use std::io::Write;
 
@@ -76,7 +76,7 @@ fn a_stream_past_the_window_spills_to_its_file_and_keeps_its_tail() {
             .find(|(n, _)| *n == name)
             .map(|(_, v)| v.clone())
     };
-    use layerfs_protocol::provision::install::SdkValue;
+    use layerfs_protocol::sdk::SdkValue;
     assert_eq!(get("stdout"), Some(SdkValue::Null));
     let Some(SdkValue::Text(tail)) = get("stdoutTail") else {
         panic!("{fields:?}")

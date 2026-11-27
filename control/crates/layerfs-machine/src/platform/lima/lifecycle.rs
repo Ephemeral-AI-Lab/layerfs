@@ -2,10 +2,10 @@
 use super::status::{disk_exists, disk_name, host_check, observe, CLI};
 use super::template::template;
 use crate::platform::error::{kept, Code, MachineError};
+use crate::setup::spec::{Bundle, Running, Spec};
 use crate::setup::tool;
 use crate::setup::vm::{call, checked, exists, mib, new_port, BOOT, CALL, CREATE};
 use crate::setup::State;
-use crate::setup::spec::{Bundle, Running, Spec};
 
 pub(crate) fn create(spec: &Spec, bundle: &Bundle) -> Result<Running, MachineError> {
     host_check(spec)?;
@@ -73,9 +73,9 @@ pub(crate) fn remove(spec: &Spec) -> Result<(), MachineError> {
 
 // `lima` power: see `mod.rs`.
 use super::status::guest;
+use crate::setup::spec::Lasting;
 use crate::setup::vm::{not_found, recorded_port};
 use crate::setup::worker;
-use crate::setup::spec::Lasting;
 
 /// Lima reports an instance `Broken` when it cannot read the instance's own
 /// files, and `limactl start` refuses one itself ("errors inspecting

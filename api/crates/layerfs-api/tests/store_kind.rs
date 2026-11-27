@@ -3,7 +3,7 @@
 //! writes are never read as sqlite: `store.get` answers each `broken`, and
 //! a Store call refuses each.
 use layerfs_api::home::{self, paths, write_record};
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use std::path::{Path, PathBuf};
 
 fn tempdir() -> PathBuf {

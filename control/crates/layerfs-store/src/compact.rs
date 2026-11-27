@@ -34,7 +34,6 @@ use crate::place::{self, Executor};
 use crate::postgresql;
 use crate::record::{self, StoreRecord, StoreRef};
 use crate::sqlite::family::progress;
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_history::GcScopeKind;
 use layerfs_home::events::Events;
 use layerfs_home::home::paths;
@@ -45,6 +44,7 @@ use layerfs_persistence::PostgresHandles;
 use layerfs_persistence::{
     CompactFailpoint, CompactRequest, PersistenceConfig, SqliteHandles, SqlitePersistenceProfile,
 };
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_store_service::history::{admission, lookup};
 use std::path::Path;
 
@@ -428,10 +428,8 @@ fn compact_sqlite(
         None => (None, None),
     };
     let op_id = admission::op_id();
-    let (owner_runtime, owner_boot) = admission::owner_tokens(&format!(
-        "compact:{}",
-        layerfs_protocol::sdk::hex(&op_id)
-    ));
+    let (owner_runtime, owner_boot) =
+        admission::owner_tokens(&format!("compact:{}", layerfs_protocol::sdk::hex(&op_id)));
     let receipt = handles
         .compact_observed(
             &CompactRequest {
@@ -495,10 +493,8 @@ fn compact_postgresql(
             None => (None, None),
         };
         let op_id = admission::op_id();
-        let (owner_runtime, owner_boot) = admission::owner_tokens(&format!(
-            "compact:{}",
-            layerfs_protocol::sdk::hex(&op_id)
-        ));
+        let (owner_runtime, owner_boot) =
+            admission::owner_tokens(&format!("compact:{}", layerfs_protocol::sdk::hex(&op_id)));
         let receipt = handles
             .compact_observed(
                 &CompactRequest {

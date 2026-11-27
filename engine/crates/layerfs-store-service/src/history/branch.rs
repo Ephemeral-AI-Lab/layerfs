@@ -6,10 +6,12 @@
 //! with `a`'s `/.lww`, and a clean result becomes one Commit with two parents.
 //! A conflict creates nothing. Publishing is a compare-and-swap on main's
 //! head by default, and reports the main Layers a forced publication skipped.
-use {super::lookup::{self as args, branch_node, history, invalid, refuse, root, Answer}, layerfs_protocol::sdk::{commit_value, hex, layer_value, node_text, short}};
+use super::lookup::{
+    self as args, branch_node, commit_value, hex, history, invalid, layer_value, node_text, refuse,
+    root, short, Answer,
+};
 use super::resolve::{self, Named};
 use crate::store::{CommitError, Store};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_content::{
     filesystem::FilesystemRootId,
     merge::{merge_roots, MergeInput, MergeUnit, RulesFrom, Units},
@@ -19,6 +21,7 @@ use layerfs_history::{
     CommitMeta, CommitVia, ForkRequest, ForkSource, HistoryError, LayerId, LayerStackRecord,
     MergeCommit, MergeHead, MergeSide, NodeId, MAXIMUM_PAGE_RECORDS,
 };
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_vfs::InodeSerials;
 use std::sync::Arc;
 
@@ -40,7 +43,7 @@ fn side(
     name: &str,
 ) -> Result<
     (MergeSide, NodeId, Option<layerfs_history::BranchRecord>),
-    layerfs_protocol::provision::install::SdkRefusal,
+    layerfs_protocol::sdk::SdkRefusal,
 > {
     if name == MAIN {
         return Ok((MergeSide::Main, NodeId::Layer(stack.head_layer), None));

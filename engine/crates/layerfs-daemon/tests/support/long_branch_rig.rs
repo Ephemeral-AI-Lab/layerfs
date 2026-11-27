@@ -20,7 +20,7 @@ use layerfs_persistence::{
     PersistenceConfig, SqlWork, SqliteAcquisitionSchema, SqlitePersistenceProfile,
 };
 use layerfs_storage::{Diagnostics, ReservationBlocks};
-use layerfs_workspace::{Operation, Outcome, Position, SourceView, Time};
+use layerfs_vfs::{Operation, Outcome, Position, SourceView, Time};
 use std::{
     fs,
     path::{Path, PathBuf},

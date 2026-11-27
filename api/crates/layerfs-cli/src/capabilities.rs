@@ -1,7 +1,7 @@
 //! Machine-readable CLI discovery; these commands never open a home.
 use crate::output;
-use {layerfs_home::json, layerfs_api::Kind};
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_api::{json, Kind};
+use layerfs_protocol::sdk::SdkValue;
 use std::process::ExitCode;
 
 fn strings(values: impl IntoIterator<Item = impl AsRef<str>>) -> SdkValue {
@@ -21,10 +21,7 @@ pub fn version() -> ExitCode {
         // R5: a namespaces Sandbox runs its daemon through the bundle's
         // runtime layer (its loader and libraries, a static bash), so an
         // image with another libc or no shell starts and runs commands
-        (
-            "sandbox-runtime",
-            layerfs_sandbox::backend::namespaces::linux::runtime::LOADER.is_some(),
-        ),
+        ("sandbox-runtime", layerfs_os::runtime::LOADER.is_some()),
     ];
     output::result(
         &SdkValue::map([
@@ -47,7 +44,7 @@ pub fn version() -> ExitCode {
             (
                 "formats",
                 SdkValue::Map(
-                    (layerfs_store::upgrade::FORMATS.iter())
+                    (layerfs_api::FORMATS.iter())
                         .map(|(engine, format)| ((*engine).to_owned(), SdkValue::Int(*format)))
                         .collect(),
                 ),

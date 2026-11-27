@@ -1,8 +1,8 @@
 //! Compare Store admissions with local placement records. Missing records are
 //! evidence of a blocker, never authority to release an admission.
 use super::super::doctor::budget::Checks;
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::{home::paths, names::SandboxName, outcome::refused};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_sandbox::record::{SandboxRecord, WorkspaceRecord};
 use std::path::Path;
 

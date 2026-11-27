@@ -16,7 +16,9 @@ mod producer;
 use harness::Bench;
 use layerfs_content::{ContentError, ObjectRole};
 use layerfs_overlay::OverlayError;
-use layerfs_vfs::{CapturedNamespaceAttempt, OperationRecordRefusal, OverlayCapturedNamespace, WorkspaceError};
+use layerfs_vfs::{
+    CapturedNamespaceAttempt, OperationRecordRefusal, OverlayCapturedNamespace, WorkspaceError,
+};
 use oracle::value;
 use producer::{
     build_taken, construct, evidence, injected, record, release, retained, slots, take, Call,

@@ -5,8 +5,8 @@ use crate::{
     read::{paged_reads, reads, visibility},
     StoreService,
 };
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_content::compare::memo::Memo;
+use layerfs_protocol::sdk::SdkValue;
 
 /// `read(path, { branch, commit?, startLine?, endLine?, binary? })`: one window of a file at a
 /// Branch, Commit or Layer; with `binary`, a file that is not text answers its size.

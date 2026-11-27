@@ -27,7 +27,7 @@ mod rig;
 mod support;
 use drive::evidence;
 use layerfs_content::{AuthenticatedObjects, ObjectId};
-use layerfs_store_service::store::BoundWorkspace;
+use layerfs_daemon::store::BoundWorkspace;
 use rig::{apply, commit, pattern, read, Daemon, Do, Tree};
 use std::{
     collections::BTreeSet,

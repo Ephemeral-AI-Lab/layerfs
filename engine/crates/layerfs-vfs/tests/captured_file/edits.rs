@@ -9,10 +9,13 @@ use layerfs_content::{
     construct_runs, ConstructionPolicy, ContentError, ContentResult, Edit, FileRun, FileRuns,
     FinalizedConsumer, FinalizedObject, ObjectRole,
 };
-use layerfs_store_service::OwnerClient;
 use layerfs_overlay::{CapturedReader, IndexedOperationRecordScope};
+use layerfs_store_service::OwnerClient;
 use layerfs_telemetry::timer::Timing;
-use layerfs_vfs::{CapturedFileAttempt, CapturedFileEdits, Operation, OverlayCapturedRuns, OverlayOperationRecords, WorkspaceError, WorkspaceResult};
+use layerfs_vfs::{
+    CapturedFileAttempt, CapturedFileEdits, Operation, OverlayCapturedRuns,
+    OverlayOperationRecords, WorkspaceError, WorkspaceResult,
+};
 
 #[test]
 fn overlapping_writes_shrink_regrow_and_cross_cell_spans_match_final_bytes() {
@@ -101,9 +104,11 @@ fn length_growth_and_true_new_file_do_not_use_a_fabricated_base() {
     assert_eq!(fresh_attempt.custody.work.classifications, 0);
     drop(attempt.custody);
     drop(fresh_attempt.custody);
-    case.job(|job_client: &layerfs_store_service::OwnerClient, job_route| {
-        job_client.release_captured_reader(job_route, reader)
-    });
+    case.job(
+        |job_client: &layerfs_store_service::OwnerClient, job_route| {
+            job_client.release_captured_reader(job_route, reader)
+        },
+    );
     release_operation(&case, scope.owner);
 }
 
@@ -136,15 +141,20 @@ fn many_edits_use_numbered_records_after_install_and_reads_survive_close() {
     let (reader, scope) = case.captured(85);
     let prepared =
         CapturedFileEdits::prepare(&case.workspace, &case.client, reader, 8, scope).unwrap();
-    case.job(|job_client: &layerfs_store_service::OwnerClient, job_route| {
-        job_client.install_prepared(
-            job_route,
-            case.workspace.clone(),
-            case.workspace
-                .prepare_base_install(reader.capture(), case.workspace.base().unwrap().identity())
-                .unwrap(),
-        )
-    });
+    case.job(
+        |job_client: &layerfs_store_service::OwnerClient, job_route| {
+            job_client.install_prepared(
+                job_route,
+                case.workspace.clone(),
+                case.workspace
+                    .prepare_base_install(
+                        reader.capture(),
+                        case.workspace.base().unwrap().identity(),
+                    )
+                    .unwrap(),
+            )
+        },
+    );
     let policy = ConstructionPolicy::frozen_default();
     let attempt = Timing::disabled("retained", |timing| {
         Ok::<CapturedFileAttempt, ContentError>(prepared.construct(
@@ -200,7 +210,9 @@ fn many_edits_use_numbered_records_after_install_and_reads_survive_close() {
         after = keys.last().copied();
     }
     assert_eq!(count, 129);
-    case.job(|job_client: &layerfs_store_service::OwnerClient, job_route| job_client.close(job_route));
+    case.job(
+        |job_client: &layerfs_store_service::OwnerClient, job_route| job_client.close(job_route),
+    );
     let reply = case
         .client
         .captured_run_step(layerfs_overlay::CapturedRunCursor::new(reader, 8, 0, 400000).unwrap())
@@ -499,9 +511,7 @@ impl OverlayOperationRecords for InheritedPort<'_> {
         &self,
         scope: IndexedOperationRecordScope,
         changes: Vec<layerfs_overlay::IndexedOperationRecordChange>,
-    ) -> WorkspaceResult<
-        layerfs_vfs::OperationRecordReply<layerfs_vfs::OperationRecordApply>,
-    > {
+    ) -> WorkspaceResult<layerfs_vfs::OperationRecordReply<layerfs_vfs::OperationRecordApply>> {
         self.client.operation_record_apply(scope, changes)
     }
     fn operation_record_keys(
@@ -656,9 +666,11 @@ fn prepare_after_actual_binding_install_rebinds_only_the_retained_original_root(
         .workspace
         .prepare_base_install(reader.capture(), next)
         .unwrap();
-    case.job(|job_client: &layerfs_store_service::OwnerClient, job_route| {
-        job_client.install_prepared(job_route, case.workspace.clone(), input)
-    });
+    case.job(
+        |job_client: &layerfs_store_service::OwnerClient, job_route| {
+            job_client.install_prepared(job_route, case.workspace.clone(), input)
+        },
+    );
     assert_eq!(case.workspace.base().unwrap().identity(), next);
     let attempt = case.construct(reader, scope, 8);
     assert_eq!(

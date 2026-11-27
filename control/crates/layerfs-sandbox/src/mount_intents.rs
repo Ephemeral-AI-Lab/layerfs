@@ -9,12 +9,12 @@
 //! Nothing else ends a mount intent: `store compact` and the other GC
 //! calls settle only what the Store's admission proves unowned.
 use crate::record::SandboxRecord;
-use layerfs_protocol::provision::install::SdkValue;
-use layerfs_protocol::sdk::{hex, unhex};
 use layerfs_history::BranchId;
 use layerfs_home::outcome::shell_word;
+use layerfs_protocol::sdk::SdkValue;
+use layerfs_protocol::sdk::{hex, unhex};
 use layerfs_store::open_args::OpenArgs;
-use layerfs_protocol::StoreKind;
+use layerfs_store::record::StoreKind;
 use std::path::Path;
 
 /// The Branch a mounted Workspace is bound to: its id, as the process that

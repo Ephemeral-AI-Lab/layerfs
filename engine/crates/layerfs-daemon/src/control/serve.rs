@@ -1,11 +1,15 @@
 //! One authenticated request/result exchange, retaining original delivery failures.
 use super::{Failure, Service, Success};
-use layerfs_store_service::store::CommitError;
-use layerfs_protocol::{provision::install::{Answer, Call, ControlError, Reply, Request}, duplex::{ChannelError, Connection}};
 use layerfs_content::filesystem::FilesystemRootId;
 use layerfs_history::BranchSnapshot;
 use layerfs_overlay::Capture;
+use layerfs_protocol::{
+    daemon::{Answer, Call, Reply, Request},
+    duplex::{ChannelError, Connection},
+    provision::install::ControlError,
+};
 use layerfs_storage::Save;
+use layerfs_store_service::store::CommitError;
 use std::fmt;
 /// Original product operation, even when response encoding/delivery fails later.
 #[derive(Debug)]
@@ -96,7 +100,7 @@ pub(crate) fn answer_call(
     connection: &mut Connection,
     call: Call,
     outcome: Result<Success, Failure>,
-    telemetry: Option<layerfs_protocol::provision::install::SdkValue>,
+    telemetry: Option<layerfs_protocol::sdk::SdkValue>,
 ) -> Result<Served, Box<ServeFailure>> {
     let original = Served { call, outcome };
     let result = (|| {

@@ -8,8 +8,8 @@
 use super::record::StoreLink;
 use crate::intent;
 use crate::record::{self, StoreRecord};
-use layerfs_protocol::provision::install::SdkRefusal;
 use layerfs_home::op::{self, Op};
+use layerfs_protocol::sdk::SdkRefusal;
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;

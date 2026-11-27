@@ -4,11 +4,11 @@
 //! one line. With `LAYERFS_TRACE_STEP` set too, a call appends one line per
 //! step, the worker's sent back in its answer; unset, none, and the answer
 //! is the same.
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::trace;
 use layerfs_machine::worker::{
     self, read_frame, read_frame_within, write_frame, Endpoint, Hello, MAX_HELLO, PROTOCOL,
 };
+use layerfs_protocol::sdk::SdkValue;
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -111,9 +111,7 @@ fn served(dir: &Path) -> Endpoint {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let address = listener.local_addr().unwrap();
     let root = dir.join("root");
-    std::thread::spawn(move || {
-        layerfs_api::worker::serve::serve(listener, "k".to_owned(), root)
-    });
+    std::thread::spawn(move || layerfs_api::worker::serve::serve(listener, "k".to_owned(), root));
     Endpoint {
         address,
         secret: "k".to_owned(),

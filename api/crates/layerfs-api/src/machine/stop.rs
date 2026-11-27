@@ -5,11 +5,11 @@ use crate::calls::table::{a, call, opt, Call, PROGRESS};
 use crate::calls::Context;
 use crate::calls::Form;
 #[cfg(feature = "machine")]
-use layerfs_protocol::provision::install::SdkValue;
-#[cfg(feature = "machine")]
 use layerfs_home::names::MachineName;
 #[cfg(feature = "machine")]
 use layerfs_home::outcome::Outcome;
+#[cfg(feature = "machine")]
+use layerfs_protocol::sdk::SdkValue;
 
 /// Its answer: `ok`, `unchanged` when it was stopped already, what a
 /// forced stop stopped beside it, and from the host worker's drain: the
@@ -64,7 +64,13 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let machine = MachineName::parse(args.get_text("machine").unwrap_or(""))?;
     let force = args.get_bool("force");
     let (home, events) = context.parts();
-    layerfs_machine::with_users::stop(home, events, &machine, force)
+    layerfs_machine::with_users::stop(
+        home,
+        events,
+        &machine,
+        force,
+        &layerfs_sandbox::users::MACHINE,
+    )
 }
 
 // without the `machine` feature (the guest worker's build) it is

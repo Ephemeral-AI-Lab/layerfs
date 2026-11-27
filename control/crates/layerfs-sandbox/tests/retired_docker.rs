@@ -4,8 +4,8 @@
 //! and `sandbox.close` forgets it, answering its container's name. No
 //! Docker is used; nothing it names is touched.
 #![cfg(any(target_os = "linux", target_os = "macos"))]
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::home::{paths, read_record, write_record};
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_sandbox::host::{Deploy, Host, Message};
 use layerfs_store::open_args::PgSelection;
 use std::os::unix::fs::PermissionsExt;
@@ -99,7 +99,7 @@ fn a_retired_docker_record_is_refused_with_how_to_recreate_it() {
 fn close_forgets_a_retired_docker_sandbox_and_names_its_container() {
     let root = root("close");
     docker_record(&root, None);
-    let answer = layerfs_sandbox::lifecycle::close(&host(&root), false, &[]).unwrap();
+    let answer = layerfs_sandbox::lifecycle::close(&host(&root), false, &[], &NoDrain).unwrap();
     assert_eq!(answer.get_text("kind"), Some("Forgotten"), "{answer:?}");
     assert_eq!(answer.get_text("container"), Some("lfs-0123abcd-old"));
     assert_eq!(
@@ -108,7 +108,8 @@ fn close_forgets_a_retired_docker_sandbox_and_names_its_container() {
     );
     assert!(!paths::sandbox_dir(&root, "old").exists());
     // closed again: nothing is recorded any more
-    let refusal = layerfs_sandbox::lifecycle::close(&host(&root), false, &[]).unwrap_err();
+    let refusal =
+        layerfs_sandbox::lifecycle::close(&host(&root), false, &[], &NoDrain).unwrap_err();
     assert_eq!(refusal.code, "NoSuchSandbox", "{}", refusal.message);
     assert!(read_record(&paths::sandbox_record(&root, "old"))
         .unwrap()
@@ -165,4 +166,11 @@ fn a_create_of_the_same_name_forgets_a_retired_docker_record() {
     );
     assert!(!paths::sandbox_record(&root, "old").exists());
     std::fs::remove_dir_all(root).unwrap();
+}
+
+/// A close here has no mounted Workspace to drain.
+struct NoDrain;
+
+impl layerfs_sandbox::lifecycle::WorkspaceDrain for NoDrain {
+    fn drain(&self, _: &layerfs_sandbox::host::Host, _: &str) {}
 }

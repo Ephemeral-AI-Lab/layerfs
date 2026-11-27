@@ -26,7 +26,6 @@
 //! transaction controls included.
 #![allow(dead_code)] // each test crate uses a part of it
 
-use layerfs_protocol::provision::install::{SdkCall, SdkValue};
 use layerfs_history::records::StoreStatistics;
 use layerfs_history::{
     BranchId, ForkRequest, ForkSource, HistoryCatalog, HistoryCatalogConfig, HistoryName,
@@ -37,6 +36,7 @@ use layerfs_persistence::{
     SqliteHandles, SqlitePersistenceProfile, StoreSelection,
 };
 use layerfs_project::{init, InitRequest};
+use layerfs_protocol::sdk::{SdkCall, SdkValue};
 use layerfs_storage::{ReservationBlocks, Storage, StoragePolicy};
 use layerfs_store_service::bootstrap::open_store_observed;
 use layerfs_store_service::{Owner, OwnerConfig, StoreService};

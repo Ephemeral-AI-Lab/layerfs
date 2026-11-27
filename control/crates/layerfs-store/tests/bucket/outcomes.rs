@@ -7,7 +7,10 @@
 //! the provider's request limit; a 403 sent before the server stops
 //! reading the body is that refusal, not an uncertain outcome.
 use layerfs_store::backup::s3_api::{part_size, S3Client, S3Config, MAX_PART, MAX_PARTS};
-use layerfs_store::backup::{providers::{s3, r2}, bucket::{Credentials, Driver, Metadata, RemoteError}};
+use layerfs_store::backup::{
+    bucket::{Credentials, Driver, Metadata, RemoteError},
+    providers::{r2, s3},
+};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{Shutdown, TcpListener, TcpStream};
 use std::path::PathBuf;

@@ -19,9 +19,9 @@
 //!
 //! Nothing runs a daemon: a record names this test's own process.
 #![cfg(target_os = "macos")]
-use layerfs_protocol::provision::install::SdkValue;
-use layerfs_os::process::LocalProcess;
 use layerfs_home::home::{self, paths, write_record};
+use layerfs_os::process::LocalProcess;
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_sandbox::family::{remove, RemoveRequest, Removed};
 use layerfs_sandbox::force::local_host;
 use layerfs_sandbox::host::Host;
@@ -118,7 +118,7 @@ fn removed_alone(home: &Path, id: &str, force: bool) -> String {
         name: id.to_owned(),
         force,
     };
-    match remove(home, &mut events, &request) {
+    match remove(home, &mut events, &request, local) {
         Ok(Removed::AlreadyGone { left }) => left.join(" | "),
         Ok(Removed::Stopped { .. }) => panic!("Sandbox {id} was stopped"),
         Err(refusal) => panic!("Sandbox {id}: {refusal:?}"),
@@ -213,7 +213,7 @@ fn a_record_with_a_name_this_home_does_not_give_is_removed_by_its_records() {
         name: "s1".to_owned(),
         force: false,
     };
-    let left = match remove(&home, &mut events, &request).unwrap() {
+    let left = match remove(&home, &mut events, &request, local).unwrap() {
         Removed::AlreadyGone { left } => left,
         Removed::Stopped { .. } => panic!("a record named {old} was stopped"),
     };
@@ -315,4 +315,20 @@ fn a_forwarded_record_is_not_an_unread_local_one() {
         unread(&local).is_some(),
         "a local record missing its fields"
     );
+}
+
+/// The Workspace drain these tests pass: they mount no Workspace.
+struct NoDrain;
+
+impl layerfs_sandbox::lifecycle::WorkspaceDrain for NoDrain {
+    fn drain(&self, _host: &layerfs_sandbox::host::Host, _path: &str) {}
+}
+
+/// The in-process runner `remove` takes (the workspace crate's dispatch in
+/// the product): the Sandbox's own dispatch, with no Workspace to drain.
+fn local(
+    host: layerfs_sandbox::host::Host,
+    call: layerfs_sandbox::host::Call,
+) -> layerfs_home::outcome::Outcome {
+    layerfs_sandbox::dispatch::call(host, call, &NoDrain)
 }

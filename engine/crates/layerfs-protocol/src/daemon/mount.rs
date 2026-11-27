@@ -1,5 +1,10 @@
 //! Additive mount attachment records: Ready receipt, status block and custody.
-use crate::{provision::install::{ControlError, WorkspaceToken}, daemon::history::{boolean, put_token, token}, wire::{Reader, Writer}};
+use crate::{
+    daemon::history::{boolean, put_token, token},
+    daemon::WorkspaceToken,
+    provision::install::ControlError,
+    wire::{Reader, Writer},
+};
 /// Longest mount directory a Ready or status record carries.
 pub const MOUNT_DIRECTORY_LIMIT: usize = 1024;
 /// Mount half of one bound Workspace, separate from control activity.

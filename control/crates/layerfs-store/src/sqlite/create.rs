@@ -16,12 +16,12 @@ use crate::place::{self, Executor};
 use crate::record::{self, StoreRecord};
 use crate::sqlite::family::step;
 use crate::sqlite::transfer::step::{StepFrame, StoreStep};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::home::{self, paths};
 use layerfs_home::op::{self, Op};
 use layerfs_home::outcome::{refused, Outcome};
 use layerfs_home::time;
 use layerfs_machine::record::MachineRecord;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;

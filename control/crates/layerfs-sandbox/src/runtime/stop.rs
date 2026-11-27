@@ -107,9 +107,10 @@ pub fn cancel(stop: &Stop, grace: Duration) -> io::Result<Cancelled> {
             io::ErrorKind::Unsupported,
             "a cgroup stop handle is acted on by the Linux kernel that holds it",
         )),
-        Stop::Group { pgid, leader } => {
-            ended(&crate::backend::process::instance::groups::Led(*pgid, *leader), grace)
-        }
+        Stop::Group { pgid, leader } => ended(
+            &crate::backend::process::instance::groups::Led(*pgid, *leader),
+            grace,
+        ),
     }
 }
 
@@ -126,9 +127,9 @@ pub fn kill(stop: &Stop) -> io::Result<Cancelled> {
             io::ErrorKind::Unsupported,
             "a cgroup stop handle is acted on by the Linux kernel that holds it",
         )),
-        Stop::Group { pgid, leader } => {
-            killed(&crate::backend::process::instance::groups::Led(*pgid, *leader))
-        }
+        Stop::Group { pgid, leader } => killed(&crate::backend::process::instance::groups::Led(
+            *pgid, *leader,
+        )),
     }
 }
 

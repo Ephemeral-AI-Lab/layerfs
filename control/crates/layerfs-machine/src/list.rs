@@ -4,12 +4,12 @@
 use super::live::{self, Seen};
 use super::record::{Holders, MachineRecord};
 use crate::Related;
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::home::{observed, paths};
 use layerfs_home::names::MachineName;
 use layerfs_home::outcome::{failed, with_fix, Outcome};
 use layerfs_home::state::{Reason, State};
 use layerfs_home::time::iso;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;

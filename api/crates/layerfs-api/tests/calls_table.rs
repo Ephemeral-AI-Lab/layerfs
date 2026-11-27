@@ -1,8 +1,8 @@
 //! The call table and its dispatcher (#533 step 2): 83 calls in ten
 //! families (the call surface 2.0), arguments checked before any effect, one test per family that
 //! a valid call reaches its family function and a wrong one is refused.
-use {layerfs_api::{families, keys, size, Call, Kind}, layerfs_home::json};
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_api::{families, json, keys, size, Call, Kind};
+use layerfs_protocol::sdk::SdkValue;
 use std::path::Path;
 
 fn map(fields: &[(&str, SdkValue)]) -> SdkValue {

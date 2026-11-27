@@ -6,9 +6,9 @@
 //! move fix; and the doctor writes nothing in the home. The check reads records only: it dials no worker or daemon.
 #[path = "../support/doctor_own.rs"]
 mod doctor_own;
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
-use layerfs_inspect::{Kind, Options};
 use layerfs_home::home::{paths, private_dir, write_entity, write_record};
+use layerfs_inspect::{Kind, Options};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::collections::BTreeMap;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};

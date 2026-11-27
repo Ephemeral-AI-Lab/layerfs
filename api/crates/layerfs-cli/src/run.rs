@@ -2,7 +2,7 @@
 use crate::parse::{parse_cli, Usage};
 use crate::{help, output, view, worker};
 use layerfs_api::Scope;
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use std::io::{IsTerminal, Write};
 use std::process::ExitCode;
 
@@ -137,7 +137,7 @@ fn one(call: &layerfs_api::Call, words: &[String]) -> ExitCode {
     if cancellable {
         let store = parsed.args.get_text("store").unwrap_or("");
         if let Err(error) = crate::signals::cancel_on_signal(store, switches.detail, text) {
-            let refusal = layerfs_api::refusal::public(layerfs_protocol::provision::install::SdkRefusal {
+            let refusal = layerfs_api::refusal::public(layerfs_protocol::sdk::SdkRefusal {
                 code: "Failed".to_owned(),
                 message: format!("the signal handler could not start: {error}"),
                 detail: SdkValue::Null,

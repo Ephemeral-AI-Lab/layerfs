@@ -11,7 +11,7 @@
 //! the table. The URLs name 127.0.0.1 port 1, where nothing listens, so a
 //! request would fail with another code.
 use layerfs_api::home::{self, paths, write_record};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
@@ -465,7 +465,7 @@ fn attach_and_detach_refuse_what_is_not_theirs() {
     let lima = layerfs_machine::platform::sandbox_allowed(
         layerfs_machine::platform::Platform::Lima,
         layerfs_machine::platform::HostOs::current(),
-        layerfs_protocol::Postgresql,
+        layerfs_protocol::StoreKind::Postgresql,
     );
     let loopback = refusal(&home, "store.attach", &on("pg", "dev"));
     match lima {

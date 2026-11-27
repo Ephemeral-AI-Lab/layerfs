@@ -21,15 +21,15 @@ use super::progress::Phases;
 use super::record::{MachineRecord, START};
 use super::spec::{self as record, machine_of, refusal, save_running, save_unready};
 use super::state::{replace_worker, settle};
+use crate::platform::{self as adapters, Code, HostOs, Platform, Route};
 use crate::worker::{self, Endpoint};
 use crate::Related;
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::home::lock;
 use layerfs_home::op::Op;
 use layerfs_home::outcome::{refused, shell_word, with_fix};
 use layerfs_home::state::{Reason, State};
-use crate::platform::{self as adapters, Code, HostOs, Platform, Route};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 use std::time::{Duration, Instant};
 

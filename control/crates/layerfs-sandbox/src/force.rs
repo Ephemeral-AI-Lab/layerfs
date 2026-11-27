@@ -6,9 +6,9 @@
 //! ([`local_host`], `Recorded::stop_now`).
 use crate::host::{Deploy, Host, Message};
 use crate::mount_intents::{Bound, Branch};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::home::{self, paths};
 use layerfs_home::outcome::{failed, refused, Outcome};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 
 /// The host operation's view, in this process, of Sandbox `sandbox` on a

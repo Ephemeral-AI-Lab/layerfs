@@ -3,9 +3,9 @@
 //! skips invalidation only for an install that changes nothing the kernel
 //! showed; this one sends it before the caller's answer.
 use super::{Failure, Service};
-use layerfs_store_service::store::BoundWorkspace;
-use layerfs_protocol::provision::install::WorkspaceToken;
+use crate::store::BoundWorkspace;
 use layerfs_content::ObjectId;
+use layerfs_protocol::daemon::WorkspaceToken;
 
 impl Service {
     /// One notification per changed inode and per rebound name the Workspace
@@ -26,8 +26,8 @@ impl Service {
         #[cfg(target_os = "linux")]
         {
             use super::{kernel::Kernel, registry::bound};
-            use layerfs_store_service::store::Stale;
-            use layerfs_protocol::provision::install::ControlCode;
+            use crate::store::Stale;
+            use layerfs_protocol::daemon::ControlCode;
             let invalidator = {
                 let entries = self.entries.lock().map_err(|_| Failure::Poisoned)?;
                 match &bound(&entries, token)?.kernel {

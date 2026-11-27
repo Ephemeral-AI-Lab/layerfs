@@ -3,10 +3,12 @@
 //! names, a project's folder and record, the turn calls take on one folder,
 //! and the record file format (moved from `sandbox/files.rs`,
 //! layerfs-project#105).
-use layerfs_protocol::provision::{install::{Reply, SdkRefusal, SdkValue}, manifest::StoreManifest};
 use layerfs_home::helpers;
 use layerfs_home::outcome::{failed, refused};
 use layerfs_persistence::{SealedStore, SqlitePersistenceProfile};
+use layerfs_protocol::daemon::Reply;
+use layerfs_protocol::provision::manifest::StoreManifest;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::{
     fs::{self, File, OpenOptions},
     io::{Read, Write},
@@ -189,7 +191,7 @@ fn no_follow() -> i32 {
 }
 
 pub fn save(path: &Path, value: SdkValue) -> Result<()> {
-    let bytes = layerfs_protocol::provision::install::Answer {
+    let bytes = layerfs_protocol::daemon::Answer {
         id: 1,
         reply: Reply::Sdk(value),
     }
@@ -223,7 +225,7 @@ pub fn load(path: &Path) -> Result<SdkValue> {
     }
     let mut bytes = Vec::new();
     file.take(65536).read_to_end(&mut bytes).map_err(failed)?;
-    match layerfs_protocol::provision::install::Answer::decode(&bytes)
+    match layerfs_protocol::daemon::Answer::decode(&bytes)
         .map_err(failed)?
         .reply
     {

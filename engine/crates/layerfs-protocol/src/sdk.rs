@@ -7,7 +7,10 @@
 //! most [`MAXIMUM_VALUE_DEPTH`] levels, and the whole record within the
 //! control limit. A refusal carries a stable code (for example `NoSuchPath`),
 //! a message for people and a detail value; the code alone decides.
-use crate::{provision::install::ControlError, wire::{Reader, Writer}};
+use crate::{
+    provision::install::ControlError,
+    wire::{Reader, Writer},
+};
 
 /// Deepest nesting of lists and maps.
 pub const MAXIMUM_VALUE_DEPTH: usize = 16;
@@ -584,4 +587,3 @@ pub fn layer_value(record: &LayerRecord, source_branch: Option<&str>) -> SdkValu
         ),
     ])
 }
-

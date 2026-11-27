@@ -2,8 +2,8 @@
 use super::lookup::Custody;
 use super::ReadFailure;
 use crate::ports::mount::{RequestServices, ServiceError, ServiceReply};
-use layerfs_overlay::{KernelMount, OverlayError, CELL_BYTES, READ_WINDOW};
 use crate::{KernelReadOperation, KernelWindow, Refusal};
+use layerfs_overlay::{KernelMount, OverlayError, CELL_BYTES, READ_WINDOW};
 use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

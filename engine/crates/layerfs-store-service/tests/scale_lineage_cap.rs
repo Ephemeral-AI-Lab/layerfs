@@ -13,13 +13,13 @@ mod installed;
 #[allow(dead_code)]
 mod support;
 
-use layerfs_protocol::provision::install::{SdkCall, SdkValue};
 use layerfs_content::ObjectId;
 use layerfs_history::records::{
     AddLayerOutcome, AddLayerRequest, CommitMeta, CommitOutcome, CommitRequest, CommitVia,
     ForkRequest, ForkSource,
 };
 use layerfs_history::{BranchId, CommitId, HistoryName, LayerId, LayerStackId, NodeId};
+use layerfs_protocol::sdk::{SdkCall, SdkValue};
 use layerfs_store_service::operator;
 use std::fmt::Write;
 use std::fs;

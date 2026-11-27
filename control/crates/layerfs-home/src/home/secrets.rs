@@ -7,7 +7,7 @@
 use crate::home::generation;
 use crate::names::name;
 use crate::outcome::{failed, refused};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::{Path, PathBuf};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;

@@ -12,10 +12,14 @@ use layerfs_content::filesystem::{
 use layerfs_content::{
     AuthenticatedObjects, ConstructionPolicy, FinalizedObject, ObjectId, ObjectRole,
 };
-use layerfs_store_service::{bootstrap::open_store, store::{BindRequest, BoundWorkspace, CommitError, CommitPhase, Store}, Owner, OwnerClient, OwnerConfig};
 use layerfs_history::{BranchSnapshot, CommitOutcome, HistoryError, WorkspaceId};
 use layerfs_overlay::ProfileConfig;
 use layerfs_storage::{ReservationBlocks, Save, StorageError};
+use layerfs_store_service::{
+    bootstrap::open_store,
+    store::{BindRequest, BoundWorkspace, CommitError, CommitPhase, Store},
+    Owner, OwnerClient, OwnerConfig,
+};
 use layerfs_telemetry::timer::Timing;
 use layerfs_vfs::Route;
 use layerfs_vfs::{Operation, Outcome, Position, Time};
@@ -137,7 +141,9 @@ fn write(workspace: &BoundWorkspace, value: &[u8]) {
         job(
             operation.overlay(),
             workspace.route(),
-            |job_client: &layerfs_store_service::OwnerClient, _| job_client.reply_attempted(publication),
+            |job_client: &layerfs_store_service::OwnerClient, _| {
+                job_client.reply_attempted(publication)
+            },
         );
     });
 }
@@ -576,10 +582,10 @@ fn observed_store(
         SqliteHandles::open_writable(f.config.clone(), support::BINDING, support::CURSOR).unwrap(),
     );
     let config = f.config.clone();
-    let factory: layerfs_store_service::store::ReaderFactory = Arc::new(move |_| {
+    let factory: layerfs_daemon::store::ReaderFactory = Arc::new(move |_| {
         let read =
             SqliteHandles::open_read_only(config.clone(), support::BINDING, support::CURSOR)?;
-        Ok(layerfs_store_service::store::StoreReader::new(
+        Ok(layerfs_daemon::store::StoreReader::new(
             layerfs_storage::Storage::new(read.storage)?,
             Arc::new(read.history),
         ))
@@ -790,7 +796,7 @@ fn unknown_publication(
     Arc<Store>,
     Owner,
     Arc<BoundWorkspace>,
-    Box<layerfs_store_service::store::CommitFailure>,
+    Box<layerfs_daemon::store::CommitFailure>,
 ) {
     let f = support::Fixture::new(8, label);
     let (store, _handles) = observed_store(&f, boundary);

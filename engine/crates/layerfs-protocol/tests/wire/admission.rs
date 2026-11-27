@@ -1,6 +1,8 @@
 //! The advisory pre-handshake capacity notice (#540): one fixed 24-byte body
 //! round-trips, and a record that is anything else is never a notice.
-use layerfs_protocol::duplex::admission::{classify, encode, AdmissionNotice, AdmissionReason, BODY_LEN, MAGIC};
+use layerfs_protocol::duplex::admission::{
+    classify, encode, AdmissionNotice, AdmissionReason, BODY_LEN, MAGIC,
+};
 
 #[test]
 fn encode_and_classify_round_trip() {

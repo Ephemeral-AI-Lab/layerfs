@@ -4,13 +4,13 @@ use super::{guest, start, status, stop};
 use crate::platform::adapter::{refused, Adapter};
 use crate::platform::docker::socket::{socket_state, SocketState, SOCKET_ANSWER};
 use crate::platform::error::{Code, MachineError};
-use crate::table::profile::{ExecutorKind, HostOs, Platform};
-use crate::setup::probe::first_line;
-use crate::table::reach::Loopback;
 use crate::setup::forward::refuse;
 use crate::setup::guest::Guest;
-use crate::setup::{tool, Status};
+use crate::setup::probe::first_line;
 use crate::setup::spec::{Bundle, Forward, NameLimit, Running, Spec, Tools};
+use crate::setup::{tool, Status};
+use crate::table::profile::{ExecutorKind, HostOs, Platform};
+use crate::table::reach::Loopback;
 
 /// Why a Sandbox daemon's port is not forwarded: the worker container's
 /// port is published when it starts (`docker run -p`), which is the only

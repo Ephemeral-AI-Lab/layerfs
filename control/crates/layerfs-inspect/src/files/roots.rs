@@ -14,12 +14,12 @@
 //! layout: every listing and every read asks it, for the path and for each
 //! folder above it.
 use super::walk::{entry, refusal, CALL};
-use layerfs_sandbox::deploy::Side;
-use layerfs_sandbox::record::{DaemonRecord, SandboxRecord};
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::home::paths;
 use layerfs_home::outcome::{refused, Outcome};
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_sandbox::backend::confined::{Base, Kind, View};
+use layerfs_sandbox::deploy::Side;
+use layerfs_sandbox::record::{DaemonRecord, SandboxRecord};
 use std::ffi::OsStr;
 use std::path::{Component, Path, PathBuf};
 
@@ -32,7 +32,7 @@ const WORKSPACES: &str = "workspaces";
 /// The uid a Sandbox's commands run as when its record names none.
 const COMMAND_UID: u32 = 501;
 /// The most Workspaces a request sends.
-pub(super) const MOST: usize = 1024;
+pub(crate) const MOST: usize = 1024;
 /// The folder beside a worker's root that holds its secret and its pid.
 const STATE: &str = "state";
 
@@ -146,7 +146,7 @@ pub(super) fn command_uid(side: &Side<'_>, name: &str) -> u32 {
 /// folder: `[{ id, path, workspace }]`, `workspace` its handle
 /// (`<sandbox>:<name>`, or `<sandbox>:<path>` with no name), the folder's
 /// name being the Sandbox's.
-pub(super) fn recorded(directory: &Path) -> Outcome {
+pub(crate) fn recorded(directory: &Path) -> Outcome {
     let sandbox = (directory.file_name())
         .and_then(|name| name.to_str())
         .unwrap_or("");
@@ -187,7 +187,7 @@ pub(super) fn recorded_under(root: &Path) -> SdkValue {
 /// `image` (`image`). In a home, which is its owner's own computer:
 /// `store`, `sandbox`, the run root `machine/<host machine>/run` and `log`
 /// only.
-pub(super) fn folders(side: &Side<'_>) -> Vec<(PathBuf, &'static str)> {
+pub(crate) fn folders(side: &Side<'_>) -> Vec<(PathBuf, &'static str)> {
     let (Side::Home(root) | Side::Worker(root)) = side;
     let run = paths::run_root(root);
     let mut folders = vec![
@@ -219,7 +219,7 @@ pub(super) fn folders(side: &Side<'_>) -> Vec<(PathBuf, &'static str)> {
 /// through its descriptor, whatever filesystem it is on; one that is a
 /// link or no folder is left out. The answer is a folder page that is
 /// never continued.
-pub(super) fn machine(side: &Side<'_>) -> Outcome {
+pub(crate) fn machine(side: &Side<'_>) -> Outcome {
     let mut listed = folders(side);
     if let Side::Worker(_) = side {
         listed.push((PathBuf::from("/"), "machine"));

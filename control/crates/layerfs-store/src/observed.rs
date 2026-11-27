@@ -9,9 +9,9 @@
 //! fails the call that made it. Writers run after their Store I/O, under
 //! the Store's lock, and write nothing once the Store is gone, so a late
 //! write never leaves a folder behind.
-use {crate::record::{lock, StoreRecord}, layerfs_protocol::StoreKind};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
+use crate::record::{lock, StoreKind, StoreRecord};
 use layerfs_home::home::{now_ms, observed, paths, with_field};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;

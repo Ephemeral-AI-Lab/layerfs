@@ -6,10 +6,13 @@ use layerfs_content::{
     apply_edits, read_all, AuthenticatedObjects, ConstructionPolicy, ContentError, ContentResult,
     Edit, EditRequest, EditSequence, EditSource, ObjectId,
 };
-use layerfs_store_service::{Owner, OwnerClient, OwnerConfig};
 use layerfs_overlay::{CapturedReader, IndexedOperationRecordScope, OperationOwner, ProfileConfig};
+use layerfs_store_service::{Owner, OwnerClient, OwnerConfig};
 use layerfs_telemetry::timer::Timing;
-use layerfs_vfs::{BaseView, CanonicalClient, CapturedFileAttempt, CapturedFileCustody, CapturedFileEdits, InodeSerials, Operation, Outcome, Position, Time, Workspace, WorkspaceResult};
+use layerfs_vfs::{
+    BaseView, CanonicalClient, CapturedFileAttempt, CapturedFileCustody, CapturedFileEdits,
+    InodeSerials, Operation, Outcome, Position, Time, Workspace, WorkspaceResult,
+};
 use std::{
     cell::Cell,
     collections::BTreeMap,
@@ -126,9 +129,11 @@ impl Case {
         job(&self.client, self.route, command)
     }
     pub fn mutate(&self, operation: Operation) -> Option<layerfs_vfs::ViewStat> {
-        let acquired = self.job(|job_client: &layerfs_store_service::OwnerClient, job_route| {
-            job_client.acquire_base_source(job_route, self.request())
-        });
+        let acquired = self.job(
+            |job_client: &layerfs_store_service::OwnerClient, job_route| {
+                job_client.acquire_base_source(job_route, self.request())
+            },
+        );
         let source = acquired;
         let view = self.workspace.view_for_source(source).unwrap();
         let outcome = self
@@ -144,9 +149,11 @@ impl Case {
             }
             Outcome::Unchanged { stat } => stat,
         };
-        self.job(|job_client: &layerfs_store_service::OwnerClient, job_route| {
-            job_client.release_base_source(job_route, source)
-        });
+        self.job(
+            |job_client: &layerfs_store_service::OwnerClient, job_route| {
+                job_client.release_base_source(job_route, source)
+            },
+        );
         result
     }
     pub fn write(&self, serial: u64, at: u64, bytes: &[u8]) {
@@ -165,17 +172,23 @@ impl Case {
         });
     }
     pub fn captured(&self, file_scope: u64) -> (CapturedReader, IndexedOperationRecordScope) {
-        let captured = self.job(|job_client: &layerfs_store_service::OwnerClient, job_route| {
-            job_client.capture(job_route)
-        });
+        let captured = self.job(
+            |job_client: &layerfs_store_service::OwnerClient, job_route| {
+                job_client.capture(job_route)
+            },
+        );
         let capture = captured;
-        let acquired = self.job(|job_client: &layerfs_store_service::OwnerClient, job_route| {
-            job_client.acquire_captured_reader(job_route, capture, self.request())
-        });
+        let acquired = self.job(
+            |job_client: &layerfs_store_service::OwnerClient, job_route| {
+                job_client.acquire_captured_reader(job_route, capture, self.request())
+            },
+        );
         let reader = acquired;
-        let acquired = self.job(|job_client: &layerfs_store_service::OwnerClient, job_route| {
-            job_client.acquire_operation(job_route, self.request())
-        });
+        let acquired = self.job(
+            |job_client: &layerfs_store_service::OwnerClient, job_route| {
+                job_client.acquire_operation(job_route, self.request())
+            },
+        );
         let owner = acquired;
         (reader, IndexedOperationRecordScope { owner, file_scope })
     }
@@ -205,9 +218,11 @@ impl Case {
         let operation = custody.records.scope.owner;
         drop(custody); // First drop original credited outcomes, not their engine owners.
         if !reader_released {
-            self.job(|job_client: &layerfs_store_service::OwnerClient, job_route| {
-                job_client.release_captured_reader(job_route, reader)
-            });
+            self.job(
+                |job_client: &layerfs_store_service::OwnerClient, job_route| {
+                    job_client.release_captured_reader(job_route, reader)
+                },
+            );
         }
         release_operation(self, operation);
     }
@@ -266,9 +281,11 @@ pub fn job<T>(
     command(client, route).unwrap_or_else(|error| panic!("{error:?}"))
 }
 pub fn release_operation(case: &Case, owner: OperationOwner) {
-    case.job(|job_client: &layerfs_store_service::OwnerClient, job_route| {
-        job_client.release_operation(job_route, owner)
-    });
+    case.job(
+        |job_client: &layerfs_store_service::OwnerClient, job_route| {
+            job_client.release_operation(job_route, owner)
+        },
+    );
 }
 pub struct Model {
     pub root: ObjectId,

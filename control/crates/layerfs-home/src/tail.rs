@@ -11,7 +11,7 @@
 //! Nothing here locks, writes or waits: a reader opens the file, reads
 //! one window and closes it.
 use crate::outcome::{failed, refused, Outcome};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::fs::{File, OpenOptions};
 use std::io::ErrorKind;
 use std::os::unix::fs::{FileExt, MetadataExt, OpenOptionsExt};
@@ -37,7 +37,7 @@ pub struct Pair {
 
 impl Pair {
     /// `current` with the file every log rotates to
-    /// (`layerfs_bridge::log_file::rotated`).
+    /// (`layerfs_home::log::rotate::rotated`).
     pub fn of(current: PathBuf) -> Self {
         let rotated = crate::log::rotate::rotated(&current);
         Self { current, rotated }

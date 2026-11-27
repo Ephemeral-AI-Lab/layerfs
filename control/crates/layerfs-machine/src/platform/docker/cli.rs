@@ -2,8 +2,8 @@
 //! `platform/docker/index.js` `socketRun` makes it.
 use crate::platform::error::MachineError;
 use crate::setup::probe::first_line;
-use crate::setup::tool;
 use crate::setup::spec::Spec;
+use crate::setup::tool;
 use std::process::Command;
 
 /// `docker -H unix://<socket> args...`.

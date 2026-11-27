@@ -1,6 +1,9 @@
 //! Owning duplex TCP/Noise proofs, through the public product API.
 #![cfg(feature = "duplex")]
-use layerfs_protocol::duplex::{accept, accept_observed, initiate, initiate_observed, public_key, ChannelError, Connection, MAX_PLAINTEXT_BYTES, NOISE};
+use layerfs_protocol::duplex::{
+    accept, accept_observed, initiate, initiate_observed, public_key, ChannelError, Connection,
+    MAX_PLAINTEXT_BYTES, NOISE,
+};
 use std::{
     io::Write,
     net::{TcpListener, TcpStream},

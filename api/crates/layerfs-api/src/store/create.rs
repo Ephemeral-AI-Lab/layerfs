@@ -3,9 +3,9 @@
 use crate::calls::table::Kind::Name;
 use crate::calls::table::{a, call, opt, Call};
 use crate::calls::{Context, Form};
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::names::{MachineName, StoreName};
 use layerfs_home::outcome::Outcome;
+use layerfs_protocol::sdk::SdkValue;
 
 /// Its answer: nothing to say in the short form.
 const FORM: Form = Form::of(

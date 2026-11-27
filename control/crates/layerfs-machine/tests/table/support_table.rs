@@ -2,7 +2,10 @@
 //! refusal the check gives is the row's reason. `LAYERFS_BLESS_SUPPORT=1`
 //! writes the file from the table instead of comparing.
 #![cfg(unix)]
-use {layerfs_machine::{platform::{self, sandbox_allowed, support_json, Backend, CallSite, HostOs, Platform}, table::support}, layerfs_protocol::{self, self}};
+use layerfs_machine::platform::{
+    platforms, sandbox_allowed, support, support_json, Backend, CallSite, HostOs, KernelRoute,
+    Platform, StoreKind,
+};
 use std::path::PathBuf;
 
 fn committed() -> PathBuf {
@@ -27,10 +30,10 @@ fn support_json_is_the_rendered_table() {
 fn every_refusal_is_the_rows_reason() {
     for host in HostOs::NAMED.into_iter().chain([HostOs::Other]) {
         for row in platforms(host) {
-            let postgresql = sandbox_allowed(row.platform, host, layerfs_protocol::Postgresql);
+            let postgresql = sandbox_allowed(row.platform, host, StoreKind::Postgresql);
             assert_eq!(row.postgresql.sandbox, postgresql.is_ok(), "{row:?}");
             assert_eq!(row.postgresql.reason, postgresql.err(), "{row:?}");
-            if let Err(reason) = sandbox_allowed(row.platform, host, layerfs_protocol::Sqlite) {
+            if let Err(reason) = sandbox_allowed(row.platform, host, StoreKind::Sqlite) {
                 assert_eq!(Some(reason), row.postgresql.reason, "{row:?}");
                 assert!(!row.supports().sqlite);
             }
@@ -51,7 +54,7 @@ fn a_worker_log_is_supported_where_this_build_starts_the_worker() {
         assert!(!log(Platform::Host, host), "native on {host:?}");
         for row in platforms(host) {
             let worker = row.sqlite == Some(CallSite::Worker);
-            let allowed = sandbox_allowed(row.platform, host, layerfs_protocol::Sqlite).is_ok();
+            let allowed = sandbox_allowed(row.platform, host, StoreKind::Sqlite).is_ok();
             assert_eq!(row.supports().log, worker && allowed, "{row:?}");
         }
     }
@@ -74,7 +77,7 @@ fn a_worker_log_is_supported_where_this_build_starts_the_worker() {
 /// receipts on lima and apple-container, on every host each is on.
 #[test]
 fn postgresql_sandboxes_run_on_every_platform_with_a_backend() {
-    let allowed = |p, h| sandbox_allowed(p, h, layerfs_protocol::Postgresql);
+    let allowed = |p, h| sandbox_allowed(p, h, StoreKind::Postgresql);
     for host in [HostOs::Macos, HostOs::Linux] {
         assert_eq!(allowed(Platform::Host, host), Ok(()));
         assert_eq!(allowed(Platform::Docker, host), Ok(()));
@@ -95,7 +98,7 @@ fn postgresql_sandboxes_run_on_every_platform_with_a_backend() {
         Err("lima runs on macOS hosts only")
     );
     for platform in Platform::ALL {
-        let sqlite = sandbox_allowed(platform, HostOs::Macos, layerfs_protocol::Sqlite);
+        let sqlite = sandbox_allowed(platform, HostOs::Macos, StoreKind::Sqlite);
         assert_eq!(sqlite, Ok(()), "{platform:?}");
     }
 }
@@ -104,13 +107,13 @@ fn postgresql_sandboxes_run_on_every_platform_with_a_backend() {
 fn rows_carry_the_profile_on_hosts_it_is_on() {
     let lima = support(Platform::Lima, HostOs::Macos);
     assert_eq!(lima.backend, Some(Backend::Namespaces));
-    assert_eq!(lima.kernel, Some(layerfs_protocol::Fuse));
+    assert_eq!(lima.kernel, Some(KernelRoute::Fuse));
     assert_eq!(lima.sqlite, Some(CallSite::Worker));
     assert_eq!(lima.options, Platform::Lima.profile().options);
     assert!(lima.description.starts_with("a Lima VM (vz); "));
     let native = support(Platform::Host, HostOs::Macos);
     assert_eq!(native.backend.map(Backend::stored_name), Some("process"));
-    assert_eq!(native.kernel, Some(layerfs_protocol::Nfs));
+    assert_eq!(native.kernel, Some(KernelRoute::Nfs));
     assert_eq!(native.sqlite, Some(CallSite::InProcess));
     let windows = support(Platform::Host, HostOs::Windows);
     assert_eq!(

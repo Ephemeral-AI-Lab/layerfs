@@ -3,12 +3,12 @@
 use crate::calls::table::Kind::Name;
 use crate::calls::table::{a, call, Call};
 use crate::calls::{Context, Form, Section};
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::names::MachineName;
 use layerfs_home::outcome::Outcome;
 use layerfs_home::time::iso;
-use layerfs_sandbox::inspect::process::shown_usage;
 use layerfs_inspect::{machine_space, machine_stats};
+use layerfs_protocol::sdk::SdkValue;
+use layerfs_sandbox::inspect::process::shown_usage;
 
 /// Its answer: the machine's processors, memory and data disk.
 const FORM: Form = Form::of(

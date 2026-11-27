@@ -7,10 +7,10 @@
 //! `unknown` (with its `reason` or `blocked_by`). A check that does not
 //! apply has no row.
 #![allow(dead_code)]
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
-use layerfs_inspect::{doctor::kinds, run_with, Kind, Located, Options, Registry, Thing};
 use layerfs_home::events::Events;
 use layerfs_home::state::State;
+use layerfs_inspect::{kinds, run_with, Kind, Located, Options, Registry, Thing};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 use std::time::Duration;
 

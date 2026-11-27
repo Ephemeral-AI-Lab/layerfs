@@ -9,8 +9,8 @@ use super::cli::docker;
 use super::cli::published_port;
 use super::status::{guest, inspect, not_ours, run, WORKER_ROLE};
 use crate::platform::error::{Code, MachineError};
-use crate::setup::{tool, worker};
 use crate::setup::spec::{Bundle, Running, Spec, DATA, STATE, WORKER_LOG, WORKER_PORT};
+use crate::setup::{tool, worker};
 use std::path::Path;
 use std::time::Duration;
 

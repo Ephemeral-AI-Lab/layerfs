@@ -28,7 +28,7 @@ mod common;
 
 use common::{layerfs, run, run_with_stdin, tempdir, text, LAYERFS};
 use layerfs_home::json;
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use std::io::Read;
 use std::os::unix::net::UnixListener;
 use std::os::unix::process::ExitStatusExt;

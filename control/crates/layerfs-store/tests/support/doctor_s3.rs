@@ -1,8 +1,8 @@
 //! Fault peer for diagnostic S3 requests; no real service or bucket is changed.
 #![allow(dead_code)]
+use layerfs_store::backup::bucket::Credentials;
 use layerfs_store::backup::providers::s3;
 use layerfs_store::backup::s3_api::{S3Client, S3Config, MIN_PART};
-use layerfs_store::backup::bucket::Credentials;
 use std::collections::BTreeMap;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};

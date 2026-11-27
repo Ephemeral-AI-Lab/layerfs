@@ -9,8 +9,8 @@
 use crate::identity as stores;
 use crate::identity::{Identity, Kind};
 use crate::open_args::{OpenArgs, PgSelection};
-use layerfs_protocol::provision::install::SdkRefusal;
 use layerfs_home::outcome::{refused, Outcome};
+use layerfs_protocol::sdk::SdkRefusal;
 use layerfs_store_service::{OpenRefusal, StoreService};
 use std::path::Path;
 
@@ -228,8 +228,8 @@ pub fn sandbox_store(open: &OpenArgs) -> Result<Option<layerfs_protocol::DaemonS
 /// error: { code: Unavailable | Denied, message } }`. A failed query after
 /// connecting is refused `Failed`.
 pub fn status(url: &str, schemas: &[String]) -> Outcome {
-    use layerfs_protocol::provision::install::SdkValue;
     use layerfs_persistence::PostgresStatusError as E;
+    use layerfs_protocol::sdk::SdkValue;
     let unreached = |code: &str, message: String| {
         SdkValue::map([
             ("reachable", SdkValue::Bool(false)),

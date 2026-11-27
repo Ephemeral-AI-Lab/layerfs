@@ -18,13 +18,14 @@
 //! written back is the same JSON.
 use super::daemon::DaemonRecord;
 use crate::host::Started;
-use layerfs_protocol::provision::install::{MountPlace, SdkRefusal, SdkValue};
 use layerfs_home::home::entity_lock::{self, EntityLock};
 use layerfs_home::home::fields::{self, Fields};
 use layerfs_home::home::{self, paths, read_record, write_entity};
 use layerfs_home::op::{self, Op};
 use layerfs_home::outcome::{failed, with_fix, with_next};
 use layerfs_machine::record::MachineRecord;
+use layerfs_protocol::daemon::MountPlace;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::{Path, PathBuf};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;

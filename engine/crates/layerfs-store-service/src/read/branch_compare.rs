@@ -10,11 +10,11 @@ use crate::{
     history::{lookup as args, saved},
     store::{Store, StorePorts},
 };
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_content::{
     compare::{ChangeKind, EntryFacts, PathChange},
     object::inode_leaf::InodeKind,
 };
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::sync::Arc;
 type Result<T> = std::result::Result<T, SdkRefusal>;
 

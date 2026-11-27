@@ -5,8 +5,8 @@
 //! `--x-from <file>`. A secret option (`password`) is read from stdin when
 //! its own flag is given (`--password-stdin`) and taken no other way.
 //! Anything wrong here is exit 2, before any call.
-use {layerfs_home::json, layerfs_api::{Arg, Call, Kind}};
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_api::{json, Arg, Call, Kind};
+use layerfs_protocol::sdk::SdkValue;
 use std::io::Read;
 
 /// A command line that is wrong; nothing is called.
@@ -36,7 +36,7 @@ pub struct Parsed {
     pub switches: Switches,
     /// A write's input left unread for the call's route to read
     /// (`file write`'s content, an unscoped `file apply`'s changes).
-    pub input: Option<layerfs_store::host_write::Input>,
+    pub input: Option<layerfs_api::CliInput>,
 }
 
 fn usage(message: impl Into<String>) -> Usage {
@@ -389,15 +389,15 @@ fn parse_with(
             };
             let (kind, placeholder) = match arg.kind {
                 Kind::Json => (
-                    layerfs_store::host_write::InputKind::Changes,
+                    layerfs_api::CliInputKind::Changes,
                     SdkValue::List(Vec::new()),
                 ),
                 _ => (
-                    layerfs_store::host_write::InputKind::Content,
+                    layerfs_api::CliInputKind::Content,
                     SdkValue::Bytes(Vec::new()),
                 ),
             };
-            input = Some(layerfs_store::host_write::Input { kind, source, file });
+            input = Some(layerfs_api::CliInput { kind, source, file });
             fields.push((arg.name.to_owned(), placeholder));
             continue;
         }

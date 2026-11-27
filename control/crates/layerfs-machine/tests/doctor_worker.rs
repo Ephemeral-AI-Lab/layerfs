@@ -1,8 +1,8 @@
 //! Diagnostic worker probes enforce one absolute socket budget, including trickling frames.
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_machine::worker::{
     diagnostic_connect, frame_bytes, read_frame_within, write_frame, Endpoint, MAX_HELLO, PROTOCOL,
 };
+use layerfs_protocol::sdk::SdkValue;
 use std::io::Write;
 use std::net::{TcpListener, TcpStream};
 use std::time::{Duration, Instant};

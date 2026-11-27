@@ -4,7 +4,7 @@
 mod standin;
 #[path = "../support/engine.rs"]
 mod support;
-use layerfs_machine::{platform::{native_missing, HostOs, Platform}, setup::probe};
+use layerfs_machine::platform::{native_missing, probe, HostOs, Platform};
 use standin::Scratch;
 
 #[test]

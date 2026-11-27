@@ -1,9 +1,9 @@
 //! #506 E3/E9: one listing finds every Store copy under a remote, with its
 //! size, sha256 and heads, pieced ones at their whole size, and skips other
 //! files.
+use layerfs_store::backup::bucket::{pieces, Limits, Metadata};
 use layerfs_store::backup::copy::{list_stores, HEADS};
 use layerfs_store::backup::providers::local_folder::LocalFolder;
-use layerfs_store::backup::bucket::{pieces, Limits, Metadata};
 use std::fs;
 use std::path::PathBuf;
 

@@ -3,13 +3,13 @@
 use super::{start, status};
 use crate::platform::adapter::{refused, Adapter};
 use crate::platform::error::MachineError;
-use crate::table::profile::HostOs;
-use crate::setup::probe::native_missing;
-use crate::table::reach::Loopback;
 use crate::setup::forward::shared;
 use crate::setup::guest::Guest;
-use crate::setup::Status;
+use crate::setup::probe::native_missing;
 use crate::setup::spec::{Bundle, Forward, NameLimit, Running, Spec, Tools};
+use crate::setup::Status;
+use crate::table::profile::HostOs;
+use crate::table::reach::Loopback;
 
 pub(crate) struct Host;
 pub(crate) static ADAPTER: Host = Host;

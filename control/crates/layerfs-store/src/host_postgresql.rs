@@ -32,9 +32,9 @@ use crate::lease;
 use crate::open_args::OpenArgs;
 use crate::record::{self, StoreRecord, StoreRef};
 use crate::resolve::{self, Target};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::names::{ProjectName, StoreName};
 use layerfs_home::outcome::{refused, Outcome};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 
 /// The host worker's PostgreSQL read operation.
@@ -255,7 +255,7 @@ fn admitted(
     home: &Path,
     store: &str,
     revision: &str,
-) -> Result<StoreRecord, layerfs_protocol::provision::install::SdkRefusal> {
+) -> Result<StoreRecord, layerfs_protocol::sdk::SdkRefusal> {
     let _lock = record::lock(home, store)?;
     checked(home, store, revision)
 }
@@ -264,7 +264,7 @@ fn checked(
     home: &Path,
     store: &str,
     revision: &str,
-) -> Result<StoreRecord, layerfs_protocol::provision::install::SdkRefusal> {
+) -> Result<StoreRecord, layerfs_protocol::sdk::SdkRefusal> {
     let record = StoreRecord::of(home, store)?;
     record.unblocked()?;
     let StoreRef::Postgres { .. } = record.store_ref()? else {
@@ -291,7 +291,7 @@ fn admit(
     home: &Path,
     store: &str,
     revision: &str,
-) -> Result<lease::Lease, layerfs_protocol::provision::install::SdkRefusal> {
+) -> Result<lease::Lease, layerfs_protocol::sdk::SdkRefusal> {
     let _lock = record::lock(home, store)?;
     checked(home, store, revision)?;
     lease::claim_unblocked_locked(home, store)

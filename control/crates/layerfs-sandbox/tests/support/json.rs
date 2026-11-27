@@ -1,7 +1,8 @@
 //! `control/SUPPORT.json` read back as rows, for the conformance kits: this
-//! crate's `conformance` test and `layerfs-platform`'s, which includes this
-//! file. It reads the committed file with the crate's own JSON reader, so a
-//! kit checks what callers and docs read, not only `support.rs`.
+//! crate's `conformance` and `platform_conformance` runtime tests (the
+//! latter from `layerfs-platform` before #828). It reads the committed
+//! file with the crate's own JSON reader, so a kit checks what callers and
+//! docs read, not only `support.rs`.
 #![allow(dead_code)]
 use layerfs_home::json::Json;
 use layerfs_sandbox::RuntimeError;
@@ -127,7 +128,7 @@ fn value<R: Read>(json: &mut Json<R>, depth: u8) -> Result<Value, RuntimeError> 
     match json.peek()? {
         Some(b'{') => {
             let mut fields = Vec::new();
-            json.object(|json, key| {
+            json.object::<RuntimeError>(|json, key| {
                 assert!(!key.overflow, "a SUPPORT.json key over 128 bytes");
                 let key = key.text().to_owned();
                 fields.push((key, value(json, depth + 1)?));
@@ -137,7 +138,7 @@ fn value<R: Read>(json: &mut Json<R>, depth: u8) -> Result<Value, RuntimeError> 
         }
         Some(b'[') => {
             let mut items = Vec::new();
-            json.array(|json| {
+            json.array::<RuntimeError>(|json| {
                 items.push(value(json, depth + 1)?);
                 Ok(())
             })?;
@@ -148,8 +149,8 @@ fn value<R: Read>(json: &mut Json<R>, depth: u8) -> Result<Value, RuntimeError> 
             json.text_into(&mut out, 4096)?;
             Ok(Value::Text(String::from_utf8(out).expect("UTF-8")))
         }
-        Some(b't' | b'f') => json.boolean().map(Value::Bool),
-        Some(b'n') => json.null().map(|_| Value::Null),
-        _ => json.integer().map(Value::Int),
+        Some(b't' | b'f') => Ok(json.boolean().map(Value::Bool)?),
+        Some(b'n') => Ok(json.null().map(|_| Value::Null)?),
+        _ => Ok(json.integer().map(Value::Int)?),
     }
 }

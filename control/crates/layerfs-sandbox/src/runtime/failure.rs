@@ -11,10 +11,18 @@ pub enum RuntimeError {
     /// a pool clash, forwarding off, a dropping forward policy, a resolver
     /// no Sandbox reaches); refused before effects, naming the fix.
     Unavailable(String),
+    /// A JSON document the runtime read (an image archive's manifest or
+    /// config) is malformed; shown as a protocol failure.
+    Json(String),
 }
 impl From<io::Error> for RuntimeError {
     fn from(e: io::Error) -> Self {
         Self::Io(e)
+    }
+}
+impl From<layerfs_home::json::JsonError> for RuntimeError {
+    fn from(e: layerfs_home::json::JsonError) -> Self {
+        Self::Json(e.0)
     }
 }
 impl fmt::Display for RuntimeError {
@@ -22,6 +30,7 @@ impl fmt::Display for RuntimeError {
         match self {
             Self::Io(e) => write!(f, "runtime I/O: {e}"),
             Self::Protocol(e) => write!(f, "runtime protocol: {e}"),
+            Self::Json(e) => write!(f, "runtime protocol: {e}"),
             Self::Unsupported(c) => write!(f, "unsupported runtime capability: {c}"),
             Self::Unavailable(why) => f.write_str(why),
         }

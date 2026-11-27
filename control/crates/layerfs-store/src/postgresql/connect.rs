@@ -11,18 +11,18 @@ use super::address::{self, with_login};
 pub use super::address::{holds_login, refuse_login, shown, target, HIDDEN};
 use super::check;
 use super::login;
-use layerfs_persistence::diagnostic::ConnectionStep;
 use crate::open_args::{OpenArgs, PgSelection};
 use crate::project::listing;
 use crate::project::record::ProjectRecord;
 use crate::record::url;
-use {layerfs_protocol::StoreKind, crate::record::StoreRecord};
+use crate::record::{StoreKind, StoreRecord};
 use crate::Related;
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
-use layerfs_protocol::sdk::hex;
 use layerfs_home::home::{self, paths, with_field};
 use layerfs_home::names::StoreName;
 use layerfs_home::outcome::{failed, refused, shell_word, with_fix, Outcome};
+use layerfs_persistence::diagnostic::ConnectionStep;
+use layerfs_protocol::sdk::hex;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -591,4 +591,38 @@ pub fn compact_status(record: &StoreRecord) -> SdkValue {
         Ok(Some(op)) => crate::report::compact_status(&op.status()),
         _ => SdkValue::Null,
     }
+}
+
+/// The Sandbox route's `reached` dialling `url`, the Store's address with a login in it
+/// (`store.connect` checks a new address or login from each attached
+/// machine before it saves them), with the refusal of a URL the machine
+/// cannot dial (`layerfs_machine::platform::reach`: a loopback or socket
+/// of this host it does not share, or a URL it cannot read to check) kept
+/// apart, as `Ok(Err(refusal))`, from every other failure (an
+/// unreadable machine record), which is `Err`.
+pub fn dialled(
+    home: &Path,
+    machine: &str,
+    record: &StoreRecord,
+    url: String,
+) -> Result<Result<(PgSelection, Option<String>)>> {
+    // a build without machines (the guest's) runs its own Sandboxes on the
+    // machine it is, which shares its loopback
+    #[cfg(feature = "machine")]
+    let (url, hint) = {
+        let spec =
+            layerfs_machine::machine_spec(home, &layerfs_machine::machine_of(home, machine)?)?;
+        let store = record.name();
+        let hint = layerfs_machine::platform::loopback_hint(&spec, store, &url);
+        match layerfs_machine::platform::reach(&spec, store, &url) {
+            Ok(url) => (url, hint),
+            Err(error) => return Ok(Err(layerfs_machine::machine_refusal(error))),
+        }
+    };
+    #[cfg(not(feature = "machine"))]
+    let hint = {
+        let _ = (home, machine);
+        None
+    };
+    Ok(Ok((selection_at(record, url), hint)))
 }

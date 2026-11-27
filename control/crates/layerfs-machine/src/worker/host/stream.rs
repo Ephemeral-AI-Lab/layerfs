@@ -21,13 +21,13 @@
 use super::super::frame::ATTACHED;
 use super::super::host_frame::{self, HOST_MAX_REPLY, HOST_MAX_REQUEST};
 use super::{decode_answer, unavailable, unknown, HostPaths};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::{
     home::host_socket,
     json,
     outcome::{refused, Outcome},
     trace,
 };
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::io::{self, Write};
 use std::os::unix::net::UnixStream;
 use std::time::{Duration, Instant};

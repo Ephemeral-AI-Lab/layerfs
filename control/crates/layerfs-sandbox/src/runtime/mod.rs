@@ -1,8 +1,5 @@
 //! The backend-neutral surface: the runtime dispatch over the backends, one
 //! command's cancel, a traced command's step times and the shared types.
-#[cfg(any(target_os = "linux", target_os = "macos"))]
-pub mod stop;
-pub mod trace;
 mod bind;
 mod capabilities;
 mod execution;
@@ -11,6 +8,9 @@ mod identity;
 mod image;
 mod options;
 mod request;
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+pub mod stop;
+pub mod trace;
 mod transfer;
 
 // Exact ordinary runtime identities, independent process/output knowledge and

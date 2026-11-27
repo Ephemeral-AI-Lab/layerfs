@@ -2,9 +2,9 @@
 //! a whole text part, with line numbers counted across the gaps and line
 //! bounds found only around a match. A call scans each content once.
 use super::window::{self, after_last_newline, newlines, Line, Open};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_content::merge::Rules;
 use layerfs_content::{compare::EntryFacts, file::FileView, AuthenticatedObjects, ObjectId};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::collections::HashMap;
 
 /// Which paths a search reads and how it matches: each glob in the rules

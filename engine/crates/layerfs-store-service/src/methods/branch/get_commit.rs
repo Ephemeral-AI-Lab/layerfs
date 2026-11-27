@@ -1,7 +1,7 @@
 //! `branch.get_commit`: one Commit of the project, by its id or a prefix.
 use crate::methods::args::{project, text, Answer};
 use crate::{history::listing, StoreService};
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 
 /// `get_commit({ commit, branch? })`: the Commit, resolved in one read of
 /// the identity index; with `branch`, only one that Branch's history holds.

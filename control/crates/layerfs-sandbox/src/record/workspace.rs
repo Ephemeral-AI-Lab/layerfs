@@ -3,9 +3,9 @@
 //! namespace, created }`, written once after its mount succeeded and
 //! removed by its unmount. As the Sandbox record does, it keeps unknown,
 //! null and mistyped fields as read, in file order.
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::home::fields::{self, Fields};
 use layerfs_home::home::{read_record, write_entity};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;

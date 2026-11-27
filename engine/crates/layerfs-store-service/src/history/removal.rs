@@ -12,8 +12,8 @@
 use super::lookup::{self as args, refuse, Answer};
 use super::MAIN;
 use crate::store::Store;
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_history::{GcScopeKind, LayerStackRecord};
+use layerfs_protocol::sdk::SdkValue;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 

@@ -1,8 +1,8 @@
 //! A Sandbox image is one word on the command line: a digest, a Docker Id or
 //! a Docker reference, passed to the call as text.
 use layerfs_api::find;
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_cli::parse::parse;
+use layerfs_protocol::sdk::SdkValue;
 
 fn parsed(call: &str, words: &[&str]) -> layerfs_cli::parse::Parsed {
     let spec = find(call).expect(call);

@@ -5,12 +5,12 @@ pub mod flush;
 pub mod link;
 mod lookup;
 mod mutation;
+pub mod phase;
 mod read;
 pub mod remove;
 pub mod rename;
 pub mod unsupported;
 pub mod write;
-pub mod phase;
 
 pub use directory::{DirectoryBatch, DirectoryFailure, DirectoryStep, DirectoryStream};
 pub use lookup::{KernelRead, ReadFailure};

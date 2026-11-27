@@ -8,10 +8,10 @@
 #[path = "../support/worker_store.rs"]
 mod worker_store;
 
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::home::paths;
 use layerfs_home::names::StoreName;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_store::record::StoreRecord;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -55,7 +55,7 @@ fn upgrade_with(home: &Path, cancel: &AtomicBool) -> (Result<SdkValue, SdkRefusa
         &mut Events::new(&mut sink),
         "shop",
         cancel,
-        layerfs_store::admin::with_users::RELATED,
+        layerfs_sandbox::users::STORE.related,
     );
     (outcome, seen)
 }
@@ -72,7 +72,7 @@ fn get_format(home: &Path) -> SdkValue {
         &mut Events::new(&mut sink),
         "shop",
         with,
-        layerfs_store::admin::with_users::reads(),
+        layerfs_sandbox::users::reads(),
     )
     .unwrap();
     got.get("format").cloned().unwrap()
@@ -167,7 +167,7 @@ fn needs_w1_the_format_section_reads_every_status() {
             &mut Events::new(&mut sink),
             "shop",
             with,
-            layerfs_store::admin::with_users::reads(),
+            layerfs_sandbox::users::reads(),
         );
         assert!(stats.is_err(), "{raw}: {stats:?}");
         layerfs_store::close_idle(std::time::Duration::ZERO);
@@ -215,8 +215,8 @@ fn needs_w1_a_store_on_a_machine_is_upgraded_by_its_worker() {
 /// in the engine's words, and nothing is installed.
 #[test]
 fn needs_w1_a_schema_version_1_backup_is_refused_by_name() {
-    use layerfs_store::backup::providers::local_folder::LocalFolder;
     use layerfs_store::backup::bucket::{pieces, Limits, Metadata};
+    use layerfs_store::backup::providers::local_folder::LocalFolder;
     let Some(home) = home_with_shop("restore-v1") else {
         return;
     };
@@ -234,14 +234,18 @@ fn needs_w1_a_schema_version_1_backup_is_refused_by_name() {
     };
     let driver = LocalFolder::new(&remote, limits).unwrap();
     let binding = layerfs_store::backup::bucket::pieces::hex(&identity.binding);
-    let metadata = Metadata::from([(layerfs_store::backup::copy::object::BINDING.to_owned(), binding)]);
+    let metadata = Metadata::from([(
+        layerfs_store::backup::copy::object::BINDING.to_owned(),
+        binding,
+    )]);
     pieces::upload(&driver, "old/store.sqlite", &copy, &metadata).unwrap();
     let restored = home.join("restored");
     std::fs::create_dir_all(&restored).unwrap();
     std::fs::set_permissions(&restored, std::fs::Permissions::from_mode(0o700)).unwrap();
     let destination = restored.join("store.sqlite");
-    let failure = layerfs_store::backup::copy::load(&driver, "old", &destination, identity.cursor_key)
-        .unwrap_err();
+    let failure =
+        layerfs_store::backup::copy::load(&driver, "old", &destination, identity.cursor_key)
+            .unwrap_err();
     assert!(
         failure.cause.contains("schema version 1"),
         "{}",
@@ -344,8 +348,8 @@ fn needs_w1_the_captured_schema_2_store_reads_outdated() {
 /// installed Store is current.
 #[test]
 fn needs_w1_a_schema_2_backup_restores_through_the_chain() {
-    use layerfs_store::backup::providers::local_folder::LocalFolder;
     use layerfs_store::backup::bucket::{pieces, Limits, Metadata};
+    use layerfs_store::backup::providers::local_folder::LocalFolder;
     let scratch = scratch("restore-v2");
     let Some(binding) = binding_of(&fixture_v2()) else {
         eprintln!("NOT RUN: no sqlite3 to read the fixture's binding");
@@ -393,7 +397,7 @@ fn needs_w1_a_failed_size_does_not_blank_later_formats() {
     let _ = std::fs::remove_file(&wal);
     std::os::unix::fs::symlink(&wal, &wal).unwrap();
     let listed =
-        layerfs_store::list::list_with(&home, None, true, true, layerfs_store::admin::with_users::reads())
+        layerfs_store::list::list_with(&home, None, true, true, layerfs_sandbox::users::reads())
             .unwrap();
     let Some(SdkValue::List(items)) = listed.get("items") else {
         panic!("{listed:?}");

@@ -1,6 +1,6 @@
 [package]
 name = "layerfs-sandbox"
-description = "Sandboxes and their Workspaces (layerfs-project#106): Sandbox records, launch, host operations, exec, the daemon channel, and the workspace/ module"
+description = "Sandboxes (layerfs-project#106): Sandbox records, launch and the backends a Sandbox runs on (process or namespaces), host operations, exec and the daemon channel"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,20 +8,34 @@ license.workspace = true
 
 [dependencies]
 sha2 = "=0.11.0"
-layerfs-bridge = { path = "../../../engine/crates/layerfs-bridge" }
+layerfs-protocol = { path = "../../../engine/crates/layerfs-protocol" }
 layerfs-history = { path = "../../../core/crates/layerfs-history" }
 layerfs-persistence = { path = "../../../engine/crates/layerfs-persistence" }
 layerfs-project = { path = "../../../engine/crates/layerfs-project" }
 layerfs-home = { path = "../layerfs-home" }
 layerfs-machine = { path = "../layerfs-machine" }
 layerfs-store = { path = "../layerfs-store" }
-# How a Sandbox runs on its machine's kernel: native or namespaces.
-layerfs-sandbox-backend = { path = "../layerfs-sandbox-backend" }
 libc = "=0.2.189"
+nix = { version = "=0.31.3", features = [
+    "poll",
+    "socket",
+    "fs",
+    "signal",
+    "mount",
+    "user",
+    "sched",
+    "process",
+    # readdir on a descriptor, for inspection listings (layerfs-project#178)
+    "dir",
+] }
+layerfs-os = { path = "../../../engine/crates/layerfs-os" }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+rustix = { version = "=1.1.5", features = ["fs"] }
 
 [features]
 # The machine calls (2.0, #533): host builds only.
-machine = ["layerfs-machine/machine"]
+machine = ["layerfs-machine/machine", "layerfs-store/machine"]
 
 [[test]]
 name = "kernel_application"
@@ -46,3 +60,14 @@ path = "tests/standalone/kernel_commit.rs"
 [[test]]
 name = "local_search_path"
 path = "tests/standalone/local_search_path.rs"
+
+[dev-dependencies]
+
+layerfs-content = { path = "../../../core/crates/layerfs-content" }
+layerfs-daemon = { path = "../../../engine/crates/layerfs-daemon" }
+layerfs-fuse = { path = "../../../engine/crates/layerfs-fuse" }
+layerfs-overlay = { path = "../../../engine/crates/layerfs-overlay" }
+layerfs-storage = { path = "../../../core/crates/layerfs-storage" }
+layerfs-store-service = { path = "../../../engine/crates/layerfs-store-service" }
+layerfs-telemetry = { path = "../../../core/crates/layerfs-telemetry" }
+layerfs-vfs = { path = "../../../engine/crates/layerfs-vfs" }

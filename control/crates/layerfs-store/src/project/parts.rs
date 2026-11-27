@@ -13,11 +13,11 @@
 use super::frame::{StageFrame, StageStep};
 use super::send::{left, log_left, Copy, Left};
 use crate::place::Worker;
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::outcome::{refused, Outcome};
 use layerfs_home::trace;
 use layerfs_machine::worker::Unreached;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::sync::mpsc;
 use std::time::Duration;
 

@@ -5,7 +5,7 @@
 //! single calls' field names, and cursor pages that carry their filters
 //! and the Commit their first page read. Store calls: Linux only.
 use layerfs_api::home;
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 

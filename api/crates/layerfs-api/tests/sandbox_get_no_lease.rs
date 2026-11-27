@@ -31,9 +31,13 @@
 //! Store's lock and the Store's record carries a running `store.move`
 //! intent, as a push does while it checks that the Store is idle.
 #![cfg(unix)]
-use {layerfs_api::home::{self, paths, read_record, write_record}, layerfs_store::lease};
-use layerfs_protocol::provision::install::{AdmissionModel, Answer, Call, CapacityModel, ControlCode, ControlRefusal, DaemonPhase, DaemonStatus, Reply, Request, RetainedModel, SdkValue, OPERATION};
+use layerfs_api::home::{self, lease, paths, read_record, write_record};
+use layerfs_protocol::daemon::{
+    AdmissionModel, Answer, Call, CapacityModel, ControlCode, ControlRefusal, DaemonPhase,
+    DaemonStatus, Reply, Request, RetainedModel, OPERATION,
+};
 use layerfs_protocol::duplex;
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_sandbox::record::{DaemonRecord, Local, WorkspaceRecord};
 use std::collections::BTreeMap;
 use std::net::{SocketAddr, TcpListener};

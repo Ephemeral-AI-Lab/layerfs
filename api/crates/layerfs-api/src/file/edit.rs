@@ -5,8 +5,8 @@ use crate::calls::scope::Rule;
 use crate::calls::table::Kind::{Bool, Name, Project, Text};
 use crate::calls::table::{a, call, opt, Call, MESSAGE};
 use crate::calls::{Context, Form, Policy};
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::outcome::Outcome;
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_store::calls::file::{edit, FileEdit};
 
 /// A write's answer and how many occurrences were `replaced`: always in the

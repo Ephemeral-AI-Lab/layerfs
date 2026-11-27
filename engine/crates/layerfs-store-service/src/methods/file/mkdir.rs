@@ -1,7 +1,7 @@
 //! `fs.mkdir`.
 use crate::methods::args::{commit, single, Answer};
 use crate::StoreService;
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 
 /// `mkdir(path, { branch, mode? })`: one Commit creating a directory and its
 /// missing parents; `mode` applies to `path` when it is created.

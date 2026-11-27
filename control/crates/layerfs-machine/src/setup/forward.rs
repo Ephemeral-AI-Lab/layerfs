@@ -9,8 +9,8 @@
 //! (layerfs-project#180): it is never renamed, since the machine's other
 //! forwards hold it open and would go on writing into the renamed file.
 use crate::platform::error::{Code, MachineError};
-use crate::setup::{tool, worker};
 use crate::setup::spec::{Forward, Spec};
+use crate::setup::{tool, worker};
 use layerfs_home::log::rotate;
 use std::thread;
 use std::time::Duration;

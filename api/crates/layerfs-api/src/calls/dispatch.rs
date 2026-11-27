@@ -22,8 +22,8 @@
 use super::form::Asked;
 use super::table::Call;
 use super::{check, refusal, render, shape, table, table::Family, Context};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::outcome::{refused, Outcome};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
@@ -63,7 +63,7 @@ pub const WITH: &str = "with";
 
 /// The home a call uses: `explicit` when given, else `LAYERFS_HOME`, else
 /// `~/.layerfs` (O28). It must be an absolute path.
-pub fn home(explicit: Option<&Path>) -> Result<PathBuf, layerfs_protocol::provision::install::SdkRefusal> {
+pub fn home(explicit: Option<&Path>) -> Result<PathBuf, layerfs_protocol::sdk::SdkRefusal> {
     let home = match explicit {
         Some(path) => path.to_owned(),
         None => match std::env::var_os("LAYERFS_HOME") {
@@ -195,7 +195,11 @@ fn call_from(
     // machine calls (a worker) has no machines
     #[cfg(feature = "machine")]
     let outcome = outcome.map_err(|refusal| match home(home_path) {
-        Ok(home) => layerfs_machine::with_users::nameless_chain(&home, refusal),
+        Ok(home) => layerfs_machine::with_users::nameless_chain(
+            &home,
+            refusal,
+            &layerfs_sandbox::users::MACHINE,
+        ),
         Err(_) => refusal,
     });
     // the log keeps the refusing code as it was raised; the caller gets its

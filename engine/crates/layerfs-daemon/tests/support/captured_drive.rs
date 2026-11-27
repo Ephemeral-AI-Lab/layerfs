@@ -8,10 +8,14 @@ use layerfs_content::{
     filesystem::{PathName, SymlinkTarget},
     object::inode_leaf::InodeKind,
 };
-use layerfs_store_service::{bootstrap::open_store, store::{BindRequest, BoundWorkspace, Store, StoreOperation}, Owner, OwnerClient, OwnerConfig};
 use layerfs_history::WorkspaceId;
 use layerfs_overlay::ProfileConfig;
 use layerfs_storage::ReservationBlocks;
+use layerfs_store_service::{
+    bootstrap::open_store,
+    store::{BindRequest, BoundWorkspace, Store, StoreOperation},
+    Owner, OwnerClient, OwnerConfig,
+};
 use layerfs_vfs::Route;
 use layerfs_vfs::{Operation, Outcome, Position, SourceView, Time, ViewStat};
 use std::{

@@ -343,7 +343,7 @@ fn r5_5_access_time_is_the_modification_time_and_unchanged_by_reads_and_two_inst
 /// bytes and the requests the direct reads sent.
 fn every_file_direct(
     rig: &Rig,
-    ready: &layerfs_protocol::provision::install::ReadyMount,
+    ready: &layerfs_protocol::daemon::ReadyMount,
     expected: &Flat,
     when: &str,
 ) -> (usize, usize, u64) {

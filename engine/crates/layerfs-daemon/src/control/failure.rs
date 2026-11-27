@@ -1,10 +1,13 @@
 //! Preserve original failure knowledge while sending a bounded control summary.
 use super::Failure;
-use layerfs_store_service::{store::{owner_uncertain, BindError, CommitError, PortError}, OwnerError};
-use layerfs_protocol::provision::install::{ControlCode, ControlRefusal};
 use layerfs_history::{error::MovedState, HistoryError};
 use layerfs_overlay::OverlayError;
+use layerfs_protocol::daemon::{ControlCode, ControlRefusal};
 use layerfs_storage::StorageError;
+use layerfs_store_service::{
+    store::{owner_uncertain, BindError, CommitError, PortError},
+    OwnerError,
+};
 impl Failure {
     pub(super) fn wire(&self) -> ControlRefusal {
         let (code, moved, phase, detail, published) = match self {
@@ -191,8 +194,8 @@ fn port(error: Option<&PortError>, opaque: bool) -> ControlCode {
         Some(PortError::Poisoned) => ControlCode::Unknown,
         Some(PortError::ConcurrentDemand) => ControlCode::Busy,
         Some(PortError::ReadAdmission(error)) => match error {
-            layerfs_store_service::store::ReadAdmissionError::Capacity => ControlCode::Capacity,
-            layerfs_store_service::store::ReadAdmissionError::Poisoned => ControlCode::Unknown,
+            crate::store::ReadAdmissionError::Capacity => ControlCode::Capacity,
+            crate::store::ReadAdmissionError::Poisoned => ControlCode::Unknown,
             _ => ControlCode::Failed,
         },
         None if opaque => ControlCode::Unknown,

@@ -8,7 +8,9 @@
 mod common;
 use common::{fixture, Fixture, Store};
 use layerfs_content::ObjectId;
-use layerfs_vfs::{BaseView, CanonicalCache, CanonicalClient, ClientWork, FileLengths, WorkspaceResult};
+use layerfs_vfs::{
+    BaseView, CanonicalCache, CanonicalClient, ClientWork, FileLengths, WorkspaceResult,
+};
 use std::sync::{
     atomic::{AtomicU64, Ordering},
     Arc,

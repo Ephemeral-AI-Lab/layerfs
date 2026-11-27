@@ -5,7 +5,7 @@ mod fixture;
 #[path = "common/host_worker_proof.rs"]
 mod proof;
 
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use proof::Cli;
 use std::path::{Path, PathBuf};
 use std::time::Duration;

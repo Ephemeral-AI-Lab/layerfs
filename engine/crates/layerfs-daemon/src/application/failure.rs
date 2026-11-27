@@ -3,7 +3,7 @@ use crate::{
     control::{ServeFailure, Served},
     install_types::{InstallFailure, InstalledStore},
 };
-use layerfs_protocol::{provision::install::ControlError, duplex::ChannelError};
+use layerfs_protocol::{duplex::ChannelError, provision::install::ControlError};
 use std::{fmt, io};
 
 /// Exact startup or original connection failure, never followed by a replay.
@@ -11,11 +11,11 @@ pub enum ApplicationError {
     /// Before-effect configuration/listener/kernel file error.
     Io(io::Error),
     /// Original initialized Overlay owner failure.
-    Owner(Box<layerfs_store_service::OwnerStart>),
+    Owner(Box<crate::OwnerStart>),
     /// Original later startup failure, retaining the successfully initialized Overlay owner.
     AfterOverlay {
         /// Actual Overlay service/creation receipt; no cleanup or zero work is inferred.
-        owner: Box<layerfs_store_service::Owner>,
+        owner: Box<crate::Owner>,
         /// Exact subsequent startup boundary.
         cause: Box<ApplicationError>,
     },

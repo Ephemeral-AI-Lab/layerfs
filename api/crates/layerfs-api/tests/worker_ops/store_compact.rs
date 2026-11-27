@@ -3,11 +3,11 @@
 //! that machine's worker, which compacts the file under its own root and
 //! sends each phase back. Nothing is opened, rebuilt or left under the
 //! caller's home.
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::home::{self, paths};
 use layerfs_home::names::{ProjectRef, StoreName};
 use layerfs_machine::worker::{self, Endpoint};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_store::open_args::OpenArgs;
 use layerfs_store::project::add::{add_project, ProjectAdd};
 use layerfs_store::record::StoreRecord;
@@ -79,9 +79,7 @@ fn serve(root: &Path) -> Endpoint {
         secret: "k".to_owned(),
     };
     let served = root.to_path_buf();
-    std::thread::spawn(move || {
-        layerfs_api::worker::serve::serve(listener, "k".to_owned(), served)
-    });
+    std::thread::spawn(move || layerfs_api::worker::serve::serve(listener, "k".to_owned(), served));
     for _ in 0..200 {
         if worker::ping(&endpoint).is_ok() {
             break;
@@ -155,6 +153,7 @@ fn a_store_on_another_machine_is_compacted_by_its_worker() {
         &home,
         &mut Events::new(&mut sink),
         &ProjectRef::parse("shop/gone").unwrap(),
+        &layerfs_sandbox::users::STORE,
     )
     .unwrap();
 

@@ -13,7 +13,7 @@ mod installed;
 #[allow(dead_code)]
 mod support;
 
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use std::fs;
 use support::{operation, write, Fixture};
 
@@ -548,7 +548,7 @@ fn public_methods_answer_as_recorded() {
     // Two faults on one call: the unknown project is refused before the
     // missing path (the project is looked up first).
     let two_faults = {
-        let call = layerfs_protocol::provision::install::SdkCall {
+        let call = layerfs_protocol::sdk::SdkCall {
             method: "fs.read".into(),
             args: SdkValue::map([("project", t("ghost")), ("branch", t("feat"))]),
         };

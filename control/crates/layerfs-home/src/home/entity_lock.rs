@@ -6,7 +6,7 @@
 //! the `op` intent keeps other operations out meanwhile. A wait for a
 //! holder is bounded and is a readiness wait, not a retry.
 use crate::outcome::{failed, refused};
-use layerfs_protocol::provision::install::SdkRefusal;
+use layerfs_protocol::sdk::SdkRefusal;
 use std::fs::{File, OpenOptions};
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;

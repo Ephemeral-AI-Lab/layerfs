@@ -13,8 +13,8 @@
 //! test here takes one lock. The walker's own tests are layerfs-sandbox
 //! `inspect_files`.
 #![cfg(unix)]
-use {layerfs_api::home::{self, paths, read_record, write_record}, layerfs_store::lease};
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_api::home::{self, lease, paths, read_record, write_record};
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_sandbox::record::{DaemonRecord, Local, WorkspaceRecord};
 use std::collections::BTreeMap;
 use std::net::{SocketAddr, TcpListener};

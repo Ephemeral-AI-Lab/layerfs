@@ -12,10 +12,9 @@
 //! compaction record beside its file through its machine (the shallow cut
 //! answers it, spec v19). Under a machine that is not ready only
 //! `store.record` is made: the rest wait on the machine.
-use super::super::doctor::runner::{CheckId, Probe};
-use super::super::doctor::report::Node;
 use super::super::doctor::budget::{Budget, Checks};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
+use super::super::doctor::report::Node;
+use super::super::doctor::runner::{CheckId, Probe};
 use layerfs_home::events::Events;
 use layerfs_home::helpers::map_of;
 use layerfs_home::home::paths;
@@ -23,7 +22,8 @@ use layerfs_home::op::Standing;
 use layerfs_home::outcome::shell_word;
 use layerfs_home::outcome::{refused, Outcome as CallOutcome};
 use layerfs_home::state::{Reason, State};
-use {layerfs_store::diagnostic, layerfs_persistence::diagnostic::{Observation, Options, Outcome}};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
+use layerfs_store::diagnostic::{self, Observation, Options, Outcome};
 use layerfs_store::identity::{self, Identity};
 use layerfs_store::intent::clearing as clearing_call;
 use layerfs_store::place::{self, Executor};
@@ -42,7 +42,7 @@ const MOUNT_HOLDERS: &str = "store.mount_holders";
 const GC_AUDIT: &str = "store.gc_audit";
 
 /// A Store's checks, in the frozen order.
-pub(super) const CHECKS: &[CheckId] = &[
+pub(crate) const CHECKS: &[CheckId] = &[
     CheckId::own(RECORD),
     CheckId::own(OPERATION),
     CheckId::own(CONNECTION),
@@ -63,12 +63,12 @@ const SCHEMA_HINT: &str = "this build does not read its schema; use the LayerFS 
 /// records (`layerfs_store::state`, with the machine family's derivation
 /// handed in) says whether it waits on its machine, and what blocks the
 /// Store blocks its projects too.
-pub(super) fn run(probe: &Probe<'_>, node: &mut Node) {
+pub(crate) fn run(probe: &Probe<'_>, node: &mut Node) {
     let name = probe.thing.name.as_str();
     let mut checks = Checks::default();
     let mut state = probe.state.clone();
     if let Some((record, identity)) = resolve(probe.home, name, &mut checks) {
-        let machines = layerfs_store::admin::with_users::machine_state;
+        let machines = layerfs_sandbox::users::machine_state;
         if let Ok(recorded) = layerfs_store::state::recorded(probe.home, &record, &machines) {
             state = recorded;
         }
@@ -624,7 +624,7 @@ fn remote(
 /// the shallow cut, `cut: schema`, or one project's data, `cut: project`
 /// (`project doctor --full`), which a request must name (an older host's
 /// full scan is refused); caller paths and leases are not used.
-pub(crate) fn in_worker(
+pub fn in_worker(
     root: &Path,
     args: SdkValue,
     events: &mut dyn FnMut(SdkValue) -> Result<(), SdkRefusal>,
@@ -860,7 +860,7 @@ fn reach(probe: &Probe<'_>, record: &StoreRecord, checks: &mut Checks) {
         None => record.attached(),
     };
     for machine in &machines {
-        let state = layerfs_store::admin::with_users::machine_state(probe.home, machine)
+        let state = layerfs_sandbox::users::machine_state(probe.home, machine)
             .unwrap_or_else(|_| State::broken(Reason::Missing, None));
         match state.blocks("machine", machine) {
             Some(State::Blocked(by)) => {
@@ -869,7 +869,14 @@ fn reach(probe: &Probe<'_>, record: &StoreRecord, checks: &mut Checks) {
             _ => {
                 let mut sink = |_| {};
                 let mut events = Events::new(&mut sink);
-                let checked = layerfs_store::admin::with_users::check_from(probe.home, &mut events, record, machine).1;
+                let checked = layerfs_store::admin::with_users::check_from(
+                    probe.home,
+                    &mut events,
+                    record,
+                    machine,
+                    &layerfs_sandbox::users::STORE,
+                )
+                .1;
                 let seen = layerfs_store::observed::Reach::of(&checked);
                 layerfs_store::observed::record(probe.home, record.name(), Some(machine), &seen);
                 match checked {

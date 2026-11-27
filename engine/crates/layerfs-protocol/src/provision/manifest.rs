@@ -102,7 +102,10 @@ impl fmt::Debug for StoreManifest {
 }
 
 // One authenticated control record for sealed Store provisioning.
-use crate::{provision::install::ControlError, wire::{Reader, Writer}};
+use crate::{
+    provision::install::ControlError,
+    wire::{Reader, Writer},
+};
 pub(crate) const MAGIC: &[u8] = b"LFSI\x01";
 impl StoreManifest {
     /// Encodes checked metadata; sealed file bytes are separate duplex records.

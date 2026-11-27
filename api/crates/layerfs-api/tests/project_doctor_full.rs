@@ -5,7 +5,7 @@
 //! is read once per project. Without `--full` nothing of the data is read.
 //! On Linux the test reports the `--full` call's time and peak memory (one
 //! sample, `VmHWM` reset just before the call).
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use std::os::unix::fs::{symlink, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -363,7 +363,7 @@ fn check(home: &Path, engine: &str, damage: &dyn Fn(&Path) -> String) {
     assert_eq!(last.get_text("phase"), Some("self"), "{events:?}");
     assert!(last.get("node").is_some(), "{last:?}");
 
-    layerfs_store::admin::with_users::close_idle(std::time::Duration::ZERO);
+    layerfs_api::close_idle(std::time::Duration::ZERO);
     let lost = damage(home);
     for project in ["shop/app", "shop/twin"] {
         let (damaged, _) = doctor(home, project, true);
@@ -399,7 +399,7 @@ fn check(home: &Path, engine: &str, damage: &dyn Fn(&Path) -> String) {
             .find(|(check, _)| check == "project.data");
         assert_eq!(row.map(|(_, outcome)| outcome).as_deref(), Some("error"));
     }
-    layerfs_store::admin::with_users::close_idle(std::time::Duration::ZERO);
+    layerfs_api::close_idle(std::time::Duration::ZERO);
     let _ = std::fs::remove_dir_all(&tree);
 }
 

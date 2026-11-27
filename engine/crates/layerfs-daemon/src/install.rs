@@ -1,7 +1,18 @@
 //! Authenticated one-time file installation and concrete Store bootstrap.
-use {layerfs_store_service::{bootstrap::open_store_observed, install::{check_initial, InitialCheck}}, crate::{install_file, install_types::{InstallError, InstallFailure, InstallWork, InstalledStore, StoreSettings}}};
-use layerfs_protocol::{provision::{install::{ControlError, InstallPhase, InstallReply, INSTALL_FINISH}, manifest::{StoreManifest, StoreProfile}}, duplex::Connection};
+use crate::{
+    bootstrap::open_store_observed,
+    install_file,
+    install_types::{InstallError, InstallFailure, InstallWork, InstalledStore, StoreSettings},
+    shared_install::{check_initial, InitialCheck},
+};
 use layerfs_persistence::{PersistenceConfig, SqlitePersistenceProfile};
+use layerfs_protocol::{
+    duplex::Connection,
+    provision::{
+        install::{ControlError, InstallPhase, InstallReply, INSTALL_FINISH},
+        manifest::{StoreManifest, StoreProfile},
+    },
+};
 use std::{fs, path::Path};
 
 /// Installs into the explicitly provisioned local destination. No caller-supplied

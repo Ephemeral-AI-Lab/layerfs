@@ -33,8 +33,8 @@
 #[path = "support/round_trips.rs"]
 mod rt;
 
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_persistence::SqlWork;
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_store_service::telemetry::{attribute_sql, mark_phases, phase_sql, Recording};
 use rt::{t, Opened, Server, Statements, Store};
 use std::cell::RefCell;

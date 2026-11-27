@@ -8,7 +8,6 @@ mod fusectl;
 #[allow(dead_code)]
 #[path = "support/installed_store.rs"]
 mod installed;
-use layerfs_store_service::{bootstrap::open_store, store::{BindRequest, BoundWorkspace}, Owner, OwnerClient, OwnerConfig};
 use layerfs_fuse::{
     attributes::Identity,
     mount::AbortWrite,
@@ -16,10 +15,20 @@ use layerfs_fuse::{
     MountRequests,
 };
 use layerfs_history::WorkspaceId;
-use layerfs_vfs::ports::mount::{Fence, MountServices, RequestServices, ServiceError, ServiceFuture, ServiceReply};
 use layerfs_overlay::{KernelCookieOffer, KernelMount, OverlayError, ProfileConfig, Publication};
 use layerfs_storage::ReservationBlocks;
-use layerfs_vfs::{BaseView, KernelDirectoryWindow, KernelMutationOutcome, KernelReadOperation, KernelReadOutcome, KernelVisitRequest, KernelWindow, VisitFacts, WorkspaceError, WriteData};
+use layerfs_store_service::{
+    bootstrap::open_store,
+    store::{BindRequest, BoundWorkspace},
+    Owner, OwnerClient, OwnerConfig,
+};
+use layerfs_vfs::ports::mount::{
+    Fence, MountServices, RequestServices, ServiceError, ServiceFuture, ServiceReply,
+};
+use layerfs_vfs::{
+    BaseView, KernelDirectoryWindow, KernelMutationOutcome, KernelReadOperation, KernelReadOutcome,
+    KernelVisitRequest, KernelWindow, VisitFacts, WorkspaceError, WriteData,
+};
 use std::{
     fs,
     os::unix::process::CommandExt,
@@ -111,7 +120,10 @@ impl RequestServices for ObserveRequest {
 fn job<T>(
     client: &OwnerClient,
     route: layerfs_vfs::Route,
-    action: impl FnOnce(&OwnerClient, layerfs_vfs::Route) -> Result<T, layerfs_store_service::OwnerError>,
+    action: impl FnOnce(
+        &OwnerClient,
+        layerfs_vfs::Route,
+    ) -> Result<T, layerfs_store_service::OwnerError>,
 ) -> T {
     action(client, route).unwrap()
 }

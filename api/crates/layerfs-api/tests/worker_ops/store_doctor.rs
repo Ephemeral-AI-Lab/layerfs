@@ -2,14 +2,14 @@
 //! the shallow cut on this computer (reached, id and schema, heads against
 //! each bucket link) in the frozen order, and the same cut through a real
 //! worker's `store.diagnose`, which refuses a request without `cut`.
-use layerfs_protocol::provision::install::SdkValue;
-use layerfs_inspect::{self, Kind, Options, Thing};
 use layerfs_history::HistoryCatalogConfig;
 use layerfs_home::events::Events;
 use layerfs_home::home::{self, paths, with_field, write_entity};
 use layerfs_home::op::Op;
+use layerfs_inspect::{self, Kind, Options, Thing};
 use layerfs_machine::worker::{diagnostic_connect, Endpoint};
 use layerfs_persistence::{PersistenceConfig, SqliteHandles, SqlitePersistenceProfile};
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_storage::StoragePolicy;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};

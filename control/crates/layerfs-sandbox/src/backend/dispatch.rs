@@ -6,7 +6,7 @@
 use crate::backend::namespaces::{self, NamespaceProvider};
 #[cfg(target_os = "macos")]
 use crate::backend::process;
-use {crate::backend::adapter, layerfs_machine::table::backend::Backend};
+use crate::backend::{adapter, Backend};
 #[cfg(target_os = "macos")]
 use crate::process::ProcessProvider;
 use crate::{

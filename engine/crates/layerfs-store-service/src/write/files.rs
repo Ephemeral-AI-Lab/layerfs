@@ -8,10 +8,10 @@ use crate::read::{snapshot, visibility::Visibility};
 use crate::store::{BindError, BindPhase};
 use crate::store_service::NamedBindFailure;
 use crate::StoreService;
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_content::compare::TreeTable;
 use layerfs_content::filesystem::FilesystemRootId;
 use layerfs_history::{BranchRecord, CommitOutcome, CommitVia, LayerStackRecord, WorkspaceId};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::sync::Arc;
 
 pub fn path(value: &str) -> Result<String, SdkRefusal> {

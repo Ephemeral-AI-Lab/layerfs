@@ -1,10 +1,10 @@
 //! Real Store admission, maintenance fences, and process cache limits.
 #![cfg(any(target_os = "macos", target_os = "linux"))]
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::home::{layout, paths};
 use layerfs_home::names::StoreName;
 use layerfs_home::op::{Op, FIELD};
 use layerfs_persistence::{PersistenceConfig, SqliteHandles, SqlitePersistenceProfile};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_store::open;
 use layerfs_store::open_args::{OpenArgs, PgSelection};
 use layerfs_store::record::{self, StoreRecord};

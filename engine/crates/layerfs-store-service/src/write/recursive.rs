@@ -78,9 +78,9 @@ impl Mutation<'_> {
                 return Err(args::refuse(
                     "NotEmpty",
                     format!("{path} is a folder that is not empty"),
-                    layerfs_protocol::provision::install::SdkValue::map([(
+                    layerfs_protocol::sdk::SdkValue::map([(
                         "path",
-                        layerfs_protocol::provision::install::SdkValue::text(path),
+                        layerfs_protocol::sdk::SdkValue::text(path),
                     )]),
                 ));
             }
@@ -189,7 +189,7 @@ impl Mutation<'_> {
         // Unknown operation custody is kept rather than released or replayed.
         if result
             .as_ref()
-            .is_err_and(|e: &layerfs_protocol::provision::install::SdkRefusal| e.code == "Unknown")
+            .is_err_and(|e: &layerfs_protocol::sdk::SdkRefusal| e.code == "Unknown")
         {
             return result;
         }
@@ -289,9 +289,9 @@ impl Mutation<'_> {
         Ok(())
     }
 }
-fn exists(to: &str) -> layerfs_protocol::provision::install::SdkRefusal {
+fn exists(to: &str) -> layerfs_protocol::sdk::SdkRefusal {
     let message = format!("{to} already exists");
-    args::refuse("Exists", message, layerfs_protocol::provision::install::SdkValue::Null)
+    args::refuse("Exists", message, layerfs_protocol::sdk::SdkValue::Null)
 }
 pub(super) fn overlap(from: &str, to: &str) -> Result<()> {
     if from == to || from == "/" || to.starts_with(&format!("{from}/")) {

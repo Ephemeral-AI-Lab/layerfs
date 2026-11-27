@@ -6,12 +6,11 @@
 //! namespaces.
 #![cfg(target_os = "linux")]
 #[allow(dead_code)]
-mod support {
-    pub mod image;
-}
+#[path = "../support/image.rs"]
+mod image;
+use image::{archive, base256, hex, pax_record, unpacked_at, Scratch, Tar, DIGEST, OTHER};
 use layerfs_sandbox::{namespaces::rootfs, Image};
 use std::{fs, os::unix::fs::MetadataExt, path::Path};
-use support::image::{archive, base256, hex, pax_record, unpacked_at, Scratch, Tar, DIGEST, OTHER};
 
 fn image(digest: &str) -> Image {
     Image::parse(digest).unwrap()

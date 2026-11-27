@@ -8,7 +8,6 @@ use super::{
     walk, window,
 };
 use crate::history::lookup::{self as args, invalid, Answer, Arg};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_content::{
     compare::{memo::Memo, EntryFacts},
     filesystem::{
@@ -19,6 +18,7 @@ use layerfs_content::{
     merge::Rule,
     object::inode_leaf::InodeKind,
 };
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 
 pub const REPLY_BUDGET: usize = window::BYTES;
 

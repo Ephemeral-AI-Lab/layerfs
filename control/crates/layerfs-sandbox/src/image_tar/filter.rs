@@ -4,7 +4,7 @@
 //! 2. Entry-header resolution, entry-size-bounded descriptor construction, and checks.
 //! 3. Archive end-block / clean EOF termination and streaming payload output.
 
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use std::collections::HashSet;
 use std::io::{self, Read};
 

@@ -31,10 +31,10 @@ mod rig;
 #[allow(dead_code)]
 #[path = "support/host_install.rs"]
 mod support;
-use layerfs_protocol::provision::install::{Activity, ReadyMount, Reply, Request, WorkspaceToken};
 use layerfs_content::ObjectId;
 use layerfs_daemon::control::Service;
 use layerfs_history::CommitRecord;
+use layerfs_protocol::daemon::{Activity, ReadyMount, Reply, Request, WorkspaceToken};
 use model::{assert_same, Flat, Seen, DIRECTORY, FILE};
 use mounted::{until, COMMAND};
 use mutating::{c, direct, frames, path_only};

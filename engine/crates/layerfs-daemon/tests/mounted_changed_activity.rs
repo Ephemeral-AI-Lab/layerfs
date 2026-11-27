@@ -10,7 +10,8 @@ mod installed;
 #[allow(dead_code)]
 #[path = "support/mounted.rs"]
 mod mounted;
-use layerfs_protocol::provision::install::{Reply, Request, SdkCall, SdkValue};
+use layerfs_protocol::daemon::{Reply, Request};
+use layerfs_protocol::sdk::{SdkCall, SdkValue};
 use layerfs_store_service::bootstrap::open_store_observed;
 use mounted::Harness;
 use std::path::Path;

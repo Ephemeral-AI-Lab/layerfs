@@ -1,6 +1,9 @@
 //! External engine/Store boundaries; all waiting returns to the kernel pool.
+use crate::{
+    BaseView, KernelDirectoryWindow, KernelMutationOutcome, KernelReadFailure, KernelReadOperation,
+    KernelReadOutcome, KernelVisitRequest, KernelWindow, VisitFacts, WorkspaceError, WriteData,
+};
 use layerfs_overlay::{KernelCookieOffer, KernelMount, OverlayError, Publication};
-use crate::{BaseView, KernelDirectoryWindow, KernelMutationOutcome, KernelReadFailure, KernelReadOperation, KernelReadOutcome, KernelVisitRequest, KernelWindow, VisitFacts, WorkspaceError, WriteData};
 use std::{
     error::Error,
     fmt,

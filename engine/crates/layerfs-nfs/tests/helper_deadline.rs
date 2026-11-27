@@ -2,11 +2,14 @@
 #[allow(dead_code)]
 #[path = "support/rig.rs"]
 mod rig;
-use layerfs_protocol::provision::install::{CleanupObservation, DetachDisposition, ForcedCleanup, MountPhase, Reply, Request, TeardownStage, UnmountControl};
 use layerfs_daemon::control::{
     ExportServing, ExportServingConfig, Failure, Helper, Mounter, HELPER_WAIT,
 };
 use layerfs_history::WorkspaceId;
+use layerfs_protocol::daemon::{
+    CleanupObservation, DetachDisposition, ForcedCleanup, MountPhase, Reply, Request,
+    TeardownStage, UnmountControl,
+};
 use std::{
     fs,
     path::{Path, PathBuf},

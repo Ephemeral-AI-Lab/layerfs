@@ -24,13 +24,13 @@
 //! reason and fix win over the live read (UI pass 2, F1).
 use super::record::{MachineRecord, CREATE, REMOVE};
 use super::spec::{self as record, refusal};
+use crate::platform::{self as adapters, Code, Spec};
 use crate::worker::{self, Endpoint, Hello};
 use crate::Related;
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::home::{self, lock, observed, paths};
 use layerfs_home::op::Standing;
 use layerfs_home::state::{Reason, State};
-use crate::platform::{self as adapters, Code, Spec};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};

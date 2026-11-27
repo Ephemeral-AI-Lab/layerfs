@@ -8,13 +8,15 @@ mod mounted;
 #[allow(dead_code)]
 #[path = "../../../../../engine/crates/layerfs-daemon/tests/support/host_install.rs"]
 mod support;
-use layerfs_protocol::provision::install::{Call, ControlCode, MountPhase, ReadyMount, Reply, Request, WorkspaceToken};
 use layerfs_daemon::{
     control::{Failure, Success},
     install::receive_install,
     install_types::{InstalledStore, StoreSettings},
 };
 use layerfs_history::{BranchId, WorkspaceId};
+use layerfs_protocol::daemon::{
+    Call, ControlCode, MountPhase, ReadyMount, Reply, Request, WorkspaceToken,
+};
 use layerfs_sandbox::internal::Control;
 use layerfs_sandbox::OperationCause;
 use mounted::{until, Harness};

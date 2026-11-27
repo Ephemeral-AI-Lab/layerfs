@@ -1,6 +1,6 @@
 //! New history queries do not widen folder scopes to project-wide metadata.
 use layerfs_api::Scope;
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 
 #[test]
 fn saved_history_calls_are_refused_before_dispatch_even_for_root_folder_scopes() {

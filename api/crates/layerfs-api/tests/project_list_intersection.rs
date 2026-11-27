@@ -3,9 +3,9 @@
 //! project is retired (hidden) or absent is not listed, and project.get
 //! answers it `NoSuchProject`; a live project still lists and gets.
 use layerfs_api::home::{self, paths, write_record};
-use layerfs_protocol::provision::install::SdkValue;
-use layerfs_protocol::sdk::{hex, unhex};
 use layerfs_history::LayerStackId;
+use layerfs_protocol::sdk::SdkValue;
+use layerfs_protocol::sdk::{hex, unhex};
 use layerfs_store::open_args::OpenArgs;
 use layerfs_store::project::record::ProjectRecord;
 use layerfs_store::record::StoreRecord;

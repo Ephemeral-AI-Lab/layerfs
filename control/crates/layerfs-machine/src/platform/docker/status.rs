@@ -7,9 +7,9 @@
 use super::cli::{docker, engine_version};
 use crate::platform::error::{Code, MachineError};
 use crate::setup::guest::Guest;
+use crate::setup::spec::Spec;
 use crate::setup::{tool, worker};
 use crate::setup::{with_worker, State, Status};
-use crate::setup::spec::Spec;
 use std::time::Duration;
 
 const CALL: Duration = Duration::from_secs(30);

@@ -3,12 +3,12 @@
 //! project), the `home_entry_removed` echo, and the worker's own entry. A fake
 //! `Effects` stands in for the Store so the home state machine is tested
 //! without opening one.
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
-use layerfs_protocol::sdk::hex;
 use layerfs_history::LayerStackId;
 use layerfs_home::home::{paths, write_record};
 use layerfs_home::names::StoreName;
 use layerfs_home::outcome::{failed, refused};
+use layerfs_protocol::sdk::hex;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_store::project::delete::{
     delete_with, remove_project_entry, remove_worker_entry, Admission, Effects, Intent, IntentState,
 };

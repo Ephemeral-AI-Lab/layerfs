@@ -39,12 +39,12 @@
 use super::cached::{batches, Cached, ROOTS};
 use crate::history::{lookup as args, rows::Rows};
 use crate::store::Store;
-use layerfs_protocol::provision::install::SdkRefusal;
 use layerfs_content::compare::{AcrossWork, EntryFacts, PathAcross, PathAnswer};
 use layerfs_content::filesystem::{path::PathName, FilesystemRootId};
 use layerfs_content::object::inode_leaf::InodeKind;
 use layerfs_content::{AuthenticatedObjects, ContentError, ContentResult, ObjectId};
 use layerfs_history::NodeId;
+use layerfs_protocol::sdk::SdkRefusal;
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
 

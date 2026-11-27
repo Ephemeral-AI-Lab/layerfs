@@ -2,12 +2,12 @@
 //! of this home linked to it.
 use super::heads::store_heads;
 use super::record::{BucketRecord, StoreLink};
-use crate::record::StoreRecord;
-use layerfs_protocol::provision::install::SdkValue;
-use crate::backup::copy as remote;
 use crate::backup::bucket::RemoteError;
+use crate::backup::copy as remote;
+use crate::record::StoreRecord;
 use layerfs_home::home::paths;
 use layerfs_home::outcome::{failed, Outcome};
+use layerfs_protocol::sdk::SdkValue;
 use std::collections::BTreeMap;
 use std::path::Path;
 
@@ -49,7 +49,7 @@ fn changed(link: &StoreLink, copy: &remote::Copy) -> Result<bool, String> {
     let now = copy.sha256.ok_or(format!(
         "the listing read no sha256 of {} (at most {} per listing)",
         copy.file,
-        remote::copies::MAX_LIST_STATS
+        remote::list::MAX_LIST_STATS
     ))?;
     Ok(now != then)
 }

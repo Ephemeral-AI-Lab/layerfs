@@ -1,7 +1,12 @@
 //! LOOKUP/GETATTR/OPEN/OPENDIR share the existing atomic semantic plan.
-use crate::ports::mount::{stale, BaseDemandFailed, Fenced, RequestServices, ServiceError, ServiceReply};
+use crate::ports::mount::{
+    stale, BaseDemandFailed, Fenced, RequestServices, ServiceError, ServiceReply,
+};
+use crate::{
+    KernelReadDecision, KernelReadFailure, KernelReadOperation, KernelReadOutcome, KernelReadValue,
+    Refusal, ViewStat, VisitFacts,
+};
 use layerfs_overlay::KernelMount;
-use crate::{KernelReadDecision, KernelReadFailure, KernelReadOperation, KernelReadOutcome, KernelReadValue, Refusal, ViewStat, VisitFacts};
 use std::{fmt, sync::Arc};
 
 pub(super) struct Custody {

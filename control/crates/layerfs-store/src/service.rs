@@ -16,9 +16,9 @@
 //! runs once: a refused or failed call returns its own error, nothing is sent
 //! again.
 use crate::open_args::{OpenArgs, ROUTING};
-use layerfs_protocol::provision::install::{SdkCall, SdkRefusal, SdkValue};
 use layerfs_home::helpers::lock;
 use layerfs_home::outcome::{failed, refused, with_fix, Outcome};
+use layerfs_protocol::sdk::{SdkCall, SdkRefusal, SdkValue};
 use layerfs_store_service::{OpenRefusal, StoreService};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};

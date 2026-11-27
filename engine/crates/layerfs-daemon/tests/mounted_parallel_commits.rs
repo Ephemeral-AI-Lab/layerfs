@@ -18,9 +18,9 @@ mod mounted;
 #[allow(dead_code)]
 #[path = "support/mounted_commit.rs"]
 mod rig;
-use layerfs_protocol::provision::install::{Activity, Reply};
-use {layerfs_daemon::control::Failure, layerfs_store_service::store::CommitError};
+use layerfs_daemon::{control::Failure, store::CommitError};
 use layerfs_history::{CommitOutcome, HistoryError};
+use layerfs_protocol::daemon::{Activity, Reply};
 use mounted::COMMAND;
 use rig::{bash_in, host, passed, root, Rig};
 use std::{
@@ -105,8 +105,8 @@ fn parallel_workspace_commits_keep_distinct_captures_and_one_admission_each() {
             if ready.send(tag).is_err() || started.recv_timeout(Duration::from_secs(1)).is_err() {
                 return;
             }
-            let result = service.execute_control(&layerfs_protocol::provision::install::Request::Commit(
-                layerfs_protocol::provision::install::CommitControl {
+            let result = service.execute_control(&layerfs_protocol::daemon::Request::Commit(
+                layerfs_protocol::daemon::CommitControl {
                     token,
                     force: false,
                     message: None,
@@ -146,7 +146,7 @@ fn parallel_workspace_commits_keep_distinct_captures_and_one_admission_each() {
     let duplicate_refused = matches!(
         &duplicate,
         Some(Err(Failure::Rejected(
-            layerfs_protocol::provision::install::ControlCode::Busy,
+            layerfs_protocol::daemon::ControlCode::Busy,
             _
         )))
     ) || matches!(&duplicate,Some(Err(Failure::Commit(f))) if matches!(f.error,CommitError::InFlight));

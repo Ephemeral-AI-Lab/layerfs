@@ -7,8 +7,8 @@
 use super::form::Asked;
 use super::table::{Arg, Call, Kind, Redact};
 use super::Scope;
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::outcome::Outcome;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 
 /// A path argument's logged byte length: the §4.3 normalization (strip one
 /// leading `/`) applied before counting.

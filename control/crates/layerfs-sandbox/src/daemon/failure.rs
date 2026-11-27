@@ -1,6 +1,6 @@
 //! Typed facade failures over the single existing control exchange owner.
 use crate::internal::{Control, ControlFailure};
-use layerfs_protocol::provision::install::{ControlRefusal, Reply, Request};
+use layerfs_protocol::daemon::{ControlRefusal, Reply, Request};
 use std::fmt;
 
 /// Original facade operation and its exact exchange or daemon refusal custody.
@@ -23,7 +23,7 @@ pub enum OperationCause {
     /// Original correlated daemon refusal; the channel may remain usable.
     Remote(ControlRefusal),
     /// A terminal operation stopped after effects; the daemon keeps its custody.
-    Retained(Box<layerfs_protocol::provision::install::TeardownCustody>),
+    Retained(Box<layerfs_protocol::daemon::TeardownCustody>),
     /// Original correlated reply that cannot supply the selected typed result.
     Unexpected(Reply),
 }

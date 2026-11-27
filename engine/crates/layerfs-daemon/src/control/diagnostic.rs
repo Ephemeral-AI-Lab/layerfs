@@ -1,6 +1,7 @@
 //! Bounded, nonblocking registry observations, without Store or overlay reads.
 use super::{inspect::activity, registry::Entry, Service};
-use layerfs_protocol::provision::install::{Reply, SdkCall, SdkRefusal, SdkValue};
+use layerfs_protocol::daemon::Reply;
+use layerfs_protocol::sdk::{SdkCall, SdkRefusal, SdkValue};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
@@ -60,13 +61,13 @@ impl Service {
                     Entry::Binding => ("binding", false),
                     Entry::Bound(binding) => (
                         activity(binding.activity),
-                        binding.kernel.block().phase == layerfs_protocol::provision::install::MountPhase::Ready,
+                        binding.kernel.block().phase == layerfs_protocol::daemon::MountPhase::Ready,
                     ),
                 };
                 SdkValue::map([
                     (
                         "workspace",
-                        SdkValue::text(layerfs_protocol::sdk::hex(&id.to_bytes())),
+                        SdkValue::text(layerfs_store_service::history::lookup::hex(&id.to_bytes())),
                     ),
                     ("activity", SdkValue::text(state)),
                     ("mounted", SdkValue::Bool(mounted)),

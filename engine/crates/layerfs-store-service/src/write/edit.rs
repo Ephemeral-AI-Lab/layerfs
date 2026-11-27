@@ -1,7 +1,7 @@
 //! Exact text edits scan first, then shift the tail through bounded byte windows.
 use super::mutation::{Mutation, Result};
 use crate::history::lookup as args;
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_vfs::Operation;
 impl Mutation<'_> {
     /// Replaces `old` with `new` in the file at `path`: its one occurrence,
@@ -140,7 +140,7 @@ impl Mutation<'_> {
         Ok(())
     }
 }
-fn binary(path: &str) -> layerfs_protocol::provision::install::SdkRefusal {
+fn binary(path: &str) -> layerfs_protocol::sdk::SdkRefusal {
     let message = format!("{path} is not UTF-8 text");
     args::refuse("Binary", message, SdkValue::Null)
 }

@@ -1,6 +1,6 @@
 //! Exact captured namespace normalization and its sealed streamed row source.
-mod cursor;
 pub(crate) mod base_files;
+mod cursor;
 mod inodes;
 mod normalize;
 mod records;

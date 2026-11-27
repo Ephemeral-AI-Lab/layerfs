@@ -2,9 +2,9 @@
 //! typed refusals before any effect, and the result shapes of one reachable
 //! refusal per call plus the three removal results and the §11 report.
 use layerfs_api::Kind;
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_history::records::{GcIntent, GcIntentKind, GcScopeKind};
 use layerfs_history::PlaceAuthority;
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_store::open_args::OpenArgs;
 use layerfs_store::record::StoreRecord;
 use layerfs_store::service::with_service;
@@ -487,7 +487,12 @@ fn force_removed(home: &Path) -> (Vec<String>, Vec<String>) {
         name: "sb1".to_owned(),
         force: true,
     };
-    match layerfs_sandbox::family::remove(home, &mut events, &request) {
+    match layerfs_sandbox::family::remove(
+        home,
+        &mut events,
+        &request,
+        layerfs_workspace::route::dispatch::call,
+    ) {
         Ok(layerfs_sandbox::family::Removed::Stopped { unmounted, left }) => (unmounted, left),
         Ok(_) => panic!("Sandbox sb1 was not stopped"),
         Err(refusal) => panic!("sandbox.remove: {refusal:?}"),

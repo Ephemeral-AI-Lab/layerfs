@@ -6,9 +6,9 @@ use crate::calls::table::{a, call, opt, Call};
 use crate::calls::Context;
 use crate::calls::{Form, Policy};
 #[cfg(feature = "machine")]
-use layerfs_protocol::provision::install::SdkValue;
-#[cfg(feature = "machine")]
 use layerfs_home::outcome::Outcome;
+#[cfg(feature = "machine")]
+use layerfs_protocol::sdk::SdkValue;
 
 /// Its answer: `ok`; the long form adds the settings as recorded.
 const FORM: Form = Form::of(
@@ -61,7 +61,7 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         wsl: text("wsl"),
         daemon: text("daemon"),
     };
-    layerfs_machine::with_users::update(&context.home, &request)
+    layerfs_machine::with_users::update(&context.home, &request, &layerfs_sandbox::users::MACHINE)
 }
 
 // without the `machine` feature (the guest worker's build) it is

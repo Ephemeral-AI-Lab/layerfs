@@ -1,9 +1,9 @@
 //! A cancel received before registration. Callers hold the Sandbox record lock.
 //! The mark is keyed by the Workspace and exec id's record path, consumed once
 //! at registration, and ignored after thirty seconds. Unmount removes its folder.
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::home::{now_ms, read_record, write_entity};
 use layerfs_home::outcome::refused;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 
 const LIFETIME_MS: i64 = 30_000;

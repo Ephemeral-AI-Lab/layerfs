@@ -4,10 +4,10 @@
 //! lacks the file's metadata. Each request is sent once. A remote file is
 //! named by its `file` (#509: the object `<file>/store.sqlite`), which a
 //! local Store links to; the name need not be the Store's.
-use crate::backup::copy::heads::HEADS;
-use crate::backup::bucket::registry::{store_object, STORE_FILE};
 use crate::backup::bucket::pieces::{self, parse_hex32};
+use crate::backup::bucket::registry::{store_object, STORE_FILE};
 use crate::backup::bucket::{Driver, Metadata, RemoteError};
+use crate::backup::copy::heads::HEADS;
 
 /// Most stats one listing sends; copies beyond show no sha256 or heads.
 pub const MAX_LIST_STATS: usize = 64;

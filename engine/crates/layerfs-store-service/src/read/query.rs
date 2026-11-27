@@ -1,7 +1,7 @@
 //! Stable numbered result pages and explicit per-request replay budgets.
 //! A page counts matching results, never candidates silently filtered away.
 use crate::history::lookup::{invalid, refuse};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 
 /// Maximum candidates evaluated by one numbered query, including seeking.
 /// This bounds one request's work, not the size of a Store or its history.

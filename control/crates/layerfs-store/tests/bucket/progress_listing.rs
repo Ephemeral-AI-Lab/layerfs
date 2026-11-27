@@ -3,10 +3,13 @@
 //! S3 timestamp forms.
 #[path = "../support/progress_cell.rs"]
 mod progress_cell;
-use layerfs_store::backup::providers::local_folder::LocalFolder;
 use layerfs_store::backup::bucket::pieces;
 use layerfs_store::backup::bucket::progress::{self, Progress};
-use layerfs_store::backup::{s3_api::time, bucket::{Driver, Limits, Metadata}};
+use layerfs_store::backup::providers::local_folder::LocalFolder;
+use layerfs_store::backup::{
+    bucket::{Driver, Limits, Metadata},
+    s3_api::time,
+};
 use progress_cell::{Cell, Sample};
 use std::fs;
 use std::path::PathBuf;

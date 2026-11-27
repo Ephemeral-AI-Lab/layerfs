@@ -10,9 +10,9 @@
 //! `LAYERFS_TEST_POSTGRES_URL`.
 use super::adversary::{commit, verdict, wait_until, write, Service, TestStore, Verdict, CURSOR};
 use super::fault_proxy::{proxied_url, Fault, FaultProxy};
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_history::{BranchId, CommitId, HistoryError};
 use layerfs_persistence::{CompactRequest, Handles};
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_store_service::store::BoundWorkspace;
 use std::io::{Read, Write};
 use std::net::{Shutdown, TcpListener, TcpStream};

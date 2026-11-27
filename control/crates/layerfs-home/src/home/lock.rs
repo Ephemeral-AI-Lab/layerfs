@@ -5,7 +5,7 @@
 //! file description. A thread that holds it takes it again at once, so a
 //! record writer can take it whether or not its caller already holds it.
 use crate::outcome::{failed, refused};
-use layerfs_protocol::provision::install::SdkRefusal;
+use layerfs_protocol::sdk::SdkRefusal;
 use std::fs::{File, OpenOptions};
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};

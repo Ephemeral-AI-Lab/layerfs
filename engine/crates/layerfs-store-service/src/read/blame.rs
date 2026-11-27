@@ -14,11 +14,11 @@ use crate::{
     history::lookup::{self as args, Answer, Arg},
     history::rows::Rows,
 };
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_content::{
     compare::{match_lines, EntryFacts},
     object::inode_leaf::InodeKind,
 };
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::collections::HashMap;
 type Result<T> = std::result::Result<T, SdkRefusal>;
 

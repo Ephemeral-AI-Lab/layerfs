@@ -10,14 +10,14 @@
 //! its own checks found (stopped, `engine_down`, `missing`, `failed`,
 //! `not_answering`, `outdated`, `busy`, `unresolved`, `unsupported`), else
 //! with what its records say when its checks gave no verdict.
-use super::runner::{CheckId, KindDoctor, Located, Probe, Registry};
-use super::report::{Kind, Node, Thing};
 use super::budget::Checks;
+use super::report::{Kind, Node, Thing};
+use super::runner::{CheckId, KindDoctor, Located, Probe, Registry};
 use crate::home::tree;
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::home::{detect, paths, Layout};
 use layerfs_home::outcome::refused;
 use layerfs_home::state::{BlockedBy, Reason, State};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -153,14 +153,20 @@ fn blocker(state: &State, word: &'static str, name: &str) -> Option<BlockedBy> {
 
 fn home(probe: &Probe<'_>, node: &mut Node) {
     let mut checks = Checks::default();
-    super::super::home::doctor::diagnose(probe.home, probe.options.build, probe.budget, &mut checks);
+    super::super::home::doctor::diagnose(
+        probe.home,
+        probe.options.build,
+        probe.budget,
+        &mut checks,
+    );
     checks.fill(node, probe.checks, probe.budget.expired());
 }
 
 fn machine(probe: &Probe<'_>, node: &mut Node) {
     let name = probe.thing.name.as_str();
     let mut checks = Checks::default();
-    let found = super::super::machine::doctor::diagnose(probe.home, name, probe.budget, &mut checks);
+    let found =
+        super::super::machine::doctor::diagnose(probe.home, name, probe.budget, &mut checks);
     checks.fill(node, probe.checks, probe.budget.expired());
     // what its own checks found blocks what is on it (a machine they found
     // ready blocks nothing); when they gave no verdict, its records say
@@ -181,7 +187,7 @@ fn machine(probe: &Probe<'_>, node: &mut Node) {
 fn bucket(probe: &Probe<'_>, node: &mut Node) {
     let name = probe.thing.name.as_str();
     let mut checks = Checks::default();
-    super::super::backup_target::diagnose(probe.home, name, probe.full, probe.budget, &mut checks);
+    crate::backup_target::diagnose(probe.home, name, probe.full, probe.budget, &mut checks);
     checks.fill(node, probe.checks, probe.budget.expired());
 }
 

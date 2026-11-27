@@ -19,13 +19,13 @@
 use crate::host::{Deploy, Host};
 use crate::lifecycle::OpenedStore;
 use crate::registry::{SandboxState, SANDBOXES};
-use crate::{ProviderCreate, SandboxApi};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
-use layerfs_protocol::{DaemonStore, KernelRoute};
-use layerfs_home::helpers::{lock, required};
-use layerfs_home::outcome::{failed, refused};
 use crate::{CommandIdentity, Runtime, Sandbox};
 use crate::{LaunchRequest, ProviderLaunchOptions};
+use crate::{ProviderCreate, SandboxApi};
+use layerfs_home::helpers::{lock, required};
+use layerfs_home::outcome::{failed, refused};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
+use layerfs_protocol::{DaemonStore, KernelRoute};
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
@@ -41,15 +41,18 @@ pub fn start(
     (host, platform, place): (&Host, &str, Option<&(String, String)>),
     directory: &Path,
     project: OpenedStore,
-    backend: crate::runtime::Backend,
+    backend: crate::backend::select::Backend,
 ) -> Result<Arc<SandboxState>, SdkRefusal> {
     let deploy = host
         .deploy()
         .ok_or_else(|| refused("InvalidInput", "missing `deploy`"))?;
     // Inputs are read first, so a refused request leaves no creation intent.
     #[cfg(target_os = "linux")]
-    if backend == crate::runtime::Backend::HostProcess {
-        return Err(refused("Unsupported", crate::runtime::NATIVE_ON_LINUX));
+    if backend == crate::backend::select::Backend::HostProcess {
+        return Err(refused(
+            "Unsupported",
+            crate::backend::select::NATIVE_ON_LINUX,
+        ));
     }
     if cfg!(target_os = "linux") && crate::files::user().0 != 0 {
         return Err(refused(
@@ -92,7 +95,12 @@ fn start_named(
     directory: &Path,
     id: &str,
     project: OpenedStore,
-    (runtime, backend, executable, store): (Runtime, crate::runtime::Backend, PathBuf, String),
+    (runtime, backend, executable, store): (
+        Runtime,
+        crate::backend::select::Backend,
+        PathBuf,
+        String,
+    ),
 ) -> Result<Arc<SandboxState>, SdkRefusal> {
     let name = host.project.as_str();
     let sandbox_name = crate::lifecycle::sandbox_name(host.deploy(), id)?;
@@ -105,7 +113,7 @@ fn start_named(
     let controller = layerfs_protocol::duplex::generate_keypair().map_err(failed)?;
     let daemon = layerfs_protocol::duplex::generate_keypair().map_err(failed)?;
     let route = match backend {
-        crate::runtime::Backend::HostProcess => KernelRoute::Nfs,
+        crate::backend::select::Backend::HostProcess => KernelRoute::Nfs,
         _ => KernelRoute::Fuse,
     };
     // the Store's path in the daemon's filesystem, which is this one
@@ -277,7 +285,7 @@ fn start_named(
 #[cfg(target_os = "macos")]
 fn native_runtime(
     root: &str,
-    _: crate::runtime::Backend,
+    _: crate::backend::select::Backend,
 ) -> Result<Runtime, crate::RuntimeError> {
     crate::process::ProcessProvider::new(root).map(Runtime::Process)
 }
@@ -285,15 +293,14 @@ fn native_runtime(
 #[cfg(target_os = "linux")]
 fn native_runtime(
     root: &str,
-    backend: crate::runtime::Backend,
+    backend: crate::backend::select::Backend,
 ) -> Result<Runtime, crate::RuntimeError> {
     match backend {
-        crate::runtime::Backend::HostProcess => Err(
-            crate::RuntimeError::Unsupported(crate::runtime::NATIVE_ON_LINUX),
-        ),
-        crate::runtime::Backend::Namespaces => {
-            crate::namespaces::NamespaceProvider::new(root)
-                .map(Runtime::Namespaces)
+        crate::backend::select::Backend::HostProcess => Err(crate::RuntimeError::Unsupported(
+            crate::backend::select::NATIVE_ON_LINUX,
+        )),
+        crate::backend::select::Backend::Namespaces => {
+            crate::namespaces::NamespaceProvider::new(root).map(Runtime::Namespaces)
         }
     }
 }
@@ -303,19 +310,22 @@ fn native_runtime(
 /// binds follow from the daemon's Store when it is launched.
 #[cfg(target_os = "linux")]
 fn launch_options(
-    backend: crate::runtime::Backend,
+    backend: crate::backend::select::Backend,
     identity: CommandIdentity,
     host: &Host,
 ) -> Result<ProviderLaunchOptions, SdkRefusal> {
     Ok(match backend {
-        crate::runtime::Backend::HostProcess => {
-            return Err(refused("Unsupported", crate::runtime::NATIVE_ON_LINUX))
+        crate::backend::select::Backend::HostProcess => {
+            return Err(refused(
+                "Unsupported",
+                crate::backend::select::NATIVE_ON_LINUX,
+            ))
         }
-        crate::runtime::Backend::Namespaces => {
+        crate::backend::select::Backend::Namespaces => {
             let deploy = host
                 .deploy()
                 .ok_or_else(|| refused("InvalidInput", "missing `deploy`"))?;
-            let (image, archive) = crate::runtime::namespaces_image(deploy)?;
+            let (image, archive) = crate::backend::select::namespaces_image(deploy)?;
             ProviderLaunchOptions::Namespaces {
                 command_identity: identity,
                 // the daemon starts with `PATH` and its provider's kernel route only;
@@ -331,7 +341,7 @@ fn launch_options(
 
 #[cfg(not(target_os = "linux"))]
 fn launch_options(
-    _: crate::runtime::Backend,
+    _: crate::backend::select::Backend,
     identity: CommandIdentity,
     _: &Host,
 ) -> Result<ProviderLaunchOptions, SdkRefusal> {

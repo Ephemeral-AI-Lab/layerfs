@@ -3,7 +3,7 @@
 #![allow(dead_code)]
 use super::fixture::Fixture;
 use layerfs_home::json;
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use std::io::Write;
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};

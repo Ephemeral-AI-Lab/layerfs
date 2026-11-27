@@ -13,10 +13,15 @@
 //! returns, and the run is not proof.
 #![cfg(target_os = "linux")]
 #[allow(dead_code)]
-mod support {
-    pub mod image;
-}
-use layerfs_sandbox::{cancel::{cancel, Cancelled, ExecSlot, Stop}, namespaces::{NamespaceProvider, Sandbox}, Bind, CommandIdentity, ExecRequest, Image, LaunchRequest, ProviderLaunchOptions, RuntimeError, SandboxRecord};
+#[path = "../support/image.rs"]
+mod image;
+use image::{archive, hex, unpacked_at, Tar, DIGEST};
+use layerfs_sandbox::{
+    cancel::{cancel, Cancelled, ExecSlot, Stop},
+    namespaces::{NamespaceProvider, Sandbox},
+    Bind, CommandIdentity, ExecRequest, Image, LaunchRequest, ProviderLaunchOptions, RuntimeError,
+    SandboxRecord,
+};
 use nix::sys::signal::Signal;
 use std::{
     collections::BTreeSet,
@@ -26,7 +31,6 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use support::image::{archive, hex, unpacked_at, Tar, DIGEST};
 
 /// The port the stub daemon claims; nothing listens on it.
 const PORT: u16 = 40404;

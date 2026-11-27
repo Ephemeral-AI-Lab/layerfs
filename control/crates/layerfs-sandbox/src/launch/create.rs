@@ -1,8 +1,9 @@
 //! Ordinary Sandbox startup, original deployment inputs and failure custody.
-use crate::{internal::Control, OperationFailure};
-use layerfs_protocol::provision::install::{ControlError, DaemonStatus, HelloRequest, Reply, Request};
-use layerfs_protocol::duplex::ChannelError;
 use crate::Runtime;
+use crate::{internal::Control, OperationFailure};
+use layerfs_protocol::daemon::{DaemonStatus, HelloRequest, Reply, Request};
+use layerfs_protocol::duplex::ChannelError;
+use layerfs_protocol::provision::install::ControlError;
 use std::{fmt, io, sync::Arc};
 
 /// Concrete boundary reached by one original lifecycle operation.
@@ -82,8 +83,8 @@ impl SandboxPhase {
 /// In plain words, never `Debug` text.
 impl fmt::Display for SandboxCause {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use layerfs_project::store::InstallError;
         use crate::RuntimeError;
+        use layerfs_project::store::InstallError;
         match self {
             Self::Io(error) => write!(f, "{error}"),
             Self::Setup(error) => write!(f, "{error}"),
@@ -91,6 +92,7 @@ impl fmt::Display for SandboxCause {
             Self::Provider(failure) => match &failure.cause {
                 RuntimeError::Io(error) => write!(f, "{error}"),
                 RuntimeError::Protocol(said) => f.write_str(said),
+                RuntimeError::Json(said) => f.write_str(said),
                 RuntimeError::Unsupported(what) => write!(f, "not supported here: {what}"),
                 RuntimeError::Unavailable(why) => f.write_str(why),
             },

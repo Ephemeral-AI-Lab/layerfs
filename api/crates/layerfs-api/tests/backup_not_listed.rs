@@ -4,7 +4,7 @@
 //! bucket whose key has no saved secret, and one whose record cannot be
 //! read. Nothing is sent: neither bucket has an endpoint that answers.
 use layerfs_api::home::{self, paths, write_record};
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 

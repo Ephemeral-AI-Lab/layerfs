@@ -7,9 +7,9 @@
 //! tagged with its base root, and visits again. A later visit uses facts only
 //! of the base the Workspace has at that moment, so an install between two
 //! visits costs another read and never a stale answer.
-use crate::job::Decided;
-use crate::operations::kernel::mutation::effect;
+use crate::job::run::Decided;
 use crate::operations::kernel::lookup::decide_read;
+use crate::operations::kernel::mutation::effect;
 use crate::{
     BaseFacts, BaseView, JobOutcome, KernelMutationOutcome, KernelReadDecision,
     KernelReadOperation, KernelReadOutcome, NamespaceJob, Need, Operation, Position, Refusal, Time,

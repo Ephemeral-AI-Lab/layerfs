@@ -1,7 +1,7 @@
 //! Logical binding and kernel mount acknowledgements.
 use crate::{internal::Control, OperationFailure};
-use layerfs_protocol::provision::install::{MountPlace, ReadyMount, Reply, Request, WorkspaceToken};
 use layerfs_history::{BranchId, BranchSnapshot, WorkspaceId};
+use layerfs_protocol::daemon::{MountPlace, ReadyMount, Reply, Request, WorkspaceToken};
 use std::fmt;
 
 /// Explicit filesystem operations on one caller-owned sequential control channel.

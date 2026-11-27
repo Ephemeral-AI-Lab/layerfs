@@ -1,12 +1,18 @@
 //! One startup lifecycle owner, Store transfer and bounded connection custody.
 use super::retained::{RetainedFailure, RetainedFailures, RetainedSnapshot};
 use super::{ApplicationError, ConnectionFailure};
-use {layerfs_store_service::{bootstrap::{open_store_observed, OpenedStore}, Owner, OwnerConfig}, crate::{control::Service, install_types::{InstallFailure, InstalledStore}}};
-use layerfs_protocol::{provision::{install::{DaemonPhase, DaemonStatus, HelloRequest}, daemon_setup::DaemonSetup}, duplex as transport};
+use crate::{
+    bootstrap::{open_store_observed, OpenedStore},
+    control::Service,
+    install_types::{InstallFailure, InstalledStore},
+    Owner, OwnerConfig,
+};
 use layerfs_overlay::ProfileConfig;
 use layerfs_persistence::{
     PersistenceConfig, PostgresSelection, SqlitePersistenceProfile, SynchronousCommit,
 };
+use layerfs_protocol::daemon::{DaemonPhase, DaemonStatus, HelloRequest};
+use layerfs_protocol::{duplex as transport, provision::daemon_setup::DaemonSetup};
 use layerfs_storage::ReservationBlocks;
 use std::{
     sync::{Arc, Condvar, Mutex},
@@ -384,13 +390,13 @@ pub enum Disposition {
 /// ControlReady (#547 slice 3): close, workspace status, the operator read
 /// model and reclaim (#547 slice 5). Everything else is refused `Capacity`
 /// and the connection is closed.
-pub fn recovery_request(request: &layerfs_protocol::provision::install::Request) -> bool {
-    use layerfs_protocol::provision::install::Request;
+pub fn recovery_request(request: &layerfs_protocol::daemon::Request) -> bool {
+    use layerfs_protocol::daemon::Request;
     match request {
         Request::Status(_) | Request::Unmount(_) => true,
         Request::Sdk(call) => {
-            call.method == layerfs_protocol::provision::install::OPERATION
-                || call.method == layerfs_protocol::provision::install::RECLAIM
+            call.method == layerfs_protocol::daemon::OPERATION
+                || call.method == layerfs_protocol::daemon::RECLAIM
         }
         _ => false,
     }
@@ -660,7 +666,7 @@ impl Application {
         class: SlotClass,
     ) -> Result<DaemonStatus, crate::control::Failure> {
         use crate::control::Failure;
-        use layerfs_protocol::provision::install::ControlCode;
+        use layerfs_protocol::daemon::ControlCode;
         let mut state = self.state.lock().map_err(|_| Failure::Poisoned)?;
         if class == SlotClass::Reserved
             && matches!(

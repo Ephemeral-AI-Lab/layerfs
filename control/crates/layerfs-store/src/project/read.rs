@@ -12,12 +12,12 @@ use crate::project::record::ProjectRecord;
 use crate::project::state::{self, Listing};
 use crate::record::StoreRecord;
 use crate::state::Machines;
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::cursor;
 use layerfs_home::home::paths;
 use layerfs_home::names::{ProjectRef, StoreName};
 use layerfs_home::outcome::{failed, refused, Outcome};
 use layerfs_home::state::State;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;

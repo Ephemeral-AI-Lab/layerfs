@@ -16,11 +16,11 @@ use crate::project::op::{DELETE, INIT};
 use crate::project::record::ProjectRecord;
 use crate::record::StoreRecord;
 use crate::state::Machines;
-use layerfs_protocol::provision::install::SdkRefusal;
 use layerfs_home::op::Standing;
 use layerfs_home::outcome::refused;
 use layerfs_home::outcome::shell_word;
 use layerfs_home::state::{Reason, State};
+use layerfs_protocol::sdk::SdkRefusal;
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;

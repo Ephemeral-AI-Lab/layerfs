@@ -1,6 +1,9 @@
 //! Cargo-sized merge diagnostics must use the normal bounded control encoder.
-use layerfs_protocol::{provision::install::{Answer, Reply, SdkValue}, sdk::{conflicts, conflicts_truncated, lww, lww_truncated}};
 use layerfs_content::merge::{Conflict, ConflictKind, LwwDecision};
+use layerfs_protocol::{
+    daemon::{Answer, Reply},
+    sdk::{conflicts, conflicts_truncated, lww, lww_truncated, SdkValue},
+};
 
 #[test]
 fn cargo_lww_result_fits_the_unchanged_control_frame() {

@@ -4,8 +4,8 @@ use crate::calls::table::Kind::{Bool, Name};
 use crate::calls::table::{a, call, opt, Call, PROGRESS};
 use crate::calls::Context;
 use crate::calls::Form;
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::outcome::Outcome;
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_sandbox::family::{remove, RemoveRequest, Removed};
 
 /// Its answer: `ok`, the Workspaces a forced remove ended, and what may be
@@ -42,7 +42,12 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let (home, events) = context.parts();
     let texts =
         |items: Vec<String>| SdkValue::List(items.into_iter().map(SdkValue::Text).collect());
-    let (outcome, unmounted, left) = match remove(home, events, &request)? {
+    let (outcome, unmounted, left) = match remove(
+        home,
+        events,
+        &request,
+        layerfs_workspace::route::dispatch::call,
+    )? {
         Removed::Stopped { unmounted, left } => ("removed", unmounted, left),
         Removed::AlreadyGone { left } => ("already_gone", Vec::new(), left),
     };

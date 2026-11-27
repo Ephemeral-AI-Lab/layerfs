@@ -5,10 +5,10 @@
 //! `sandbox/dispatch.rs` so Sandbox code never imports Workspace code
 //! (layerfs-project#106). It matches on the one table of host operations
 //! (`host::Call`, R1).
-use layerfs_sandbox::exec;
-use layerfs_sandbox::host::{Call, Host};
 use crate::machine::serve as workspace;
 use layerfs_home::outcome::Outcome;
+use layerfs_sandbox::exec;
+use layerfs_sandbox::host::{Call, Host};
 
 /// Runs one host operation once: a Workspace operation here, any other in
 /// `sandbox::dispatch`, which checks a Commit `message` first.
@@ -18,7 +18,7 @@ pub fn call(host: Host, call: Call) -> Outcome {
             layerfs_sandbox::dispatch::checked(&host.message)?;
         }
         Call::Status { .. } | Call::ExecCancel { .. } => {}
-        _ => return layerfs_sandbox::dispatch::call(host, call),
+        _ => return layerfs_sandbox::dispatch::call(host, call, &crate::machine::drain::Drain),
     }
     let path = match call.path() {
         Some(_) => workspace::by_name(&host, call.path())?,
@@ -54,9 +54,9 @@ pub fn call(host: Host, call: Call) -> Outcome {
             workspace,
             tag,
             ..
-        } => exec::exec(
+        } => crate::exec::run::exec(
             &host,
-            &exec::Exec {
+            &crate::exec::run::Exec {
                 path: path.as_deref(),
                 directory: directory.as_deref(),
                 command: command.as_deref(),
@@ -79,6 +79,6 @@ pub fn call(host: Host, call: Call) -> Outcome {
             (exec_id.as_deref(), grace_ms),
             workspace.as_deref(),
         ),
-        _ => layerfs_sandbox::dispatch::call(host, call),
+        _ => layerfs_sandbox::dispatch::call(host, call, &crate::machine::drain::Drain),
     }
 }

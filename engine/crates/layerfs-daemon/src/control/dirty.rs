@@ -18,11 +18,11 @@
 //! an observation before terminal admission, so a write that lands after it
 //! is closed with the Workspace.
 use super::{registry::bound, Failure, Service};
-use layerfs_protocol::provision::install::{DirtyReport, WorkspaceToken};
 use layerfs_content::compare::{locate, TreeTable};
 use layerfs_content::filesystem::attributes::{read_portable, AttributeReadWork};
 use layerfs_content::filesystem::FilesystemRootId;
 use layerfs_content::ObjectId;
+use layerfs_protocol::daemon::{DirtyReport, WorkspaceToken};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Paths one report names.

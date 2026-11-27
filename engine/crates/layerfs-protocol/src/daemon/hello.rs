@@ -1,5 +1,8 @@
 //! Additive Hello fields within the existing Call/Answer control format.
-use crate::{provision::install::ControlError, wire::{Reader, Writer}};
+use crate::{
+    provision::install::ControlError,
+    wire::{Reader, Writer},
+};
 pub(crate) fn put_request(out: &mut Writer, request: &HelloRequest) -> Result<(), ControlError> {
     if request.expected_instance == Some([0; 32]) {
         return Err(ControlError("daemon incarnation"));

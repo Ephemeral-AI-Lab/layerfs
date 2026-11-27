@@ -14,9 +14,9 @@
 //! command's stream only as fast as this sink takes it (an 8 KiB window),
 //! so a slow disk holds the command back. No total is capped: a spilled
 //! stream is bounded by free space.
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::helpers::lock;
 use layerfs_home::outcome::{failed, refused};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
 use std::io::{self, BufWriter, Write};

@@ -8,8 +8,8 @@ mod oracle;
 #[allow(dead_code)]
 #[path = "support/host_install.rs"]
 mod support;
-use layerfs_store_service::{store::BindRequest, Owner, OwnerConfig};
 use layerfs_history::WorkspaceId;
+use layerfs_store_service::{store::BindRequest, Owner, OwnerConfig};
 fn proof(shape: fixture::Shape) {
     let f = fixture::Fixture::new(shape);
     prove_fixture(f);

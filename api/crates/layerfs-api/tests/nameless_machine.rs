@@ -22,7 +22,7 @@
 //!   the Store file it keeps with the line that removes it.
 #![cfg(feature = "machine")]
 use layerfs_api::home::{paths, write_entity, write_record};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::{Path, PathBuf};
 
 fn tempdir(tag: &str) -> PathBuf {

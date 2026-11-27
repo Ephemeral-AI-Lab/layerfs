@@ -12,9 +12,9 @@ mod fixture;
 mod pg;
 
 use fixture::Fixture;
-use layerfs_home::names::HOST_MACHINE;
+use layerfs_api::names::HOST_MACHINE;
 use layerfs_api::worker::{read_host_frame, write_host_frame, HOST_MAX_REPLY, MAX_HELLO};
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use pg::*;
 use postgres::{Client as Postgres, NoTls};
 use std::io::{Read, Write};

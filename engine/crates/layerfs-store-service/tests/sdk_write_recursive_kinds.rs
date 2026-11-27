@@ -11,7 +11,7 @@
 #[path = "support/round_trips.rs"]
 mod rt;
 
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use rt::{branch_arg as branch, path_arg as path, t, Opened, Store};
 use std::collections::BTreeMap;
 

@@ -26,12 +26,12 @@ use super::family::named;
 use super::list::handle;
 use super::record::{self, SandboxRecord};
 use crate::host::Call;
-use crate::route::on_machine;
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
+use crate::route::{on_machine, Local};
 use layerfs_home::events::Events;
 use layerfs_home::home;
 use layerfs_home::op::{Op, Standing};
 use layerfs_home::outcome::{refused, shell_word, with_fix, with_next};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -99,8 +99,16 @@ fn texts(items: &[SdkValue]) -> impl Iterator<Item = &str> {
 /// Store call's `OldStore`, or a daemon that did not open it and said so)
 /// answers `OldStore` with the version and the forced remove as its fix,
 /// which goes by the Sandbox's records and runtime, not its Store.
-pub fn remove(home: &Path, events: &mut Events<'_>, request: &RemoveRequest) -> Result<Removed> {
-    removed(home, events, request).map_err(|refusal| {
+/// `local` runs the close on a machine whose calls run in this process: the
+/// control-layer workspace crate's `route::dispatch::call`, which drains the
+/// Sandbox's Workspaces (this crate sits below it).
+pub fn remove(
+    home: &Path,
+    events: &mut Events<'_>,
+    request: &RemoveRequest,
+    local: Local,
+) -> Result<Removed> {
+    removed(home, events, request, local).map_err(|refusal| {
         // an unknown outcome stays as it is: its record keeps the intent
         let status = match request.force || refusal.code == "Unknown" {
             true => None,
@@ -118,7 +126,12 @@ pub fn remove(home: &Path, events: &mut Events<'_>, request: &RemoveRequest) -> 
 }
 
 /// [`remove`], as it is attempted once.
-fn removed(home: &Path, events: &mut Events<'_>, request: &RemoveRequest) -> Result<Removed> {
+fn removed(
+    home: &Path,
+    events: &mut Events<'_>,
+    request: &RemoveRequest,
+    local: Local,
+) -> Result<Removed> {
     let home = home.to_path_buf();
     let name = request.name.as_str();
     let found = named(&home, name)?;
@@ -127,7 +140,7 @@ fn removed(home: &Path, events: &mut Events<'_>, request: &RemoveRequest) -> Res
             "its container of the retired docker backend was not touched: {}",
             super::reopen::container_fix(container.as_deref())
         );
-        return forget(&home, events, name, container, Worker::Ask);
+        return forget(&home, events, name, container, Worker::Ask, local);
     }
     // a Sandbox on a machine whose record has no 2.0 name (RV3 FAIL 1), or
     // whose VM a live read found missing: nothing on that machine is
@@ -143,10 +156,10 @@ fn removed(home: &Path, events: &mut Events<'_>, request: &RemoveRequest) -> Res
             ),
             false => missing_vm(machine, found.project()),
         };
-        return forget(&home, events, name, first, Worker::Skip);
+        return forget(&home, events, name, first, Worker::Skip, local);
     }
     if let Some(unnamed) = foreign(&home, &found)? {
-        return forget(&home, events, name, unnamed, Worker::Ask);
+        return forget(&home, events, name, unnamed, Worker::Ask, local);
     }
     // a local record this build does not read (RV3 FAIL 2, 3): its
     // identity cannot be checked, so nothing is signalled and no Store or
@@ -155,7 +168,7 @@ fn removed(home: &Path, events: &mut Events<'_>, request: &RemoveRequest) -> Res
     if let Some(daemon) = found.daemon() {
         if let Some(why) = crate::reopen::unread(daemon) {
             let first = crate::lifecycle::unread_left(daemon, &why);
-            return forget(&home, events, name, first, Worker::Ask);
+            return forget(&home, events, name, first, Worker::Ask, local);
         }
     }
     // a machine recorded stopped runs no daemon and its worker is not
@@ -163,7 +176,7 @@ fn removed(home: &Path, events: &mut Events<'_>, request: &RemoveRequest) -> Res
     // with `force`, goes by its records alone; without either, the remove
     // says how it can go
     if let Some(first) = stopped_on(&home, &found, request.force)? {
-        return forget(&home, events, name, first, Worker::Gone);
+        return forget(&home, events, name, first, Worker::Gone, local);
     }
     let force = request.force;
     // the commands this home records, which a forced remove cancels first
@@ -239,13 +252,7 @@ fn removed(home: &Path, events: &mut Events<'_>, request: &RemoveRequest) -> Res
             .and_then(|()| crate::force::local_host(&home, name))
             .and_then(|host| crate::force::close(&host, held.as_deref().unwrap_or(&[])))
     } else {
-        on_machine(
-            &home,
-            events,
-            &record,
-            Call::Close { force, held },
-            crate::dispatch::call,
-        )
+        on_machine(&home, events, &record, Call::Close { force, held }, local)
     };
     let _lock = home::lock::take(&home)?;
     // on `native` the Sandbox's own side removed the folder already
@@ -437,6 +444,7 @@ fn forget(
     name: &str,
     first: String,
     worker: Worker,
+    local: Local,
 ) -> Result<Removed> {
     let record = {
         let _lock = home::lock::take(home)?;
@@ -460,7 +468,7 @@ fn forget(
                 force: true,
                 held: None,
             },
-            crate::dispatch::call,
+            local,
         )
         .err()
         .filter(|refusal| refusal.code != "NoSuchSandbox")

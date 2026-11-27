@@ -4,8 +4,8 @@
 //! root, the project, its Store and how the Sandbox is deployed,
 //! [`Deploy`]). Fields a request may lack stay optional and are refused
 //! where each is used, with the text the untyped request was refused with.
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::helpers::required;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_store::open_args::PgSelection;
 use layerfs_store::record::StoreRecord;
 use std::path::PathBuf;
@@ -42,7 +42,7 @@ pub const OPS: [(Op, &str); 10] = [
     (Op::SandboxCreate, "sandbox.create"),
     (Op::SandboxClose, "sandbox.close"),
     (Op::ListWorkspaces, "sandbox.list_workspaces"),
-    (Op::Capacity, layerfs_protocol::provision::install::OPERATION),
+    (Op::Capacity, layerfs_protocol::daemon::OPERATION),
     (Op::Mount, "workspace.mount"),
     (Op::Exec, "workspace.exec"),
     (Op::ExecCancel, "workspace.cancel"),

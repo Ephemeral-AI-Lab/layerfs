@@ -8,11 +8,11 @@ use crate::calls::table::{a, call, Call};
 use crate::calls::Context;
 use crate::calls::{Form, Part, Section};
 #[cfg(feature = "machine")]
-use layerfs_protocol::provision::install::SdkValue;
-#[cfg(feature = "machine")]
 use layerfs_home::names::MachineName;
 #[cfg(feature = "machine")]
 use layerfs_home::outcome::Outcome;
+#[cfg(feature = "machine")]
+use layerfs_protocol::sdk::SdkValue;
 
 /// One image the machine holds, with its state.
 const ITEM: Form = Form::of(

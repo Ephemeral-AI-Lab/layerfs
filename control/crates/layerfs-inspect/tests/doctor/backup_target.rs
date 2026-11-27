@@ -6,8 +6,8 @@ mod target {
 mod backup_target;
 #[path = "../../../layerfs-store/tests/support/doctor_s3.rs"]
 mod peer;
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::home::{self, paths, write_entity};
+use layerfs_protocol::sdk::SdkValue;
 use peer::{Mode, Server};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};

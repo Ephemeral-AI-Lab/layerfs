@@ -6,7 +6,7 @@
 //! record read and written back is the same JSON, field for field, null for
 //! null; a changed field keeps its place and a new one comes last, as
 //! [`super::with_field`] places them. It knows no entity.
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 
 /// The fields one entity's record knows, each with its type.
 pub trait Field: Sized + Clone {

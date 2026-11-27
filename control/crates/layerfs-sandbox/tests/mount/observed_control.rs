@@ -1,6 +1,9 @@
 //! Normal and observed facades use one authenticated lifecycle with exact tokens.
-use layerfs_protocol::{provision::install::{Answer, Call, CleanupObservation, Reply, Request, UnmountControl, WorkspaceToken}, duplex};
 use layerfs_history::WorkspaceId;
+use layerfs_protocol::{
+    daemon::{Answer, Call, CleanupObservation, Reply, Request, UnmountControl, WorkspaceToken},
+    duplex,
+};
 use layerfs_sandbox::internal::{Control, ControlPhase};
 use std::{
     net::{TcpListener, TcpStream},
@@ -66,7 +69,7 @@ fn observed_reply_keeps_original_exact_token_validation() {
 }
 #[test]
 fn unmount_force_selects_one_original_request_without_unknown_relinquishment() {
-    use layerfs_protocol::provision::install::{ControlCode, ControlRefusal};
+    use layerfs_protocol::daemon::{ControlCode, ControlRefusal};
     let (mut control, worker) = pair(|mut channel| {
         for force in [false, true] {
             let call = Call::decode(channel.receive.receive().unwrap()).unwrap();

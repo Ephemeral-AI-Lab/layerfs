@@ -3,7 +3,7 @@
 //! never creates or deletes it, and the first write starts the owner, which
 //! later writes reuse.
 #![cfg(any(target_os = "linux", target_os = "macos"))]
-use layerfs_protocol::provision::install::{SdkCall, SdkValue};
+use layerfs_protocol::sdk::{SdkCall, SdkValue};
 use layerfs_store_service::StoreService;
 
 #[allow(dead_code)]

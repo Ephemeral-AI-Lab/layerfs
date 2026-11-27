@@ -5,7 +5,7 @@
 //! `os` re-exports them for this module: `backend::process::macos` (the
 //! `mount` table, `umount -f`) or `backend::namespaces::linux` (the
 //! `mountinfo` table, a lazy `MNT_DETACH`). Process identity
-//! (`LocalProcess`) is `layerfs_bridge::process` (layerfs-project#112).
+//! (`LocalProcess`) is `layerfs_os::process` (layerfs-project#112).
 //! `confined` is what an inspection read uses of the filesystem
 //! (layerfs-project#178).
 mod daemon;

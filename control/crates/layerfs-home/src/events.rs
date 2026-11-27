@@ -1,7 +1,7 @@
 //! A running call's one event stream (O22): progress, a worker's events and
 //! a command's output. The entities emit through it; the call surface
 //! (`layerfs-api`) gives each call one (layerfs-project#107).
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 
 /// A call's one event stream.
 pub struct Events<'a> {

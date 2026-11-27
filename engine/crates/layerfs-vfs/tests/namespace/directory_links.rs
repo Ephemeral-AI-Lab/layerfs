@@ -18,7 +18,10 @@ use layerfs_content::filesystem::{
 use layerfs_content::object::inode_leaf::{InodeKind, InodeValue};
 use layerfs_content::{ContentError, FinalizedConsumer, ObjectId};
 use layerfs_overlay::{KernelMount, StatementKind, StoredCounts, WorkspaceState};
-use layerfs_vfs::{CanonicalClient, JobOutcome, KernelInput, KernelReadDecision, KernelReadOperation, KernelVisitRequest, Need, Operation, Refusal, ViewStat, VisitFacts, DIRECTORY_COUNT_CAPACITY};
+use layerfs_vfs::{
+    CanonicalClient, JobOutcome, KernelInput, KernelReadDecision, KernelReadOperation,
+    KernelVisitRequest, Need, Operation, Refusal, ViewStat, VisitFacts, DIRECTORY_COUNT_CAPACITY,
+};
 use std::{collections::BTreeMap, sync::Arc};
 
 const CACHE: usize = 4 * 1024 * 1024;

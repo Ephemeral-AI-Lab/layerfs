@@ -1,5 +1,9 @@
 //! Kernel serving assembly over the daemon's one Store and one overlay owner.
-use {crate::control::{ExportServing, ExportServingConfig, Helper, KernelServing, Mounter, Service}, layerfs_store_service::{store::Store, Owner}};
+use crate::{
+    control::{ExportServing, ExportServingConfig, Helper, KernelServing, Mounter, Service},
+    store::Store,
+    Owner,
+};
 use layerfs_protocol::provision::daemon_setup::DaemonSetup;
 use layerfs_protocol::KernelRoute;
 use std::{path::Path, sync::Arc};

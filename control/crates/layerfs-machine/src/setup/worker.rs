@@ -6,7 +6,9 @@ use super::guest::{Guest, EXEC};
 use super::tool;
 use crate::platform::error::{Code, MachineError};
 use crate::setup::facts;
-use crate::setup::spec::{Bundle, Endpoint, Spec, BUNDLE, DATA, IMAGE, STATE, WORKER_LOG, WORKER_PORT};
+use crate::setup::spec::{
+    Bundle, Endpoint, Spec, BUNDLE, DATA, IMAGE, STATE, WORKER_LOG, WORKER_PORT,
+};
 use layerfs_home::log::rotate::ROTATE_AT;
 use std::net::{Ipv4Addr, SocketAddr, TcpStream};
 use std::path::Path;

@@ -10,7 +10,7 @@ mod installed;
 #[allow(dead_code)]
 mod support;
 
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 use support::{write, Fixture};

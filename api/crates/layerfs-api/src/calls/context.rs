@@ -2,8 +2,8 @@
 //! (moved back from layerfs-home by layerfs-project#107; the entities take
 //! the home and [`Events`] apart).
 use super::form::Asked;
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::events::Events;
+use layerfs_protocol::sdk::SdkValue;
 use std::path::{Path, PathBuf};
 
 /// What one running call can reach: its home and its event stream.

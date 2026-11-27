@@ -1,5 +1,11 @@
 //! Control preserves confirmed header corruption despite schema-open refusal.
-use {layerfs_store::{diagnostic, identity::{Identity, Kind}}, layerfs_persistence::diagnostic::{Options, Outcome}};
+use {
+    layerfs_persistence::diagnostic::{Options, Outcome},
+    layerfs_store::{
+        diagnostic,
+        identity::{Identity, Kind},
+    },
+};
 
 /// A private (`0700`) scratch directory for one Store file: the kernel guard
 /// admits a Store's own directory only, as in a home.

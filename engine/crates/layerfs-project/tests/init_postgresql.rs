@@ -131,8 +131,7 @@ fn a_folder_inits_into_postgresql_with_the_root_sqlite_gives() {
     let file = scratch.path.join("store.sqlite");
     let sqlite = || {
         StoreSelection::Sqlite(
-            PersistenceConfig::sqlite(&file)
-                .with_sqlite_profile(SqlitePersistenceProfile::Normal),
+            PersistenceConfig::sqlite(&file).with_sqlite_profile(SqlitePersistenceProfile::Normal),
         )
     };
     api.create_store(CreateRequest {

@@ -1,5 +1,17 @@
 //! Exact known control results and explicitly scoped status observations.
-use crate::{provision::install::{Activity, Answer, CleanupObservation, ControlCode, ControlError, ControlRefusal, LocalObservation, Reply, WorkspaceStatus, HISTORY_WINDOW}, daemon::{forced::{facts, forced, put_facts, put_forced}, history::*, mount::{custody, mount, put_custody, put_mount, put_ready, ready}}, wire::{Reader, Writer}};
+use crate::{
+    daemon::{
+        forced::{facts, forced, put_facts, put_forced},
+        history::*,
+        mount::{custody, mount, put_custody, put_mount, put_ready, ready},
+    },
+    daemon::{
+        Activity, Answer, CleanupObservation, ControlCode, ControlRefusal, LocalObservation, Reply,
+        WorkspaceStatus, HISTORY_WINDOW,
+    },
+    provision::install::ControlError,
+    wire::{Reader, Writer},
+};
 use layerfs_history::PageResult;
 const MAGIC: &[u8] = b"LFSA\x02";
 impl Answer {

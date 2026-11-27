@@ -1,8 +1,12 @@
 //! Runtime startup: one launch, one authenticated connection and the Store's installation, the same for every backend.
 use super::{connection::Startup, SandboxApi, SandboxCause, SandboxPhase};
 use crate::internal::Control;
-use layerfs_protocol::{provision::{install::{ControlError, DaemonStatus}, daemon_setup::DaemonSetup, manifest::StoreManifest}, duplex::{public_key, ChannelWork}};
 use crate::{Bind, CommandIdentity, LaunchRequest, ProviderLaunchOptions, Runtime, Sandbox};
+use layerfs_protocol::daemon::DaemonStatus;
+use layerfs_protocol::{
+    duplex::{public_key, ChannelWork},
+    provision::{daemon_setup::DaemonSetup, install::ControlError, manifest::StoreManifest},
+};
 use std::{fmt, sync::Arc};
 
 /// Runtime launch and private daemon authentication inputs.
@@ -110,12 +114,10 @@ impl SandboxApi {
         let mut progress = Startup::new();
         let mut launched = None;
         let result = (|| {
-            if let Some(directory) =
-                self.runtime
-                    .local_directory(&request.launch.name)
-                    .map_err(|cause| {
-                        SandboxCause::Runtime(crate::WireFailure::local(cause))
-                    })?
+            if let Some(directory) = self
+                .runtime
+                .local_directory(&request.launch.name)
+                .map_err(|cause| SandboxCause::Runtime(crate::WireFailure::local(cause)))?
             {
                 if std::path::Path::new(&request.setup.overlay)
                     != directory.join("overlay/overlay.sqlite")
@@ -221,12 +223,10 @@ impl SandboxApi {
         let mut launched = None;
         let mut installed = None;
         let result = (|| {
-            if let Some(directory) =
-                self.runtime
-                    .local_directory(&request.launch.name)
-                    .map_err(|cause| {
-                        SandboxCause::Runtime(crate::WireFailure::local(cause))
-                    })?
+            if let Some(directory) = self
+                .runtime
+                .local_directory(&request.launch.name)
+                .map_err(|cause| SandboxCause::Runtime(crate::WireFailure::local(cause)))?
             {
                 if std::path::Path::new(&request.setup.overlay)
                     != directory.join("overlay/overlay.sqlite")
@@ -364,9 +364,7 @@ fn binds(
             layerfs_protocol::DaemonStore::Sqlite { locator, .. },
         ) => Bind::store(std::path::Path::new(locator))
             .map(|bind| vec![bind])
-            .map_err(|cause| {
-                SandboxCause::Runtime(crate::WireFailure::local(cause))
-            }),
+            .map_err(|cause| SandboxCause::Runtime(crate::WireFailure::local(cause))),
         _ => Ok(Vec::new()),
     }
 }

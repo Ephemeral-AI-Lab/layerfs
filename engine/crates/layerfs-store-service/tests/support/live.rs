@@ -188,8 +188,8 @@ pub fn committed(fixture: &Fixture, name: &str, path: &str) -> Option<String> {
         .try_call(
             "fs.read",
             vec![
-                ("branch", layerfs_protocol::provision::install::SdkValue::text(name)),
-                ("path", layerfs_protocol::provision::install::SdkValue::text(path)),
+                ("branch", layerfs_protocol::sdk::SdkValue::text(name)),
+                ("path", layerfs_protocol::sdk::SdkValue::text(path)),
             ],
         )
         .ok()

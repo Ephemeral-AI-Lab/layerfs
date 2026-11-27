@@ -22,7 +22,10 @@
 //! original result first.
 use crate::{coherence::reply_order, RequestDisposition};
 use fuser::Errno;
-use layerfs_vfs::{requests::{DirectoryFailure, MutationFailure, ReadFailure}, ports::mount::Fence};
+use layerfs_vfs::{
+    ports::mount::Fence,
+    requests::{DirectoryFailure, MutationFailure, ReadFailure},
+};
 
 /// The kernel's own abort releases the blocked caller; this errno only ends
 /// the request's reply ownership.

@@ -1,10 +1,10 @@
 //! Typed original observations. Unavailable values are never populated from defaults.
 use super::json::Json;
-use layerfs_store_service::{OwnerConfig, OwnerStart, OwnerWork};
 use layerfs_overlay::{
     AllocationState, AllocationWork, DatabaseProfile, DatabaseWork, PayloadWork, ProfileConfig,
     StatementWork,
 };
+use layerfs_store_service::{OwnerConfig, OwnerStart, OwnerWork};
 use std::io;
 
 fn numbers(out: &mut Json, fields: &[(&str, u64)]) -> io::Result<()> {

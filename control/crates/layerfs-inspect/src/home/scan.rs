@@ -8,11 +8,11 @@
 //! repairs it (a record that does not parse, a symlink in place of a
 //! folder): its message then says what to do by hand.
 use super::findings::Findings;
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::home::{paths, read_record, RECORD_VERSION};
 use layerfs_home::outcome::failed;
 use layerfs_home::outcome::shell_word;
 use layerfs_machine::record::MachineRecord;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_sandbox::record::SandboxRecord;
 use layerfs_store::record::StoreRecord;
 use std::collections::BTreeSet;

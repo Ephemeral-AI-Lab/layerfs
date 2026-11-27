@@ -1,5 +1,9 @@
 //! One correlated bounded control request, never an immutable-content upload.
-use crate::{provision::install::{Call, ControlError, MountPlace, Request, HISTORY_WINDOW}, daemon::history::*, wire::{Reader, Writer}};
+use crate::{
+    daemon::history::*,
+    provision::install::ControlError,
+    wire::{Reader, Writer},
+};
 use layerfs_history::{
     BranchId, CommitHistoryRequest, ForkRequest, ForkSource, HistoryName, LayerId, LayerStackId,
     Page, WorkspaceId,
@@ -319,7 +323,9 @@ fn window(limit: u16) -> Result<(), ControlError> {
 }
 
 // Public mount-control vocabulary; no immutable-content data service.
-use layerfs_history::{error::MovedState, BranchRecord, BranchSnapshot, CommitOutcome, CommitRecord, PageResult};
+use layerfs_history::{
+    error::MovedState, BranchRecord, BranchSnapshot, CommitOutcome, CommitRecord, PageResult,
+};
 /// History processing window; authenticated continuation covers arbitrarily many pages.
 pub const HISTORY_WINDOW: u16 = 32;
 /// Exact daemon-local namespace plus authority incarnation. Never redirect a stale token.
@@ -503,12 +509,14 @@ impl Request {
         match self {
             Self::Observed { scope, request, .. } => {
                 if *scope == [0; 32] {
-                    return Err(crate::provision::install::ControlError("zero observation scope"));
+                    return Err(crate::provision::install::ControlError(
+                        "zero observation scope",
+                    ));
                 }
                 match request.as_ref() {
-                    Self::Observed { .. } | Self::Hello(_) | Self::EndSession => {
-                        Err(crate::provision::install::ControlError("invalid observed operation"))
-                    }
+                    Self::Observed { .. } | Self::Hello(_) | Self::EndSession => Err(
+                        crate::provision::install::ControlError("invalid observed operation"),
+                    ),
                     operation => Ok(operation),
                 }
             }

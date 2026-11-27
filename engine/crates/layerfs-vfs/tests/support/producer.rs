@@ -19,7 +19,12 @@ use layerfs_overlay::{
     WRITE_WINDOW,
 };
 use layerfs_telemetry::timer::Timing;
-use layerfs_vfs::{CapturedNamespace, CapturedNamespaceAttempt, CapturedNamespaceCustody, CapturedNamespaceWork, Operation, OperationRecordApply, OperationRecordReply, OperationRecordWindow, Outcome, OverlayCapturedNamespace, OverlayCapturedRuns, OverlayOperationRecords, Position, Time, ViewStat, WorkspaceError, WorkspaceResult};
+use layerfs_vfs::{
+    CapturedNamespace, CapturedNamespaceAttempt, CapturedNamespaceCustody, CapturedNamespaceWork,
+    Operation, OperationRecordApply, OperationRecordReply, OperationRecordWindow, Outcome,
+    OverlayCapturedNamespace, OverlayCapturedRuns, OverlayOperationRecords, Position, Time,
+    ViewStat, WorkspaceError, WorkspaceResult,
+};
 use std::{
     cell::{Cell, RefCell},
     collections::BTreeMap,

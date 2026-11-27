@@ -8,16 +8,16 @@
 //! hold is a finding. A list that gave no verdict leaves every Workspace
 //! `not_checked` with its `reason`; a list never asked for leaves each
 //! `blocked_by` its Sandbox, `not_answering`: no probe was tried.
-use super::super::doctor::runner::Probe;
-use super::super::doctor::report::{NoVerdict, Node, NotChecked, Thing};
 use super::super::doctor::budget::Checks;
-use layerfs_protocol::provision::install::SdkValue;
+use super::super::doctor::report::{NoVerdict, Node, NotChecked, Thing};
+use super::super::doctor::runner::Probe;
 use layerfs_home::state::BlockedBy;
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_sandbox::state::unmount_fix;
 use std::path::Path;
 
 /// The `workspace` kind's checks, in the order they run.
-pub(super) const CHECKS: &[super::super::doctor::runner::CheckId] = &[
+pub(crate) const CHECKS: &[super::super::doctor::runner::CheckId] = &[
     super::super::doctor::runner::CheckId::own("workspace.mounted"),
     super::super::doctor::runner::CheckId::own("workspace.activity"),
 ];
@@ -261,7 +261,7 @@ fn waiting(thing: Thing, sandbox: &str) -> Node {
 /// Workspace (from its daemon's list), so one it did not observe was not
 /// tried here; it waits on that Sandbox, named before the `:` of its
 /// handle.
-pub(super) fn doctor(probe: &Probe<'_>, node: &mut Node) {
+pub(crate) fn doctor(probe: &Probe<'_>, node: &mut Node) {
     let name = probe.thing.name.as_str();
     let sandbox = name.split_once(':').map_or(name, |(sandbox, _)| sandbox);
     *node = waiting(probe.thing.clone(), sandbox);

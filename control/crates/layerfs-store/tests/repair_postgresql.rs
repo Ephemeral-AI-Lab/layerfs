@@ -8,12 +8,12 @@
 //! libpq connection string or URL. The test creates and drops its own
 //! database, because the Store uses the one `layerfs` schema. Without the
 //! variable it reports NOT_RUN.
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_history::records::{GcIntent, GcIntentKind, GcScopeKind};
 use layerfs_history::{HistoryCatalogConfig, PlaceAuthority};
 use layerfs_home::home;
 use layerfs_home::names::ProjectRef;
 use layerfs_persistence::{PostgresHandles, PostgresSelection};
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_storage::StoragePolicy;
 use layerfs_store::open_args::OpenArgs;
 use layerfs_store::project::family::{init, ProjectInit};

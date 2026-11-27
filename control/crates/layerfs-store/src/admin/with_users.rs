@@ -1,23 +1,22 @@
 //! The Store calls whose checks read who uses a Store (layerfs-project#105):
-//! each runs `layerfs-store`'s call with the checks from
-//! [`crate::inventory`]. The Store calls proper (`branch`, `commit`, `file`)
+//! each runs this crate's call with the checks its caller passes in
+//! ([`StoreUsers`], which the Sandbox crate implements). The Store calls proper (`branch`, `commit`, `file`)
 //! and the rest (`store.list`, `store.get`, `store.create`) are
 //! `layerfs-store`'s own. `store.attach` and `store.detach` also read the
 //! machine, and the first reaches the Store from it as a Sandbox would.
-use layerfs_sandbox::status::inventory;
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
+use crate::open_args::OpenArgs;
+use crate::place::{self, Executor};
+use crate::postgresql::check;
+use crate::postgresql::connect::{self, StoreConnect};
+use crate::record::{StoreKind, StoreRecord};
+use crate::StoreUsers;
 use layerfs_home::events::Events;
 use layerfs_home::names::{MachineName, StoreName};
 use layerfs_home::outcome::shell_word;
 use layerfs_home::outcome::{refused, with_fix, with_next, Outcome, FIX};
 use layerfs_machine::worker::Unreached;
 use layerfs_persistence::diagnostic::ConnectionStep;
-use crate::open_args::OpenArgs;
-use crate::place::{self, Executor};
-use crate::postgresql::check;
-use crate::postgresql::connect::{self, StoreConnect};
-use {layerfs_protocol::StoreKind, crate::record::StoreRecord};
-use crate::Related;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 
 pub use crate::close_idle;
@@ -28,27 +27,37 @@ pub use crate::close_idle;
 /// Store's machine whose worker was not reached, or replacing a worker of
 /// another build (the stop forced when Sandboxes are on the machine); the
 /// same `store compact` after a lost reply or an unresolved earlier run.
-pub fn compact(home: &Path, events: &mut Events<'_>, name: &StoreName) -> Outcome {
+pub fn compact(
+    home: &Path,
+    events: &mut Events<'_>,
+    name: &StoreName,
+    users: &StoreUsers,
+) -> Outcome {
     let store = name.as_str();
     crate::compact::compact(home, events, store)
-        .map_err(|refusal| with_store_fix(home, store, refusal, "compact"))
+        .map_err(|refusal| with_store_fix(home, store, refusal, "compact", users))
 }
 
 /// `store.upgrade`: brings an older-format Store to the latest format in
 /// place (#804), reading the process-wide cancel flag, refused `InUse`
-/// while a Sandbox of one of its projects is recorded ([`RELATED`]). A
+/// while a Sandbox of one of its projects is recorded ([`StoreUsers`]). A
 /// refusal gets the call that clears it as its `fix`: the machine start or
 /// worker replacement compaction names, the same `store upgrade` after a
 /// lost reply or an unresolved earlier run, and for a format this build
 /// cannot upgrade (not one newer than this build) the Store's `store
 /// remove` (sqlite) or `store disconnect` (PostgreSQL, which keeps its data).
 /// The process-wide cancel request is cleared when the call returns.
-pub fn upgrade(home: &Path, events: &mut Events<'_>, name: &StoreName) -> Outcome {
+pub fn upgrade(
+    home: &Path,
+    events: &mut Events<'_>,
+    name: &StoreName,
+    users: &StoreUsers,
+) -> Outcome {
     let store = name.as_str();
     let cancel = layerfs_home::cancel::flag();
     // a cancel asked for before the run still stops it; once the answer is
     // decided the request is dropped, so it does not cancel a later call
-    let outcome = crate::upgrade::upgrade_with(home, events, store, cancel, RELATED);
+    let outcome = crate::upgrade::upgrade_with(home, events, store, cancel, users.related);
     layerfs_home::cancel::clear();
     outcome.map_err(|refusal| {
         if refusal.code != "Unsupported"
@@ -56,7 +65,7 @@ pub fn upgrade(home: &Path, events: &mut Events<'_>, name: &StoreName) -> Outcom
                 .message
                 .contains(layerfs_persistence::upgrade::NEWER)
         {
-            return with_store_fix(home, store, refusal, "upgrade");
+            return with_store_fix(home, store, refusal, "upgrade", users);
         }
         let kind = StoreRecord::read(home, store).ok().flatten();
         let call = match kind.and_then(|record| record.kind().ok()) {
@@ -76,7 +85,13 @@ pub fn upgrade(home: &Path, events: &mut Events<'_>, name: &StoreName) -> Outcom
 /// sqlite Store's machine whose worker was not reached, or replacing a
 /// worker of another build (the stop forced when Sandboxes are on the
 /// machine); the same call after a lost reply or an unresolved earlier run.
-fn with_store_fix(home: &Path, store: &str, refusal: SdkRefusal, call: &str) -> SdkRefusal {
+fn with_store_fix(
+    home: &Path,
+    store: &str,
+    refusal: SdkRefusal,
+    call: &str,
+    users: &StoreUsers,
+) -> SdkRefusal {
     if refusal
         .detail
         .get(FIX)
@@ -93,7 +108,7 @@ fn with_store_fix(home: &Path, store: &str, refusal: SdkRefusal, call: &str) -> 
     let fix = match refusal.code.as_str() {
         "Unavailable" => match machine() {
             Some(machine) if layerfs_machine::worker::is_mismatch(&refusal) => {
-                let on = inventory::sandboxes_on(home, &machine).map_or(0, |on| on.len());
+                let on = (users.sandboxes_on)(home, &machine).map_or(0, |on| on.len());
                 Some(layerfs_machine::state::replace_worker(&machine, on))
             }
             Some(machine) => Some(format!(
@@ -228,50 +243,29 @@ fn paged(answer: SdkValue, filters: &[(&str, SdkValue)]) -> SdkValue {
     SdkValue::Map(fields)
 }
 
-/// Who uses a Store or a project, read from the Sandbox records.
-pub const RELATED: Related = Related {
-    store_idle: inventory::store_idle,
-    store_idle_except: Some(|home, store, owner| {
-        inventory::store_idle_with(home, store, Some(owner))
-    }),
-    can_remove_project: inventory::can_remove_project,
-};
-
-/// A machine's records-only state as the Store reads take it
-/// ([`layerfs_store::state::Machines`]): the machine family's one
-/// derivation, [`inventory::machine_state`], so a Store's `blocked_by` says
-/// what `machine get` says of its machine.
-pub fn machine_state(home: &Path, name: &str) -> Result<layerfs_home::state::State, SdkRefusal> {
-    match layerfs_machine::record::MachineRecord::read(home, name) {
-        Ok(record) => inventory::machine_state(home, name, record.as_ref()),
-        // a record that cannot be read blocks the Stores on it, nothing else
-        Err(_) => Ok(layerfs_machine::state::unreadable(name)),
-    }
-}
-
-/// What the Store reads take from the other entities: each machine's
-/// state ([`machine_state`]).
-pub fn reads() -> crate::state::Machines<'static> {
-    &machine_state
-}
-
 /// `store.remove`: a sqlite Store no Sandbox uses, with its file.
-pub fn remove(home: &Path, name: &StoreName) -> Outcome {
-    crate::sqlite::remove::remove(home, name, RELATED)
+pub fn remove(home: &Path, name: &StoreName, users: &StoreUsers) -> Outcome {
+    crate::sqlite::remove::remove(home, name, users.related)
 }
 
 /// `store.move`: a sqlite Store from the machine that holds it to
 /// `machine`, one of the two being this computer (C13).
-pub fn move_to(home: &Path, events: &mut Events<'_>, store: &str, machine: &str) -> Outcome {
-    crate::sqlite::transfer::phases::move_to(home, events, store, machine, RELATED)
+pub fn move_to(
+    home: &Path,
+    events: &mut Events<'_>,
+    store: &str,
+    machine: &str,
+    users: &StoreUsers,
+) -> Outcome {
+    crate::sqlite::transfer::phases::move_to(home, events, store, machine, users.related)
 }
 
 /// `store.disconnect(store)`: forget a PostgreSQL Store, its saved login
 /// and its attachments (its data stays), refused `InUse` while a process
 /// holds it or a Sandbox of its projects exists. A sqlite Store is
 /// `InvalidInput`, naming `store remove`.
-pub fn disconnect(home: &Path, name: &StoreName) -> Outcome {
-    connect::disconnect(home, name, RELATED)
+pub fn disconnect(home: &Path, name: &StoreName, users: &StoreUsers) -> Outcome {
+    connect::disconnect(home, name, users.related)
 }
 
 /// `store.connect(store, url, { user, password, synchronous_commit,
@@ -285,7 +279,12 @@ pub fn disconnect(home: &Path, name: &StoreName) -> Outcome {
 /// any change, and only once this computer passed), saves and records
 /// nothing and is refused by none of them: it answers
 /// [`connect::tested`].
-pub fn connect(home: &Path, events: &mut Events<'_>, request: &StoreConnect) -> Outcome {
+pub fn connect(
+    home: &Path,
+    events: &mut Events<'_>,
+    request: &StoreConnect,
+    users: &StoreUsers,
+) -> Outcome {
     let Some(update) = connect::prepare(home, request)? else {
         return connect::connect(home, request);
     };
@@ -299,7 +298,7 @@ pub fn connect(home: &Path, events: &mut Events<'_>, request: &StoreConnect) -> 
     if update.here.is_ok() && (request.dry_run || update.redials()) {
         for machine in &machines {
             let url = update.dial().to_owned();
-            let seen = check_dialling(home, events, update.trial(), machine, url).1;
+            let seen = check_dialling(home, events, update.trial(), machine, url, users).1;
             checked.push((machine.as_str(), seen));
         }
     }
@@ -413,12 +412,13 @@ pub fn attach(
     name: &StoreName,
     machine: &MachineName,
     dry_run: bool,
+    users: &StoreUsers,
 ) -> Outcome {
     let machine = machine.as_str();
     let record = attachable(home, name, machine)?;
     runs_postgresql_sandboxes(home, name, machine)?;
     let attached = record.is_attached(machine);
-    let checked = check_from(home, events, &record, machine).1;
+    let checked = check_from(home, events, &record, machine, users).1;
     if dry_run {
         return Ok(attach_answer("tested", name, machine, &checked?));
     }
@@ -450,10 +450,10 @@ fn attach_answer(outcome: &str, name: &StoreName, machine: &str, checked: &SdkVa
 /// Refused `InUse` while a Sandbox of the Store's projects is on it,
 /// `NotFound` when it is not attached. Answers `{ ok, outcome: detached,
 /// store, machine }`.
-pub fn detach(home: &Path, name: &StoreName, machine: &MachineName) -> Outcome {
+pub fn detach(home: &Path, name: &StoreName, machine: &MachineName, users: &StoreUsers) -> Outcome {
     let machine = machine.as_str();
     attachable(home, name, machine)?;
-    let idle = |home: &Path| inventory::store_idle_on(home, name, machine);
+    let idle = |home: &Path| (users.store_idle_on)(home, name, machine);
     check::detach(home, name, machine, &idle)?;
     Ok(SdkValue::map([
         ("ok", SdkValue::Bool(true)),
@@ -559,14 +559,15 @@ fn from_machine(
 /// at (`configuration` for a login this computer does not hold, or an
 /// address the machine cannot dial); either way with the host it
 /// dialled, once known.
-pub(crate) fn check_from(
+pub fn check_from(
     home: &Path,
     events: &mut Events<'_>,
     record: &StoreRecord,
     machine: &str,
+    users: &StoreUsers,
 ) -> (Option<String>, Result<SdkValue, SdkRefusal>) {
     match crate::record::url(record) {
-        Ok(url) => check_dialling(home, events, record, machine, url),
+        Ok(url) => check_dialling(home, events, record, machine, url, users),
         Err(refusal) => {
             let refusal = check::at_step(refusal, ConnectionStep::Configuration);
             (None, Err(on_machine(refusal, machine)))
@@ -588,8 +589,9 @@ fn check_dialling(
     record: &StoreRecord,
     machine: &str,
     url: String,
+    users: &StoreUsers,
 ) -> (Option<String>, Result<SdkValue, SdkRefusal>) {
-    let (host, checked) = dial_from(home, events, record, machine, url);
+    let (host, checked) = dial_from(home, events, record, machine, url, users);
     (
         host,
         checked.map_err(|refusal| on_machine(refusal, machine)),
@@ -603,15 +605,21 @@ fn dial_from(
     record: &StoreRecord,
     machine: &str,
     url: String,
+    users: &StoreUsers,
 ) -> (Option<String>, Result<SdkValue, SdkRefusal>) {
     let name = record.name();
     let configuration = |refusal| check::at_step(refusal, ConnectionStep::Configuration);
-    let (postgresql, hint) = match layerfs_sandbox::route::dialled(home, machine, record, url) {
+    let (postgresql, hint) = match connect::dialled(home, machine, record, url) {
         Ok(Ok(reached)) => reached,
         // an address this machine cannot dial (a loopback of this host it
         // does not share), refused before any dial
-        Ok(Err(refusal)) => return (None, Err(configuration(nameless(home, machine, refusal)))),
-        Err(refusal) => return (None, Err(nameless(home, machine, refusal))),
+        Ok(Err(refusal)) => {
+            return (
+                None,
+                Err(configuration((users.nameless_fix)(home, machine, refusal))),
+            )
+        }
+        Err(refusal) => return (None, Err((users.nameless_fix)(home, machine, refusal))),
     };
     // the host named is read from the address the machine dials, with no
     // login: the URL dialled holds the password
@@ -644,19 +652,6 @@ fn dial_from(
     let checked =
         checked.map_err(|refusal| from_machine(refusal, (name, machine, &host), hint.as_deref()));
     (Some(host), checked)
-}
-
-/// `refusal` with the fix of a machine that has no VM name, when it is one.
-fn nameless(home: &Path, machine: &str, refusal: SdkRefusal) -> SdkRefusal {
-    #[cfg(feature = "machine")]
-    {
-        layerfs_machine::with_users::RELATED.nameless_fix(home, machine, refusal)
-    }
-    #[cfg(not(feature = "machine"))]
-    {
-        let _ = (home, machine);
-        refusal
-    }
 }
 
 /// `store.reach` in a machine's worker: `{ store, store_record, postgresql }`

@@ -1,26 +1,15 @@
 //! The machine calls whose answers or checks read a machine's Stores and
-//! Sandboxes (layerfs-project#104): each runs `layerfs-machine`'s call with
-//! those reads from [`crate::inventory`]. The other machine calls are
-//! `layerfs-machine`'s own.
-use layerfs_sandbox::status::inventory;
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
+//! Sandboxes (layerfs-project#104): each runs this crate's call with the
+//! reads and steps its caller passes in ([`MachineUsers`], which the Sandbox
+//! crate implements). The other machine calls are this crate's own.
+use crate::worker::Endpoint;
+use crate::{MachineCreate, MachineUpdate, MachineUsers};
 use layerfs_home::events::Events;
 use layerfs_home::names::MachineName;
 use layerfs_home::outcome::Outcome;
-use crate::worker::Endpoint;
-use crate::{MachineCreate, MachineUpdate, Related};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 use std::time::Duration;
-
-/// What a machine holds, read from the Store and Sandbox records.
-pub const RELATED: Related = Related {
-    stores_on: inventory::stores_on,
-    sandboxes_on: inventory::sandboxes_on,
-    hosted_on: inventory::hosted_on,
-    can_remove: inventory::can_remove_machine,
-    can_stop: inventory::can_stop_machine,
-    can_change: inventory::can_change_machine,
-};
 
 /// `refusal` with the chain of what is on its machine as its fix, when its
 /// fix is the bare `layerfs machine remove <m>` of a machine whose record
@@ -28,34 +17,34 @@ pub const RELATED: Related = Related {
 /// `Failed`, or a Store call refused `Unavailable` (LF10), before a
 /// nameless machine's worker is dialled. The holders are read here, on the
 /// refusal path alone; any other refusal is kept.
-pub fn nameless_chain(home: &Path, refusal: SdkRefusal) -> SdkRefusal {
+pub fn nameless_chain(home: &Path, refusal: SdkRefusal, users: &MachineUsers) -> SdkRefusal {
     let named = (refusal.detail.get_text(layerfs_home::outcome::FIX))
         .and_then(|fix| fix.strip_prefix("layerfs machine remove "))
         .filter(|name| layerfs_home::names::MachineName::parse(name).is_ok())
         .map(str::to_owned);
     match named {
         Some(name) if matches!(refusal.code.as_str(), "Failed" | "Unavailable") => {
-            RELATED.nameless_fix(home, &name, refusal)
+            users.related.nameless_fix(home, &name, refusal)
         }
         _ => refusal,
     }
 }
 
 /// `machine.list`: from the records; with `live`, every machine probed.
-pub fn list(home: &Path, live: bool) -> Outcome {
-    crate::list(home, live, RELATED)
+pub fn list(home: &Path, live: bool, users: &MachineUsers) -> Outcome {
+    crate::list(home, live, users.related)
 }
 
 /// `machine.get`: from its record; with `live`, one probe and the `live`
 /// section.
-pub fn get(home: &Path, name: &MachineName, live: bool) -> Outcome {
-    let answer = crate::get(home, name, live, RELATED)?;
+pub fn get(home: &Path, name: &MachineName, live: bool, users: &MachineUsers) -> Outcome {
+    let answer = crate::get(home, name, live, users.related)?;
     #[cfg(any(target_os = "macos", target_os = "linux"))]
     if live
         && name.as_str() == layerfs_home::names::HOST_MACHINE
         && answer.get_text("platform") == Some("host")
     {
-        return Ok(layerfs_inspect::machine::worker::live(home, answer));
+        return Ok(crate::status::worker::live(home, answer));
     }
     Ok(answer)
 }
@@ -67,14 +56,22 @@ pub fn get(home: &Path, name: &MachineName, live: bool) -> Outcome {
 /// machine (spec §3.1). A start that cannot confirm the old worker or record
 /// the token fails before any settle; a Store the reconcile cannot reach is
 /// left for the next start.
-pub fn start(home: &Path, events: &mut Events<'_>, name: &MachineName) -> Outcome {
+pub fn start(
+    home: &Path,
+    events: &mut Events<'_>,
+    name: &MachineName,
+    users: &MachineUsers,
+) -> Outcome {
     #[cfg(unix)]
     if name.as_str() == layerfs_home::names::HOST_MACHINE {
         return crate::lifecycle::host::start(home, name);
     }
-    let started = crate::start(home, name, RELATED, events)?;
+    let started = crate::start(home, name, users.related, events)?;
     let incarnation = record_start(home, name)?;
-    let _ = reconcile_stores(home, name, incarnation.as_deref());
+    // A Store the reconcile cannot reach is left for the next start.
+    if let Some(incarnation) = incarnation {
+        let _ = (users.reconcile)(home, name.as_str(), &incarnation);
+    }
     Ok(started)
 }
 
@@ -129,92 +126,68 @@ fn worker_incarnation(home: &Path, machine: &str) -> Result<Option<String>, SdkR
         answer: Duration::from_secs(1),
     };
     let request = crate::worker::request("worker.ping", SdkValue::Null)?;
-    let answer =
-        match crate::worker::send_within(&endpoint, "worker.ping", &request, budget) {
-            Ok(Ok(answer)) => answer,
-            _ => return Ok(None),
-        };
-    Ok(answer.get_text("incarnation").map(str::to_owned))
-}
-
-/// Settles the mount intents a previous worker incarnation left in each Store
-/// on `machine`, with the incarnation this start recorded. Never a live or
-/// uncertain owner: the Store-side reconcile applies the same rule admission
-/// does. A start that could not read or verify the incarnation skips the
-/// reconcile.
-fn reconcile_stores(
-    home: &Path,
-    machine: &MachineName,
-    incarnation: Option<&str>,
-) -> Result<(), SdkRefusal> {
-    let Some(incarnation) = incarnation else {
-        return Ok(());
+    let answer = match crate::worker::send_within(&endpoint, "worker.ping", &request, budget) {
+        Ok(Ok(answer)) => answer,
+        _ => return Ok(None),
     };
-    let stores = inventory::stores_on(home, machine.as_str())?;
-    for store in stores {
-        let _ =
-            layerfs_store::service::reconcile_machine(home, &store, machine.as_str(), incarnation);
-    }
-    Ok(())
+    Ok(answer.get_text("incarnation").map(str::to_owned))
 }
 
 /// The worker of machine `name`, started if it does not answer; `None`
 /// when its calls run in this process.
-pub fn running(home: &Path, name: &str) -> Result<Option<Endpoint>, SdkRefusal> {
-    crate::running(home, name, RELATED)
+pub fn running(
+    home: &Path,
+    name: &str,
+    users: &MachineUsers,
+) -> Result<Option<Endpoint>, SdkRefusal> {
+    crate::running(home, name, users.related)
 }
 
 /// `machine.stop`, with its phases on `events`; `force` stops it and this
 /// home's Sandboxes on it without asking its worker.
-pub fn stop(home: &Path, events: &mut Events<'_>, name: &MachineName, force: bool) -> Outcome {
+pub fn stop(
+    home: &Path,
+    events: &mut Events<'_>,
+    name: &MachineName,
+    force: bool,
+    users: &MachineUsers,
+) -> Outcome {
     #[cfg(unix)]
     if name.as_str() == layerfs_home::names::HOST_MACHINE {
-        return crate::lifecycle::host::stop(home, events, name, force);
+        return crate::lifecycle::host::stop(home, events, name, force, users);
     }
     match force {
-        true => crate::lifecycle::force_stop::stop(home, events, name),
-        false => crate::stop(home, name, RELATED, events),
+        true => crate::lifecycle::force_stop::stop(home, events, name, users),
+        false => crate::stop(home, name, users.related, events),
     }
 }
 
 /// `machine.create`.
-pub fn create(home: &Path, events: &mut Events<'_>, request: &MachineCreate) -> Outcome {
-    crate::create(home, events, request, RELATED)
+pub fn create(
+    home: &Path,
+    events: &mut Events<'_>,
+    request: &MachineCreate,
+    users: &MachineUsers,
+) -> Outcome {
+    crate::create(home, events, request, users.related)
 }
 
 /// `machine.remove`. A removed machine's attachment to each PostgreSQL
 /// Store is forgotten with it, so a later machine of its name is attached
 /// to none, and so are the home's image copy locks of it
 /// (`run/image-lock/<machine>/`).
-pub fn remove(home: &Path, events: &mut Events<'_>, name: &MachineName) -> Outcome {
-    let removed = crate::remove(home, name, RELATED, events)?;
-    layerfs_store::postgresql::check::forget_machine(home, name).map_err(|refusal| {
-        layerfs_home::outcome::refused(
-            &refusal.code,
-            format!(
-                "machine {name} was removed, but its PostgreSQL Store attachments were not forgotten: {}",
-                refusal.message
-            ),
-        )
-    })?;
-    // the home's image copy locks of the machine go with it
-    let locks = layerfs_sandbox::image_lock::ImageLock::dir(home, name.as_str());
-    match std::fs::remove_dir_all(&locks) {
-        Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
-            return Err(layerfs_home::outcome::refused(
-                "Failed",
-                format!(
-                    "machine {name} was removed, but its image copy locks in {} were not: {error}",
-                    locks.display()
-                ),
-            ))
-        }
-        _ => {}
-    }
+pub fn remove(
+    home: &Path,
+    events: &mut Events<'_>,
+    name: &MachineName,
+    users: &MachineUsers,
+) -> Outcome {
+    let removed = crate::remove(home, name, users.related, events)?;
+    (users.forget)(home, name.as_str())?;
     Ok(removed)
 }
 
 /// `machine.update`.
-pub fn update(home: &Path, request: &MachineUpdate) -> Outcome {
-    crate::update(home, request, RELATED)
+pub fn update(home: &Path, request: &MachineUpdate, users: &MachineUsers) -> Outcome {
+    crate::update(home, request, users.related)
 }

@@ -6,17 +6,24 @@
 //! `{"base64": "..."}`, which parses back to bytes. A worker frame with
 //! attachments prints each byte value as `{"attachment": i}` instead
 //! ([`write_attached`]); the frame carries the bytes themselves.
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use std::fmt::Write as _;
-
-mod stream;
-mod read;
-mod strings;
-pub use stream::{read_value, read_value_within, Limits};
 
 /// Why JSON text could not be read.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct JsonError(pub String);
+
+impl From<std::io::Error> for JsonError {
+    fn from(error: std::io::Error) -> Self {
+        JsonError(format!("cannot read the input: {error}"))
+    }
+}
+
+impl std::fmt::Display for JsonError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
 
 /// Reads one JSON value; anything after it but whitespace is refused.
 pub fn parse(text: &str) -> Result<SdkValue, JsonError> {
@@ -241,7 +248,7 @@ pub fn unbase64(text: &str) -> Option<Vec<u8>> {
 }
 
 /// Nesting deeper than this is refused rather than recursed into.
-const MAX_DEPTH: usize = 128;
+pub(crate) const MAX_DEPTH: usize = 128;
 
 struct Reader<'a> {
     text: &'a str,
@@ -450,7 +457,7 @@ impl Reader<'_> {
 
 /// `{"base64": "..."}`, the printed form of bytes that are not UTF-8,
 /// reads back as bytes.
-fn base64_object(fields: Vec<(String, SdkValue)>) -> SdkValue {
+pub(crate) fn base64_object(fields: Vec<(String, SdkValue)>) -> SdkValue {
     if let [(name, SdkValue::Text(text))] = fields.as_slice() {
         if name == "base64" {
             if let Some(bytes) = unbase64(text) {

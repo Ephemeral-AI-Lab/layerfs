@@ -10,13 +10,13 @@
 use super::{snapshot, walk};
 use crate::history::lookup;
 use crate::store::{PortError, Store};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_content::compare::EntryFacts;
 use layerfs_content::merge::Rule;
 use layerfs_content::object::inode_leaf::InodeKind;
 use layerfs_content::AuthenticatedObjects;
 use layerfs_history::error::{RemovedPath, RemovedState};
 use layerfs_history::{HistoryError, LayerStackId, LayerStackRecord, NodeId, PathRemovalRecord};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::collections::BTreeSet;
 use std::sync::Arc;
 

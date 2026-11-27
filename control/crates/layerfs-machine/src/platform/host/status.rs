@@ -3,9 +3,9 @@
 //! it holds only records and its Stores are in the WSL worker, which is
 //! not designed yet.
 use crate::platform::error::MachineError;
-use crate::table::profile::HostOs;
 use crate::setup::probe::native_missing;
 use crate::setup::{State, Status};
+use crate::table::profile::HostOs;
 
 /// The host runs whenever the caller does. A host that lacks what
 /// Sandboxes need (`native_missing`: root, `/dev/fuse`, cgroup v2 on Linux)

@@ -1,11 +1,11 @@
 //! One observation of an existing host worker, bounded by a single deadline.
 use super::host::{existing_socket, host_check_peer, HostPaths};
 use super::host_hello::{build_identity, HostHello};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::{
     home::{flock, host_socket, paths},
     outcome::refused,
 };
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::{fs::File, io, os::unix::fs::MetadataExt, path::Path, time::Instant};
 
 /// The observed step at which a host worker could not be reached.

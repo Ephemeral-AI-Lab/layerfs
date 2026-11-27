@@ -1,7 +1,7 @@
 //! The observations a worker sends are bounded: retained rows, evidence
 //! and the budget a probe may use.
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_inspect::doctor::budget::{Budget, Checks};
+use layerfs_protocol::sdk::SdkValue;
 use std::time::Duration;
 
 #[test]

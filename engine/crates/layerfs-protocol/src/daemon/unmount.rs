@@ -3,7 +3,15 @@
 //! Unmount refuses a Workspace that holds uncommitted changes unless the
 //! caller discards them. The refusal names the changed paths while they fit
 //! one control record and says when some were left out.
-use crate::{provision::install::{ControlError, WorkspaceToken}, daemon::{history::{boolean, put_token, token}, commit::{lines, put_lines}}, wire::{Reader, Writer}};
+use crate::{
+    daemon::WorkspaceToken,
+    daemon::{
+        commit::{lines, put_lines},
+        history::{boolean, put_token, token},
+    },
+    provision::install::ControlError,
+    wire::{Reader, Writer},
+};
 
 /// One Unmount request.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

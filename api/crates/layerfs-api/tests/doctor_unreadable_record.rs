@@ -4,7 +4,7 @@
 //! names is not there (its Sandbox's reference checks say so, as errors in
 //! both the home's records check and the Sandbox's own).
 use layerfs_api::home::{paths, write_entity};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 

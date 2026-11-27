@@ -6,14 +6,16 @@ use super::{
     types::KernelFailure,
     Failure, Service, Success,
 };
-use layerfs_store_service::store::BoundWorkspace;
-use layerfs_protocol::provision::install::{Activity, ControlCode, Reply, TeardownStage, WorkspaceToken, MOUNT_DIRECTORY_LIMIT};
 use layerfs_fuse::{
     attributes::Identity,
     session::{AttachRemainder, KernelSession, SessionConfig},
     DispatchError,
 };
 use layerfs_overlay::KernelMount;
+use layerfs_protocol::daemon::{
+    Activity, ControlCode, Reply, TeardownStage, WorkspaceToken, MOUNT_DIRECTORY_LIMIT,
+};
+use layerfs_store_service::store::BoundWorkspace;
 use std::sync::Arc;
 
 /// Where a failed Attach leaves the entry.
@@ -34,7 +36,7 @@ impl Service {
         timing: &layerfs_telemetry::timer::TimingScope<'_, layerfs_telemetry::timer::Active>,
     ) -> Result<Success, Failure> {
         if let Some(export) = self.export.clone() {
-            return layerfs_store_service::telemetry::phase(timing, "kernel.attach", || {
+            return crate::telemetry::phase(timing, "kernel.attach", || {
                 self.attach_export(&export, token)
             });
         }
@@ -45,7 +47,7 @@ impl Service {
             ));
         };
         let workspace = self.admit_attach(token)?;
-        match layerfs_store_service::telemetry::phase(timing, "kernel.attach", || {
+        match crate::telemetry::phase(timing, "kernel.attach", || {
             self.attach_admitted(&serving, token, &workspace)
         }) {
             Ok(attached) => {
@@ -125,7 +127,7 @@ impl Service {
         if let Err(error) = operation.workspace().prepare_serials(operation.ports()) {
             let failure = match operation.ports().failure() {
                 Ok(Some(cause)) => match cause.as_ref() {
-                    layerfs_store_service::store::PortError::History(error) => Failure::History(error.clone()),
+                    crate::store::PortError::History(error) => Failure::History(error.clone()),
                     _ => Failure::Workspace(error),
                 },
                 Ok(None) | Err(_) => Failure::Workspace(error),
@@ -136,7 +138,7 @@ impl Service {
         let mount = self
             .job(
                 workspace.route(),
-                |job_client: &layerfs_store_service::OwnerClient, job_route| {
+                |job_client: &crate::OwnerClient, job_route| {
                     job_client.kernel_mount(job_route, root)
                 },
             )
@@ -232,7 +234,7 @@ impl Service {
     ) -> Stop {
         match self.job(
             workspace.route(),
-            |job_client: &layerfs_store_service::OwnerClient, job_route| job_client.kernel_revoke(job_route, mount),
+            |job_client: &crate::OwnerClient, job_route| job_client.kernel_revoke(job_route, mount),
         ) {
             Ok(()) => Stop::Unattached(Failure::Kernel(Box::new(failure))),
             other => Stop::Retained(Box::new(Kept {

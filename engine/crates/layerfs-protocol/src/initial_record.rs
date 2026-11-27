@@ -1,5 +1,6 @@
 //! One exact discriminator for the first authenticated application record.
-use crate::provision::{install::{Call, ControlError}, manifest::StoreManifest};
+use crate::daemon::Call;
+use crate::provision::{install::ControlError, manifest::StoreManifest};
 /// Owned first request; installation payload records are never routed through this.
 #[derive(Clone, Debug, Eq, PartialEq)]
 // Pinned 1.85.1 Clippy loses layout through recursive boxed Request and reports

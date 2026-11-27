@@ -5,10 +5,10 @@
 //! exchange with an older daemon unreadable (RF re-check N-A). New
 //! Workspace facts travel elsewhere (the operator's changed-path answer);
 //! this test fails when the record's layout moves.
-use layerfs_protocol::provision::install::*;
 use layerfs_content::ObjectId;
 use layerfs_history::{BranchId, BranchRecord, BranchSnapshot, CommitId, HistoryName, LayerId};
 use layerfs_history::{LayerStackId, WorkspaceId};
+use layerfs_protocol::daemon::*;
 
 fn status(local: bool) -> WorkspaceStatus {
     let root = ObjectId::for_bytes(b"control root");

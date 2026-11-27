@@ -1,7 +1,7 @@
 //! The engine method and arguments each typed Store call sends (#109 R2):
 //! the same names and order the call's args map gave before, an absent
 //! option not sent.
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_store::calls::branch::{BranchFork, BranchMerge, BranchPublish};
 use layerfs_store::calls::commit::{CommitGet, CommitPage, DiffPage};
 use layerfs_store::calls::{Names, Page, StoreOp};

@@ -1,9 +1,9 @@
 //! Routes by records and leases (#533 step 7): a Store call goes where its
 //! Store's records say, a worker gets the records with the call, and leases
 //! are held, read and cleaned.
-use layerfs_store::lease;
 use layerfs_api::home::{self, paths, write_record};
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
+use layerfs_store::lease;
 use std::net::TcpListener;
 use std::path::PathBuf;
 

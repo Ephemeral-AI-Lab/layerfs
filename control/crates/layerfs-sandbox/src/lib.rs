@@ -6,8 +6,9 @@
 //! (`route::Local`).
 //!
 //! Actual ordinary Sandbox lifecycle and its Workspaces, with exact logical and kernel readiness.
-#![forbid(unsafe_code)]
 #![deny(missing_docs)]
+// unsafe only in backend/namespaces/seccomp.rs (see the backend notes below)
+#![deny(unsafe_code)]
 
 #[doc(hidden)]
 pub use daemon::internal;
@@ -17,6 +18,9 @@ pub use daemon::failure::{OperationCause, OperationFailure};
 pub use daemon::workspace::{
     BoundWorkspace, MountFailure, MountedWorkspace, Unmounted, WorkspaceApi,
 };
+#[cfg(unix)]
+#[doc(hidden)]
+pub mod backend;
 mod create;
 #[doc(hidden)]
 pub mod deploy;
@@ -48,11 +52,13 @@ mod image_sweep;
 pub mod image_tar;
 #[doc(hidden)]
 pub mod images;
+pub mod inspect;
 #[doc(hidden)]
 pub mod launch;
 #[doc(hidden)]
 pub mod lifecycle;
-mod list;
+#[doc(hidden)]
+pub mod list;
 #[doc(hidden)]
 pub mod mount_intents;
 #[doc(hidden)]
@@ -70,19 +76,17 @@ pub mod route;
 pub mod run_folder;
 #[doc(hidden)]
 pub mod runtime;
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+pub mod spawn;
 /// A Sandbox's state and a Workspace's, from records and daemon words.
 pub mod state;
+pub mod status;
 /// What interrupted Sandbox starts and removals left in a run root, removed
 /// where nothing can own it (spec v20).
 pub mod sweep;
 #[doc(hidden)]
 pub mod unmount_guard;
-#[cfg(unix)]
-mod backend;
-pub mod inspect;
-#[cfg(any(target_os = "linux", target_os = "macos"))]
-pub mod spawn;
-pub mod status;
+pub mod users;
 #[cfg(unix)]
 pub use launch::SandboxApi;
 #[cfg(unix)]
@@ -114,9 +118,12 @@ pub use launch::{SandboxCause, SandboxPhase};
 // unsafe only in backend/namespaces/seccomp.rs (the namespaces command
 // filter's two prctl calls and the helper's clone3 into a cgroup); the macOS
 // process facts (proc_pidinfo) moved with LocalProcess to
-// layerfs_bridge::process (layerfs-project#112)
-#![deny(unsafe_code)]
+// layerfs_os::process (layerfs-project#112)
 
+#[cfg(unix)]
+pub use backend::capabilities as backend_capabilities;
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+pub use backend::dispatch::{LaunchFailure, Runtime, Sandbox};
 #[cfg(target_os = "linux")]
 pub use backend::namespaces::{self, NamespaceProvider};
 #[cfg(unix)]
@@ -124,15 +131,18 @@ pub use backend::namespaces::{network, rootfs, HelperSpec, SpecNetwork, RESOLVER
 #[cfg(target_os = "macos")]
 pub use backend::process::{self, ProcessProvider};
 #[cfg(unix)]
-pub use layerfs_machine::table::backend::Backend;
-#[cfg(any(target_os = "linux", target_os = "macos"))]
-pub use runtime::stop::{self as cancel, Cancelled, ExecSlot, Stop};
-#[cfg(any(target_os = "linux", target_os = "macos"))]
-pub use backend::dispatch::{LaunchFailure, Runtime, Sandbox};
-pub use runtime::trace;
-pub use runtime::{Bind, CommandIdentity, ContainerId, ExecExit, ExecRequest, Image, IsolationModel, LaunchPhase, LaunchRequest, LocalRecord, MountDriver, NamespaceRecord, PendingRequest, ProviderCapabilities, ProviderLaunchOptions, RuntimeError, SandboxId, SandboxInspection, SandboxRecord, SearchPathPolicy, WireFailure, OUTCOME_UNKNOWN};
-#[cfg(unix)]
 pub use layerfs_home::json;
+#[cfg(unix)]
+pub use layerfs_machine::table::backend::Backend;
 #[cfg(unix)]
 pub use layerfs_machine::table::postgresql_url::{ip, loopback, socket, url_hostaddr, url_hosts};
 pub use layerfs_machine::table::removed as removed_platforms;
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+pub use runtime::stop::{self as cancel, Cancelled, ExecSlot, Stop};
+pub use runtime::trace;
+pub use runtime::{
+    Bind, CommandIdentity, ContainerId, ExecExit, ExecRequest, Image, IsolationModel, LaunchPhase,
+    LaunchRequest, LocalRecord, MountDriver, NamespaceRecord, PendingRequest, ProviderCapabilities,
+    ProviderLaunchOptions, RuntimeError, SandboxId, SandboxInspection, SandboxRecord,
+    SearchPathPolicy, WireFailure, OUTCOME_UNKNOWN,
+};

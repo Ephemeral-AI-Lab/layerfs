@@ -45,7 +45,7 @@ mod mounted;
 #[allow(dead_code)]
 #[path = "support/mounted_commit.rs"]
 mod rig;
-use layerfs_protocol::provision::install::{MountPhase, MountWork, WorkspaceToken};
+use layerfs_protocol::daemon::{MountPhase, MountWork, WorkspaceToken};
 use mounted::{mount_entry, COMMAND};
 use rig::{bash_in, passed, pattern, root, stamp_tree, Rig};
 use std::{

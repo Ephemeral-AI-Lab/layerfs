@@ -11,7 +11,7 @@
 //! LAYERFS_TEST_POSTGRES_URL (an admin URL of a trust-auth server, in
 //! postgres:// form); each test makes and drops its own databases.
 use layerfs_api::home::{self, paths};
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use std::path::{Path, PathBuf};
 
 fn tempdir(tag: &str) -> PathBuf {
@@ -461,7 +461,7 @@ fn the_doctor_checks_attached_machines_only_after_this_computer() {
 
 /// A refusal's flat field `key` (its `next`), as the call boundary
 /// answers it beside `error` and `message`.
-fn flat(refusal: &layerfs_protocol::provision::install::SdkRefusal, key: &str) -> SdkValue {
+fn flat(refusal: &layerfs_protocol::sdk::SdkRefusal, key: &str) -> SdkValue {
     let next = refusal.detail.get("next").cloned().unwrap_or_default();
     next.get(key).cloned().unwrap_or_default()
 }
@@ -471,7 +471,7 @@ fn refusal(
     home: &Path,
     name: &str,
     args: &[(&str, SdkValue)],
-) -> layerfs_protocol::provision::install::SdkRefusal {
+) -> layerfs_protocol::sdk::SdkRefusal {
     let args = SdkValue::Map(
         args.iter()
             .map(|(n, v)| ((*n).to_owned(), v.clone()))

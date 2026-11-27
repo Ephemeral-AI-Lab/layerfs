@@ -89,7 +89,7 @@ STEPS = {
     # it reads a PostgreSQL Store's schema binding in sandbox.create (#535 G3)
     "worker": ["-p", "layerfs-cli", "--no-default-features", "--bin", "layerfs"],
     # the namespaces Sandbox backend runs it beside the daemon
-    "helper": ["-p", "layerfs-sandbox-backend", "--bin", "layerfs-sandbox-helper"],
+    "helper": ["-p", "layerfs-sandbox", "--bin", "layerfs-sandbox-helper"],
 }
 ARCHES = {"arm64": "aarch64", "aarch64": "aarch64", "amd64": "x86_64", "x86_64": "x86_64"}
 # the Sandbox runtime layer (R5): the loader each architecture's glibc names as its

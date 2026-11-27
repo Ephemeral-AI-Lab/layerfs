@@ -1,8 +1,8 @@
 //! Live native machine force stop and Sandbox force close with mounted, executing Workspaces.
 #![cfg(all(target_os = "macos", feature = "machine"))]
 use layerfs_api::home::{self, paths, read_record, write_record};
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_os::process::LocalProcess;
+use layerfs_protocol::sdk::SdkValue;
 use std::{
     path::Path,
     process::{Child, Command},

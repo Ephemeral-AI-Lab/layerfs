@@ -6,11 +6,11 @@
 //! `core/docs/issues/535/receipts/g7-live/`) enabled them on the
 //! VM platforms; `control/SUPPORT.json` (rendered by [`support_json`], compared by a
 //! test) and `home get --with platforms` follow.
+use crate::platform::{ExecutorKind, HostOs, How, KernelRoute, Platform};
+use crate::table::backend::Backend;
 use crate::table::options::OptSpec;
-use {crate::table::profile::{ExecutorKind, HostOs, How, Platform}, layerfs_protocol::KernelRoute};
-pub use layerfs_protocol::StoreKind;
 use layerfs_home::json::quoted;
-use crate::table::backend;
+pub use layerfs_protocol::StoreKind;
 
 /// Where a Store's calls run for a machine.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -205,7 +205,7 @@ fn render(out: &mut String, row: &SupportRow) {
     out.push_str("        {\n");
     field(out, pad, "platform", Some(row.platform.name()));
     field(out, pad, "how", Some(row.how.as_str()));
-    field(out, pad, "backend", row.backend.map(backend::stored_name));
+    field(out, pad, "backend", row.backend.map(Backend::stored_name));
     field(out, pad, "kernel", row.kernel.map(KernelRoute::as_str));
     field(out, pad, "sqlite", row.sqlite.map(CallSite::as_str));
     out.push_str(pad);

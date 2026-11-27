@@ -14,10 +14,10 @@ mod identity;
 mod linux;
 mod retained;
 #[cfg(target_os = "macos")]
+pub use super::mount_table::mount_table;
+#[cfg(target_os = "macos")]
 pub use darwin::{boot, processes, stat, sync_volume_wait};
 pub use identity::{pid, LocalProcess, Stat};
 #[cfg(target_os = "linux")]
 pub use linux::{boot, processes, stat};
-#[cfg(target_os = "macos")]
-pub use super::mount_table::mount_table;
 pub use retained::Retained;

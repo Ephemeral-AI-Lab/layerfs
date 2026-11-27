@@ -7,7 +7,7 @@
 //! call asks its worker for the worker's own steps (`trace_step` in the
 //! request, `steps` in the answer). Unset, a step mark is one thread-local
 //! check.
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use std::cell::RefCell;
 use std::io::Write;
 use std::os::unix::fs::OpenOptionsExt;

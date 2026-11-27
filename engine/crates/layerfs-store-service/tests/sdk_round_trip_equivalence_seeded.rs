@@ -35,8 +35,6 @@
 //! so the SQLite half alone is a check. The PostgreSQL half needs
 //! `LAYERFS_TEST_POSTGRES_URL` and reports NOT_RUN without it. Set
 //! `EQUIV_PRINT=1` to print each backend's transcript.
-use layerfs_protocol::provision::install::{Answer, Reply, SdkCall, SdkRefusal, SdkValue};
-use layerfs_protocol::sdk::{hex, unhex};
 use layerfs_history::{
     BranchId, ForkRequest, ForkSource, HistoryCatalog, HistoryCatalogConfig, HistoryName,
     LayerStackId,
@@ -46,6 +44,9 @@ use layerfs_persistence::{
     SqlitePersistenceProfile, StoreSelection,
 };
 use layerfs_project::{init, InitRequest, Initialized};
+use layerfs_protocol::daemon::{Answer, Reply};
+use layerfs_protocol::sdk::{hex, unhex};
+use layerfs_protocol::sdk::{SdkCall, SdkRefusal, SdkValue};
 use layerfs_storage::{ReservationBlocks, Storage, StoragePolicy};
 use layerfs_store_service::bootstrap::open_store_observed;
 use layerfs_store_service::{Owner, OwnerConfig, StoreService};

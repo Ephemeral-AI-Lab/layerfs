@@ -29,7 +29,6 @@ use crate::place::{self, Executor, Worker};
 use crate::record::{StoreRecord, StoreRef};
 use crate::sqlite::family::{self, progress};
 use crate::Related;
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::home::paths;
 use layerfs_home::op::{Op, Standing};
@@ -37,6 +36,7 @@ use layerfs_home::outcome::{refused, Outcome};
 use layerfs_persistence::upgrade::{
     upgrade_postgresql, upgrade_sqlite, UpgradeError, UpgradeReport, UpgradeRequest,
 };
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};

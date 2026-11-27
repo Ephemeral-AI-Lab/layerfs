@@ -2,7 +2,7 @@
 //! specification does (conformance R2 G1): the same value word or default
 //! (`[--at C]`, `[--limit 100]`), `-m msg` for a Commit message, and a
 //! required option without brackets.
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 
 const SPEC: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),

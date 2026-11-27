@@ -14,14 +14,14 @@
 //!   the quoting is this crate's, not the CLI's.
 use crate::platform::error::{Code, MachineError};
 use crate::setup::facts;
-use crate::table::profile::HostOs;
-use crate::setup::probe::first_line;
 use crate::setup::forward;
 use crate::setup::guest::Guest;
+use crate::setup::probe::first_line;
+use crate::setup::spec::{Forward, Spec};
 use crate::setup::vm::{call, checked, CALL};
 use crate::setup::{tool, worker};
 use crate::setup::{with_worker, State, Status};
-use crate::setup::spec::{Forward, Spec};
+use crate::table::profile::HostOs;
 use std::path::{Path, PathBuf};
 
 pub(super) const CLI: &str = "limactl";

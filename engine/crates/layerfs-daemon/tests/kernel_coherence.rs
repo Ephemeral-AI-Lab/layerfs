@@ -17,9 +17,9 @@ mod mutating;
 #[allow(dead_code)]
 #[path = "support/host_install.rs"]
 mod support;
-use layerfs_protocol::provision::install::{Activity, ControlCode, MountPhase};
 use layerfs_daemon::control::Failure;
 use layerfs_fuse::request::Opcode;
+use layerfs_protocol::daemon::{Activity, ControlCode, MountPhase};
 use mounted::{until, COMMAND};
 use mutating::{
     bytes_of, direct, errno, forced, frames, harness, opcodes, path_only, quiet, shell, unmounted,

@@ -12,7 +12,6 @@ use crate::{
     history::{lookup as args, saved},
     store::{Store, StorePorts},
 };
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_content::{
     compare::{tree::join, Memo},
     filesystem::{
@@ -23,6 +22,7 @@ use layerfs_content::{
     merge::Rule,
     object::inode_leaf::InodeKind,
 };
+use layerfs_protocol::sdk::SdkValue;
 use std::sync::Arc;
 
 /// Every saved read publishes its exact immutable anchor, including legacy

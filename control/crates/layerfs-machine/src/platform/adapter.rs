@@ -4,11 +4,11 @@
 //! public calls in `setup/calls.rs` dispatch through it; a platform that
 //! cannot do an operation answers with that operation's refusal.
 use crate::platform::error::{Code, MachineError};
-use crate::table::profile::{HostOs, Platform};
 use crate::platform::{apple_container, docker, host, lima};
 use crate::setup::guest::Guest;
-use crate::setup::{State, Status};
 use crate::setup::spec::{Bundle, Forward, NameLimit, Running, Spec, Tools};
+use crate::setup::{State, Status};
+use crate::table::profile::{HostOs, Platform};
 
 /// What a platform does; implemented once per platform folder.
 pub(crate) trait Adapter: Sync {

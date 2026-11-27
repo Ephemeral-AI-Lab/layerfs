@@ -29,10 +29,10 @@ mod mounted;
 #[allow(dead_code)]
 #[path = "support/mounted_commit.rs"]
 mod rig;
-use layerfs_protocol::provision::install::{MountPhase, MountWork, Reply, WorkspaceToken};
-use layerfs_store_service::OwnerClient;
 use layerfs_fuse::request::Opcode;
 use layerfs_overlay::{CleanupState, StoredCounts};
+use layerfs_protocol::daemon::{MountPhase, MountWork, Reply, WorkspaceToken};
+use layerfs_store_service::OwnerClient;
 use mounted::mount_entry;
 use nix::libc;
 use rig::{root, stamp_tree, Rig};

@@ -13,11 +13,11 @@
 use crate::deploy::{self, Side};
 use crate::host::Deploy;
 use crate::images::{lowers, refused_with};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
-use layerfs_home::home::{self, paths};
-use layerfs_home::outcome::{failed, refused, Outcome};
 use crate::rootfs;
 use crate::Image;
+use layerfs_home::home::{self, paths};
+use layerfs_home::outcome::{failed, refused, Outcome};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use sha2::{Digest, Sha256};
 use std::fs::{self, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};

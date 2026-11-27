@@ -5,11 +5,11 @@ use crate::calls::table::{a, call, opt, Call};
 use crate::calls::Context;
 use crate::calls::{Form, Part};
 #[cfg(feature = "machine")]
-use layerfs_protocol::provision::install::SdkValue;
-#[cfg(feature = "machine")]
 use layerfs_home::names::MachineName;
 #[cfg(feature = "machine")]
 use layerfs_home::outcome::Outcome;
+#[cfg(feature = "machine")]
+use layerfs_protocol::sdk::SdkValue;
 
 /// One image `--unused` could not remove, and why.
 const SKIPPED: Form = Form::of(&["image", "message"], &[], &["image", "message"]);

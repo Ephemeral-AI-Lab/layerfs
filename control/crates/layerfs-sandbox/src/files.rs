@@ -4,23 +4,23 @@
 //! `<root>/sandbox/<name>/` holds its record (`record.json`, with what
 //! reopens it under `daemon`), its daemon keys (`control.json`) and one
 //! record per Workspace (`workspace/<id>.json`). No mutation replay.
+#[cfg(target_os = "linux")]
+use crate::backend::select::NAMESPACES;
+#[cfg(target_os = "macos")]
+use crate::backend::select::{LOCAL, NATIVE};
 use crate::host::Host;
 use crate::record::{DaemonRecord, Local, SandboxRecord, WorkspaceRecord};
 use crate::registry::{Mount, SandboxState};
 use crate::reopen::{gone, recorded};
-#[cfg(target_os = "linux")]
-use crate::runtime::NAMESPACES;
-#[cfg(target_os = "macos")]
-use crate::runtime::{LOCAL, NATIVE};
-use crate::{internal::workspace, BoundWorkspace, MountedWorkspace};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
-use layerfs_home::helpers;
-use layerfs_home::home::paths;
-use layerfs_home::outcome::{failed, refused};
 use crate::LocalRecord;
 #[cfg(target_os = "linux")]
 use crate::SandboxRecord as BackendRecord;
+use crate::{internal::workspace, BoundWorkspace, MountedWorkspace};
 use crate::{CommandIdentity, Sandbox};
+use layerfs_home::helpers;
+use layerfs_home::home::paths;
+use layerfs_home::outcome::{failed, refused};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_store::project::discovery::{home_of, private};
 use std::{
     fs,
@@ -106,7 +106,7 @@ pub fn save_sandbox(
         ]),
     )?;
     let facts = [
-        crate::runtime::kind(runtime).to_owned(),
+        crate::backend::select::kind(runtime).to_owned(),
         route(runtime).to_owned(),
         runtime.identity().to_string(),
     ];
@@ -357,7 +357,7 @@ pub fn workspaces(directory: &Path) -> Result<Vec<(PathBuf, WorkspaceRecord)>> {
     Ok(found)
 }
 /// A Workspace record's token: its id (64 hex digits) and namespace.
-fn token_of(value: &WorkspaceRecord) -> Result<layerfs_protocol::provision::install::WorkspaceToken> {
+fn token_of(value: &WorkspaceRecord) -> Result<layerfs_protocol::daemon::WorkspaceToken> {
     let id = helpers::required(value.id(), "id")?;
     let bytes: Vec<u8> = (0..id.len())
         .step_by(2)
@@ -368,7 +368,7 @@ fn token_of(value: &WorkspaceRecord) -> Result<layerfs_protocol::provision::inst
         .collect::<Option<_>>()
         .filter(|b: &Vec<u8>| b.len() == 32)
         .ok_or_else(|| refused("InvalidInput", "Workspace record id"))?;
-    Ok(layerfs_protocol::provision::install::WorkspaceToken {
+    Ok(layerfs_protocol::daemon::WorkspaceToken {
         workspace: layerfs_history::WorkspaceId::from_slice(&bytes).map_err(failed)?,
         namespace: value
             .namespace()
@@ -377,12 +377,12 @@ fn token_of(value: &WorkspaceRecord) -> Result<layerfs_protocol::provision::inst
 }
 fn absent(failure: &crate::OperationFailure) -> bool {
     matches!(&failure.cause, crate::OperationCause::Remote(refusal)
-        if refusal.code == layerfs_protocol::provision::install::ControlCode::Missing)
+        if refusal.code == layerfs_protocol::daemon::ControlCode::Missing)
 }
 /// The record of the Workspace `token` names: `workspace/<id>.json`.
 pub fn workspace_file(
     state: &SandboxState,
-    token: layerfs_protocol::provision::install::WorkspaceToken,
+    token: layerfs_protocol::daemon::WorkspaceToken,
 ) -> PathBuf {
     state.directory.join("workspace").join(format!(
         "{}.json",

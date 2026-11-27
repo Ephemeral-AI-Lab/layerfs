@@ -1,7 +1,7 @@
 //! CREATE, MKNOD (regular), MKDIR and SYMLINK: one new inode and its entry.
 use super::{mutation::Declined, unsupported};
-use layerfs_content::filesystem::{PathName, SymlinkTarget};
 use crate::{Operation, Refusal};
+use layerfs_content::filesystem::{PathName, SymlinkTarget};
 
 /// The kernel has already applied the caller's umask. Bits outside the
 /// portable grammar (set-id, set-gid) reach Workspace and are refused there.

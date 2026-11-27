@@ -7,12 +7,12 @@
 //! the side with the later write and nothing inside it conflicts.
 use super::lookup::{self as args, history};
 use crate::store::{CatalogHints, Store};
-use layerfs_protocol::provision::install::SdkRefusal;
 use layerfs_content::filesystem::FilesystemRootId;
 use layerfs_content::merge::{
     decide_units, revert_units, unit_changes, RevertInput, Side, UnitReport, Units,
 };
 use layerfs_content::{ConstructionCapacities, ConstructionPolicy, ContentResult};
+use layerfs_protocol::sdk::SdkRefusal;
 use layerfs_storage::Save;
 use layerfs_telemetry::timer::{Active, TimingScope};
 

@@ -1,14 +1,42 @@
 //! What uses a Store from outside the Store's records: the Sandboxes of its
-//! projects, read from their records by `layerfs-control`, which passes
-//! these checks in (layerfs-project#105). Each runs at the point it ran
-//! before, under the same locks.
+//! projects, read from their records by the crates above this one, which
+//! pass these checks in (layerfs-project#105), with the machine reads the
+//! Store calls take ([`StoreUsers`]). Each runs at the point it ran before,
+//! under the same locks.
 use crate::lease::Owner;
-use layerfs_protocol::provision::install::SdkRefusal;
+use layerfs_home::state::State;
+use layerfs_protocol::sdk::SdkRefusal;
 use std::path::Path;
 
 /// A related-use check on the Store or project `name` in home `home`.
 type Check = fn(home: &Path, name: &str) -> Result<(), SdkRefusal>;
 type Except = fn(home: &Path, name: &str, owner: &Owner) -> Result<(), SdkRefusal>;
+
+/// The Sandboxes on machine `machine` in home `home`.
+type Names = fn(home: &Path, machine: &str) -> Result<Vec<String>, SdkRefusal>;
+/// A machine's records-only state.
+type MachineState = fn(home: &Path, machine: &str) -> Result<State, SdkRefusal>;
+/// Refused while a Sandbox of Store `store`'s projects is on `machine`.
+type IdleOn = fn(home: &Path, store: &str, machine: &str) -> Result<(), SdkRefusal>;
+/// `refusal` with the fix of machine `machine` when it has no VM name.
+type Nameless = fn(home: &Path, machine: &str, refusal: SdkRefusal) -> SdkRefusal;
+
+/// What the Store calls read from the Sandboxes and machines that use a
+/// Store, passed in by the crates that own them.
+#[derive(Clone, Copy)]
+pub struct StoreUsers {
+    /// The checks over a Store's users.
+    pub related: Related,
+    /// A machine's state as `machine get` derives it from the records, so a
+    /// Store's `blocked_by` says what `machine get` says of its machine.
+    pub machine_state: MachineState,
+    /// The Sandboxes on a machine (a refusal's fix counts them).
+    pub sandboxes_on: Names,
+    /// `store.detach`: refused while a Sandbox of the Store is on the machine.
+    pub store_idle_on: IdleOn,
+    /// The fix of a machine with no VM name, for a check dialled from it.
+    pub nameless_fix: Nameless,
+}
 
 /// The checks over a Store's users.
 #[derive(Clone, Copy)]

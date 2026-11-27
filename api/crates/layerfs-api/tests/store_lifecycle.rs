@@ -9,10 +9,10 @@
 //! never starts a machine under the home lock; a move refuses the wrong
 //! side and a stopped machine, naming `machine start`. All from records:
 //! no Store is opened, so these run on any host.
-use layerfs_store::lease;
 use layerfs_api::home::{self, paths, read_record, write_record};
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_os::process::LocalProcess;
+use layerfs_protocol::sdk::SdkValue;
+use layerfs_store::lease;
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -469,7 +469,7 @@ fn refusal(
     home: &Path,
     name: &str,
     args: &[(&str, SdkValue)],
-) -> layerfs_protocol::provision::install::SdkRefusal {
+) -> layerfs_protocol::sdk::SdkRefusal {
     let args = SdkValue::Map(
         args.iter()
             .map(|(n, v)| ((*n).to_owned(), v.clone()))

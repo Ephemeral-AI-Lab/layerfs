@@ -2,8 +2,8 @@
 //! request [`steps::run`](super::steps::run) takes, and the `store.file`
 //! frame it travels in to a worker, `{ op, args: { store, store_record?,
 //! ... } }`, encoded by the caller and decoded once in the worker.
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::outcome::refused;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 

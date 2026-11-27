@@ -3,7 +3,7 @@
 //! argument, fresh random bytes, an answer's list with its `<list>_count`
 //! companion, and a map of ordered fields.
 use crate::outcome::{failed, refused};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::sync::{Mutex, MutexGuard};
 
 /// The lock of a table each holder changes in one step (one insert, remove

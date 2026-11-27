@@ -31,12 +31,12 @@ mod support;
 #[allow(dead_code)]
 mod view;
 
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_content::compare::tree::{join, list_directory, TreeTable};
 use layerfs_content::filesystem::FilesystemRootId;
 use layerfs_content::inode_leaf::{InodeKind, InodeMetadata};
 use layerfs_content::object::ObjectId;
 use layerfs_persistence::{PersistenceConfig, SqliteHandles, SqlitePersistenceProfile};
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_storage::Storage;
 use std::collections::BTreeMap;
 use std::path::Path;

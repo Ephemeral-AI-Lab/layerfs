@@ -7,7 +7,7 @@
 //! The lifecycle is the local one, imported from `crate::shared`
 //! (namespaces is the local process with namespaces added: its
 //! `Local`, `LocalPaths`, `LocalPhase`, `search_path`, `listener`, `streams`,
-//! and its own Linux `mounts` in `linux/`, with `LocalProcess` from `layerfs_bridge::process`): a
+//! and its own Linux `mounts` in `linux/`, with `LocalProcess` from `layerfs_os::process`): a
 //! private directory per Sandbox, one daemon start and one listener wait, a
 //! record of the daemon's exact process and its port. What this backend
 //! adds is outside that daemon: the helper that builds the private root, the
@@ -17,15 +17,14 @@
 //! Its adapter (stored name, capabilities) builds on every Unix host; the
 //! backend itself on Linux only.
 mod adapter;
-#[cfg(target_os = "linux")]
-pub(crate) mod linux;
+pub(crate) mod instance;
+pub mod linux;
 pub mod network;
 #[cfg(target_os = "linux")]
 mod provider;
 pub mod rootfs;
 #[cfg(target_os = "linux")]
 pub(crate) mod seccomp;
-pub(crate) mod instance;
 
 pub(crate) use adapter::ADAPTER;
 
@@ -36,11 +35,11 @@ pub use instance::cgroup::{give_controllers, leaf, split};
 #[cfg(target_os = "linux")]
 pub use instance::exec::NO_HELPER_COPY;
 #[cfg(target_os = "linux")]
+pub use instance::handle::Sandbox;
+pub use instance::spec::{HelperSpec, SpecNetwork, RESOLVER_FILES};
+#[cfg(target_os = "linux")]
 pub use provider::NamespaceProvider;
 #[cfg(target_os = "linux")]
 pub use rootfs::ImageRoot;
 #[cfg(target_os = "linux")]
-pub use instance::handle::Sandbox;
-#[cfg(target_os = "linux")]
 pub use seccomp::{deny_user_namespaces, OneThread};
-pub use instance::spec::{HelperSpec, SpecNetwork, RESOLVER_FILES};

@@ -3,7 +3,7 @@
 //! status, commit, unmount and remove. The live half needs the macOS (or
 //! Linux, as root) daemon at LAYERFS_DAEMON; without it, it says NOT_RUN.
 use layerfs_api::home::{self, paths, write_record};
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
@@ -228,7 +228,10 @@ fn named_sandboxes_on_native() {
         &[("workspace", t(&ws)), ("message", t("from a sandbox"))],
     );
     let got = ok(&home, "sandbox.get", &[("sandbox", t("t1"))]);
-    assert!(layerfs_home::json::print(&got).contains(&ws[3..]), "{got:?}");
+    assert!(
+        layerfs_home::json::print(&got).contains(&ws[3..]),
+        "{got:?}"
+    );
     ok(&home, "workspace.unmount", &[("workspace", t(&ws))]);
     let read = ok(
         &home,

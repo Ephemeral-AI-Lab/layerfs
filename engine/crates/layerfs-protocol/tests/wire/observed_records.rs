@@ -1,6 +1,9 @@
 //! Additive controls preserve old bytes and reject recursive observation input.
-use layerfs_protocol::provision::install::{Answer, Call, CleanupObservation, CommitControl, HelloRequest, Reply, Request, UnmountControl, WorkspaceToken};
 use layerfs_history::WorkspaceId;
+use layerfs_protocol::daemon::{
+    Answer, Call, CleanupObservation, CommitControl, HelloRequest, Reply, Request, UnmountControl,
+    WorkspaceToken,
+};
 
 fn token() -> WorkspaceToken {
     WorkspaceToken {
@@ -225,7 +228,7 @@ fn traced_observation_differs_only_in_its_prefix_tag() {
 }
 #[test]
 fn observed_reply_carries_telemetry_beside_the_unchanged_reply() {
-    use layerfs_protocol::provision::install::SdkValue;
+    use layerfs_protocol::sdk::SdkValue;
     let inner = Reply::Cleanup {
         token: token(),
         state: CleanupObservation::Gone,

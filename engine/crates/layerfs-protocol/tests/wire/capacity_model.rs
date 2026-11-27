@@ -1,7 +1,9 @@
 //! The control-capacity read model (#540): the typed DTO round-trips the
 //! daemon's answer, keeps a missing field legible, and drops a malformed
 //! retained record instead of inventing one.
-use layerfs_protocol::provision::install::{AdmissionModel, CapacityModel, RetainedFailureModel, RetainedModel};
+use layerfs_protocol::daemon::{
+    AdmissionModel, CapacityModel, RetainedFailureModel, RetainedModel,
+};
 
 fn failure(slot: i64) -> RetainedFailureModel {
     RetainedFailureModel {
@@ -48,18 +50,18 @@ fn the_typed_model_round_trips_its_wire_record() {
 
 #[test]
 fn a_missing_or_malformed_record_reads_as_absent_not_invented() {
-    let value = layerfs_protocol::provision::install::SdkValue::map([
-        ("admission", layerfs_protocol::provision::install::SdkValue::Null),
+    let value = layerfs_protocol::sdk::SdkValue::map([
+        ("admission", layerfs_protocol::sdk::SdkValue::Null),
         (
             "retained",
-            layerfs_protocol::provision::install::SdkValue::map([
-                ("limit", layerfs_protocol::provision::install::SdkValue::Int(64)),
+            layerfs_protocol::sdk::SdkValue::map([
+                ("limit", layerfs_protocol::sdk::SdkValue::Int(64)),
                 (
                     "failures",
-                    layerfs_protocol::provision::install::SdkValue::List(vec![
-                        layerfs_protocol::provision::install::SdkValue::map([(
+                    layerfs_protocol::sdk::SdkValue::List(vec![
+                        layerfs_protocol::sdk::SdkValue::map([(
                             "slot",
-                            layerfs_protocol::provision::install::SdkValue::Int(1),
+                            layerfs_protocol::sdk::SdkValue::Int(1),
                         )]),
                     ]),
                 ),

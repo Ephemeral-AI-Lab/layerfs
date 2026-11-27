@@ -15,9 +15,9 @@
 //!
 //! Nothing runs a daemon: a `sleep` stands for one.
 #![cfg(any(target_os = "linux", target_os = "macos"))]
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::home::{self, paths, read_record, write_record};
 use layerfs_home::op::Op;
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_sandbox::family::{remove, RemoveRequest, Removed};
 use std::path::{Path, PathBuf};
 
@@ -52,14 +52,14 @@ fn removed(
     home: &Path,
     name: &str,
     force: bool,
-) -> Result<Removed, layerfs_protocol::provision::install::SdkRefusal> {
+) -> Result<Removed, layerfs_protocol::sdk::SdkRefusal> {
     let mut sink = |_| {};
     let mut events = layerfs_home::events::Events::new(&mut sink);
     let request = RemoveRequest {
         name: name.to_owned(),
         force,
     };
-    remove(home, &mut events, &request)
+    remove(home, &mut events, &request, local)
 }
 
 /// The create's intent Sandbox `name`'s record still holds.
@@ -353,7 +353,7 @@ fn a_reclaimed_sandbox_is_tombstoned_or_says_why_not() {
     let generation = "p1:sandbox:0000000000000002:00";
     ended(&home, "s1", generation);
     let host = layerfs_sandbox::force::local_host(&home, "s1").unwrap();
-    let refusal = layerfs_sandbox::lifecycle::close(&host, false, &[]).unwrap_err();
+    let refusal = layerfs_sandbox::lifecycle::close(&host, false, &[], &NoDrain).unwrap_err();
     assert_eq!(refusal.code, "NoSuchSandbox", "{refusal:?}");
     assert!(refusal.detail.get("left").is_none(), "{refusal:?}");
     assert!(!paths::sandbox_dir(&home, "s1").exists());
@@ -372,7 +372,7 @@ fn a_reclaimed_sandbox_is_tombstoned_or_says_why_not() {
     std::fs::remove_dir_all(&retired).unwrap();
     std::fs::write(&retired, b"not a folder").unwrap();
     let host = layerfs_sandbox::force::local_host(&home, "s2").unwrap();
-    let refusal = layerfs_sandbox::lifecycle::close(&host, false, &[]).unwrap_err();
+    let refusal = layerfs_sandbox::lifecycle::close(&host, false, &[], &NoDrain).unwrap_err();
     assert_eq!(refusal.code, "NoSuchSandbox", "{refusal:?}");
     let left = match refusal.detail.get("left") {
         Some(SdkValue::List(items)) => items.clone(),
@@ -385,4 +385,20 @@ fn a_reclaimed_sandbox_is_tombstoned_or_says_why_not() {
     );
     assert!(!paths::sandbox_dir(&home, "s2").exists());
     std::fs::remove_dir_all(home).unwrap();
+}
+
+/// A close here has no mounted Workspace to drain.
+struct NoDrain;
+
+impl layerfs_sandbox::lifecycle::WorkspaceDrain for NoDrain {
+    fn drain(&self, _: &layerfs_sandbox::host::Host, _: &str) {}
+}
+
+/// The in-process runner `remove` takes (the workspace crate's dispatch in
+/// the product): the Sandbox's own dispatch, with no Workspace to drain.
+fn local(
+    host: layerfs_sandbox::host::Host,
+    call: layerfs_sandbox::host::Call,
+) -> layerfs_home::outcome::Outcome {
+    layerfs_sandbox::dispatch::call(host, call, &NoDrain)
 }

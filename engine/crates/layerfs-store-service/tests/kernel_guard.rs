@@ -139,7 +139,7 @@ fn open_concurrent_child() {
     let Some(store) = std::env::var_os("LAYERFS_OPEN_CONCURRENT_STORE") else {
         return;
     };
-    use layerfs_protocol::provision::install::{SdkCall, SdkValue};
+    use layerfs_protocol::sdk::{SdkCall, SdkValue};
     use std::io::{Read, Write};
     use std::os::unix::net::UnixStream;
     let id = std::env::var("LAYERFS_OPEN_CONCURRENT_ID").unwrap();
@@ -388,20 +388,20 @@ fn three_processes_open_direct_and_commit_concurrently() {
         let branch = format!("agent-{id}");
         let list = layerfs_store_service::methods::call(
             &service,
-            &layerfs_protocol::provision::install::SdkCall {
+            &layerfs_protocol::sdk::SdkCall {
                 method: "branch.list_commits".to_owned(),
-                args: layerfs_protocol::provision::install::SdkValue::map([
+                args: layerfs_protocol::sdk::SdkValue::map([
                     (
                         "project",
-                        layerfs_protocol::provision::install::SdkValue::text("installed"),
+                        layerfs_protocol::sdk::SdkValue::text("installed"),
                     ),
-                    ("branch", layerfs_protocol::provision::install::SdkValue::text(&branch)),
-                    ("pageSize", layerfs_protocol::provision::install::SdkValue::Int(50)),
+                    ("branch", layerfs_protocol::sdk::SdkValue::text(&branch)),
+                    ("pageSize", layerfs_protocol::sdk::SdkValue::Int(50)),
                 ]),
             },
         )
         .unwrap();
-        let Some(layerfs_protocol::provision::install::SdkValue::List(items)) = list.get("items") else {
+        let Some(layerfs_protocol::sdk::SdkValue::List(items)) = list.get("items") else {
             panic!("missing items: {list:?}");
         };
         assert_eq!(items.len(), 20, "branch {branch} commit count");

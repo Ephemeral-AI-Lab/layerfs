@@ -1,13 +1,13 @@
 //! `lima`'s adapter.
-use super::{lifecycle, daemon_forward, guest, remove, start, status, stop};
+use super::{create, daemon_forward, guest, remove, start, status, stop};
 use crate::platform::adapter::Adapter;
 use crate::platform::error::MachineError;
-use crate::table::profile::HostOs;
-use crate::setup::probe::{macos_missing, tool_version};
-use crate::table::reach::Loopback;
 use crate::setup::guest::Guest;
-use crate::setup::Status;
+use crate::setup::probe::{macos_missing, tool_version};
 use crate::setup::spec::{Bundle, Forward, NameLimit, Running, Spec, Tools};
+use crate::setup::Status;
+use crate::table::profile::HostOs;
+use crate::table::reach::Loopback;
 
 /// What a lima guest calls this host (#535 §7.3): the guest's `/etc/hosts`
 /// names `host.lima.internal`, the gateway of Lima's default user-mode

@@ -2,8 +2,11 @@
 //! reads between undecided visits, a single publishing visit, then the exact
 //! post-reply release of its ticket.
 use crate::ports::mount::{BaseDemandFailed, Fenced, RequestServices, ServiceError, ServiceReply};
+use crate::{
+    JobOutcome, KernelMutationOutcome, KernelVisitRequest, Position, Refusal, Time, ViewStat,
+    VisitFacts, WorkspaceError,
+};
 use layerfs_overlay::{KernelMount, OpenFile, Publication};
-use crate::{JobOutcome, KernelMutationOutcome, KernelVisitRequest, Position, Refusal, Time, ViewStat, VisitFacts, WorkspaceError};
 use std::{fmt, sync::Arc};
 
 /// What the kernel asked for, before a handle's descriptor is resolved.

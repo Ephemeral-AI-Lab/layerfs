@@ -1,10 +1,12 @@
 //! Streaming JSON strings with exact UTF-8 and surrogate handling.
 use super::Json;
-use layerfs_sandbox::RuntimeError;
+use super::JsonError;
 use std::io::{Read, Write};
+/// A JSON string read with [`Json::string`]: its text up to a bound.
 pub struct Text {
     bytes: [u8; 128],
     len: usize,
+    /// Whether the string was longer than the bound and cut.
     pub overflow: bool,
 }
 impl Text {
@@ -28,15 +30,18 @@ impl Text {
         self.bytes[self.len..self.len + bytes.len()].copy_from_slice(bytes);
         self.len += bytes.len();
     }
+    /// The text read.
     pub fn text(&self) -> &str {
         std::str::from_utf8(&self.bytes[..self.len]).expect("validated UTF-8")
     }
+    /// Whether the whole string is `s`.
     pub fn equals(&self, s: &str) -> bool {
         !self.overflow && self.text() == s
     }
 }
 impl<R: Read> Json<R> {
-    pub fn string(&mut self, capture: bool) -> Result<Text, RuntimeError> {
+    /// Reads one string; its text is kept only when `capture`.
+    pub fn string(&mut self, capture: bool) -> Result<Text, JsonError> {
         let mut text = Text::new();
         self.string_each(|c| text.push(c, capture))?;
         Ok(text)
@@ -46,7 +51,8 @@ impl<R: Read> Json<R> {
     /// this crate reads is an image archive's path. Its only caller unpacks
     /// images, which this crate does on Linux only.
     #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
-    pub fn text_into(&mut self, out: &mut Vec<u8>, max: usize) -> Result<(), RuntimeError> {
+    /// Reads one string's bytes into `out`, refusing more than `max`.
+    pub fn text_into(&mut self, out: &mut Vec<u8>, max: usize) -> Result<(), JsonError> {
         let mut too_long = false;
         self.string_each(|c| {
             let mut encoded = [0; 4];
@@ -58,17 +64,17 @@ impl<R: Read> Json<R> {
             }
         })?;
         if too_long {
-            return Err(RuntimeError::Protocol("JSON string length"));
+            return Err(JsonError("JSON string length".to_owned()));
         }
         Ok(())
     }
-    fn string_each(&mut self, mut emit: impl FnMut(char)) -> Result<(), RuntimeError> {
+    fn string_each(&mut self, mut emit: impl FnMut(char)) -> Result<(), JsonError> {
         self.expect(b'"')?;
         loop {
             let byte = self.byte()?;
             let c = match byte {
                 b'"' => return Ok(()),
-                0..=31 => return Err(RuntimeError::Protocol("JSON unescaped control")),
+                0..=31 => return Err(JsonError("JSON unescaped control".to_owned())),
                 b'\\' => match self.byte()? {
                     b'"' => '"',
                     b'\\' => '\\',
@@ -85,7 +91,7 @@ impl<R: Read> Json<R> {
                             self.expect(b'u')?;
                             let second = self.hex4()?;
                             if !(0xdc00..=0xdfff).contains(&second) {
-                                return Err(RuntimeError::Protocol("JSON surrogate pair"));
+                                return Err(JsonError("JSON surrogate pair".to_owned()));
                             }
                             0x10000
                                 + ((u32::from(first) - 0xd800) << 10)
@@ -94,9 +100,9 @@ impl<R: Read> Json<R> {
                             u32::from(first)
                         };
                         char::from_u32(scalar)
-                            .ok_or(RuntimeError::Protocol("JSON surrogate/scalar"))?
+                            .ok_or(JsonError("JSON surrogate/scalar".to_owned()))?
                     }
-                    _ => return Err(RuntimeError::Protocol("JSON escape")),
+                    _ => return Err(JsonError("JSON escape".to_owned())),
                 },
                 32..=127 => char::from(byte),
                 _ => {
@@ -104,7 +110,7 @@ impl<R: Read> Json<R> {
                         0xc2..=0xdf => 2,
                         0xe0..=0xef => 3,
                         0xf0..=0xf4 => 4,
-                        _ => return Err(RuntimeError::Protocol("JSON UTF-8 prefix")),
+                        _ => return Err(JsonError("JSON UTF-8 prefix".to_owned())),
                     };
                     let mut bytes = [0; 4];
                     bytes[0] = byte;
@@ -112,7 +118,7 @@ impl<R: Read> Json<R> {
                         *b = self.byte()?;
                     }
                     std::str::from_utf8(&bytes[..width])
-                        .map_err(|_| RuntimeError::Protocol("JSON UTF-8"))?
+                        .map_err(|_| JsonError("JSON UTF-8".to_owned()))?
                         .chars()
                         .next()
                         .expect("one validated scalar")
@@ -121,7 +127,7 @@ impl<R: Read> Json<R> {
             emit(c);
         }
     }
-    fn hex4(&mut self) -> Result<u16, RuntimeError> {
+    fn hex4(&mut self) -> Result<u16, JsonError> {
         let mut n = 0;
         for _ in 0..4 {
             let b = self.byte()?;
@@ -129,13 +135,14 @@ impl<R: Read> Json<R> {
                 b'0'..=b'9' => b - b'0',
                 b'a'..=b'f' => b - b'a' + 10,
                 b'A'..=b'F' => b - b'A' + 10,
-                _ => return Err(RuntimeError::Protocol("JSON unicode digit")),
+                _ => return Err(JsonError("JSON unicode digit".to_owned())),
             };
             n = n * 16 + u16::from(v);
         }
         Ok(n)
     }
 }
+/// Writes `value` as a JSON string to `out`.
 pub fn quoted(out: &mut (impl Write + ?Sized), value: &str) -> std::io::Result<()> {
     out.write_all(b"\"")?;
     for c in value.chars() {

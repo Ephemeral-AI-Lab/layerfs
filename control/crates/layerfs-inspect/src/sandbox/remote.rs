@@ -3,13 +3,13 @@
 //! whose report (the worker's own live checks from its fixed root, and its
 //! Workspaces) is read into this one. A report this build does not read
 //! leaves the Sandbox `not_checked` with `reason` `lost`.
-use super::workspace_target::{Listing, Seen};
 use super::{local, read, Budget, Checks, Observed};
-use layerfs_protocol::provision::install::SdkValue;
+use crate::sandbox::workspace::{Listing, Seen};
 use layerfs_home::names::{MachineName, SandboxName};
 use layerfs_home::outcome::{refused, Outcome};
 use layerfs_home::state::BlockedBy;
 use layerfs_machine::worker::{diagnostic_connect, DiagnosticOperation, Endpoint};
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_sandbox::record::SandboxRecord;
 use std::path::Path;
 use std::time::{Duration, Instant};
@@ -212,7 +212,7 @@ fn merge(report: SdkValue, checks: &mut Checks, seen: &mut Observed) {
 /// paths: the live checks of Sandbox `name` from this root, its
 /// Workspaces (`workspaces`, named by this root's records) and how its
 /// daemon's list went (`listing`).
-pub(crate) fn worker_diagnose(root: &Path, args: SdkValue) -> Outcome {
+pub fn worker_diagnose(root: &Path, args: SdkValue) -> Outcome {
     let name = args
         .get_text("name")
         .ok_or_else(|| refused("InvalidInput", "sandbox diagnostic name"))?;

@@ -7,10 +7,10 @@ use super::commit::{CommitGet, CommitPage, DiffPage};
 use super::file::FileOp;
 use crate::call::store_call;
 use crate::resolve::target;
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::helpers::shown;
 use layerfs_home::outcome::{with_next, Outcome};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 
 /// One page of a list: its size and position, each when sent.

@@ -87,7 +87,7 @@ pub(super) fn build(spec: &HelperSpec) -> Result<(), String> {
 /// files (a bind through a link would leave the root before the pivot); so
 /// does one whose entry is a directory. A file this host lacks is not bound.
 ///
-/// [`RESOLVER_FILES`]: layerfs_sandbox_backend::RESOLVER_FILES
+/// [`RESOLVER_FILES`]: layerfs_sandbox::RESOLVER_FILES
 fn resolver(spec: &HelperSpec) -> Result<(), String> {
     let targets = spec.resolver_targets()?;
     let etc = spec.root.join("etc");

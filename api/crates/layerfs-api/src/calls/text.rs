@@ -6,9 +6,9 @@
 //! next call needs; `detail` when the call asked for the long form).
 //! Nothing is retried here.
 use super::dispatch::{asks_detail, refuse_early, Client};
-use {super::{call_scoped, Family, Scope}, layerfs_home::json};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
+use super::{call_scoped, json, Family, Scope};
 use layerfs_home::outcome::{refused, Outcome};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 
 /// One call's outcome, and whether it asked for the long form.
 type Ran = (Outcome, bool);

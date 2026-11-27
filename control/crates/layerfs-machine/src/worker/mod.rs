@@ -16,6 +16,7 @@
 //! This is the protocol and its client; the worker's server, which runs
 //! every entity's operations, is `layerfs-control` `worker_server`
 //! (layerfs-project#104).
+pub mod accept;
 mod client;
 mod diagnostic;
 mod frame;

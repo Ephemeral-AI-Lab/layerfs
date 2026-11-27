@@ -1,11 +1,11 @@
 //! Bounded public control records preserve exact identities and failure knowledge.
-use layerfs_protocol::provision::install::*;
 use layerfs_content::ObjectId;
 use layerfs_history::{
     error::MovedState, BranchId, BranchRecord, BranchSnapshot, CommitHistoryRequest, CommitId,
     CommitMeta, CommitOutcome, CommitRecord, CommitVia, ForkRequest, ForkSource, HistoryName,
     LayerId, LayerStackId, Page, PageResult, WorkspaceId,
 };
+use layerfs_protocol::daemon::*;
 fn binding() -> BranchSnapshot {
     let root = ObjectId::for_bytes(b"control root");
     BranchSnapshot {

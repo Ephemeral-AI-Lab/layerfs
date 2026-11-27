@@ -11,9 +11,9 @@
 //! (a command can still `cd` anywhere in the mounted tree). Every refusal
 //! comes before dispatch.
 use super::table::Call;
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::home::with_field;
 use layerfs_home::outcome::refused;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 
 /// The argument a scoped `branch.list` carries to its family: the Branch

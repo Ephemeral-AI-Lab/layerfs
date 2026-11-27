@@ -3,13 +3,13 @@
 //! makes of a compaction's own record. The report renders from the
 //! `CompactReceipt`; the live read reads only the `<store>.compact-op`
 //! sidecar and never opens the Store database.
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_content::ObjectId;
 use layerfs_home::events::Events;
 use layerfs_home::home::{paths, private_dir, write_entity};
 use layerfs_persistence::{
     CompactKeptWaste, CompactPath, CompactReceipt, CompactResidue, CompactZeroReason, KeptWaste,
 };
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_store::get::With;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -132,7 +132,7 @@ fn receipt() -> CompactReceipt {
 fn machines(
     home: &Path,
     name: &str,
-) -> Result<layerfs_home::state::State, layerfs_protocol::provision::install::SdkRefusal> {
+) -> Result<layerfs_home::state::State, layerfs_protocol::sdk::SdkRefusal> {
     Ok(
         match layerfs_machine::record::MachineRecord::read(home, name)? {
             Some(record) => record.status(false, 0),

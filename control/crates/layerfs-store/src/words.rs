@@ -9,7 +9,6 @@ use layerfs_project::store::InitError;
 use layerfs_project::ProjectError;
 use layerfs_storage::port::acquisition::AcquisitionError;
 
-
 /// A Store creation or project add that failed.
 pub fn init_error(error: &InitError) -> String {
     match error {

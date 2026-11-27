@@ -88,7 +88,10 @@ struct Run {
 
 fn committed(workspace: &layerfs_store_service::store::BoundWorkspace, what: &str) {
     let answer = verdict(&commit(workspace));
-    assert!(matches!(answer, Verdict::Committed(_)), "{what}: {answer:?}");
+    assert!(
+        matches!(answer, Verdict::Committed(_)),
+        "{what}: {answer:?}"
+    );
 }
 
 /// One faulted (or clean) run on Branches `{name}-0` and `{name}-1`.
@@ -125,7 +128,10 @@ fn run(rig: &Rig, lost: &mut Lost, name: &str, reverse: bool, target: Option<(u6
     // The same service: a new Workspace's Commit.
     let b2 = store.fork(&format!("{name}-2"));
     let same_service = match service.try_bind(b2) {
-        Err(error) => format!("bind refused: {}", error.chars().take(120).collect::<String>()),
+        Err(error) => format!(
+            "bind refused: {}",
+            error.chars().take(120).collect::<String>()
+        ),
         Ok(w2) => {
             write(&w2, "/two", format!("{name} two\n").as_bytes());
             let answer = verdict(&commit(&w2));
@@ -151,7 +157,11 @@ fn run(rig: &Rig, lost: &mut Lost, name: &str, reverse: bool, target: Option<(u6
     let (lost_ord, _) = lost.closed_point(store, &format!("{label}: faulted service gone"));
     // A fresh service lands Commits on all three Branches; no lost id used.
     let fresh = store.open();
-    for (branch, path) in [(b0, "/fresh0"), (b1, "/fresh1"), (store.fork(&format!("{name}-3")), "/fresh3")] {
+    for (branch, path) in [
+        (b0, "/fresh0"),
+        (b1, "/fresh1"),
+        (store.fork(&format!("{name}-3")), "/fresh3"),
+    ] {
         let workspace = fresh.bind(branch);
         write(&workspace, path, format!("{name} {path}\n").as_bytes());
         committed(&workspace, &format!("{label}: fresh {path}"));
@@ -199,7 +209,10 @@ fn release_positions(run: &Run) -> Vec<u64> {
     for (n, (conn, reply)) in annotated.iter().enumerate() {
         dump.push_str(&format!("{n} c{conn} {} {}\n", reply.kind, reply.sql));
         let upper = reply.sql.to_ascii_uppercase();
-        if upper.starts_with("BEGIN") && current.iter().all(|(_, c)| c != conn) && connection.is_none() {
+        if upper.starts_with("BEGIN")
+            && current.iter().all(|(_, c)| c != conn)
+            && connection.is_none()
+        {
             connection = Some(*conn);
             current.clear();
             publishes = false;
@@ -222,7 +235,10 @@ fn release_positions(run: &Run) -> Vec<u64> {
         }
     }
     println!("RELEASE_FLIGHT\n{dump}");
-    assert!(!found.is_empty(), "no release transaction in the clean flight");
+    assert!(
+        !found.is_empty(),
+        "no release transaction in the clean flight"
+    );
     found
 }
 
@@ -243,7 +259,13 @@ fn sweep(tag: &str, reverse: bool, fault: Fault) {
     println!("RELEASE_TX {positions:?}");
     let mut classes = std::collections::BTreeMap::<String, u64>::new();
     for n in &positions {
-        let outcome = run(&rig, &mut lost, &format!("n{n}"), reverse, Some((*n, fault)));
+        let outcome = run(
+            &rig,
+            &mut lost,
+            &format!("n{n}"),
+            reverse,
+            Some((*n, fault)),
+        );
         assert!(outcome.window.fired.is_some(), "n{n}: the fault fired");
         let class = format!(
             "rewound={} unmount_ok={} same={}",
@@ -258,7 +280,10 @@ fn sweep(tag: &str, reverse: bool, fault: Fault) {
         positions.len()
     );
     let store = &rig.store;
-    assert!(store.no_open_transaction(), "a backend left in a transaction");
+    assert!(
+        store.no_open_transaction(),
+        "a backend left in a transaction"
+    );
     let amcheck = verify768::amcheck(store);
     assert!(amcheck.is_empty(), "amcheck: {amcheck:#?}");
     let duplicates = verify768::duplicate_allocations(store);
@@ -330,7 +355,11 @@ fn slot_release_held_while_another_service_reserves() {
             let other = store.open();
             let w2 = other.bind(b2);
             for k in 0..40 {
-                write(&w2, &format!("/other{k}"), format!("other {k}\n").as_bytes());
+                write(
+                    &w2,
+                    &format!("/other{k}"),
+                    format!("other {k}\n").as_bytes(),
+                );
             }
             committed(&w2, "the other service");
             let mid = alloc(store);

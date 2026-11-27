@@ -5,7 +5,11 @@ use super::common::{fixture, name, Fixture};
 use layerfs_content::filesystem::PathName;
 use layerfs_content::ContentError;
 use layerfs_overlay::{Overlay, ProfileConfig};
-use layerfs_vfs::{CanonicalCache, CanonicalClient, InodeSerials, JobOutcome, NamespaceJob, Operation, Outcome, OverlayJobs, OverlayRead, Refusal, SourceView, Time, ViewStat, Workspace, WorkspaceError, WorkspaceResult};
+use layerfs_vfs::{
+    CanonicalCache, CanonicalClient, InodeSerials, JobOutcome, NamespaceJob, Operation, Outcome,
+    OverlayJobs, OverlayRead, Refusal, SourceView, Time, ViewStat, Workspace, WorkspaceError,
+    WorkspaceResult,
+};
 use std::{
     cell::{Cell, RefCell},
     path::PathBuf,

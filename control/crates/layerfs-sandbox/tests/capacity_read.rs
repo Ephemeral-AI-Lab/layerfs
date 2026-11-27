@@ -6,10 +6,14 @@
 //!
 //! Nothing runs: a stand-in daemon answers the query on the connections it
 //! accepts, and counts what it saw.
-use layerfs_protocol::provision::install::{AdmissionModel, Answer, Call, CapacityModel, DaemonPhase, DaemonStatus, Reply, Request, RetainedModel, SdkValue, OPERATION};
-use layerfs_protocol::duplex;
 use layerfs_home::home::paths;
 use layerfs_home::secrets;
+use layerfs_protocol::daemon::{
+    AdmissionModel, Answer, Call, CapacityModel, DaemonPhase, DaemonStatus, Reply, Request,
+    RetainedModel, OPERATION,
+};
+use layerfs_protocol::duplex;
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_sandbox::daemon::capacity;
 use layerfs_sandbox::daemon::channel::ControlPhase;
 use layerfs_sandbox::daemon::operator;
@@ -313,7 +317,7 @@ fn the_worker_s_side_reads_the_capacity_model() {
         started: None,
         reach_hint: None,
     };
-    let answer = layerfs_sandbox::dispatch::call(host, HostCall::Capacity);
+    let answer = layerfs_sandbox::dispatch::call(host, HostCall::Capacity, &NoDrain);
     // the call left its Sandbox live in this process's table: it goes,
     // with its pooled connection, before anything is asserted
     let real = home.canonicalize().unwrap();
@@ -474,4 +478,11 @@ fn a_quarantined_connection_attempts_nothing() {
         other => panic!("{other:?}"),
     }
     assert_eq!(seen.queries.load(Ordering::SeqCst), 0);
+}
+
+/// A close here has no mounted Workspace to drain.
+struct NoDrain;
+
+impl layerfs_sandbox::lifecycle::WorkspaceDrain for NoDrain {
+    fn drain(&self, _: &layerfs_sandbox::host::Host, _: &str) {}
 }

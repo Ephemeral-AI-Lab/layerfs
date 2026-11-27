@@ -2,13 +2,13 @@
 //! `history/lookup.rs`: product source holds no tests (the product-boundary
 //! guard).
 
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_history::error::{
     HolderKind, HolderState, Missing, MountHolders, MovedState, NameHolder, NameSource,
     NameTakenState, OpConflict, RemovedPath, RemovedState,
 };
 use layerfs_history::records::{GcIntentKind, GcScopeKind};
 use layerfs_history::{CommitId, HistoryError, LayerId, UnknownOutcomeState};
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_store_service::history::lookup::history;
 
 fn layer(tag: u8) -> LayerId {

@@ -207,12 +207,9 @@ fn with_direct_writes(store: &TestStore) {
                 writer.call(
                     "fs.write",
                     vec![
-                        ("branch", layerfs_protocol::provision::install::SdkValue::text("mixed")),
-                        ("path", layerfs_protocol::provision::install::SdkValue::text(&direct)),
-                        (
-                            "content",
-                            layerfs_protocol::provision::install::SdkValue::text("direct\n"),
-                        ),
+                        ("branch", layerfs_protocol::sdk::SdkValue::text("mixed")),
+                        ("path", layerfs_protocol::sdk::SdkValue::text(&direct)),
+                        ("content", layerfs_protocol::sdk::SdkValue::text("direct\n")),
                     ],
                 )
             });

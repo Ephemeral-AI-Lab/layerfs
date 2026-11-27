@@ -6,7 +6,7 @@ use layerfs_overlay::{
     CapturedReader, CapturedRunCursor, CapturedRunReply, DirectoryEntry,
     IndexedOperationRecordChange, IndexedOperationRecordKey, IndexedOperationRecordScope, Inode,
 };
-use layerfs_workspace::{
+use layerfs_vfs::{
     OperationRecordApply, OperationRecordReply, OverlayCapturedNamespace, OverlayCapturedRuns,
     OverlayOperationRecords, WorkspaceResult,
 };

@@ -3,8 +3,8 @@
 //! quiesced file is the Store's closed bytes. The checkpoint runs after the
 //! call is answered; the wait below is bounded.
 use layerfs_api::home::{self};
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::home::paths;
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_store::lease;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};

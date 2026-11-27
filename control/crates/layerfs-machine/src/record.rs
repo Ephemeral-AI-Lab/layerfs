@@ -9,10 +9,10 @@
 //! `machine remove` removes its record alone. Read once and kept whole. Built without
 //! the `machine` feature too (the guest worker reads its own `native` and
 //! `docker` records); the platform and the summary need the adapters.
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::home::{self, paths, read_record, with_field, write_entity};
 use layerfs_home::op::{self, Op, Standing};
 use layerfs_home::outcome::{refused, shell_word, with_fix};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;

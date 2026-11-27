@@ -1,9 +1,9 @@
 //! The destination on the caller's host: checked before any effect, and
 //! the hidden sibling staging folder that becomes it by one rename.
 use crate::project::staged;
-use layerfs_protocol::provision::install::SdkRefusal;
-use layerfs_protocol::sdk::hex;
 use layerfs_home::outcome::{failed, refused};
+use layerfs_protocol::sdk::hex;
+use layerfs_protocol::sdk::SdkRefusal;
 use std::fs;
 use std::os::unix::fs::DirBuilderExt;
 use std::path::{Component, Path, PathBuf};

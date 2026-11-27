@@ -1,5 +1,11 @@
 //! Exact local stream progress and original remote acknowledgement custody.
-use layerfs_protocol::{provision::{install::{ControlError, InstallPhase, InstallRefusal}, manifest::StoreManifest}, duplex::ChannelError};
+use layerfs_protocol::{
+    duplex::ChannelError,
+    provision::{
+        install::{ControlError, InstallPhase, InstallRefusal},
+        manifest::StoreManifest,
+    },
+};
 use std::{fmt, io, path::PathBuf};
 /// Actual work from one host file stream, separate from channel crypto/I/O work.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]

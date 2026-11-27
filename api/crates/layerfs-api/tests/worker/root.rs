@@ -2,8 +2,8 @@
 //! worker runs on it gets the caller's home id, sent with the request; the
 //! root is never created or given an id of its own, even when it holds
 //! files of its own.
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_machine::worker::{self, Endpoint};
+use layerfs_protocol::sdk::SdkValue;
 use std::path::{Path, PathBuf};
 
 static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
@@ -64,9 +64,7 @@ fn a_worker_root_is_not_converted_and_uses_the_callers_home_id() {
         secret: "k".to_owned(),
     };
     let guest = root.clone();
-    std::thread::spawn(move || {
-        layerfs_api::worker::serve::serve(listener, "k".to_owned(), guest)
-    });
+    std::thread::spawn(move || layerfs_api::worker::serve::serve(listener, "k".to_owned(), guest));
     // the worker is up once it answers
     for _ in 0..200 {
         if worker::ping(&endpoint).is_ok() {
@@ -112,9 +110,7 @@ fn the_retired_host_ops_are_refused() {
         secret: "k".to_owned(),
     };
     let guest = root.clone();
-    std::thread::spawn(move || {
-        layerfs_api::worker::serve::serve(listener, "k".to_owned(), guest)
-    });
+    std::thread::spawn(move || layerfs_api::worker::serve::serve(listener, "k".to_owned(), guest));
     for _ in 0..200 {
         if worker::ping(&endpoint).is_ok() {
             break;

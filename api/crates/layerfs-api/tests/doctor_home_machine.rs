@@ -10,7 +10,7 @@
 #![cfg(feature = "machine")]
 use layerfs_api::home::{paths, read_record, with_field, write_entity, write_record};
 use layerfs_home::json;
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::os::unix::fs::PermissionsExt;

@@ -3,7 +3,7 @@
 //! a worker and a move back with history heads equal, the refusals of a
 //! move, and the InUse refusals of a move and a remove.
 use layerfs_api::home::{self, paths, read_record, write_record};
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 
@@ -541,7 +541,7 @@ fn snapshot_checkpoints_an_unheld_leftover_wal_before_moving_either_way() {
         ],
     )
     .unwrap();
-    layerfs_store::admin::with_users::close_idle(std::time::Duration::ZERO);
+    layerfs_api::close_idle(std::time::Duration::ZERO);
     let store_path = paths::store_file(&home, "shop");
     assert_eq!(wal_bytes(&store_path), 0, "a closed Store keeps no log");
 
@@ -586,7 +586,7 @@ fn snapshot_checkpoints_an_unheld_leftover_wal_before_moving_either_way() {
     .unwrap();
     assert_eq!(read.get_text("text"), Some("from-wal\n"));
 
-    layerfs_store::admin::with_users::close_idle(std::time::Duration::ZERO);
+    layerfs_api::close_idle(std::time::Duration::ZERO);
     std::fs::remove_dir_all(home).unwrap();
     let _ = std::fs::remove_dir_all(root);
     let _ = std::fs::remove_dir_all(folder);

@@ -10,10 +10,10 @@ mod fixture;
 #[path = "../../../../../engine/crates/layerfs-daemon/tests/support/host_install.rs"]
 mod support;
 
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_history::records::GcScopeKind;
 use layerfs_history::{BranchId, ForkRequest, ForkSource, HistoryName, LayerStackId, WorkspaceId};
 use layerfs_machine::record::MachineRecord;
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_sandbox::internal::Control;
 use layerfs_sandbox::record::{mount_place, retire_in, SandboxRecord};
 use layerfs_store::place_view;

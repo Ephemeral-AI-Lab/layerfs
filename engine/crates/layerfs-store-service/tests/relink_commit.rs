@@ -25,12 +25,12 @@
 #[allow(dead_code)]
 mod installed;
 
-use layerfs_protocol::provision::install::{SdkCall, SdkValue};
 use layerfs_content::filesystem::attributes::PortableMetadata;
 use layerfs_content::filesystem::PathName;
 use layerfs_content::object::inode_leaf::InodeKind;
 use layerfs_history::{CommitVia, WorkspaceId};
 use layerfs_persistence::{PersistenceConfig, SqlitePersistenceProfile};
+use layerfs_protocol::sdk::{SdkCall, SdkValue};
 use layerfs_store_service::write::mutation::Mutation;
 use layerfs_store_service::{bootstrap::open_store_observed, Owner, OwnerConfig, StoreService};
 use layerfs_vfs::{Operation, Time};

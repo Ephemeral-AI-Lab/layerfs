@@ -12,12 +12,12 @@ use crate::{
     history::{lookup as args, saved},
     store::Store,
 };
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_content::{
     compare::{line_diff, EntryFacts, MAXIMUM_TEXT_BYTES},
     object::inode_leaf::InodeKind,
 };
 use layerfs_history::LayerStackRecord;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::sync::Arc;
 
 pub struct Options {

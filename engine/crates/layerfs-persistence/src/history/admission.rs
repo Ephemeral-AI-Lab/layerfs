@@ -59,12 +59,12 @@ mod mount;
 mod place;
 mod removal;
 mod session;
+use crate::backend::postgresql::session::transaction::Mode;
 pub(crate) use authority::{liveness, reconcile_machine, release, release_done};
 pub(crate) use mount::{one_message, register_mount, separately_refuses};
 pub(crate) use place::PlaceView;
 pub use place::{has_place_view, with_place_view};
 pub(crate) use removal::{delete_stack, intents, remove_branch, remove_path};
-use crate::backend::postgresql::session::transaction::Mode;
 use session::{session_lock, session_unlock, session_unlock_op};
 
 const INSERT: &str = "gc_intent_insert";

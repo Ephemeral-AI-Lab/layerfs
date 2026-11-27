@@ -1,11 +1,14 @@
 //! One shared dispatcher for every mount, and the exact owners an entry keeps.
 use super::kernel::{bounded, KernelConfig};
-use layerfs_protocol::provision::install::{AbortDisposition, DetachDisposition, ForcedFacts, MountPhase, MountReceipt, MountWork, ReadyMount, TeardownCustody, TeardownStage, WorkspaceToken};
 use layerfs_fuse::{
     session::{DrainStage, KernelSession, SessionFacts, SessionObserver, Undrained},
     DispatchError, MountRequests,
 };
 use layerfs_overlay::KernelMount;
+use layerfs_protocol::daemon::{
+    AbortDisposition, DetachDisposition, ForcedFacts, MountPhase, MountReceipt, MountWork,
+    ReadyMount, TeardownCustody, TeardownStage, WorkspaceToken,
+};
 use std::{fmt, path::PathBuf};
 
 /// Process-wide kernel serving registry: each mount has its own receive workers.

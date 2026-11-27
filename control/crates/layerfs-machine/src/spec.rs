@@ -4,11 +4,13 @@
 //! reads the home.
 pub use super::record::vm_name;
 use super::record::MachineRecord;
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
+use crate::platform::{
+    self as adapters, Endpoint, HostOs, Lasting, MachineError, Platform, Running, Spec, Tools,
+};
 use layerfs_home::home::{self, paths, write_record};
 use layerfs_home::outcome::refused;
 use layerfs_home::state::Reason;
-use crate::platform::{self as adapters, Endpoint, HostOs, Lasting, MachineError, Platform, Running, Spec, Tools};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;

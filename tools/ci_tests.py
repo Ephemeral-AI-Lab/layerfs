@@ -26,7 +26,7 @@ Usage (from the repository root):
                                      each mount test binary
 
 `--test NAME` selects every package's target of that name. captured_namespace
-exists in layerfs-overlay (fast) and layerfs-workspace (heavy), so the push job
+exists in layerfs-overlay (fast) and layerfs-vfs (heavy), so the push job
 also builds the heavy one; the filter keeps it from running.
 """
 
@@ -39,9 +39,11 @@ ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "Cargo.toml"
 LINUX_ONLY = '#![cfg(target_os = "linux")]'
 MOUNT_PACKAGE = "layerfs-daemon"
-# The management library's daemon mount targets (moved from layerfs-api, #536).
-CONTROL_PACKAGE = "layerfs-control"
-API_MOUNT_TARGETS = {"kernel_mount_routes", "kernel_application", "observed_application", "r5_1_actual_daemon_commit"}
+# The control layer's daemon mount targets (moved from layerfs-api, #536; from
+# layerfs-control to layerfs-sandbox, r5_1_actual_daemon_commit renamed
+# kernel_commit, #828).
+CONTROL_PACKAGE = "layerfs-sandbox"
+API_MOUNT_TARGETS = {"kernel_mount_routes", "kernel_application", "observed_application", "kernel_commit"}
 
 # (package, test target): run seconds on the macOS host, 2026-10-23.
 SLOW = {
@@ -57,7 +59,7 @@ SLOW = {
     # Linux native binding proof (#508), run in the runtime image, 2026-10-30.
     ("layerfs-node", "native_connection_wait"): 66.11,
     # Linux SDK mount proof after the ownership move, 2026-10-27.
-    ("layerfs-control", "observed_application"): 6.30,
+    ("layerfs-sandbox", "observed_application"): 6.30,
     # Linux functional run at the relocated tree, 2026-10-27.
     ("layerfs-persistence", "writer_admission"): 9.74,
     # Two cases each hold a lane 3 s (finding #20), macOS host, 2026-11-23.
@@ -76,9 +78,9 @@ SLOW = {
     ("layerfs-store-service", "history_diff_oracle"): 6.0,
     ("layerfs-store-service", "sdk_text_scan"): 7.0,
     # Inspect admission waits out the 6 s hard deadline (layerfs-project#178), 2026-11-16.
-    ("layerfs-sandbox", "inspect_admission"): 11.58,
+    ("layerfs-inspect", "inspect_admission"): 11.58,
     # Two requests wait out the 4 s soft budget (layerfs-project#164), 2026-11-16.
-    ("layerfs-sandbox", "inspect_stats"): 8.30,
+    ("layerfs-inspect", "machine_stats"): 8.30,
     # Marks of 1.1 million objects and of 20,000 packs through sort files
     # (layerfs-project#41), 2026-11-18.
     ("layerfs-persistence", "kept_objects_sort_files"): 24.54,
@@ -87,7 +89,7 @@ SLOW = {
     ("layerfs-persistence", "kept_node_closure"): 5.32,
     # A provider call waits out its own 10 s and 30 s bounds (cp-platform
     # fix of tool::run's deadline), estimated from those bounds, 2026-11-23.
-    ("layerfs-platform", "machine_deadline"): 31.0,
+    ("layerfs-machine", "setup_tool_deadline"): 31.0,
     # #768 adversarial Commit tests against the private PostgreSQL test
     # server (each skips its PostgreSQL half without one), macOS host,
     # 2026-11-25: a fault at every server message of one Commit's flight.
@@ -195,20 +197,14 @@ SLOW = {
 # (package, test target): build CPU seconds in the cold mold build of CI run
 # 39924955411 (4-CPU runner, test profile without debuginfo).
 HEAVY = {
-    ("layerfs-control", "mount_control"): 20.6,
+    ("layerfs-sandbox", "mount_control"): 20.6,
     ("layerfs-daemon", "store_commit"): 19.1,
-    ("layerfs-workspace", "captured_namespace_cursor"): 9.3,
-    ("layerfs-workspace", "captured_namespace_holds"): 9.0,
-    ("layerfs-workspace", "captured_namespace_perturbed"): 9.0,
-    ("layerfs-workspace", "captured_namespace_custody"): 9.0,
-    ("layerfs-workspace", "captured_namespace_states"): 8.4,
-    ("layerfs-workspace", "captured_namespace_rebound"): 8.3,
-    ("layerfs-workspace", "captured_namespace_order"): 7.2,
-    ("layerfs-workspace", "captured_namespace_fragments"): 6.5,
-    ("layerfs-workspace", "captured_namespace"): 6.4,
-    ("layerfs-workspace", "directory_links_install"): 6.0,
-    ("layerfs-workspace", "captured_namespace_metadata"): 6.0,
-    ("layerfs-workspace", "captured_namespace_inline"): 5.7,
+    # #828 joined eleven captured_namespace* binaries of layerfs-workspace
+    # (9.3, 9.0, 9.0, 9.0, 8.4, 8.3, 7.2, 6.5, 6.4, 6.0, 5.7) into one: their sum,
+    # an upper bound until the next CI run measures it.
+    ("layerfs-vfs", "captured_namespace"): 84.8,
+    # directory_links_install (6.0) is a module of the namespace binary (#828).
+    ("layerfs-vfs", "namespace"): 6.0,
     ("layerfs-project", "backed_acquisition"): 5.5,
     ("layerfs-project", "complete_root"): 5.1,
     ("layerfs-content", "filesystem_sorted_localized"): 5.0,
@@ -218,11 +214,10 @@ HEAVY = {
 # it the target builds empty (`#![cfg(feature = ...)]`), so both lanes pass over it;
 # the nightly run builds and runs each group alone, with only that package's feature
 # on, so no other binary is ever built with it. `worker-fault` is the worker's fault
-# switches (layerfs-project#177): run seconds on the macOS host, 2026-11-16.
+# switches (layerfs-project#177): run seconds on the macOS host, 2026-11-16, of the
+# three binaries (4.87, 3.26 and 19.16) #828 joined into layerfs-api's one.
 FEATURED = {
-    ("layerfs-control", "worker_fault"): ("worker-fault", 4.87),
-    ("layerfs-control", "worker_fault_store"): ("worker-fault", 3.26),
-    ("layerfs-control", "worker_fault_inspect"): ("worker-fault", 19.16),
+    ("layerfs-api", "worker_fault"): ("worker-fault", 27.29),
 }
 
 # SDK timings are recorded above without adding the owner-excluded API to CI.

@@ -8,12 +8,12 @@ use crate::{
     store::{Store, StorePorts},
     write::files::path as checked,
 };
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_content::{
     compare::{EntryFacts, TreeTable},
     filesystem::FilesystemRootId,
 };
 use layerfs_history::NodeId;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::sync::Arc;
 
 /// The node's root, parent and record value, read on their own; a walk

@@ -23,10 +23,10 @@ use crate::docker::Docker;
 use crate::image_artifact as cache;
 use crate::image_load::{existing_home_id, owned_for_home_id, remove_container, Target};
 use crate::image_lock::{ImageLock, PruneGate};
-use crate::sweep::{Bounds, Budget, BOUNDS};
-use layerfs_protocol::provision::install::SdkValue;
-use layerfs_home::home::log_swept as log;
 use crate::rootfs::{self, Temporary};
+use crate::sweep::{Bounds, Budget, BOUNDS};
+use layerfs_home::home::log_swept as log;
+use layerfs_protocol::sdk::SdkValue;
 use std::path::Path;
 use std::time::{Duration, Instant};
 

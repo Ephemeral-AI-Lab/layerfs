@@ -17,8 +17,8 @@
 //! its owner's locks).
 use crate::inspect::process;
 use crate::record::DaemonRecord;
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::home::with_field;
+use layerfs_protocol::sdk::SdkValue;
 use std::path::Path;
 
 /// The daemon namespaces of the Workspaces `listed` holds (a

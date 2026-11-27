@@ -13,7 +13,10 @@ use layerfs_content::{
     ObjectId,
 };
 use layerfs_overlay::{KernelDirectory, KernelMount, OverlayError, PAGE_ROWS};
-use layerfs_vfs::{CanonicalCache, CanonicalClient, KernelDirectoryBatch, KernelDirectoryRead, KernelDirectoryWindow, KernelReadDecision, KernelReadOperation, VisitFacts};
+use layerfs_vfs::{
+    CanonicalCache, CanonicalClient, KernelDirectoryBatch, KernelDirectoryRead,
+    KernelDirectoryWindow, KernelReadDecision, KernelReadOperation, VisitFacts,
+};
 use std::sync::Arc;
 /// A memory-only client over a cache that holds nothing.
 fn empty() -> Arc<CanonicalClient> {

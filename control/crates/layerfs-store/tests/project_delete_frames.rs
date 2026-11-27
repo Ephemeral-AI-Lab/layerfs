@@ -1,9 +1,9 @@
 //! The `project.delete` worker frame and its reply: the map the caller
 //! builds, the fields the worker decodes, and the reply it sends back.
-use layerfs_protocol::provision::install::SdkValue;
-use layerfs_protocol::sdk::hex;
 use layerfs_history::LayerStackId;
 use layerfs_home::names::StoreName;
+use layerfs_protocol::sdk::hex;
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_store::project::frame::{
     DeleteAdmitFrame, DeleteEntryFrame, DeleteEntryReply, DeleteFrame, DeleteReleaseFrame,
     DeleteReply,

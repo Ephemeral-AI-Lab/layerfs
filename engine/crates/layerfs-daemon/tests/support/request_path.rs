@@ -16,7 +16,7 @@ use layerfs_daemon::{
     bootstrap::open_store,
     store::{BindRequest, BoundWorkspace, Store}, KernelReply, Owner, OwnerClient, OwnerConfig, Response, ServiceClass,
 };
-use layerfs_mount_ports::{
+use layerfs_vfs::{
     operations::{
         create::{create, mkdir},
         remove::unlink,
@@ -27,7 +27,7 @@ use layerfs_mount_ports::{
 };
 use layerfs_history::WorkspaceId;
 use layerfs_overlay::{DatabaseWork, KernelMount, ProfileConfig, StatementKind, StatementWork};
-use layerfs_workspace::{KernelReadOperation, Operation, Refusal, Time};
+use layerfs_vfs::{KernelReadOperation, Operation, Refusal, Time};
 use std::{
     cell::{Cell, RefCell},
     collections::BTreeMap,
@@ -101,10 +101,10 @@ fn until(what: &str, mut condition: impl FnMut() -> bool) {
 }
 fn finish<T>(
     client: &OwnerClient,
-    route: layerfs_workspace::Route,
+    route: layerfs_vfs::Route,
     command: impl FnOnce(
         &layerfs_daemon::OwnerClient,
-        layerfs_workspace::Route,
+        layerfs_vfs::Route,
     ) -> Result<T, layerfs_daemon::OwnerError>,
 ) -> T {
     command(client, route).unwrap_or_else(|error| panic!("{error:?}"))
@@ -467,7 +467,7 @@ impl Rig {
     }
     pub fn write(&self, serial: u64, handle: u64, offset: u64, bytes: &[u8]) {
         let input = MutationInput::Write {
-            position: layerfs_workspace::Position::At(offset),
+            position: layerfs_vfs::Position::At(offset),
             data: bytes.into(),
             cached: false,
         };

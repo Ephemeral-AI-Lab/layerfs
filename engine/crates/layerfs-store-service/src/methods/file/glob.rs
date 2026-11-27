@@ -5,8 +5,8 @@ use crate::{
     read::{paged_reads, query, reads, search, visibility},
     StoreService,
 };
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_content::compare::memo::Memo;
+use layerfs_protocol::sdk::SdkValue;
 
 /// `glob(pattern, { branch, commit?, path?, pageSize?, pagePos? })`: paths matching a `/.lww`-syntax pattern.
 pub fn glob(service: &StoreService, args: &SdkValue) -> Answer {

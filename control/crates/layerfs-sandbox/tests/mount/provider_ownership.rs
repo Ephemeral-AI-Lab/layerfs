@@ -56,10 +56,16 @@ impl Drop for ProjectFixture {
     }
 }
 
-use layerfs_protocol::{provision::daemon_setup::{DaemonLimits, DaemonSetup}, duplex};
+use layerfs_protocol::{
+    duplex,
+    provision::daemon_setup::{DaemonLimits, DaemonSetup},
+};
 use layerfs_protocol::{DaemonStore, KernelRoute};
+use layerfs_sandbox::{
+    process::ProcessProvider, spawn::LocalPaths, CommandIdentity, LaunchRequest,
+    ProviderLaunchOptions, Runtime,
+};
 use layerfs_sandbox::{ProviderCreate, SandboxApi, SandboxPhase};
-use layerfs_sandbox::{process::ProcessProvider, spawn::LocalPaths, CommandIdentity, LaunchRequest, ProviderLaunchOptions, Runtime};
 use std::{
     os::unix::fs::{MetadataExt, PermissionsExt},
     sync::Arc,

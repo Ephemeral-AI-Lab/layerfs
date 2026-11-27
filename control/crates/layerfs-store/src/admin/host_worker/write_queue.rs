@@ -36,12 +36,12 @@
 //! that ends the worker. Nothing waits on a record: drain, idle exit and a
 //! Store's close never do.
 use super::server::{log, HostServer};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
+use crate::postgresql::pool::Reservation;
 use layerfs_home::outcome::{refused, Outcome};
 use layerfs_machine::worker::StreamReader;
 #[cfg(doc)]
 use layerfs_machine::worker::HOST_HELD_WRITES;
-use crate::postgresql::pool::Reservation;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::collections::VecDeque;
 use std::os::unix::net::UnixStream;
 use std::path::Path;
@@ -54,14 +54,14 @@ pub(super) const WRITE_THREADS: usize = 4;
 const UNRECORDED_LISTED: usize = 32;
 
 /// One `store.write` request whose input still follows on its connection.
-pub(in layerfs_api::worker::serve) struct Held {
-    pub(in layerfs_api::worker::serve) stream: UnixStream,
-    pub(in layerfs_api::worker::serve) args: SdkValue,
-    pub(in layerfs_api::worker::serve) request_id: String,
-    pub(in layerfs_api::worker::serve) traced: bool,
+pub(crate) struct Held {
+    pub(super) stream: UnixStream,
+    pub(super) args: SdkValue,
+    pub(super) request_id: String,
+    pub(super) traced: bool,
     /// The Store of a PostgreSQL write (#819 P-B), which starts only once
     /// that Store has a free write slot.
-    pub(in layerfs_api::worker::serve) postgresql: Option<String>,
+    pub(super) postgresql: Option<String>,
 }
 
 impl Drop for Held {
@@ -75,7 +75,7 @@ impl Drop for Held {
 
 /// The held writes of one worker, under its activity lock.
 #[derive(Default)]
-pub(super) struct Writes {
+pub(crate) struct Writes {
     /// Held streamed writes, running or waiting.
     held: usize,
     /// Admitted writes whose Store call has not returned, single-change
@@ -106,8 +106,7 @@ impl Writes {
         for (at, held) in self.waiting.iter().enumerate() {
             match held.postgresql.as_deref() {
                 Some(store) if !draining => {
-                    if let Some(slot) = crate::postgresql::pool::reserve_write(home, store)
-                    {
+                    if let Some(slot) = crate::postgresql::pool::reserve_write(home, store) {
                         chosen = Some((at, Some(slot)));
                         break;
                     }
@@ -126,7 +125,8 @@ impl Writes {
     /// `go` and none runs, so each frees its place at once.
     pub(super) fn purge_gone(&mut self) {
         let before = self.waiting.len();
-        self.waiting.retain(|held| !super::server::peer_gone(&held.stream));
+        self.waiting
+            .retain(|held| !super::server::peer_gone(&held.stream));
         self.held -= before - self.waiting.len();
     }
 
@@ -152,7 +152,7 @@ impl HostServer {
     /// drains (its write threads may have ended) it is refused at once,
     /// before any effect: nothing committed. Otherwise it always waits:
     /// the write endpoint's accept limit already bounds held writes.
-    pub(in layerfs_api::worker::serve) fn hold_write(&self, held: Held) {
+    pub(super) fn hold_write(&self, held: Held) {
         let mut activity = self.lock();
         if activity.draining {
             drop(activity);
@@ -164,7 +164,7 @@ impl HostServer {
                 ("request_id", SdkValue::text(&held.request_id)),
                 ("state", SdkValue::text("draining")),
             ]);
-            layerfs_api::worker::connection::reply(&held.stream, &held.request_id, false, Err(refusal));
+            super::connection::reply(&held.stream, &held.request_id, false, Err(refusal));
             return;
         }
         activity.writes.held += 1;
@@ -245,23 +245,19 @@ impl HostServer {
     /// Runs one write on this thread and answers it: whether the answer
     /// was delivered. A write thread runs streamed writes; the ordinary
     /// thread that read it runs a single-change write.
-    pub(in layerfs_api::worker::serve) fn answer_write(&self, held: &Held, admitted: &mut bool) -> bool {
+    pub(super) fn answer_write(&self, held: &Held, admitted: &mut bool) -> bool {
         if held.traced {
             layerfs_home::trace::steps_begin();
         }
         let outcome = self.dispatch_write(held, admitted);
         #[cfg(feature = "worker-fault")]
-        let outcome = layerfs_api::worker::fault::write_outcome(&self.home, outcome);
+        let outcome = write_outcome(&self.home, outcome);
         let outcome = match outcome {
             Err(refusal) if refusal.code == "Unknown" => Err(self.record_uncertain(held, refusal)),
             other => other,
         };
-        let delivered = layerfs_api::worker::connection::reply(
-            &held.stream,
-            &held.request_id,
-            held.traced,
-            outcome.clone(),
-        );
+        let delivered =
+            super::connection::reply(&held.stream, &held.request_id, held.traced, outcome.clone());
         // Only an effect the caller may not know is kept: a Commit whose
         // answer was lost. An uncertain outcome was recorded before its
         // answer, and a refusal changed nothing.
@@ -312,7 +308,7 @@ impl HostServer {
         let _running = Running(self);
         // a single-change write has no input to ask for
         let streamed = matches!(held.args.get_text("body"), Some("content" | "changes"));
-        if streamed && !layerfs_api::worker::connection::go(&held.stream, &held.request_id) {
+        if streamed && !super::connection::go(&held.stream, &held.request_id) {
             return Err(refused(
                 "Unavailable",
                 "the write's caller was gone before its input was sent; nothing was committed",
@@ -325,8 +321,7 @@ impl HostServer {
     /// Writes one outcome's record, one attempt; on failure the outcome
     /// goes to the worker log, without content, and false is returned.
     fn keep(&self, request_id: &str, kind: &str, args: &SdkValue, outcome: &Outcome) -> bool {
-        let Err(error) =
-            crate::host_write::keep(&self.home, request_id, kind, args, outcome)
+        let Err(error) = crate::host_write::keep(&self.home, request_id, kind, args, outcome)
         else {
             return true;
         };
@@ -360,4 +355,31 @@ fn committed(outcome: &Outcome) -> bool {
     outcome
         .as_ref()
         .is_ok_and(|answer| answer.get_text("kind") == Some("Committed"))
+}
+
+/// Host worker write switch (S2.2): while the home's
+/// `machine/<host>/fault-write-unknown` exists, a write's outcome becomes
+/// an engine-style `Unknown` that carries the real outcome as evidence.
+#[cfg(feature = "worker-fault")]
+fn write_outcome(
+    home: &std::path::Path,
+    outcome: layerfs_home::outcome::Outcome,
+) -> layerfs_home::outcome::Outcome {
+    let switch = layerfs_home::home::paths::machine_dir(home, layerfs_home::names::HOST_MACHINE)
+        .join("fault-write-unknown");
+    if !switch.exists() {
+        return outcome;
+    }
+    let real = match &outcome {
+        Ok(answer) => answer.clone(),
+        Err(refusal) => layerfs_protocol::sdk::SdkValue::text(&refusal.code),
+    };
+    Err(layerfs_protocol::sdk::SdkRefusal {
+        code: "Unknown".to_owned(),
+        message: "fault: the write's outcome is uncertain".to_owned(),
+        detail: layerfs_protocol::sdk::SdkValue::map([
+            ("fault", layerfs_protocol::sdk::SdkValue::Bool(true)),
+            ("answer", real),
+        ]),
+    })
 }

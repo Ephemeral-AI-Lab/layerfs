@@ -19,7 +19,7 @@
 mod common;
 use common::{layerfs, tempdir, text, LAYERFS};
 use layerfs_home::json;
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use nix::sys::signal::{kill, Signal};
 use nix::unistd::Pid;
 use std::fs::{File, OpenOptions};

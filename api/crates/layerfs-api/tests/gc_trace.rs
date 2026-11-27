@@ -5,10 +5,10 @@
 //! changes with the salt, and a `store.compact` report's artifact names never
 //! reach the log.
 use layerfs_api::Redact;
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_history::path::{path_key, trace_key};
 use layerfs_history::LayerStackId;
 use layerfs_home::home::paths;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};

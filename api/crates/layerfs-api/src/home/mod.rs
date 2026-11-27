@@ -11,15 +11,15 @@ mod init;
 mod log;
 
 use crate::calls::Calls;
-pub(crate) use super::home::get::build;
+pub(crate) use get::build;
 
 /// Its calls, in the order help lists them.
 pub(crate) fn calls() -> Calls {
     &[
-        super::home::init::CALL,
-        super::home::get::CALL,
-        super::home::log::CALL,
-        super::home::clear_log::CALL,
-        super::home::doctor::CALL,
+        init::CALL,
+        get::CALL,
+        log::CALL,
+        clear_log::CALL,
+        doctor::CALL,
     ]
 }

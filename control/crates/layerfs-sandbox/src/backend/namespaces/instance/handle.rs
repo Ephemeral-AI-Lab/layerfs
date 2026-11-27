@@ -2,7 +2,11 @@
 //! namespaces, its cgroup and its exact attempts. Nothing is retried and no
 //! Drop cleans up; a Drop only reaps an init process this process started
 //! that has already exited, so it never stays a zombie of this process.
-use super::{cgroup, super::{linux::host_checks, rootfs::ImageRoot}, paths::Paths};
+use super::{
+    super::{linux::host_checks, rootfs::ImageRoot},
+    cgroup,
+    paths::Paths,
+};
 use crate::{ContainerId, RuntimeError, WireFailure};
 use crate::{LocalRecord, NamespaceRecord, SandboxRecord};
 use layerfs_os::process::LocalProcess;
@@ -18,7 +22,7 @@ use std::{
 };
 
 /// The recorded process facts of a Sandbox, as a live process to check.
-pub(super) fn process(record: &LocalRecord) -> LocalProcess {
+pub(crate) fn process(record: &LocalRecord) -> LocalProcess {
     LocalProcess {
         pid: record.pid,
         start: record.start_time,

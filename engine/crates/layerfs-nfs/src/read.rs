@@ -8,9 +8,9 @@
 //! a client that loaded it would restart its own `actimeo` on facts that do
 //! not change until the export happens to observe the directory again.
 use crate::attributes::Status;
-use layerfs_vfs::{requests::ReadFailure, ports::mount::ServiceError};
 use layerfs_overlay::OverlayError;
 use layerfs_vfs::ViewStat;
+use layerfs_vfs::{ports::mount::ServiceError, requests::ReadFailure};
 
 /// One kernel read's answer, as this export uses it.
 pub(crate) struct Answer {

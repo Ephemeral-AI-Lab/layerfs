@@ -9,12 +9,12 @@
 //! its `reason` and `fix`, the build's `version`, the home's `generation`,
 //! and, only when asked, the platforms this computer supports (a probe)
 //! and the tree of everything in the home ([`crate::home_tree`]).
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::home::layout::{detect, Layout};
 use layerfs_home::home::{generation, read_record, with_field};
 use layerfs_home::names::HOST_MACHINE;
 use layerfs_home::outcome::{refused, Outcome};
 use layerfs_home::state::{Reason, State};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 
 /// The identity of the build making the call (`LAYERFS_BUILD_COMMIT` and
@@ -55,7 +55,7 @@ const INIT: &str = "layerfs home init";
 
 /// The home's state and layout, read only; a home the system refuses to
 /// read is refused, as `detect` does.
-fn state(home: &Path) -> Result<(Found, Option<i64>), layerfs_protocol::provision::install::SdkRefusal> {
+fn state(home: &Path) -> Result<(Found, Option<i64>), layerfs_protocol::sdk::SdkRefusal> {
     Ok(match detect(home)? {
         Layout::Empty => (Found::Missing, None),
         Layout::Foreign => (Found::Foreign, None),

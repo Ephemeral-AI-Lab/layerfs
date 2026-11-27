@@ -5,7 +5,7 @@
 //! the home). A project is always `<store>/<project>`. Each kind of name
 //! is a type checked once by its `parse` (#536 §9.2).
 use crate::outcome::refused;
-use layerfs_protocol::provision::install::SdkRefusal;
+use layerfs_protocol::sdk::SdkRefusal;
 
 /// Windows device names, refused everywhere.
 const DEVICES: [&str; 22] = [

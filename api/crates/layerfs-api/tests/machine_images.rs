@@ -1,8 +1,8 @@
 //! Image discovery never starts a stopped machine to answer a read.
 #![cfg(feature = "machine")]
 use layerfs_api::call;
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_machine::record::MachineRecord;
+use layerfs_protocol::sdk::SdkValue;
 
 #[test]
 fn stopped_machine_images_is_unavailable_and_preserves_state() {

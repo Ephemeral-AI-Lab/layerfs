@@ -8,12 +8,12 @@
 //! process's lease is taken. The locks are held only for those checks and
 //! record writes, never across a round trip.
 use crate::lease;
-use {crate::record::{self, StoreRecord}, layerfs_protocol::StoreKind};
+use crate::record::{self, StoreKind, StoreRecord};
 use crate::Related;
-use layerfs_protocol::provision::install::SdkRefusal;
 use layerfs_home::home;
 use layerfs_home::op::{self, Op};
 use layerfs_home::outcome::refused;
+use layerfs_protocol::sdk::SdkRefusal;
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;

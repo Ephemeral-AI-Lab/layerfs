@@ -16,7 +16,7 @@ mod fixture;
 mod writes;
 
 use layerfs_api::worker::{read_host_frame, HOST_HELD_WRITES, HOST_MAX_REPLY, MAX_HELLO};
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use std::io::Write;
 use std::os::unix::net::UnixStream;
 use std::process::Stdio;

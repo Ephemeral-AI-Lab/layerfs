@@ -11,10 +11,10 @@
 //! `state` and `bundle` beside it. Scratch folders are under the build's
 //! own temporary folder, or under `/tmp` where a test reads them from `/`.
 #![cfg(any(target_os = "linux", target_os = "macos"))]
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::home::{self, paths, write_record};
 use layerfs_home::names::MachineName;
-use {layerfs_inspect::{self, FilesRequest}, layerfs_sandbox::{deploy::Side, inspect::owner::{HARD, SOFT}}};
+use layerfs_inspect::{FilesRequest, Side, HARD, SOFT};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_sandbox::record::{DaemonRecord, Local, WorkspaceRecord};
 use std::cell::Cell;
 use std::os::unix::fs::{symlink, PermissionsExt};
@@ -643,7 +643,8 @@ fn a_home_reads_only_its_layerfs_folders() {
     let nobody = MachineName::parse("nobody").unwrap();
     let refusal = layerfs_inspect::machine_files(&home, &nobody, &wide).unwrap_err();
     assert_eq!(refusal.code, "InvalidInput");
-    let lost = layerfs_inspect::machine_files(&home, &nobody, &FilesRequest::default()).unwrap_err();
+    let lost =
+        layerfs_inspect::machine_files(&home, &nobody, &FilesRequest::default()).unwrap_err();
     assert_ne!(lost.code, "InvalidInput", "{lost:?}");
     println!(
         "machine.files unknown machine: {}: {}",
@@ -722,7 +723,9 @@ fn a_walk_pages_by_name_and_answers_what_it_has_at_its_soft_budget() {
     );
     assert_eq!(layerfs_inspect::running(), 0);
     let root = fx.data.clone();
-    let whole = layerfs_inspect::admit(move |budget| layerfs_inspect::serve(&Side::Worker(&root), &asked, budget));
+    let whole = layerfs_inspect::admit(move |budget| {
+        layerfs_inspect::serve(&Side::Worker(&root), &asked, budget)
+    });
     assert_eq!(entries(&whole.unwrap()).len(), 500);
 }
 

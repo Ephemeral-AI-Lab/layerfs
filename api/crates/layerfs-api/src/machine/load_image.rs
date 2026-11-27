@@ -8,11 +8,11 @@ use crate::calls::table::{a, call, Call, PROGRESS};
 use crate::calls::Context;
 use crate::calls::{Form, Part};
 #[cfg(feature = "machine")]
-use layerfs_protocol::provision::install::SdkValue;
-#[cfg(feature = "machine")]
 use layerfs_home::names::MachineName;
 #[cfg(feature = "machine")]
 use layerfs_home::outcome::Outcome;
+#[cfg(feature = "machine")]
+use layerfs_protocol::sdk::SdkValue;
 
 /// Its answer: the image's id on the machine, `reused` when it was there,
 /// `dropped` the FIFO and device paths the copy left out.

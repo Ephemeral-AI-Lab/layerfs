@@ -7,10 +7,10 @@
 //! The service tests are ignored by default: start a MinIO with
 //! `tests/minio_service.sh start NAME`, eval its exports, then run
 //! `cargo test -p layerfs-bucket --test minio -- --ignored`.
-use layerfs_store::backup::providers::s3::{self, MinioSettings};
 use layerfs_store::backup::bucket::pieces;
-use layerfs_store::backup::s3_api::{part_size, S3Client, S3Config, MAX_PARTS, MIN_PART};
 use layerfs_store::backup::bucket::{Driver, Limits, Metadata, RemoteError, Span};
+use layerfs_store::backup::providers::s3::{self, MinioSettings};
+use layerfs_store::backup::s3_api::{part_size, S3Client, S3Config, MAX_PARTS, MIN_PART};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{Shutdown, TcpListener, TcpStream};
 use std::path::PathBuf;

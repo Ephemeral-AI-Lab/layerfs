@@ -95,8 +95,8 @@
 mod cache;
 mod docker_archive;
 mod layers;
-mod tar;
 pub(crate) mod root;
+mod tar;
 
 pub use cache::{
     cache, ensure, ensure_flat, ensure_held, lookup, remove, remove_temporary, temporary_digest,

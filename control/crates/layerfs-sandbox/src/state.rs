@@ -16,11 +16,11 @@
 //!
 //! A Workspace's state comes from its daemon's `activity` ([`activity`]).
 use super::record::SandboxRecord;
-use layerfs_protocol::provision::install::SdkRefusal;
 use layerfs_home::op::Standing;
 use layerfs_home::outcome::shell_word;
 use layerfs_home::state::{Reason, State};
 use layerfs_machine::record::MachineRecord;
+use layerfs_protocol::sdk::SdkRefusal;
 use std::path::Path;
 
 /// The reasons a live read writes on a Sandbox's record, the only ones a

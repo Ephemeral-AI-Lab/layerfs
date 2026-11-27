@@ -17,12 +17,12 @@
 //! the function that makes them), so a kind's package changes its own list
 //! and functions and nothing here. The real kinds are in `kinds`; a test
 //! hands [`run_with`] made-up ones.
-use super::report::{Coverage, Kind, NoVerdict, Node, NotChecked, Report, Thing, Verdict};
 use super::budget::Budget;
+use super::report::{Coverage, Kind, NoVerdict, Node, NotChecked, Report, Thing, Verdict};
 use crate::home::get::Build;
-use layerfs_protocol::provision::install::SdkRefusal;
 use layerfs_home::events::Events;
 use layerfs_home::state::{BlockedBy, State};
+use layerfs_protocol::sdk::SdkRefusal;
 use std::cell::RefCell;
 use std::path::Path;
 use std::time::Duration;

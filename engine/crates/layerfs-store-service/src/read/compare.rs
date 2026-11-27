@@ -11,7 +11,6 @@ use super::snapshot::{self, answer, existing, kind_name, Kind, Snap};
 use super::visibility::Visibility;
 use crate::history::lookup::{self as args, invalid, refuse, Answer, Arg};
 use crate::store::{CatalogHints, Store, StorePorts};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_content::compare::tree::{same_inode, same_metadata};
 use layerfs_content::compare::{
     line_diff, same_file_bytes, ChangeKind, ChangeWalk, DiffLine, EntryFacts, LineOp, Memo,
@@ -21,6 +20,7 @@ use layerfs_content::filesystem::path::PathName;
 use layerfs_content::object::inode_leaf::InodeKind;
 use layerfs_content::AuthenticatedObjects;
 use layerfs_history::LayerStackRecord;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::sync::Arc;
 
 /// Budget one listed change costs besides its path and lines.

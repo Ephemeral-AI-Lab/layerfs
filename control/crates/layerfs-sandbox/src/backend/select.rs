@@ -6,30 +6,18 @@
 //! remove` (RV3 FAIL 3). The
 //! docker backend is retired (D-8): a deployment naming it is refused. All
 //! use the same authenticated daemon control pipeline and the same concrete
-//! `layerfs_sandbox_backend::Sandbox` handle. A Sandbox also names its
+//! `crate::backend::dispatch::Sandbox` handle. A Sandbox also names its
 //! platform (#529), recorded beside the runtime; every later call follows
 //! the record, not the caller's deployment.
-mod bind;
-mod capabilities;
-mod execution;
-mod failure;
-mod identity;
-mod image;
-mod options;
-mod request;
-#[cfg(any(target_os = "linux", target_os = "macos"))]
-pub mod stop;
-pub mod trace;
-mod transfer;
 use crate::host::Deploy;
 use crate::output::{Place, Spool};
-use layerfs_protocol::provision::install::SdkRefusal;
-use layerfs_home::outcome::refused;
 #[cfg(target_os = "linux")]
 use crate::Image;
 #[cfg(target_os = "linux")]
 use crate::SandboxRecord;
 use crate::{CommandIdentity, ExecSlot, Sandbox};
+use layerfs_home::outcome::refused;
+use layerfs_protocol::sdk::SdkRefusal;
 #[cfg(target_os = "linux")]
 use std::path::PathBuf;
 
@@ -229,14 +217,11 @@ pub fn namespaces_image(deploy: &Deploy) -> Result<(Image, PathBuf), SdkRefusal>
             // an image this machine already holds unpacked (one copied from
             // Docker, `machine.load`) needs no archive
             if !crate::image_artifact::unpacked(deploy, &image) {
-                crate::namespaces::rootfs::holds(&archive, &image)
-                    .map_err(in_archive)?;
+                crate::namespaces::rootfs::holds(&archive, &image).map_err(in_archive)?;
             }
             image
         }
-        None => {
-            crate::namespaces::rootfs::image_of(&archive).map_err(in_archive)?
-        }
+        None => crate::namespaces::rootfs::image_of(&archive).map_err(in_archive)?,
     };
     Ok((image, archive))
 }

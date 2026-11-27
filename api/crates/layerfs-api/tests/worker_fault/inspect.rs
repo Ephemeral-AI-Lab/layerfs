@@ -6,16 +6,16 @@
 //! caller's budget. The faults come from the `worker-fault` cargo feature;
 //! this file is empty without it:
 //!
-//! `cargo test -p layerfs-control --features worker-fault --test worker_fault_inspect`
+//! `cargo test -p layerfs-api --features worker-fault --test worker_fault`
 //!
 //! The worker is in this process, whose inspect permits it shares with
 //! every test here, so each takes one lock.
 #![cfg(feature = "worker-fault")]
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_api::worker::fault::{Faults, OpFault, INSPECT_HELPER};
 use layerfs_home::names::MachineName;
+use layerfs_inspect::{Window, HARD};
 use layerfs_machine::worker;
-use {layerfs_inspect::{self, Window}, layerfs_sandbox::inspect::owner::HARD};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_store::place;
 use std::path::Path;
 use std::sync::{mpsc, Arc, Mutex, MutexGuard};
@@ -205,7 +205,10 @@ fn a_worker_that_never_answers_is_unavailable_at_the_caller_s_budget() {
     let budget = place::READ.answer;
     assert_eq!(budget, Duration::from_secs(8));
     // held on the connection's thread, before admission: no answer comes
-    faults.on(layerfs_inspect::OP, OpFault::Hang(budget + Duration::from_secs(3)));
+    faults.on(
+        layerfs_inspect::OP,
+        OpFault::Hang(budget + Duration::from_secs(3)),
+    );
     let started = Instant::now();
     let refusal = machine_log(&home).unwrap_err();
     let after = started.elapsed();

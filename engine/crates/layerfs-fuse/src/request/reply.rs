@@ -8,8 +8,11 @@ use fuser::{
     Errno, FileAttr, FileHandle, FileType, FopenFlags, Generation, INodeNo, ReplyAttr, ReplyData,
     ReplyEntry, ReplyOpen,
 };
-use layerfs_vfs::{requests::{KernelData, KernelRead, ReadDataInput}, ports::mount::{Fence, RequestServices}};
 use layerfs_overlay::KernelMount;
+use layerfs_vfs::{
+    ports::mount::{Fence, RequestServices},
+    requests::{KernelData, KernelRead, ReadDataInput},
+};
 use layerfs_vfs::{KernelReadOperation, Refusal};
 use std::{
     sync::Arc,

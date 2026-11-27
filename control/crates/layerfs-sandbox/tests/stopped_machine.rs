@@ -10,9 +10,9 @@
 //! Nothing runs a machine or a daemon: records are written by hand, and a
 //! `sleep` this test starts and ends stands for a daemon that ended.
 #![cfg(any(target_os = "linux", target_os = "macos"))]
-use layerfs_protocol::provision::install::SdkValue;
-use layerfs_os::process::LocalProcess;
 use layerfs_home::home::{self, paths, write_record};
+use layerfs_os::process::LocalProcess;
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_sandbox::family::{remove, RemoveRequest, Removed};
 use layerfs_sandbox::record::{DaemonRecord, Local};
 use std::path::{Path, PathBuf};
@@ -34,14 +34,14 @@ fn removed(
     home: &Path,
     name: &str,
     force: bool,
-) -> Result<Removed, layerfs_protocol::provision::install::SdkRefusal> {
+) -> Result<Removed, layerfs_protocol::sdk::SdkRefusal> {
     let mut sink = |_| {};
     let mut events = layerfs_home::events::Events::new(&mut sink);
     let request = RemoveRequest {
         name: name.to_owned(),
         force,
     };
-    remove(home, &mut events, &request)
+    remove(home, &mut events, &request, local)
 }
 
 /// A started Sandbox `name` on machine `dev`, as the home records it.
@@ -203,4 +203,20 @@ fn a_starting_worker_removes_the_records_of_daemons_that_ended() {
     assert!(paths::sandbox_record(&root, "live").exists());
     assert!(live.join("daemon.log").is_file());
     std::fs::remove_dir_all(root).unwrap();
+}
+
+/// The Workspace drain these tests pass: they mount no Workspace.
+struct NoDrain;
+
+impl layerfs_sandbox::lifecycle::WorkspaceDrain for NoDrain {
+    fn drain(&self, _host: &layerfs_sandbox::host::Host, _path: &str) {}
+}
+
+/// The in-process runner `remove` takes (the workspace crate's dispatch in
+/// the product): the Sandbox's own dispatch, with no Workspace to drain.
+fn local(
+    host: layerfs_sandbox::host::Host,
+    call: layerfs_sandbox::host::Call,
+) -> layerfs_home::outcome::Outcome {
+    layerfs_sandbox::dispatch::call(host, call, &NoDrain)
 }

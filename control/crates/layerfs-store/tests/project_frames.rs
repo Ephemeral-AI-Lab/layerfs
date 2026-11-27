@@ -1,8 +1,8 @@
 //! The `project` worker frames (layerfs-project#109): each typed frame
 //! encodes the map its caller built by hand, and the worker's decode
 //! refuses in the order it always did.
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::names::StoreName;
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_store::project::frame::{InitFrame, StageFrame, StageStep};
 
 fn t(text: &str) -> SdkValue {

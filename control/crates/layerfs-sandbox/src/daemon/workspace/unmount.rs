@@ -1,7 +1,9 @@
 //! Logical terminal control through the existing daemon lifetime owner.
 use super::WorkspaceApi;
 use crate::OperationFailure;
-use layerfs_protocol::provision::install::{DirtyReport, ForcedOutcome, Reply, Request, UnmountControl, WorkspaceToken};
+use layerfs_protocol::daemon::{
+    DirtyReport, ForcedOutcome, Reply, Request, UnmountControl, WorkspaceToken,
+};
 
 /// The answer to a normal unmount.
 #[derive(Clone, Debug, Eq, PartialEq)]

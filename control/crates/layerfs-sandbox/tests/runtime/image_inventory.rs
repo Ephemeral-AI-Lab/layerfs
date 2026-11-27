@@ -1,12 +1,11 @@
 //! Public archive discovery works on Unix hosts without Docker or root.
 #![cfg(unix)]
 #[allow(dead_code)]
-mod support {
-    pub mod image;
-}
+#[path = "../support/image.rs"]
+mod image;
+use image::{Scratch, Tar};
 use layerfs_sandbox::rootfs;
 use sha2::{Digest, Sha256};
-use support::image::{Scratch, Tar};
 
 fn digest(bytes: &[u8]) -> String {
     format!(

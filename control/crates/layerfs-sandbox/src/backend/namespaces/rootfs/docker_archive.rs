@@ -6,7 +6,7 @@ use super::{
     tar::{path_of, Kind, Tape, Time},
     PATH_MAX,
 };
-use {layerfs_home::json::Json, crate::{Image, RuntimeError}};
+use crate::{json::Json, Image, RuntimeError};
 use sha2::{Digest, Sha256};
 use std::{
     collections::BTreeMap,
@@ -232,7 +232,7 @@ fn config_metadata(
     let mut metadata = ConfigMetadata::default();
     let mut json = Json::new(bytes.as_slice());
     let mut seen = 0;
-    json.object(|reader, key| {
+    json.object::<RuntimeError>(|reader, key| {
         match key.text() {
             "os" | "architecture" => {
                 let bit = if key.text() == "os" { 1 } else { 2 };
@@ -276,7 +276,7 @@ fn config_metadata(
                             Ok(())
                         })
                     } else {
-                        reader.skip(0)
+                        Ok(reader.skip(0)?)
                     }
                 })?;
             }
@@ -374,9 +374,9 @@ fn parse_manifests(bytes: &[u8]) -> Result<Vec<Manifest>, RuntimeError> {
         let mut layers: Option<Vec<Vec<u8>>> = None;
         let mut tags = Vec::new();
         let mut seen: u8 = 0;
-        element.object(|reader, key| {
+        element.object::<RuntimeError>(|reader, key| {
             if key.overflow {
-                return reader.skip(0);
+                return Ok(reader.skip(0)?);
             }
             match key.text() {
                 "Config" => {
@@ -402,7 +402,7 @@ fn parse_manifests(bytes: &[u8]) -> Result<Vec<Manifest>, RuntimeError> {
                 "RepoTags" => {
                     layerfs_home::json::once(&mut seen, 4)?;
                     if !reader.null()? {
-                        reader.array(|entry| {
+                        reader.array::<RuntimeError>(|entry| {
                             let mut text = Vec::new();
                             entry.text_into(&mut text, PATH_MAX)?;
                             tags.push(

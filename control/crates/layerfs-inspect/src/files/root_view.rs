@@ -23,12 +23,13 @@
 //! does not rename them. A file with several names is read unless it is in
 //! the run folder and not the command user's: an image's own files keep
 //! their links.
+use super::roots;
 use super::walk::{answer, refusal, FilesRequest, Rules, Scope, CALL};
-use {layerfs_sandbox::inspect::process, super::roots};
-use layerfs_sandbox::record::DaemonRecord;
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::outcome::{refused, Outcome};
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_sandbox::backend::confined::{self, Refused, View};
+use layerfs_sandbox::inspect::process;
+use layerfs_sandbox::record::DaemonRecord;
 use std::path::Path;
 
 /// The entries of a Sandbox's root that are the kernel's own.

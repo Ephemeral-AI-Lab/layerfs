@@ -6,8 +6,8 @@ mod fixture;
 
 use common::{broken_pipe, failing_sinks, finish, layerfs, run, text};
 use fixture::Fixture;
-use {layerfs_api::{home::paths, worker}, layerfs_home::json};
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_api::{home::paths, json, worker};
+use layerfs_protocol::sdk::SdkValue;
 use std::io::{self, Write};
 use std::os::unix::net::UnixStream;
 use std::path::Path;

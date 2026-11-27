@@ -3,9 +3,9 @@
 //! writes only its observation file: each leaves a stale lease and
 //! `log/leases.jsonl` as they were and takes no lock, while its answer
 //! still ignores the dead holder.
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::events::Events;
 use layerfs_home::home::{paths, private_dir, write_entity};
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_store::get::{get, With};
 use layerfs_store::list::list;
 use std::collections::BTreeMap;
@@ -50,13 +50,13 @@ fn a_stale_lease_survives_every_store_read_and_is_ignored() {
     let mut events = Events::new(&mut sink);
 
     let before = tree(&home);
-    let list = list(&home, None, false, layerfs_store::admin::with_users::reads()).unwrap();
+    let list = list(&home, None, false, layerfs_sandbox::users::reads()).unwrap();
     let get_records = get(
         &home,
         &mut events,
         "s",
         With::default(),
-        layerfs_store::admin::with_users::reads(),
+        layerfs_sandbox::users::reads(),
     )
     .unwrap();
     assert_eq!(before, tree(&home), "a records-only read changed the home");
@@ -70,7 +70,7 @@ fn a_stale_lease_survives_every_store_read_and_is_ignored() {
         &mut events,
         "s",
         live,
-        layerfs_store::admin::with_users::reads(),
+        layerfs_sandbox::users::reads(),
     )
     .unwrap();
     let mut after = tree(&home);

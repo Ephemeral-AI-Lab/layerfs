@@ -12,24 +12,39 @@
 //! `backend/` never uses it.
 #![cfg(unix)]
 #![forbid(unsafe_code)]
-mod adapter;
-mod error;
+pub(crate) mod adapter;
 pub(crate) mod apple_container;
 pub(crate) mod dispatch;
 pub(crate) mod docker;
+pub(crate) mod error;
 pub(crate) mod host;
 pub(crate) mod lima;
-pub use docker::socket::{docker_automatic, docker_candidates, socket_state, DockerCandidate, DockerEnv, SocketState, DEFAULT_DOCKER_SOCKET, SOCKET_ANSWER};
-pub use error::{Code, MachineError};
-pub use crate::table::removed as removed_platforms;
-pub use crate::table::backend as Backend;
-pub use super::table::options::{OptKind, OptSpec};
-pub use {super::table::profile::{ExecutorKind, HostOs, How, Platform, Profile, Route}, layerfs_protocol::KernelRoute};
-pub use super::setup::probe::{native_missing, probe, Probe};
 pub use super::setup::find_tool;
-pub use super::setup::{cached_image, copy_in, copy_out, create, data_volume, forward, forward_close, load_image, loopback_hint, name_limit, provider_state, provider_within, reach, remove, shares_loopback, start, status, status_within, stop, stop_force, worker_port, State, Status};
-pub use super::setup::spec::{parse_size, search_path, tool_fallbacks, Bundle, Endpoint, Forward, Lasting, NameLimit, Running, Spec, Tools, BUNDLE, DATA, IMAGE, STATE, WORKER_LOG, WORKER_PORT};
-pub use {super::table::support::{platforms, sandbox_allowed, support, support_json, CallSite, PostgresqlSupport, SupportRow, Supports}, layerfs_protocol::StoreKind};
+pub use super::setup::probe::{native_missing, probe, Probe};
+pub use super::setup::spec::{
+    parse_size, search_path, tool_fallbacks, Bundle, Endpoint, Forward, Lasting, NameLimit,
+    Running, Spec, Tools, BUNDLE, DATA, IMAGE, STATE, WORKER_LOG, WORKER_PORT,
+};
+pub use super::setup::{
+    cached_image, copy_in, copy_out, create, data_volume, forward, forward_close, load_image,
+    loopback_hint, name_limit, provider_state, provider_within, reach, remove, shares_loopback,
+    start, status, status_within, stop, stop_force, worker_port, State, Status,
+};
+pub use super::table::options::{OptKind, OptSpec};
+pub use super::table::profile::{ExecutorKind, HostOs, How, Platform, Profile, Route};
+pub use super::table::support::{
+    platforms, sandbox_allowed, support, support_json, CallSite, PostgresqlSupport, SupportRow,
+    Supports,
+};
+pub use crate::table::backend::Backend;
+pub use crate::table::removed as removed_platforms;
+pub use docker::socket::{
+    docker_automatic, docker_candidates, socket_state, DockerCandidate, DockerEnv, SocketState,
+    DEFAULT_DOCKER_SOCKET, SOCKET_ANSWER,
+};
+pub use error::{Code, MachineError};
+pub use layerfs_protocol::KernelRoute;
+pub use layerfs_protocol::StoreKind;
 
 // The VM kinds (the port of `api/runtime/src/platform/vm/`): one VM
 // per machine, named `<prefix><machine>`, with one data disk at

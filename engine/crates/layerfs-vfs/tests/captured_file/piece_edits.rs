@@ -92,18 +92,19 @@ impl Run {
         self.claimed(at, self.root, &base, source, length);
     }
     fn view<T>(&self, read: impl FnOnce(&layerfs_vfs::SourceView) -> T) -> T {
-        let acquired = self
-            .case
-            .job(|job_client: &layerfs_store_service::OwnerClient, job_route| {
+        let acquired = self.case.job(
+            |job_client: &layerfs_store_service::OwnerClient, job_route| {
                 job_client.acquire_base_source(job_route, self.case.request())
-            });
+            },
+        );
         let source = acquired;
         let view = self.case.workspace.view_for_source(source).unwrap();
         let value = read(&view);
-        self.case
-            .job(|job_client: &layerfs_store_service::OwnerClient, job_route| {
+        self.case.job(
+            |job_client: &layerfs_store_service::OwnerClient, job_route| {
                 job_client.release_base_source(job_route, source)
-            });
+            },
+        );
         value
     }
     /// The whole file through the live view, in read windows.

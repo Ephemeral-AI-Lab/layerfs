@@ -3,11 +3,14 @@
 //! version-owned write, read and delete of one small object. A check that
 //! does not apply, or that a failed check of the bucket kept from running,
 //! is left out of the report.
-use super::target::{Budget, Checks};
-use layerfs_protocol::provision::install::SdkValue;
-use layerfs_store::backup::{s3_api::{DiagnosticObject, S3Client}, bucket::RemoteError};
+use crate::doctor::budget::{Budget, Checks};
 use layerfs_home::outcome::shell_word;
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_store::backup::record::BucketRecord;
+use layerfs_store::backup::{
+    bucket::RemoteError,
+    s3_api::{DiagnosticObject, S3Client},
+};
 use std::path::Path;
 use std::time::{Duration, Instant};
 

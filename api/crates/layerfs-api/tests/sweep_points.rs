@@ -9,7 +9,7 @@
 //! refused after their sweep (the bucket record names a port nothing
 //! listens on).
 use layerfs_api::home::{self, paths, read_record, write_record};
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};

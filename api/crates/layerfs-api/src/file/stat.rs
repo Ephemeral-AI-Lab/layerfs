@@ -4,8 +4,8 @@ use crate::calls::scope::Rule;
 use crate::calls::table::Kind::{Name, Project, Text};
 use crate::calls::table::{a, call, opt, Call};
 use crate::calls::{Context, Form};
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::outcome::Outcome;
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_store::calls::file::{stat, FileStat};
 
 /// `type` is file, dir or symlink; `mode` octal text, `0644`.

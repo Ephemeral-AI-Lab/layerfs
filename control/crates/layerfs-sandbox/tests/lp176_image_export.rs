@@ -6,9 +6,9 @@
 #[path = "support/image.rs"]
 mod fixture;
 use fixture::{pax_record, Scratch, Tar};
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::events::Events;
 use layerfs_home::home;
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_sandbox::docker::Docker;
 use layerfs_sandbox::image_artifact::{self as cache, CHUNK};
 use layerfs_sandbox::image_load::{
@@ -315,7 +315,7 @@ fn run_load(
     machine: &str,
     image: &str,
 ) -> (
-    Result<Loaded, layerfs_protocol::provision::install::SdkRefusal>,
+    Result<Loaded, layerfs_protocol::sdk::SdkRefusal>,
     Vec<SdkValue>,
 ) {
     let mut phases = Vec::new();

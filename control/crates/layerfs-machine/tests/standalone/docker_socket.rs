@@ -5,7 +5,10 @@
 #![cfg(unix)]
 #[path = "../support/engine.rs"]
 mod support;
-use layerfs_machine::platform::{docker_automatic, docker_candidates, find_tool, search_path, socket_state, tool_fallbacks, DockerCandidate, DockerEnv, SocketState, Tools};
+use layerfs_machine::platform::{
+    docker_automatic, docker_candidates, find_tool, search_path, socket_state, tool_fallbacks,
+    DockerCandidate, DockerEnv, SocketState, Tools,
+};
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};

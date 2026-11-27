@@ -14,9 +14,11 @@ mod mounted;
 #[allow(dead_code)]
 #[path = "support/host_install.rs"]
 mod support;
-use layerfs_protocol::provision::install::{Activity, MountPhase, Reply, Request, TeardownStage, WorkspaceToken};
 use layerfs_daemon::control::Failure;
 use layerfs_history::BranchId;
+use layerfs_protocol::daemon::{
+    Activity, MountPhase, Reply, Request, TeardownStage, WorkspaceToken,
+};
 use layerfs_vfs::Route;
 use mounted::{mount_entry, until, Harness};
 use std::{
@@ -228,7 +230,7 @@ fn an_unmount_of_an_already_revoked_mount_keeps_exact_retained_custody() {
     );
     // Later operations answer with the same custody and attempt nothing.
     for request in [
-        Request::Unmount(layerfs_protocol::provision::install::UnmountControl {
+        Request::Unmount(layerfs_protocol::daemon::UnmountControl {
             token,
             discard: true,
         }),

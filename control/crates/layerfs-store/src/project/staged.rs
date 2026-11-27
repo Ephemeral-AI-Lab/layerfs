@@ -21,8 +21,8 @@
 //! a record's way must already be a real directory.
 use super::frame::{StageFrame, StageStep};
 use super::tree::{Reader, Record};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::outcome::{failed, refused, Outcome};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use nix::sys::stat::{utimensat, UtimensatFlags};
 use nix::sys::time::TimeSpec;
 use std::ffi::OsStr;

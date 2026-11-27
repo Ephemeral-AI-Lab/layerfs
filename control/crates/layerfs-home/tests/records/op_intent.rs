@@ -1,7 +1,7 @@
 //! The one in-flight intent (#536 §7.1) and the per-entity lock (§8).
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::home::entity_lock;
 use layerfs_home::op::{Op, Standing};
+use layerfs_protocol::sdk::SdkValue;
 use std::time::Duration;
 
 /// A record whose intent names a process that is not alive (id 0).

@@ -10,8 +10,13 @@ fn project_delete_is_reachable_from_control_and_refuses_an_unknown_store() {
     layerfs_home::home::layout::create(&home).unwrap();
     let project = ProjectRef::parse("shop/app").unwrap();
     let mut sink = |_| {};
-    let refused =
-        layerfs_store::data::project::with_users::delete(&home, &mut Events::new(&mut sink), &project).unwrap_err();
+    let refused = layerfs_store::data::project::with_users::delete(
+        &home,
+        &mut Events::new(&mut sink),
+        &project,
+        &layerfs_sandbox::users::STORE,
+    )
+    .unwrap_err();
     assert_eq!(refused.code, "NoSuchStore");
     let _ = std::fs::remove_dir_all(&home);
 }

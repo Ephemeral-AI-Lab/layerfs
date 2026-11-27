@@ -1,5 +1,12 @@
 //! Bounded KK authentication on one supplied duplex socket; no connection replay.
-use super::{channel::Connection, error::ChannelResult, io, profile::{NOISE, PROLOGUE}, peer::{ChannelWork, VerifiedPeer}, ChannelError};
+use super::{
+    channel::Connection,
+    error::ChannelResult,
+    io,
+    peer::{ChannelWork, VerifiedPeer},
+    profile::{NOISE, PROLOGUE},
+    ChannelError,
+};
 use std::net::TcpStream;
 
 /// Authenticates the expected responder on an already connected socket.

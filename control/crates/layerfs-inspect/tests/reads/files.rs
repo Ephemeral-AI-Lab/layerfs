@@ -12,9 +12,9 @@
 //! Nothing runs: a Sandbox is its record and its run folder, which is all
 //! a read uses. Scratch folders are under the build's own temporary folder.
 #![cfg(any(target_os = "linux", target_os = "macos"))]
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::home::{self, paths, write_record};
-use {layerfs_inspect::{self, FilesRequest}, layerfs_sandbox::{deploy::Side, inspect::owner::{HARD, SOFT}}};
+use layerfs_inspect::{FilesRequest, Side, HARD, SOFT};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_sandbox::record::{DaemonRecord, Local, WorkspaceRecord};
 use std::cell::Cell;
 use std::os::unix::fs::{symlink, FileExt, PermissionsExt};
@@ -524,7 +524,9 @@ fn a_page_past_its_soft_budget_answers_what_it_has_with_reason_deadline() {
     assert_eq!(layerfs_inspect::running(), 0);
     // a request in time is not cut
     let home = fx.home.clone();
-    let whole = layerfs_inspect::admit(move |budget| layerfs_inspect::serve(&Side::Home(&home), &asked, budget));
+    let whole = layerfs_inspect::admit(move |budget| {
+        layerfs_inspect::serve(&Side::Home(&home), &asked, budget)
+    });
     assert_eq!(entries(&whole.unwrap()).len(), 41);
 }
 
@@ -946,7 +948,8 @@ fn the_call_reads_a_stopped_sandbox_s_home_in_this_process() {
     };
     let listed = layerfs_inspect::sandbox_files(&fx.home, "s1", &request(&fx.tmp)).unwrap();
     assert_eq!(below(&listed, &fx.tmp), ["left"]);
-    let file = layerfs_inspect::sandbox_files(&fx.home, "s1", &request(&fx.tmp.join("left"))).unwrap();
+    let file =
+        layerfs_inspect::sandbox_files(&fx.home, "s1", &request(&fx.tmp.join("left"))).unwrap();
     assert_eq!(file.get_text("content"), Some("by a command"));
     assert_eq!(layerfs_inspect::running(), 0);
 

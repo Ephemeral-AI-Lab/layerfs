@@ -2,7 +2,10 @@
 //! Native is macOS only (#533 O27).
 #![cfg(target_os = "macos")]
 use layerfs_sandbox::process::ProcessProvider;
-use layerfs_sandbox::{CommandIdentity, Image, LaunchPhase, LaunchRequest, ProviderLaunchOptions, Runtime, SandboxRecord};
+use layerfs_sandbox::{
+    CommandIdentity, Image, LaunchPhase, LaunchRequest, ProviderLaunchOptions, Runtime,
+    SandboxRecord,
+};
 use std::{fs, os::unix::fs::PermissionsExt, time::Duration};
 
 /// The native runtime this host offers, over `root`.

@@ -12,10 +12,10 @@ mod installed;
 #[allow(dead_code)]
 mod support;
 
-use layerfs_protocol::provision::install::{CommitControl, Reply, Request, UnmountControl, WorkspaceToken};
 use layerfs_content::filesystem::PathName;
 use layerfs_daemon::control::Service;
 use layerfs_history::{BranchId, HistoryName, LayerStackId, WorkspaceId};
+use layerfs_protocol::daemon::{CommitControl, Reply, Request, UnmountControl, WorkspaceToken};
 use layerfs_vfs::{Operation, Outcome, Position, Time};
 
 const LANE: &str = "lane";

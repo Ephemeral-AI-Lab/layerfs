@@ -1,5 +1,13 @@
 //! Additive forced-teardown records: dispositions, Commit knowledge and receipt.
-use crate::{provision::install::{ControlError, WorkspaceToken}, daemon::{history::{outcome, put_outcome, put_token, token}, mount::{put_work, work, MountWork}}, wire::{Reader, Writer}};
+use crate::{
+    daemon::WorkspaceToken,
+    daemon::{
+        history::{outcome, put_outcome, put_token, token},
+        mount::{put_work, work, MountWork},
+    },
+    provision::install::ControlError,
+    wire::{Reader, Writer},
+};
 use layerfs_history::CommitOutcome;
 /// Result of the one abort write on the connection's own control.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

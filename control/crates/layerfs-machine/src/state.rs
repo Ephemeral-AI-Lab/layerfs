@@ -22,11 +22,11 @@
 //! record's platform was removed (`layerfs-control`'s
 //! `inventory::machine_state` asks the platform policy).
 use super::record::{Holders, MachineRecord, CREATE, REMOVE};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::op::{Op, Standing};
 use layerfs_home::outcome::shell_word;
 use layerfs_home::outcome::{with_fix, with_next};
 use layerfs_home::state::{Reason, State};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 
 /// The record field that holds a broken machine's reason code.
 pub const REASON: &str = "reason";

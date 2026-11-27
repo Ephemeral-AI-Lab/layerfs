@@ -14,9 +14,9 @@ use crate::calls::table::{
     Kind::{Bool, Int, Name, Project, Text},
 };
 use crate::calls::Context;
-use layerfs_protocol::provision::install::SdkValue;
-use layerfs_store::admin::with_users::RepairRequest;
 use layerfs_home::outcome::Outcome;
+use layerfs_protocol::sdk::SdkValue;
+use layerfs_store::admin::with_users::RepairRequest;
 
 pub(crate) const CALL: Call = call(
     "store",

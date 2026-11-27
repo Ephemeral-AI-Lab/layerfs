@@ -15,14 +15,14 @@
 //! (`broken` `failed` when unreadable), and an unreadable Sandbox or
 //! Workspace record, whose place is not known, is left out. Each kind's
 //! own `.record` doctor check names the record; the others are listed.
-use layerfs_sandbox::status::inventory;
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::home::paths;
 use layerfs_home::outcome::{failed, Outcome};
 use layerfs_home::state::{Reason, State};
 use layerfs_machine::record::MachineRecord;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_sandbox::record::{SandboxRecord, WorkspaceRecord};
-use {layerfs_protocol::StoreKind, layerfs_store::record::{StoreRecord, StoreRef}};
+use layerfs_sandbox::status::inventory;
+use layerfs_store::record::{StoreKind, StoreRecord, StoreRef};
 use std::collections::BTreeSet;
 use std::path::Path;
 

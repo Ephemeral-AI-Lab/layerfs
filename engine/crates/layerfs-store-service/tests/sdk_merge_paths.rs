@@ -18,7 +18,7 @@ mod installed;
 #[allow(dead_code)]
 mod support;
 
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use std::fs;
 use support::{write, Fixture, Work};
 

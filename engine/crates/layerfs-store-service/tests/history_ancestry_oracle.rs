@@ -9,8 +9,8 @@ mod installed;
 #[allow(dead_code)]
 mod support;
 
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_history::{BranchId, HistoryCatalog, HistoryName, LayerId, LayerStackId, NodeId};
+use layerfs_protocol::sdk::SdkValue;
 use std::cmp::Reverse;
 use std::collections::{HashSet, VecDeque};
 use std::fs;

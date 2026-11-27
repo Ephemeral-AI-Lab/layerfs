@@ -14,10 +14,10 @@
 //! reads (`store.get`, `store.list`, the doctors) ignore it and
 //! change nothing.
 use crate::record::StoreRecord;
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::home::{self, paths};
 use layerfs_home::outcome::{failed, refused};
 use layerfs_home::process::{alive_as, me};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;

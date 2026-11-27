@@ -19,7 +19,11 @@ use layerfs_overlay::{
     Inode, InodeKind, KernelMount, OpenFile, OverlayError, StatementKind, StoredCounts,
     WorkspaceState,
 };
-use layerfs_vfs::{CanonicalCache, CanonicalClient, FileLengths, JobOutcome, KernelInput, KernelMutationOutcome, KernelReadDecision, KernelReadOperation, KernelVisitRequest, Need, Operation, Position, Refusal, Time, VisitFacts, WorkspaceError};
+use layerfs_vfs::{
+    CanonicalCache, CanonicalClient, FileLengths, JobOutcome, KernelInput, KernelMutationOutcome,
+    KernelReadDecision, KernelReadOperation, KernelVisitRequest, Need, Operation, Position,
+    Refusal, Time, VisitFacts, WorkspaceError,
+};
 use std::sync::Arc;
 
 const CACHE: usize = 4 * 1024 * 1024;

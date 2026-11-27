@@ -14,11 +14,11 @@
 //! The downloaded Store's history heads digest is read before it is
 //! installed (#506 E2). Progress (#506 E4) reports `download` (bytes
 //! received), `verify` and `install`.
-use crate::backup::copy::object::BINDING;
-use crate::backup::copy::heads::heads;
-use crate::backup::bucket::registry::store_object;
 use crate::backup::bucket::pieces;
+use crate::backup::bucket::registry::store_object;
 use crate::backup::bucket::{progress, Driver};
+use crate::backup::copy::heads::heads;
+use crate::backup::copy::object::BINDING;
 use layerfs_persistence::{PersistenceConfig, SqlitePersistenceProfile};
 use layerfs_storage::ReservationBlocks;
 use layerfs_store_service::bootstrap::open_store_observed;

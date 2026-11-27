@@ -17,11 +17,17 @@ mod create;
 mod endpoint;
 #[cfg(feature = "machine")]
 mod image;
+pub(crate) mod lifecycle;
 #[cfg(feature = "machine")]
 mod list;
 #[cfg(feature = "machine")]
 mod live;
 mod local;
+/// The platform driver: one adapter per machine kind, for the Sandbox and
+/// Store code that reaches a machine's adapters through its machine
+/// (layerfs-project#106).
+#[cfg(feature = "machine")]
+pub mod platform;
 #[cfg(feature = "machine")]
 mod platforms;
 #[cfg(feature = "machine")]
@@ -33,18 +39,19 @@ pub mod record;
 mod related;
 #[cfg(feature = "machine")]
 mod remove;
+#[cfg(all(feature = "machine", unix))]
+pub(crate) mod setup;
 #[cfg(feature = "machine")]
 mod spec;
 pub mod state;
+pub mod status;
+#[doc(hidden)]
+pub mod table;
 #[cfg(feature = "machine")]
 mod update;
-pub mod worker;
-pub(crate) mod lifecycle;
-pub(crate) mod platform;
-pub(crate) mod setup;
-pub(crate) mod table;
 #[cfg(feature = "machine")]
 pub mod with_users;
+pub mod worker;
 
 #[cfg(feature = "machine")]
 pub use bundle::bundle;
@@ -64,7 +71,7 @@ pub use platforms::platforms;
 pub use power::{done, start, stop, with_stopped, STOP_PHASES};
 #[cfg(feature = "machine")]
 pub use progress::Phases;
-pub use related::Related;
+pub use related::{MachineUsers, Related};
 #[cfg(feature = "machine")]
 pub use remove::remove;
 #[cfg(feature = "machine")]
@@ -79,3 +86,5 @@ pub use update::{update, MachineUpdate};
 /// The machine lifecycle lock, shared by the spanning forced-stop call.
 #[cfg(feature = "machine")]
 pub use endpoint::start_lock as force_stop_lock;
+#[cfg(feature = "machine")]
+pub use lifecycle::force_stop::force_record;

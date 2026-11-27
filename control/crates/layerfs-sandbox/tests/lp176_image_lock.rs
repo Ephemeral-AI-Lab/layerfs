@@ -14,9 +14,9 @@
 #[path = "support/image.rs"]
 mod fixture;
 use fixture::{Scratch, Tar};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::home;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_sandbox::docker::{self, Docker};
 use layerfs_sandbox::image_artifact::{self as cache, architecture};
 use layerfs_sandbox::image_load::{load, ImageLock, Loaded, Target};

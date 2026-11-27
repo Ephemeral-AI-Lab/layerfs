@@ -2,7 +2,7 @@
 //! names the operation, the phase the daemon reports and when the
 //! operation began; a daemon that reports neither still answers busy with
 //! the activity's own phase word and no time.
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_workspace::answers::status;
 
 fn daemon(activity: &str, phase: Option<&str>, since: Option<i64>) -> SdkValue {

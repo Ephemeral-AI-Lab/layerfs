@@ -131,9 +131,9 @@ fn expired_pending_cancel_does_not_affect_id_reuse_or_other_workspaces() {
     assert!(!running.end().unwrap());
     layerfs_home::home::write_entity(
         &file.with_extension("cancel"),
-        &layerfs_protocol::provision::install::SdkValue::map([(
+        &layerfs_protocol::sdk::SdkValue::map([(
             "expires",
-            layerfs_protocol::provision::install::SdkValue::Int(1),
+            layerfs_protocol::sdk::SdkValue::Int(1),
         )]),
     )
     .unwrap();

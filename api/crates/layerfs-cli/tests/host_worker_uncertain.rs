@@ -15,7 +15,7 @@ mod fixture;
 mod writes;
 
 use layerfs_home::json;
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 use writes::*;

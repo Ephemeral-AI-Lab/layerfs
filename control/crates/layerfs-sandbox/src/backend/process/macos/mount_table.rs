@@ -3,7 +3,7 @@
 //! run with a fixed path and the C locale, read once; nothing is retried.
 //! An inspection read's table ([`mount_table`]) is the same tool under a
 //! deadline (layerfs-project#178 security rule 8).
-//! The process facts (`proc_pidinfo`, `sysctl`) are `layerfs_bridge::process`
+//! The process facts (`proc_pidinfo`, `sysctl`) are `layerfs_os::process`
 //! (layerfs-project#112), below the drivers and the home.
 use layerfs_os::process::Retained;
 use nix::fcntl::{fcntl, FcntlArg, OFlag};
@@ -23,7 +23,7 @@ const OUTPUT: usize = 2048;
 
 /// Children a `umount` KILL did not release. Their exits
 /// are reaped by the shared retained queue
-/// ([`layerfs_bridge::process::Retained`]), never by a second wait here.
+/// ([`layerfs_os::process::Retained`]), never by a second wait here.
 static RETAINED: LazyLock<Retained> = LazyLock::new(Retained::default);
 
 /// One tool's standard output, or its failure with what it said.
@@ -64,9 +64,9 @@ pub(crate) fn mount_line(line: &str) -> Option<(PathBuf, String)> {
 }
 
 /// What `mount` prints, for an inspection read: the shared bounded listing
-/// ([`layerfs_bridge::process::mount_table`]). An error means the caller
+/// ([`layerfs_os::process::mount_table`]). An error means the caller
 /// reads without a table.
-pub(crate) use layerfs_os::mount_table;
+pub(crate) use layerfs_os::process::mount_table;
 
 /// Forces the mount at `point` off once; a point no longer mounted is done.
 pub(crate) fn force_unmount(point: &Path) -> io::Result<()> {

@@ -7,7 +7,7 @@
 #[path = "support/round_trips.rs"]
 mod rt;
 
-use layerfs_protocol::provision::install::{SdkCall, SdkRefusal, SdkValue};
+use layerfs_protocol::sdk::{SdkCall, SdkRefusal, SdkValue};
 use rt::{t, Opened, Store};
 
 /// `fs.write` with exactly `fields` (no project added).

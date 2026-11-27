@@ -3,7 +3,14 @@
 //! A conflict report is bounded by the control record: conflicts and hunk
 //! lines are written while they fit and `truncated` says that some were left
 //! out. Paths and lines are never cut in the middle.
-use crate::{provision::install::{ControlError, WorkspaceToken}, daemon::history::{boolean, head, node, outcome, put_head, put_node, put_outcome, put_token, token}, wire::{Reader, Writer, LIMIT}};
+use crate::{
+    daemon::history::{
+        boolean, head, node, outcome, put_head, put_node, put_outcome, put_token, token,
+    },
+    daemon::WorkspaceToken,
+    provision::install::ControlError,
+    wire::{Reader, Writer, LIMIT},
+};
 use layerfs_content::merge::{Conflict, ConflictKind, Hunk, LwwDecision};
 use layerfs_history::{CommitId, CommitOutcome, NodeId, MAXIMUM_MESSAGE_BYTES};
 

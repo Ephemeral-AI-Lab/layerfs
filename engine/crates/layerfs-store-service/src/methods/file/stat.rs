@@ -5,8 +5,8 @@ use crate::{
     read::{paged_reads, reads, visibility},
     StoreService,
 };
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_content::compare::memo::Memo;
+use layerfs_protocol::sdk::SdkValue;
 
 /// `stat(path, { branch, commit? })`: type, inode, size and mode of one path.
 pub fn stat(service: &StoreService, args: &SdkValue) -> Answer {

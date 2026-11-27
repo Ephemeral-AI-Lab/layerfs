@@ -6,7 +6,7 @@
 //! test, because it sets the process's environment.
 #![cfg(feature = "machine")]
 use layerfs_api::home;
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use std::path::{Path, PathBuf};
 
 fn tempdir(tag: &str) -> PathBuf {

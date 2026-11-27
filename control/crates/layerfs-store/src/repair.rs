@@ -18,12 +18,12 @@
 //! the Branch's retained rows. Nothing is automatic.
 use crate::open_args::OpenArgs;
 use crate::service::{branch_named, with_service};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
-use layerfs_protocol::sdk::{hex, unhex};
 use layerfs_history::{
     GcAuditAfter, GcIntent, GcIntentKind, GcScopeKind, Liveness, MountHolderView,
 };
 use layerfs_home::outcome::{failed, refused};
+use layerfs_protocol::sdk::{hex, unhex};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_store_service::history::admission;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;

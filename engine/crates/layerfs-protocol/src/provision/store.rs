@@ -1,5 +1,8 @@
 //! The Store a daemon opens, beside its location.
-use crate::provision::{install::ControlError, manifest::{StoreManifest, StoreProfile}};
+use crate::provision::{
+    install::ControlError,
+    manifest::{StoreManifest, StoreProfile},
+};
 use std::fmt;
 /// What any opener of a Store needs besides its location.
 #[derive(Clone, Eq, PartialEq)]

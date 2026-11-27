@@ -4,7 +4,7 @@
 //! the control process, never a machine: `native` is one built-in machine
 //! whose platform runs Sandboxes on the host's own OS, and what is special
 //! about it comes from that platform on this host.
-use layerfs_protocol::provision::install::SdkRefusal;
+use layerfs_protocol::sdk::SdkRefusal;
 use std::path::Path;
 
 /// Whether machine `machine`'s calls run in this process: its platform's

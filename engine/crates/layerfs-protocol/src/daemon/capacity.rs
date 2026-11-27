@@ -21,7 +21,7 @@
 //!
 //! Every field is defaulted when absent so a newer daemon stays legible to an
 //! older reader, and every unknown reason stays a named refusal, never a hang.
-use crate::provision::install::SdkValue;
+use crate::sdk::SdkValue;
 
 /// The daemon backend method that returns this read model.
 pub const OPERATION: &str = "backend.daemon.connection_failures";

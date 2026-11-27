@@ -7,7 +7,9 @@ use crate::{
     internal::{Control, ControlCause, ControlPhase},
     OperationCause, OperationFailure,
 };
-use layerfs_protocol::provision::install::{ControlError, Reply, Request, SdkCall, SdkRefusal, SdkValue};
+use layerfs_protocol::daemon::{Reply, Request};
+use layerfs_protocol::provision::install::ControlError;
+use layerfs_protocol::sdk::{SdkCall, SdkRefusal, SdkValue};
 use std::fmt;
 
 /// The failure of one SDK call.

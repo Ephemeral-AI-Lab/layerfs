@@ -7,12 +7,12 @@
 //! The 1.1 `runtime.*` and `backend.*` tables are gone (#536 step 2).
 use crate::host::{Call, Host, Message};
 use crate::registry;
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::outcome::{refused, Outcome};
+use layerfs_protocol::sdk::SdkValue;
 
 /// Runs one Sandbox operation once; a Commit `message` is checked for every
-/// operation.
-pub fn call(host: Host, call: Call) -> Outcome {
+/// operation. A forced close unmounts each Workspace with `drain`.
+pub fn call(host: Host, call: Call, drain: &dyn crate::lifecycle::WorkspaceDrain) -> Outcome {
     checked(&host.message)?;
     match call {
         Call::ListWorkspaces { .. } => {
@@ -26,13 +26,34 @@ pub fn call(host: Host, call: Call) -> Outcome {
             crate::lifecycle::create(&host, platform.as_deref(), place.as_ref())
         }
         Call::Close { force, held } => {
-            crate::lifecycle::close(&host, force, held.as_deref().unwrap_or_default())
+            crate::lifecycle::close(&host, force, held.as_deref().unwrap_or_default(), drain)
         }
         _ => Err(refused(
             "UnknownMethod",
             format!("no operation {}", call.op().name()),
         )),
     }
+}
+
+/// [`call`] for the Sandbox's own calls that never close it (its start, its
+/// reads and a cancel), as a [`crate::route::Local`]: a Close through it is
+/// refused, since only the control-layer workspace crate's dispatch, which
+/// drains the Sandbox's Workspaces, may run one.
+pub fn unclosing(host: Host, call: Call) -> Outcome {
+    if let Call::Close { .. } = call {
+        return Err(refused(
+            "UnknownMethod",
+            "a Sandbox close runs through the Workspace dispatch",
+        ));
+    }
+    self::call(host, call, &Unclosing)
+}
+
+/// The drain [`unclosing`] passes, which no Close ever reaches.
+struct Unclosing;
+
+impl crate::lifecycle::WorkspaceDrain for Unclosing {
+    fn drain(&self, _host: &Host, _path: &str) {}
 }
 
 /// `sandbox.list_workspaces`: the daemon's read model without its history
@@ -135,7 +156,7 @@ fn capacity(host: &Host) -> Outcome {
 }
 
 /// Refuses an invalid Commit `message` before any effect.
-pub fn checked(message: &Message) -> Result<(), layerfs_protocol::provision::install::SdkRefusal> {
+pub fn checked(message: &Message) -> Result<(), layerfs_protocol::sdk::SdkRefusal> {
     match message {
         Message::Absent | Message::Null => Ok(()),
         Message::NotText => Err(refused("InvalidInput", "message must be text")),

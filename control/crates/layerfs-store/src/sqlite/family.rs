@@ -25,11 +25,11 @@ use crate::place::Executor;
 use crate::record::{self, StoreRecord};
 use crate::sqlite::transfer::step::{StepFrame, StoreStep};
 use crate::Related;
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::home::{self, paths};
 use layerfs_home::op::{self, Op};
 use layerfs_home::outcome::{refused, Outcome};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;

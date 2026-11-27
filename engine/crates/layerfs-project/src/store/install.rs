@@ -1,6 +1,12 @@
 //! Bounded one-attempt file streaming; the host never opens the installed Store.
 use super::{InstallError, InstallFailure, InstallWork, Installed, SealedProject};
-use layerfs_protocol::{provision::{install::{ControlError, InstallPhase, InstallReply, INSTALL_FINISH}, manifest::StoreProfile}, duplex::{Connection, MAX_PLAINTEXT_BYTES}};
+use layerfs_protocol::{
+    duplex::{Connection, MAX_PLAINTEXT_BYTES},
+    provision::{
+        install::{ControlError, InstallPhase, InstallReply, INSTALL_FINISH},
+        manifest::StoreProfile,
+    },
+};
 use std::{
     fs::File,
     io::{self, Read},

@@ -179,11 +179,17 @@ fn scenario(store: &TestStore, seed: u64, w: usize, cycles: usize, shared: bool)
         for i in order {
             svc.unmount(bound[i].take().unwrap());
         }
-        lost.check(store, &format!("{kind:?} seed {seed:x} cycle {cycle} unmounted"));
+        lost.check(
+            store,
+            &format!("{kind:?} seed {seed:x} cycle {cycle} unmounted"),
+        );
         if rng.below(3) == 0 || cycle + 1 == cycles {
             close(service.take().unwrap());
             closes += 1;
-            lost.closed_point(store, &format!("{kind:?} seed {seed:x} cycle {cycle} closed"));
+            lost.closed_point(
+                store,
+                &format!("{kind:?} seed {seed:x} cycle {cycle} closed"),
+            );
         }
     }
     for (b, branch) in branches.iter().enumerate() {

@@ -1,0 +1,14 @@
+[package]
+name = "layerfs-os"
+description = "What this kernel reports: local process identity, the macOS mount table and bounded host-name resolution"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+
+
+[target.'cfg(unix)'.dependencies]
+# The local process identity (`process`): kill and, on macOS, proc_pidinfo.
+nix = { version = "=0.31.3", default-features = false, features = ["signal", "fs"] }

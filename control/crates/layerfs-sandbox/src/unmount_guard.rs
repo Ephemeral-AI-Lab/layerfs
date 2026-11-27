@@ -25,8 +25,9 @@
 //! is sent again rather than answered from the record (#538).
 use crate::files as discovery;
 use crate::registry::SandboxState;
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue, WorkspaceToken};
 use layerfs_home::outcome::{failed, refused, Outcome};
+use layerfs_protocol::daemon::WorkspaceToken;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::{
     fs::{File, OpenOptions},
     os::unix::fs::OpenOptionsExt,

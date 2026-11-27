@@ -60,12 +60,18 @@ mod rig;
 #[allow(dead_code)]
 #[path = "support/store_gate.rs"]
 mod store_gate;
-use layerfs_protocol::provision::install::{Activity, ControlCode, MountPhase, MountWork, ReadyMount, Reply, WorkspaceToken};
-use {layerfs_daemon::control::Failure, layerfs_store_service::{store::{Store, StoreReader}, OwnerClient}};
+use layerfs_daemon::{
+    control::Failure,
+    store::{Store, StoreReader},
+    OwnerClient,
+};
 use layerfs_fuse::request::Opcode;
 use layerfs_history::HistoryCatalog;
 use layerfs_overlay::{CleanupState, KernelMount, KernelMountState, StoredCounts};
 use layerfs_persistence::SqliteHandles;
+use layerfs_protocol::daemon::{
+    Activity, ControlCode, MountPhase, MountWork, ReadyMount, Reply, WorkspaceToken,
+};
 use layerfs_storage::{port::PackPersistence, ReservationBlocks, Storage};
 use mounted::{mount_entry, Harness, COMMAND};
 use std::{
@@ -439,7 +445,7 @@ impl Staged {
         let gate = Gate::new();
         let reader_config = fixture.config.clone();
         let reader_gate = gate.clone();
-        let factory: layerfs_store_service::store::ReaderFactory = Arc::new(move |_| {
+        let factory: layerfs_daemon::store::ReaderFactory = Arc::new(move |_| {
             let read = SqliteHandles::open_read_only(
                 reader_config.clone(),
                 installed::BINDING,

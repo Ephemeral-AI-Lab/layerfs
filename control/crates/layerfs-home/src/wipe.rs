@@ -8,7 +8,7 @@
 //! likely that the compiler keeps them, but Rust does not guarantee it. No
 //! dependency is added for it. Copies a buffer left behind when it grew,
 //! and copies made by code that is not LayerFS's, are not reached.
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use std::sync::atomic::{compiler_fence, Ordering};
 
 /// Overwrites `bytes`, spare capacity included, then frees them.

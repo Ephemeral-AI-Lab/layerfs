@@ -10,11 +10,11 @@
 #[path = "../support/doctor_own.rs"]
 mod doctor_own;
 use doctor_own::{outcome, own_within, row};
-use layerfs_protocol::provision::install::SdkValue;
-use layerfs_inspect::{Kind, Options};
 use layerfs_home::home::{self, paths, write_entity, write_record};
+use layerfs_inspect::{Kind, Options};
 use layerfs_machine::record::MachineRecord;
 use layerfs_machine::worker::{read_frame_within, write_frame, MAX_HELLO, PROTOCOL};
+use layerfs_protocol::sdk::SdkValue;
 use std::collections::BTreeMap;
 use std::net::TcpListener;
 use std::os::unix::fs::PermissionsExt;

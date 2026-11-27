@@ -34,7 +34,7 @@ mod adversary;
 use adversary::{
     check_attempt, commit, verdict, wait_until, write, Node, Service, TestStore, Tree, Verdict,
 };
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 

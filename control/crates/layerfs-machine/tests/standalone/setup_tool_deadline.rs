@@ -5,7 +5,7 @@
 #![cfg(unix)]
 #[path = "../support/standin.rs"]
 mod standin;
-use layerfs_machine::{platform::{self as machine, Code, HostOs, Platform}, setup::probe};
+use layerfs_machine::platform::{self as machine, probe, Code, HostOs, Platform};
 use standin::Scratch;
 use std::time::{Duration, Instant};
 

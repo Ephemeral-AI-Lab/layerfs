@@ -11,23 +11,23 @@
 //! Sandboxes: a machine's worker (`network.inspect`), or the caller for
 //! `native` on Linux.
 use super::super::doctor::budget::Checks;
-#[cfg(any(target_os = "linux", feature = "machine"))]
-use layerfs_protocol::provision::install::SdkValue;
 #[cfg(target_os = "linux")]
 use layerfs_home::outcome::refused;
 use layerfs_home::outcome::Outcome;
+#[cfg(any(target_os = "linux", feature = "machine"))]
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_sandbox::record::SandboxRecord;
 use std::path::Path;
 
 /// The worker operation that answers [`report`].
-pub(crate) const OP: &str = "network.inspect";
+pub const OP: &str = "network.inspect";
 #[cfg(feature = "machine")]
 const MACHINE: &str = "machine.network";
 #[cfg(target_os = "linux")]
 const SANDBOX: &str = "sandbox.network";
 
 /// The worker's answer to [`OP`]: [`report`] of its own root.
-pub(crate) fn inspect_in_worker(root: &Path) -> Outcome {
+pub fn inspect_in_worker(root: &Path) -> Outcome {
     report(root)
 }
 
@@ -227,9 +227,9 @@ pub(super) fn machine(
 /// init stage holds a network namespace of its own, and its host end is
 /// there with the address its record keeps. Left out for a native one.
 #[cfg(target_os = "linux")]
-pub(super) fn sandbox(record: &SandboxRecord, checks: &mut Checks) {
-    use layerfs_sandbox::state::remove_fix;
+pub(crate) fn sandbox(record: &SandboxRecord, checks: &mut Checks) {
     use layerfs_sandbox::network::{inspect, pool::link_name, private};
+    use layerfs_sandbox::state::remove_fix;
     let Some(daemon) = record.daemon() else {
         return;
     };
@@ -310,12 +310,12 @@ pub(super) fn sandbox(record: &SandboxRecord, checks: &mut Checks) {
 }
 
 #[cfg(not(target_os = "linux"))]
-pub(super) fn sandbox(_record: &SandboxRecord, _checks: &mut Checks) {}
+pub(crate) fn sandbox(_record: &SandboxRecord, _checks: &mut Checks) {}
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use layerfs_protocol::provision::install::SdkValue;
+    use layerfs_protocol::sdk::SdkValue;
 
     /// A Sandbox record on `machine` whose recorded network is `link`'s.
     fn record(name: &str, machine: &str, link: &str) -> SandboxRecord {

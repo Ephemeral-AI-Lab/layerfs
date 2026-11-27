@@ -3,9 +3,9 @@
 //! `{ phase, done, total }`.
 use crate::project::staged;
 use crate::project::tree::{Reader, Record};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::outcome::refused;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 use std::time::{Duration, Instant};
 

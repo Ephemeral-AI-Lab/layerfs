@@ -23,8 +23,8 @@ pub use super::get::{get, Down, GetRequest, Got, ListedWorkspace};
 pub use super::list::{list, ListRequest, Listed, ListedSandbox};
 use super::record::SandboxRecord;
 pub use super::remove::{remove, RemoveRequest, Removed};
-use layerfs_protocol::provision::install::SdkRefusal;
 use layerfs_home::outcome::refused;
+use layerfs_protocol::sdk::SdkRefusal;
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;

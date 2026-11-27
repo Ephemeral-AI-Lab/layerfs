@@ -20,12 +20,16 @@ use super::{
     model::{self, Flat, Model, Stamp, DIRECTORY, FILE, SYMLINK},
     mounted::{until, Harness, COMMAND},
 };
-use layerfs_protocol::provision::install::{ReadyMount, Reply, Request, WorkspaceToken};
 use layerfs_content::ObjectId;
-use {layerfs_store_service::{bootstrap::open_store, store::{CapturedConstruction, ReleasedOwner, Store}}, layerfs_daemon::control::{Failure, Success}};
+use layerfs_daemon::{
+    bootstrap::open_store,
+    control::{Failure, Success},
+    store::{CapturedConstruction, ReleasedOwner, Store},
+};
 use layerfs_history::{
     CommitHistoryRequest, CommitId, CommitOutcome, CommitRecord, PageResult, WorkspaceId,
 };
+use layerfs_protocol::daemon::{ReadyMount, Reply, Request, WorkspaceToken};
 use layerfs_storage::ReservationBlocks;
 use nix::{
     fcntl::AT_FDCWD,

@@ -64,12 +64,19 @@ mod mounted;
 mod rig;
 use history_boundary::{Boundary, ObservedHistory};
 use history_gate::Point;
-use layerfs_protocol::provision::install::{AbortDisposition, Activity, CommitKnowledge, ControlCode, DetachDisposition, ForcedCleanup, ForcedOutcome, MountPhase, MountWork, Reply, Request, TeardownCustody, WorkspaceToken};
 use layerfs_content::{filesystem::FilesystemRootId, ObjectId};
-use {layerfs_store_service::{bootstrap::open_store, store::{CommitError, CommitPhase, ReleasedOwner, Store, StoreReader}}, layerfs_daemon::control::{Failure, Service, Success}};
+use layerfs_daemon::{
+    bootstrap::open_store,
+    control::{Failure, Service, Success},
+    store::{CommitError, CommitPhase, ReleasedOwner, Store, StoreReader},
+};
 use layerfs_history::{CommitOutcome, HistoryCatalog, HistoryError, WorkspaceId};
 use layerfs_overlay::CleanupState;
 use layerfs_persistence::SqliteHandles;
+use layerfs_protocol::daemon::{
+    AbortDisposition, Activity, CommitKnowledge, ControlCode, DetachDisposition, ForcedCleanup,
+    ForcedOutcome, MountPhase, MountWork, Reply, Request, TeardownCustody, WorkspaceToken,
+};
 use layerfs_storage::{port::PackPersistence, ReservationBlocks, Storage};
 use model::{assert_same, Flat, Model};
 use mounted::{mount_entry, Harness, COMMAND};
@@ -277,7 +284,7 @@ impl Fx {
         let writer: Arc<dyn PackPersistence> = handles.storage.clone();
         let history = history(handles, &fixture.config.path);
         let reader_config = fixture.config.clone();
-        let factory: layerfs_store_service::store::ReaderFactory = Arc::new(move |_| {
+        let factory: layerfs_daemon::store::ReaderFactory = Arc::new(move |_| {
             let read = SqliteHandles::open_read_only(
                 reader_config.clone(),
                 installed::BINDING,
@@ -466,7 +473,7 @@ fn departed(
             token,
             relinquish_unknown: true,
         },
-        Request::Unmount(layerfs_protocol::provision::install::UnmountControl {
+        Request::Unmount(layerfs_protocol::daemon::UnmountControl {
             token,
             discard: true,
         }),
@@ -587,7 +594,7 @@ fn commit(
     gate: Option<Arc<Gate>>,
 ) -> JoinHandle<Finished> {
     thread::spawn(move || {
-        let request = Request::Commit(layerfs_protocol::provision::install::CommitControl {
+        let request = Request::Commit(layerfs_protocol::daemon::CommitControl {
             token,
             force: false,
             message: None,

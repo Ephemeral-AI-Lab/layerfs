@@ -2,9 +2,9 @@
 #[path = "../support/doctor_own.rs"]
 mod doctor_own;
 
-use layerfs_protocol::provision::install::SdkValue;
-use layerfs_inspect::{Kind, Options};
 use layerfs_home::home::{self, private_dir, write_record};
+use layerfs_inspect::{Kind, Options};
+use layerfs_protocol::sdk::SdkValue;
 use std::path::Path;
 
 fn record(root: &Path, path: &str, value: SdkValue) {

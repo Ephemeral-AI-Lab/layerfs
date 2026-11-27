@@ -4,8 +4,8 @@
 use crate::history::lookup::{self, invalid};
 use crate::read::snapshot::Snap;
 use crate::store::{Store, StorePorts};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_history::LayerStackRecord;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::sync::Arc;
 
 pub use crate::history::lookup::next_page;

@@ -7,7 +7,7 @@
 //! LAYERFS_REMOTE_* variables tests/minio_service.sh of layerfs-bucket
 //! prints; without them the test says NOT_RUN and passes.
 use layerfs_api::home::{self, paths, read_record, write_record};
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use std::net::TcpListener;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};

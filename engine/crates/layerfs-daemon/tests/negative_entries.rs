@@ -15,8 +15,8 @@ mod mounted;
 #[allow(dead_code)]
 #[path = "support/mounted_commit.rs"]
 mod rig;
-use layerfs_protocol::provision::install::Reply;
 use layerfs_fuse::request::Opcode;
+use layerfs_protocol::daemon::Reply;
 use mounted::COMMAND;
 use rig::{bash_in, passed, root, Rig};
 

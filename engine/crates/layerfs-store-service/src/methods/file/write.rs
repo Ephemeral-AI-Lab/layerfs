@@ -1,7 +1,7 @@
 //! `fs.write`.
 use crate::methods::args::{commit, single, Answer};
 use crate::StoreService;
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 
 /// `write(path, content, { branch, mode? })`: one Commit writing a file; `mode`
 /// sets its permission bits, else a new file is 0o644 and an existing one keeps

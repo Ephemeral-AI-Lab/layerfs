@@ -27,19 +27,22 @@ mod machine;
 mod project;
 mod sandbox;
 mod store;
-mod workspace;
-pub mod home;
 pub mod worker;
+mod workspace;
 
 use calls as machinery;
 // the six doctors' shared answer (`calls/doctor/`), which each
 // family's doctor entry names
 use calls::doctor;
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::outcome::Outcome;
+use layerfs_protocol::sdk::SdkValue;
 use std::path::Path;
 
-pub use {calls::{asks_detail, close, guide, home, keys, refusal, shape, size, Arg, Asked, Call, CallRef, Calls, Client, Context, Families, Family, Form, Kind, Paging, Part, Place, Policy, Profile, Redact, Run, Scope, Section, DETAIL, WITH}, layerfs_home::json};
+pub use calls::{
+    asks_detail, close, guide, home, json, keys, refusal, shape, size, Arg, Asked, Call, CallRef,
+    Calls, Client, Context, Families, Family, Form, Kind, Paging, Part, Place, Policy, Profile,
+    Redact, Run, Scope, Section, DETAIL, WITH,
+};
 pub use layerfs_home::names;
 /// The home (`layerfs-home`) and the Store leases, for the front ends and
 /// their tests.
@@ -48,20 +51,19 @@ pub mod home {
     pub use layerfs_home::process;
     pub use layerfs_store::lease;
 }
+/// The worker of machine `name`, started if it does not answer; `None`
+/// when its calls run in this process.
 #[cfg(feature = "machine")]
 #[doc(hidden)]
-pub use layerfs_machine::with_users::running;
-/// The worker protocol (`layerfs-machine`) and its server (`layerfs-control`),
-/// for the front ends and their tests.
-pub mod worker {
-    #[cfg(all(feature = "machine", any(target_os = "macos", target_os = "linux")))]
-    pub use layerfs_store::admin::host_worker::server::serve_host;
-    pub use crate::worker::serve::{prepare_network, serve, serve_with_incarnation};
-    pub use layerfs_machine::worker::*;
+pub fn running(
+    home: &std::path::Path,
+    name: &str,
+) -> Result<Option<layerfs_machine::worker::Endpoint>, layerfs_protocol::sdk::SdkRefusal> {
+    layerfs_machine::with_users::running(home, name, &layerfs_sandbox::users::MACHINE)
 }
-pub use layerfs_store::admin::with_users::close_idle;
 /// The process-wide cancel request a front end sets on a signal (#804 §6).
 pub use layerfs_home::cancel;
+pub use layerfs_store::admin::with_users::close_idle;
 /// The Store formats this build writes, per engine, as `layerfs --version
 /// --json` shows them (#804).
 pub use layerfs_store::upgrade::FORMATS;

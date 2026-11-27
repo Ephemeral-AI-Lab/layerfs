@@ -18,8 +18,8 @@
 #[path = "support/round_trips.rs"]
 mod rt;
 
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_history::HistoryName;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_store_service::history::rows::Rows;
 use layerfs_store_service::read::{
     blame,

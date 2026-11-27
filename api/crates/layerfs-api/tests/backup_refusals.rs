@@ -3,7 +3,7 @@
 //! and the Sandbox's project records stay. The bucket record names a port
 //! nothing listens on, so a request would fail as `Failed` or `Unknown`.
 use layerfs_api::home::{self, paths, read_record, write_record};
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 

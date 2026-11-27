@@ -8,12 +8,12 @@ use super::direct;
 use super::record::{self, SandboxRecord};
 use crate::host::{Call, Message, Started};
 use crate::route::{on_machine, Asked};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::home::{self, paths};
 use layerfs_home::op::Op;
 use layerfs_home::outcome::shell_word;
 use layerfs_home::outcome::{public_code, refused, with_fix, with_next, FIX};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_store::record::StoreRef;
 use layerfs_store::resolve;
 use std::path::Path;
@@ -97,11 +97,11 @@ pub fn create(
     events: &mut Events<'_>,
     request: &CreateRequest,
 ) -> Result<Created, SdkRefusal> {
-    create_on(home, events, request, crate::dispatch::call)
+    create_on(home, events, request, crate::dispatch::unclosing)
 }
 
 /// [`create`], whose start runs through `local` on a machine whose calls
-/// run in this process (`crate::dispatch::call` in [`create`]; a test may
+/// run in this process (`crate::dispatch::unclosing` in [`create`]; a test may
 /// stand in for the Sandbox's own side there).
 pub fn create_on(
     home: &Path,

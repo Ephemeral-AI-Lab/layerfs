@@ -6,9 +6,9 @@
 //! Moved with the code from the daemon's `support/sdk_compare.rs`; a call no
 //! longer crosses a control connection.
 use super::installed;
-use layerfs_protocol::provision::install::{SdkCall, SdkValue};
 use layerfs_content::filesystem::PathName;
 use layerfs_history::{BranchId, CommitOutcome, HistoryName, LayerStackId, WorkspaceId};
+use layerfs_protocol::sdk::{SdkCall, SdkValue};
 use layerfs_store_service::{
     bootstrap::open_store_observed,
     store::{BindRequest, CommitOptions, CommitSuccess},
@@ -94,7 +94,7 @@ impl Fixture {
         &self,
         method: &str,
         mut fields: Vec<(&str, SdkValue)>,
-    ) -> Result<SdkValue, layerfs_protocol::provision::install::SdkRefusal> {
+    ) -> Result<SdkValue, layerfs_protocol::sdk::SdkRefusal> {
         fields.push(("project", SdkValue::text("installed")));
         let call = SdkCall {
             method: method.into(),

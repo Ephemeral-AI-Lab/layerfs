@@ -18,7 +18,7 @@
 //! tab (refused in every path) separates.
 //!
 //! An optional `runtime=` line names the Sandbox's copy of the bundle's
-//! runtime layer (R5, `layerfs_bridge::sandbox_runtime`), which the init stage
+//! runtime layer (R5, `layerfs_os::runtime`), which the init stage
 //! binds read-only at `/.layerfs/runtime` and starts the daemon through. A
 //! spec without it (one written before the runtime layer, or from a bundle
 //! that has none) still parses, and that Sandbox reopens unchanged.
@@ -277,7 +277,8 @@ impl HelperSpec {
     /// tells it the runtime; without one it runs on the image's own loader
     /// and libraries, as before. The caller sets the rest of its environment.
     pub fn daemon_command(&self) -> Result<std::process::Command, RuntimeError> {
-        use crate::backend::namespaces::linux::runtime::{command, ENVIRONMENT, GUEST};
+        use crate::backend::namespaces::linux::runtime::GUEST;
+        use layerfs_os::runtime::{command, ENVIRONMENT};
         let mut daemon = match &self.runtime {
             Some(_) => {
                 let mut daemon = command(Path::new(GUEST), &self.daemon).ok_or(

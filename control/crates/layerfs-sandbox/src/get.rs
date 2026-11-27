@@ -15,11 +15,12 @@ use super::record::{self, SandboxRecord};
 use super::state::machine_state;
 use crate::host::Call;
 use crate::route::reach;
-use layerfs_protocol::provision::install::{CapacityModel, SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::home::observed;
 use layerfs_home::state::{Reason, State};
 use layerfs_machine::worker::Unreached;
+use layerfs_protocol::daemon::CapacityModel;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 
 /// `sandbox.get(sandbox, { with: ["stats"] })`.
@@ -206,7 +207,7 @@ fn found(
             events,
             record,
             Call::ListWorkspaces { path: None },
-            crate::dispatch::call,
+            crate::dispatch::unclosing,
         ),
     };
     Ok(match listed {
@@ -290,7 +291,14 @@ fn capacity(home: &Path, events: &mut Events<'_>, record: &SandboxRecord) -> Opt
     let answer = if direct::forwarded(record) {
         direct::capacity(home, record)
     } else {
-        reach(home, events, record, Call::Capacity, crate::dispatch::call).ok()?
+        reach(
+            home,
+            events,
+            record,
+            Call::Capacity,
+            crate::dispatch::unclosing,
+        )
+        .ok()?
     };
     Some(CapacityModel::parse(&answer.ok()?))
 }

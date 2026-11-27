@@ -5,7 +5,7 @@
 #![allow(dead_code)]
 use super::fixture::Fixture;
 use layerfs_api::worker::{read_host_frame, write_host_frame, HOST_MAX_REPLY, MAX_HELLO};
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use postgres::{config::Host, Client as Postgres, Config, NoTls};
 use std::collections::BTreeSet;
 use std::io::{Read, Write};

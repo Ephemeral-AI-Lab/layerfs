@@ -18,8 +18,8 @@ mod mutating;
 #[allow(dead_code)]
 #[path = "support/host_install.rs"]
 mod support;
-use layerfs_protocol::provision::install::{ControlCode, MountPhase};
 use layerfs_daemon::control::Failure;
+use layerfs_protocol::daemon::{ControlCode, MountPhase};
 use mutating::{harness, quiet, unmounted};
 use nix::libc;
 use std::{

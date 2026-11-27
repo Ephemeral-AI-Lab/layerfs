@@ -1,17 +1,17 @@
 //! The `workspace` family: each call goes to its Sandbox's machine, or,
 //! for a Sandbox whose daemon this host reaches (#535 G4), straight to its
 //! daemon; an exec always runs through the Sandbox's runtime, in its machine.
-use layerfs_sandbox::direct;
-use layerfs_sandbox::family::sandbox_of;
-use layerfs_sandbox::host::{Call, Message};
-use layerfs_sandbox::record::{SandboxRecord, WorkspaceRecord};
-use layerfs_sandbox::route::{on_machine, reach, Asked};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::names::{WorkspaceAt, WorkspaceName, WorkspaceRef};
 use layerfs_home::outcome::shell_word;
 use layerfs_home::outcome::{refused, with_fix, Outcome};
 use layerfs_machine::worker::Unreached;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
+use layerfs_sandbox::direct;
+use layerfs_sandbox::family::sandbox_of;
+use layerfs_sandbox::host::{Call, Message};
+use layerfs_sandbox::record::{SandboxRecord, WorkspaceRecord};
+use layerfs_sandbox::route::{on_machine, reach, Asked};
 use std::path::{Path, PathBuf};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -189,13 +189,7 @@ pub fn mount(home: &Path, events: &mut Events<'_>, request: &MountRequest) -> Re
     // (#535 G4); every other through its machine
     let mounted = match direct::forwarded(&record) {
         true => crate::route::direct::call(&home, events, &record, call, Message::Absent),
-        false => on_machine(
-            &home,
-            events,
-            &record,
-            call,
-            crate::route::dispatch::call,
-        ),
+        false => on_machine(&home, events, &record, call, crate::route::dispatch::call),
     };
     let mounted = mounted.map_err(taken)?;
     let ws = WorkspaceRef {
@@ -255,8 +249,7 @@ pub(crate) fn at(home: &Path, ws: &str, reads: bool, exec: bool) -> Result<At> {
     // this host reaches its daemon: its directory is checked here, where
     // its Workspace records are (#535 G4)
     if forwarded && exec {
-        let (found, kept) =
-            crate::route::direct::exec_directory(&home, &record, ws.at.as_str())?;
+        let (found, kept) = crate::route::direct::exec_directory(&home, &record, ws.at.as_str())?;
         path = found;
         directory = Some(path.clone());
         workspace = Some(kept);
@@ -311,10 +304,11 @@ pub fn unmount(home: &Path, events: &mut Events<'_>, request: &UnmountRequest) -
     if at.forwarded {
         let dir = at.record.dir(&at.home);
         let by_path = at.path.starts_with('/');
-        let kept = (layerfs_sandbox::files::workspaces(&dir)?.into_iter()).find(|(_, w)| match by_path {
-            true => w.path() == Some(at.path.as_str()),
-            false => w.name() == Some(at.path.as_str()),
-        });
+        let kept =
+            (layerfs_sandbox::files::workspaces(&dir)?.into_iter()).find(|(_, w)| match by_path {
+                true => w.path() == Some(at.path.as_str()),
+                false => w.name() == Some(at.path.as_str()),
+            });
         if let Some(id) = kept.as_ref().and_then(|(_, w)| w.id()) {
             let force = request.force == Some(true);
             layerfs_sandbox::exec::remote::settle(events, (&at.home, &at.record), Some(id), force)?;

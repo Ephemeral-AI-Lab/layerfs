@@ -14,18 +14,18 @@
 //! from its cursor whatever was added or removed meanwhile. A file window
 //! is read with one `pread` of at most `length` bytes.
 //!
-//! Every open and `stat` is `layerfs_sandbox_backend::shared::confined`'s:
+//! Every open and `stat` is `layerfs_sandbox::backend::confined`'s:
 //! no link leads out of the base, no mount is entered but one the view
 //! crosses, no special file is read. A mount point is told from the mount
 //! table and what LayerFS keeps private from `roots::kept`, both before
 //! any `stat`.
 use super::roots::{self, Kept};
-use layerfs_sandbox::deploy::Side;
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::home::with_field;
 use layerfs_home::outcome::{failed, refused, Outcome};
 use layerfs_home::tail;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_sandbox::backend::confined::{self, Base, Kind, Mount, Opened, Refused, Stat, View};
+use layerfs_sandbox::deploy::Side;
 use std::cell::OnceCell;
 use std::collections::BinaryHeap;
 use std::ffi::OsStr;
@@ -36,7 +36,7 @@ use std::path::{Component, Path, PathBuf};
 /// The call the Sandbox view serves.
 pub(super) const CALL: &str = "sandbox.files";
 /// The inspect kind of [`sandbox_files`].
-pub(super) const SANDBOX_FILES: &str = "sandbox_files";
+pub(crate) const SANDBOX_FILES: &str = "sandbox_files";
 
 /// The levels a page walks when a call names none.
 pub const DEPTH: i64 = 1;
@@ -90,7 +90,7 @@ impl FilesRequest {
     /// that is not absolute or holds a `..`, or a cursor with no folder.
     /// An option that does not apply to what the path turns out to be (a
     /// `limit` for a file, an `offset` for a folder) is not used.
-    pub(super) fn check(&self, call: &str) -> Result<(), SdkRefusal> {
+    pub(crate) fn check(&self, call: &str) -> Result<(), SdkRefusal> {
         let invalid = |what: String| Err(refused("InvalidInput", format!("{call}: {what}")));
         let within = |name: &str, value: Option<i64>, least: i64, most: i64| match value {
             Some(value) if value < least || value > most => {
@@ -120,7 +120,7 @@ impl FilesRequest {
 
     /// The inspect request for this read of what `field` names: the
     /// `sandbox` or the `machine` called `name`.
-    pub(super) fn request(&self, field: &str, name: &str) -> SdkValue {
+    pub(crate) fn request(&self, field: &str, name: &str) -> SdkValue {
         let mut fields = vec![(field.to_owned(), SdkValue::text(name))];
         let texts = [("path", &self.path), ("cursor", &self.cursor)];
         for (name, value) in texts {
@@ -157,7 +157,7 @@ pub fn sandbox_files(home: &Path, name: &str, request: &FilesRequest) -> Outcome
     if layerfs_sandbox::direct::forwarded(&record) {
         args = with_field(args, "workspaces", roots::recorded(&record.dir(home))?);
     }
-    layerfs_sandbox::inspect::route::ask(home, record.machine(), SANDBOX_FILES, args)
+    crate::ask(home, record.machine(), SANDBOX_FILES, args)
 }
 
 /// [`sandbox_files`] on the side that holds the Sandbox's run folder.
@@ -214,28 +214,28 @@ pub fn sandbox_page(side: &Side<'_>, args: &SdkValue, spent: &dyn Fn() -> bool) 
 const CROSSED: [&str; 7] = ["ext4", "xfs", "btrfs", "zfs", "f2fs", "overlay", "tmpfs"];
 
 /// What a view judges beyond what LayerFS keeps private.
-pub(super) struct Rules {
+pub(crate) struct Rules {
     /// How an open resolves a path from the base, and whether it may end
     /// in another mount.
-    pub(super) view: View,
+    pub(crate) view: View,
     /// The entries of the base that are the kernel's own (`proc`, `sys`):
     /// listed as `system`, never `stat`ed, entered or read.
-    pub(super) system: &'static [&'static str],
+    pub(crate) system: &'static [&'static str],
     /// Only what every user of the machine may read is opened: a file
     /// others may read, a folder others may list and search. Anything
     /// else is `unreadable`: listed, never opened.
-    pub(super) world: bool,
+    pub(crate) world: bool,
     /// The LayerFS folders in the base, each relative to it, with its
     /// role: an entry that is one is listed with it.
-    pub(super) roles: Vec<(PathBuf, &'static str)>,
+    pub(crate) roles: Vec<(PathBuf, &'static str)>,
     /// Those folders are read as bases of their own: this view lists
     /// them and enters none.
-    pub(super) apart: bool,
+    pub(crate) apart: bool,
 }
 
 impl Rules {
     /// A folder read beneath itself, with no rule of its own.
-    pub(super) fn beneath() -> Self {
+    pub(crate) fn beneath() -> Self {
         Self {
             view: View::Beneath,
             system: &[],
@@ -287,7 +287,7 @@ struct Point {
 /// One view: a base folder, how its paths are shown, and what is judged
 /// in it. Another view (a machine's folders, a Sandbox's whole root) is
 /// another `Scope`.
-pub(super) struct Scope<'a> {
+pub(crate) struct Scope<'a> {
     /// The call, for its refusals.
     call: &'static str,
     /// The root of the side that serves it, which `roots::kept` judges
@@ -318,7 +318,7 @@ pub(super) struct Scope<'a> {
 impl<'a> Scope<'a> {
     /// The view of folder `shown` under `rules`, on the side whose root
     /// is `root`, with this process's mount table.
-    pub(super) fn open(
+    pub(crate) fn open(
         call: &'static str,
         root: &'a Path,
         shown: &Path,
@@ -396,7 +396,7 @@ impl<'a> Scope<'a> {
 
     /// Takes the Workspace records a request carried from the side that
     /// keeps them (`[{ id, path }]`), beside this side's own.
-    pub(super) fn with_workspaces(mut self, sent: Option<&'a SdkValue>) -> Self {
+    pub(crate) fn with_workspaces(mut self, sent: Option<&'a SdkValue>) -> Self {
         self.sent = sent;
         self
     }
@@ -606,7 +606,7 @@ fn special(kind: Kind) -> &'static str {
 /// above it are judged as a listing judges them, and the entry itself is
 /// `stat`ed in its folder first, so what is refused is refused before it
 /// is opened.
-pub(super) fn answer(
+pub(crate) fn answer(
     scope: &Scope<'_>,
     relative: &Path,
     request: &FilesRequest,

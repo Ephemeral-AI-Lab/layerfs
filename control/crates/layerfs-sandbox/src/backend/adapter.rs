@@ -4,16 +4,12 @@
 //! `ADAPTER`: what is fixed per backend (its stored name, description and
 //! capabilities). Launch and reopen stay on the providers the public
 //! `Runtime` enum holds; `LaunchRequest` binds arrive in a later phase.
-use {super::{namespaces, process}, layerfs_machine::table::backend::Backend};
+use super::{namespaces, process, Backend};
 use crate::ProviderCapabilities;
 
-/// What is fixed for one Sandbox backend.
+/// What is fixed for one Sandbox backend beyond its name and description,
+/// which the machine crate's [`Backend`] holds.
 pub(crate) trait BackendAdapter: Sync {
-    /// The value Sandbox records, `home get --with platforms` and `SUPPORT.json`
-    /// store and show (`Process` is `"process"`, G6).
-    fn stored_name(&self) -> &'static str;
-    /// One line: how a Sandbox runs on this backend.
-    fn description(&self) -> &'static str;
     /// What this backend supports.
     fn capabilities(&self) -> ProviderCapabilities;
 }
@@ -24,4 +20,9 @@ pub(crate) fn adapter(backend: Backend) -> &'static dyn BackendAdapter {
         Backend::Process => &process::ADAPTER,
         Backend::Namespaces => &namespaces::ADAPTER,
     }
+}
+
+/// What `backend` supports.
+pub fn capabilities(backend: Backend) -> ProviderCapabilities {
+    adapter(backend).capabilities()
 }

@@ -1,8 +1,11 @@
 //! Kernel install uses the product SDK/channel/daemon path and real Store ports.
 #[path = "support/host_install.rs"]
 mod support;
-use layerfs_protocol::{provision::install::{InstallPhase, InstallReply, RefusalKind}, duplex::MAX_PLAINTEXT_BYTES};
 use layerfs_daemon::{install::receive_install, install_types::StoreSettings};
+use layerfs_protocol::{
+    duplex::MAX_PLAINTEXT_BYTES,
+    provision::install::{InstallPhase, InstallReply, RefusalKind},
+};
 use std::{fs, path::PathBuf};
 
 #[test]

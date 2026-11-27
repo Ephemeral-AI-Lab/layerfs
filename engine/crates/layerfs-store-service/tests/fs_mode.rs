@@ -11,7 +11,7 @@ mod installed;
 #[allow(dead_code)]
 mod support;
 
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use support::Fixture;

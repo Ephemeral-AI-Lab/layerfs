@@ -8,11 +8,11 @@
 //! each file and folder, a file with two names once) taken by the test
 //! itself over the paths it made.
 #![cfg(any(target_os = "linux", target_os = "macos"))]
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
-use layerfs_os::process::LocalProcess;
 use layerfs_home::home::{self, paths, write_record};
 use layerfs_home::names::MachineName;
 use layerfs_inspect;
+use layerfs_os::process::LocalProcess;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_sandbox::record::{DaemonRecord, Local};
 use std::collections::{BTreeMap, HashSet};
 use std::os::unix::fs::{MetadataExt, PermissionsExt};

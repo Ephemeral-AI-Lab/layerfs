@@ -5,7 +5,7 @@
 //! Normal home, Branches made by `branch.fork`.
 use layerfs_api::home;
 use layerfs_api::Scope;
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 

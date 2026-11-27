@@ -3,7 +3,7 @@
 //! yet, so the mount's `commit`, its first Commit's `parent` and a status's
 //! `commit` and `branch_head` are the Layer the Branch was forked at, not
 //! null (RF re-check N-B for status).
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_workspace::answers;
 use layerfs_workspace::route::send::Mounted;
 

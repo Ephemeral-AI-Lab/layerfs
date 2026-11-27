@@ -3,7 +3,7 @@ use crate::history::saved;
 use crate::methods::args::{path, project, text, Answer};
 use crate::read::{query, revision, snapshot};
 use crate::StoreService;
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 
 pub fn revision(service: &StoreService, args: &SdkValue) -> Answer {
     let stack = project(service, args)?;

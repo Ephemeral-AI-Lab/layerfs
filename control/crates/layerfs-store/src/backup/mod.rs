@@ -3,26 +3,26 @@
 //! ([`crate::intent`], ended in [`ended`]); the home's secret folder is
 //! behind [`secret`], the place call surface 2.0 switches to the shared
 //! one.
+pub mod bucket;
+pub mod copy;
 #[doc(hidden)]
 pub mod create;
 pub mod ended;
 #[doc(hidden)]
 pub mod family;
 pub mod heads;
+pub mod jobs;
 #[doc(hidden)]
 pub mod list;
 #[doc(hidden)]
 pub mod progress;
+pub mod providers;
 #[doc(hidden)]
 pub mod record;
 #[doc(hidden)]
 pub mod restore;
 #[doc(hidden)]
 pub mod restored;
-pub mod secret;
-pub mod bucket;
-pub mod copy;
-pub mod jobs;
-pub mod providers;
 #[cfg(feature = "s3_api")]
 pub mod s3_api;
+pub mod secret;

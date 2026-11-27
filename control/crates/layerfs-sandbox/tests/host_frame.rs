@@ -1,8 +1,8 @@
 //! The `sandbox.host` frame (layerfs-project#108): built from the typed
 //! request in the order the untyped request had, read back to the same
 //! request, and refused before any effect when it names no host operation.
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::json::{parse, print};
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_sandbox::deploy::Choice;
 use layerfs_sandbox::host::{decode, encode, Call, Message, Op, Sent, OPS};
 use layerfs_store::project::record::ProjectRecord;

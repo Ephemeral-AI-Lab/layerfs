@@ -2,7 +2,7 @@
 mod common;
 use common::{layerfs, run, tempdir, text};
 use layerfs_home::json;
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use std::path::Path;
 
 fn call(home: &Path, words: &[&str]) -> SdkValue {

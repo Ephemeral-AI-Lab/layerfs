@@ -4,9 +4,9 @@ use super::{
     fixture,
     mounted::{until, Harness, COMMAND},
 };
-use layerfs_protocol::provision::install::{ReadyMount, WorkspaceToken};
 use layerfs_daemon::control::Success;
 use layerfs_history::BranchId;
+use layerfs_protocol::daemon::{ReadyMount, WorkspaceToken};
 use nix::{
     errno::Errno,
     libc,

@@ -19,7 +19,10 @@ mod mounted;
 #[path = "support/mounted_commit.rs"]
 mod rig;
 use held_writer::HeldWriter;
-use {layerfs_daemon::control::Failure, layerfs_store_service::store::{CommitError, CommitPhase}};
+use layerfs_daemon::{
+    control::Failure,
+    store::{CommitError, CommitPhase},
+};
 use layerfs_storage::StorageError;
 use mounted::COMMAND;
 use rig::{root, Rig};
@@ -164,7 +167,7 @@ fn busy_initial_reservation_has_no_kernel_mount_effect() {
     let unattached = status
         .kernel
         .as_ref()
-        .is_some_and(|value| value.phase == layerfs_protocol::provision::install::MountPhase::Unattached);
+        .is_some_and(|value| value.phase == layerfs_protocol::daemon::MountPhase::Unattached);
     held.release();
     drop(attach);
     rig.harness.try_unmount(token).unwrap();

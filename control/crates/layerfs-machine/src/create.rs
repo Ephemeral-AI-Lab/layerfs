@@ -17,14 +17,14 @@ use super::progress::Phases;
 use super::record::{MachineRecord, CREATE};
 use super::spec::{self as record, home_id, machine_of, refusal, save_running};
 use super::spec::{save_unready, update as update_record};
+use crate::platform::{self as adapters, Code, Platform};
 use crate::Related;
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::home::{self, lock, paths};
 use layerfs_home::op::Op;
 use layerfs_home::outcome::{failed, refused, Outcome};
 use layerfs_home::state::Reason;
-use crate::platform::{self as adapters, Code, Platform};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;

@@ -19,7 +19,6 @@ mod installed;
 #[allow(dead_code)]
 mod support;
 
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_content::compare::tree::{same_inode, same_metadata};
 use layerfs_content::compare::{
     inode_changes, list_directory, locate, name_from_hints, DifferenceWork, EntryFacts, TreeTable,
@@ -28,6 +27,7 @@ use layerfs_content::filesystem::FilesystemRootId;
 use layerfs_content::object::inode_leaf::InodeKind;
 use layerfs_content::{AuthenticatedObjects, ObjectId};
 use layerfs_history::LayerStackId;
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_store_service::store::CatalogHints;
 use std::collections::BTreeSet;
 use std::fs;

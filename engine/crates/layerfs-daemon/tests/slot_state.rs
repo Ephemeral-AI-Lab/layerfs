@@ -6,14 +6,14 @@
 //! These tests live outside product `src/`; they reach only the pure
 //! `Slots`/`RetainedFailures` values, no socket and no daemon process.
 
-use layerfs_protocol::provision::install::{Call, Reply, Request};
-use layerfs_protocol::duplex::{ChannelError, ChannelWork, PeerEndFailure, PeerEndPhase};
 use layerfs_daemon::application::internals::{
     disposition, recovery_request, AdmissionClass, Finished, RetainedFailure, RetainedFailures,
     SlotClass, SlotTicket, Slots, LIMIT, RESERVED_SLOTS, TTL,
 };
 use layerfs_daemon::application::{ApplicationError, ConnectionFailure};
 use layerfs_daemon::control::{Served, Success};
+use layerfs_protocol::daemon::{Call, Reply, Request};
+use layerfs_protocol::duplex::{ChannelError, ChannelWork, PeerEndFailure, PeerEndPhase};
 use std::time::{Duration, Instant};
 
 const OWNER: &str = "daemon:pid:layerfs-control-0";
@@ -389,9 +389,10 @@ fn reaped_slot_readmits_and_the_old_ticket_finishes_stale() {
 /// (`Status`) and the operator read model — and nothing else (#547 slice 3).
 #[test]
 fn recovery_request_admits_only_the_recovery_set() {
-    use layerfs_protocol::provision::install::{SdkCall, UnmountControl};
     use layerfs_history::WorkspaceId;
-    let token = layerfs_protocol::provision::install::WorkspaceToken {
+    use layerfs_protocol::daemon::UnmountControl;
+    use layerfs_protocol::sdk::SdkCall;
+    let token = layerfs_protocol::daemon::WorkspaceToken {
         workspace: WorkspaceId::from_authority([1; 32]).unwrap(),
         namespace: 0,
     };
@@ -401,20 +402,20 @@ fn recovery_request_admits_only_the_recovery_set() {
         discard: false,
     })));
     assert!(recovery_request(&Request::Sdk(SdkCall {
-        method: layerfs_protocol::provision::install::OPERATION.to_owned(),
-        args: layerfs_protocol::provision::install::SdkValue::Null,
+        method: layerfs_protocol::daemon::OPERATION.to_owned(),
+        args: layerfs_protocol::sdk::SdkValue::Null,
     })));
     // Everything else is refused.
     assert!(!recovery_request(&Request::EndSession));
     assert!(!recovery_request(&Request::Hello(
-        layerfs_protocol::provision::install::HelloRequest {
+        layerfs_protocol::daemon::HelloRequest {
             expected_instance: None,
             wait_for_store: false,
         }
     )));
     assert!(!recovery_request(&Request::Sdk(SdkCall {
         method: "sandbox.list_workspaces".to_owned(),
-        args: layerfs_protocol::provision::install::SdkValue::Null,
+        args: layerfs_protocol::sdk::SdkValue::Null,
     })));
     assert!(!recovery_request(&Request::MountNamed {
         workspace: WorkspaceId::from_authority([2; 32]).unwrap(),
@@ -422,7 +423,7 @@ fn recovery_request_admits_only_the_recovery_set() {
         branch: "branch".to_owned(),
     }));
     assert!(!recovery_request(&Request::Commit(
-        layerfs_protocol::provision::install::CommitControl {
+        layerfs_protocol::daemon::CommitControl {
             token,
             force: false,
             message: None,
@@ -532,9 +533,9 @@ fn expired_and_reclaimed_records_name_their_disposition() {
 #[test]
 fn recovery_request_admits_reclaim() {
     assert!(recovery_request(&Request::Sdk(
-        layerfs_protocol::provision::install::SdkCall {
-            method: layerfs_protocol::provision::install::RECLAIM.to_owned(),
-            args: layerfs_protocol::provision::install::SdkValue::Null,
+        layerfs_protocol::sdk::SdkCall {
+            method: layerfs_protocol::daemon::RECLAIM.to_owned(),
+            args: layerfs_protocol::sdk::SdkValue::Null,
         }
     )));
 }

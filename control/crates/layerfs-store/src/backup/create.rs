@@ -1,6 +1,8 @@
 //! `backup.create`: a snapshot on the Store's machine, uploaded by this process.
 use super::progress::Shown;
 use super::record::{remote_error, BucketRecord, StoreLink};
+use crate::backup::bucket::{pieces, Driver, Metadata};
+use crate::backup::copy as remote;
 use crate::get::hex_text;
 use crate::intent;
 use crate::lease;
@@ -8,14 +10,12 @@ use crate::place::{self, Executor};
 use crate::record::{StoreRecord, StoreRef};
 use crate::sqlite::transfer::step::{StepFrame, StoreStep};
 use crate::sqlite::transfer::steps::CHUNK;
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
-use layerfs_protocol::sdk::hex;
-use crate::backup::copy as remote;
-use crate::backup::bucket::{pieces, Driver, Metadata};
 use layerfs_home::events::Events;
 use layerfs_home::home::flock::{try_lock, unlock};
 use layerfs_home::home::{self, paths};
 use layerfs_home::outcome::{failed, refused, Outcome};
+use layerfs_protocol::sdk::hex;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -133,10 +133,10 @@ pub fn create(home: &Path, events: &mut Events<'_>, request: &BackupCreate) -> O
         let heads = staged.get_text("heads").and_then(pieces::parse_hex32);
         let mut metadata = Metadata::from([
             (
-                remote::create::SQLITE_VERSION.to_owned(),
+                remote::object::SQLITE_VERSION.to_owned(),
                 staged.get_text("sqlite").unwrap_or("").to_owned(),
             ),
-            (remote::create::BINDING.to_owned(), hex(&identity.binding)),
+            (remote::object::BINDING.to_owned(), hex(&identity.binding)),
             (EXPORTED_FROM.to_owned(), format!("{home_id}/{machine}")),
         ]);
         if let Some(heads) = &heads {

@@ -1,11 +1,14 @@
 //! Live Workspace diagnostics over bounded source/list windows, with exact release.
-use {crate::control::Service, layerfs_store_service::store::{BoundWorkspace, StoreOperation}};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
+use crate::{
+    control::Service,
+    store::{BoundWorkspace, StoreOperation},
+};
 use layerfs_content::{
     compare::{EntryFacts, TreeTable},
     filesystem::FilesystemRootId,
     object::inode_leaf::InodeKind,
 };
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_store_service::{
     history::lookup::{self as args, Answer},
     operator::args::{paging, text},

@@ -3,7 +3,7 @@
 //! it, the Store pushed to a worker machine and read there, then the project
 //! removed.
 use layerfs_api::home::{self, paths, write_record};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 

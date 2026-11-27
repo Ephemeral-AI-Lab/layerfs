@@ -32,9 +32,9 @@ mod adversary;
 mod tester768;
 
 use adversary::{commit, tree_of, verdict, write, Kind, Service, TestStore, Verdict};
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_history::{BranchId, HistoryError};
 use layerfs_persistence::{CompactRequest, Handles, SqliteHandles, StoreSelection};
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_store_service::store::BoundWorkspace;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Mutex;
@@ -114,7 +114,7 @@ fn compact(store: &TestStore, op: u64) -> String {
     }
 }
 
-fn code(answer: &Result<SdkValue, layerfs_protocol::provision::install::SdkRefusal>) -> String {
+fn code(answer: &Result<SdkValue, layerfs_protocol::sdk::SdkRefusal>) -> String {
     match answer {
         Ok(_) => "Ok".into(),
         Err(refusal) => refusal.code.clone(),

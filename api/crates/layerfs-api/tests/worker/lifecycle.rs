@@ -3,12 +3,12 @@
 //! that just started. With no clock left to simulate, this checks the
 //! observable part: after its connections close the server keeps serving,
 //! and `serve` takes no idle period.
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_machine::worker::{self, Endpoint};
+use layerfs_protocol::sdk::SdkValue;
 use std::net::TcpListener;
 
 /// One ping of `endpoint`, or why it did not answer yet.
-fn ping(endpoint: &Endpoint) -> Result<SdkValue, layerfs_protocol::provision::install::SdkRefusal> {
+fn ping(endpoint: &Endpoint) -> Result<SdkValue, layerfs_protocol::sdk::SdkRefusal> {
     worker::call(
         endpoint,
         "worker.ping",
@@ -68,9 +68,7 @@ fn a_worker_without_a_supplied_incarnation_mints_and_records_one() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let address = listener.local_addr().unwrap();
     let served = root.clone();
-    std::thread::spawn(move || {
-        layerfs_api::worker::serve::serve(listener, "s".to_owned(), served)
-    });
+    std::thread::spawn(move || layerfs_api::worker::serve::serve(listener, "s".to_owned(), served));
     let endpoint = Endpoint {
         address,
         secret: "s".to_owned(),

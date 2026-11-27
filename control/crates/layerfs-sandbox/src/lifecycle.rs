@@ -13,12 +13,12 @@ use crate::daemon::values;
 use crate::host::{Deploy, Host, Started};
 use crate::record::DaemonRecord;
 use crate::registry::{SandboxState, SANDBOXES};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
-use layerfs_protocol::provision::daemon_setup::{DaemonLimits, DaemonSetup};
-use layerfs_protocol::provision::manifest::StoreManifest;
-use layerfs_protocol::{DaemonStore, KernelRoute};
 use layerfs_home::helpers::lock;
 use layerfs_home::outcome::{failed, refused, Outcome};
+use layerfs_protocol::provision::daemon_setup::{DaemonLimits, DaemonSetup};
+use layerfs_protocol::provision::manifest::StoreManifest;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
+use layerfs_protocol::{DaemonStore, KernelRoute};
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
@@ -200,7 +200,7 @@ pub fn start(
         .deploy()
         .ok_or_else(|| refused("InvalidInput", "missing `deploy`"))?;
     // Inputs are read first, so a refused request leaves no creation intent.
-    let backend = crate::runtime::backend(deploy)?;
+    let backend = crate::backend::select::backend(deploy)?;
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     {
         crate::launch::local::start((host, platform, place), directory, store, backend)
@@ -234,7 +234,7 @@ pub fn create(host: &Host, named: Option<&str>, place: Option<&(String, String)>
     let deploy = host
         .deploy()
         .ok_or_else(|| refused("InvalidInput", "missing `deploy`"))?;
-    let platform = crate::runtime::platform(named, deploy)?;
+    let platform = crate::backend::select::platform(named, deploy)?;
     // a PostgreSQL Store's URL is the call's
     let store = match layerfs_store::postgresql::open::sandbox_store(&host.open_args())? {
         Some(selected) => OpenedStore::Postgres(Box::new(selected)),
@@ -282,15 +282,25 @@ pub fn create(host: &Host, named: Option<&str>, place: Option<&(String, String)>
     let started = Started {
         sandbox: Some(state.id.clone()),
         name: Some(state.name.clone()),
-        image: Some(crate::runtime::image(runtime).to_owned()),
+        image: Some(crate::backend::select::image(runtime).to_owned()),
         platform: Some(platform.to_owned()),
-        runtime: Some(crate::runtime::kind(runtime).to_owned()),
+        runtime: Some(crate::backend::select::kind(runtime).to_owned()),
         route: Some(crate::files::route(runtime).to_owned()),
         runtime_id: Some(runtime.identity().to_string()),
-        network: crate::runtime::network(runtime),
+        network: crate::backend::select::network(runtime),
         control: None,
     };
     Ok(started.encode())
+}
+
+/// The forced unmount a close runs on each Workspace its Sandbox still
+/// holds, before the daemon stops: the control-layer workspace crate's,
+/// passed in by its caller (the Workspace crate sits above this one).
+pub trait WorkspaceDrain {
+    /// Drains and unmounts the Workspace at `path` of the Sandbox `host`
+    /// names, discarding what it did not commit. Its outcome is not awaited:
+    /// a Workspace it cannot drain is reported as unknown by the close.
+    fn drain(&self, host: &Host, path: &str);
 }
 
 /// `sandbox.remove(sandbox, { force })`: stops Sandbox `sandbox` now, under
@@ -315,7 +325,7 @@ pub fn create(host: &Host, named: Option<&str>, place: Option<&(String, String)>
 /// whose URL this machine cannot dial, those bound by id go back to the
 /// caller in `ending` instead, which ends them
 /// (`crate::mount_intents::end_handed`).
-pub fn close(host: &Host, force: bool, held: &[String]) -> Outcome {
+pub fn close(host: &Host, force: bool, held: &[String], drain: &dyn WorkspaceDrain) -> Outcome {
     let id = host.sandbox()?.to_owned();
     let directory = crate::files::sandbox_dir(host)?;
     let Some(recorded) = crate::files::started(&directory)? else {
@@ -396,7 +406,7 @@ pub fn close(host: &Host, force: bool, held: &[String]) -> Outcome {
     let bound = bound_mounts(&state, &mounted)?;
     drop(_guard);
     for path in &mounted {
-        let _ = layerfs_workspace::machine::serve::unmount(host, Some(path), true, true);
+        drain.drain(host, path);
     }
     let value = crate::files::started(&directory)?
         .ok_or_else(|| refused("NoSuchSandbox", format!("Sandbox {id} was closed")))?;
@@ -415,7 +425,7 @@ pub fn close(host: &Host, force: bool, held: &[String]) -> Outcome {
     // ends the mount intents and reports the failure in `left`.
     let unretired = retired(host, &id);
     let pg = (host.store_record.as_ref())
-        .is_some_and(|r| r.kind().ok() == Some(layerfs_protocol::StoreKind::Postgresql));
+        .is_some_and(|r| r.kind().ok() == Some(layerfs_store::record::StoreKind::Postgresql));
     let (left, handed) = match (pg, &host.postgresql) {
         (true, None) => {
             let handed = crate::mount_intents::handed(&bound);

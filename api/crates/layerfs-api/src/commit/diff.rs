@@ -3,8 +3,8 @@ use crate::calls::scope::Rule;
 use crate::calls::table::Kind::{Int, Name, Project, Text};
 use crate::calls::table::{a, call, opt, Call};
 use crate::calls::{Context, Form, Paging, Part, Section};
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::outcome::Outcome;
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_store::calls::commit::{diff, CommitDiff};
 
 /// One path that differs; `change` is added, modified or removed.

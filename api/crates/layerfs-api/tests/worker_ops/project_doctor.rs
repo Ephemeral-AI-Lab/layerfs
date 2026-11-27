@@ -2,12 +2,12 @@
 //! machine: the Store's list is read in that machine's worker, and the data
 //! walk runs there too (`store.diagnose` with `cut: project`), its `data`
 //! progress events passed back. The caller's home holds no Store file.
-use layerfs_protocol::provision::install::SdkValue;
-use layerfs_inspect::{self, Kind, Options, Thing};
 use layerfs_home::events::Events;
 use layerfs_home::home::{self, paths};
 use layerfs_home::names::StoreName;
+use layerfs_inspect::{self, Kind, Options, Thing};
 use layerfs_machine::worker::{self, Endpoint};
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_store::project::add::{add_project, ProjectAdd};
 use layerfs_store::sqlite::create::create;
 use std::net::TcpListener;
@@ -56,9 +56,7 @@ fn serve(root: &Path) -> Endpoint {
         secret: "k".to_owned(),
     };
     let served = root.to_path_buf();
-    std::thread::spawn(move || {
-        layerfs_api::worker::serve::serve(listener, "k".to_owned(), served)
-    });
+    std::thread::spawn(move || layerfs_api::worker::serve::serve(listener, "k".to_owned(), served));
     for _ in 0..200 {
         if worker::ping(&endpoint).is_ok() {
             break;

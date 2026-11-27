@@ -1,11 +1,13 @@
 //! The inspect route: where a request runs ([`ask`]), the worker's side of
-//! it ([`in_worker`]), the one match on its kind ([`serve`]) and how a
-//! side finds a Sandbox's run folder ([`run_folder`]).
-use {super::{owner::{admit, on_owner, Budget}, overlay, super::deploy::Side}, layerfs_inspect::{files::{walk, log}, machine::{files as machine, space, stats}}};
+//! it ([`in_worker`]) and how a side finds a Sandbox's run folder
+//! ([`run_folder`]). The one match on a request's kind ([`Serve`]) is
+//! `layerfs-inspect`'s, passed in by the caller.
+use super::owner::{admit, on_owner, Budget};
+use crate::deploy::Side;
 use crate::record::SandboxRecord;
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::home::paths;
 use layerfs_home::outcome::{failed, refused, Outcome};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_store::place::{self, Executor};
 use std::io::ErrorKind;
 use std::path::{Component, Path, PathBuf};
@@ -13,12 +15,22 @@ use std::path::{Component, Path, PathBuf};
 /// The worker operation every inspect request is sent as.
 pub const OP: &str = "inspect";
 
+/// One admitted request `{ kind, .. }` on a side, with its budget: the
+/// match on its kind.
+pub type Serve = fn(side: &Side<'_>, request: &SdkValue, budget: &Budget) -> Outcome;
+
 /// Runs inspect `kind` with `args` where machine `machine`'s run folders
 /// are: in this process under its own admission, or in the machine's
 /// worker under the worker's, waited for at most `place::READ`. A machine
 /// whose worker is not recorded or does not answer in time is
 /// `Unavailable`; nothing starts it.
-pub fn ask(home: &Path, machine: &str, kind: &'static str, args: SdkValue) -> Outcome {
+pub fn ask(
+    home: &Path,
+    machine: &str,
+    kind: &'static str,
+    args: SdkValue,
+    serve: Serve,
+) -> Outcome {
     let request = layerfs_home::home::with_field(args, "kind", SdkValue::text(kind));
     match on_owner(home, machine)? {
         Executor::Local => {
@@ -31,31 +43,9 @@ pub fn ask(home: &Path, machine: &str, kind: &'static str, args: SdkValue) -> Ou
 
 /// The worker's `inspect` operation: one request under this process's
 /// admission, on the worker's `root`.
-pub fn in_worker(root: &Path, args: SdkValue) -> Outcome {
+pub fn in_worker(root: &Path, args: SdkValue, serve: Serve) -> Outcome {
     let root = root.to_owned();
     admit(move |budget| serve(&Side::Worker(&root), &args, budget))
-}
-
-/// One admitted request `{ kind, .. }` on `side`. A kind made of many
-/// units of work (a folder walk) is handed `budget` and checks it between
-/// them: a folder walk between entries (`machine_space`'s too),
-/// `machine_stats` between Stores and between Sandboxes. The other kinds
-/// each read one window or a few sizes.
-pub fn serve(side: &Side<'_>, request: &SdkValue, budget: &Budget) -> Outcome {
-    match request.get_text("kind").unwrap_or("") {
-        log::MACHINE_LOG => log::machine(side, request),
-        log::SANDBOX_LOG => log::sandbox(side, request),
-        overlay::KIND => overlay::serve(side, request),
-        walk::SANDBOX_FILES => walk::sandbox_page(side, request, &|| budget.spent()),
-        machine::KIND => machine::machine_page(side, request, &|| budget.spent()),
-        // layerfs-project#164
-        stats::KIND => stats::serve(side, request, budget),
-        space::KIND => space::serve(side, request, budget),
-        other => Err(refused(
-            "InvalidInput",
-            format!("this build has no inspect kind `{other}`"),
-        )),
-    }
 }
 
 /// The run folder of Sandbox `name` on `side`: the `directory` of the
@@ -64,7 +54,7 @@ pub fn serve(side: &Side<'_>, request: &SdkValue, budget: &Budget) -> Outcome {
 /// record never points a read elsewhere. The record is read as a file: no
 /// lock, no registry, no daemon. A side with no such record or folder
 /// answers `NoSuchSandbox`, as a Sandbox's own calls do there.
-pub(super) fn run_folder(side: &Side<'_>, name: &str) -> Result<PathBuf, SdkRefusal> {
+pub fn run_folder(side: &Side<'_>, name: &str) -> Result<PathBuf, SdkRefusal> {
     layerfs_home::names::SandboxName::parse(name)?;
     let (Side::Home(root) | Side::Worker(root)) = side;
     let lost = || {

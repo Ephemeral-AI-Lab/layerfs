@@ -61,14 +61,23 @@ mod mounted;
 #[path = "support/mounted_commit.rs"]
 mod rig;
 use history_boundary::{Boundary, ObservedHistory};
-use layerfs_protocol::provision::install::{Activity, ReadyMount, Reply, Request, WorkspaceStatus, WorkspaceToken};
 use layerfs_content::{ContentError, ObjectId};
-use {layerfs_store_service::{bootstrap::open_store, store::{CapturedConstruction, CommitError, CommitFailure, CommitPhase, ReleasedOwner, Store, StoreReader}}, layerfs_daemon::control::{Failure, Success}};
+use layerfs_daemon::{
+    bootstrap::open_store,
+    control::{Failure, Success},
+    store::{
+        CapturedConstruction, CommitError, CommitFailure, CommitPhase, ReleasedOwner, Store,
+        StoreReader,
+    },
+};
 use layerfs_history::{
     CommitId, CommitOutcome, CommitRecord, HistoryCatalog, HistoryError, WorkspaceId,
 };
 use layerfs_overlay::{Capture, CapturedReader, OperationOwner};
 use layerfs_persistence::{SqliteHandles, SqlitePersistenceProfile};
+use layerfs_protocol::daemon::{
+    Activity, ReadyMount, Reply, Request, WorkspaceStatus, WorkspaceToken,
+};
 use layerfs_storage::{port::PackPersistence, ReservationBlocks, Storage, StorageError};
 use model::{assert_same, Flat, Model, FILE};
 use mounted::{mount_entry, until, Harness, COMMAND};
@@ -284,7 +293,7 @@ fn wrapped(
         SqliteHandles::open_writable(config(), installed::BINDING, installed::CURSOR).unwrap(),
     );
     let reader_config = fixture.config.clone();
-    let factory: layerfs_store_service::store::ReaderFactory = Arc::new(move |_| {
+    let factory: layerfs_daemon::store::ReaderFactory = Arc::new(move |_| {
         let read = SqliteHandles::open_read_only(
             reader_config.clone(),
             installed::BINDING,

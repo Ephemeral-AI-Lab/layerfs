@@ -52,11 +52,11 @@ mod rig;
 #[path = "support/host_install.rs"]
 mod support;
 use history_gate::Point;
-use layerfs_protocol::provision::install::{Activity, Reply, Request, WorkspaceToken};
 use layerfs_content::ObjectId;
-use layerfs_store_service::store::{Store, StoreReader};
+use layerfs_daemon::store::{Store, StoreReader};
 use layerfs_history::{CommitOutcome, CommitRecord, HistoryCatalog, WorkspaceId};
 use layerfs_persistence::{SqliteHandles, SqlitePersistenceProfile};
+use layerfs_protocol::daemon::{Activity, Reply, Request, WorkspaceToken};
 use layerfs_storage::{
     location::{InodeValueRow, LocatedObject, SignatureRow},
     port::{
@@ -307,7 +307,7 @@ fn r5_10_each_mounted_commit_has_one_producer_on_the_one_open_disposable_writer_
     hold.release();
     let history: Arc<dyn HistoryCatalog> = Arc::new(catalog);
     let reader_config = fixture.config.clone();
-    let factory: layerfs_store_service::store::ReaderFactory = Arc::new(move |_| {
+    let factory: layerfs_daemon::store::ReaderFactory = Arc::new(move |_| {
         let read = SqliteHandles::open_read_only(
             reader_config.clone(),
             installed::BINDING,

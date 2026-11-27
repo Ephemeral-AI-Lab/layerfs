@@ -3,8 +3,8 @@
 //! moves it aside.
 use crate::calls::table::{call, Call};
 use crate::calls::{Context, Form};
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::outcome::Outcome;
+use layerfs_protocol::sdk::SdkValue;
 
 /// Its answer: the home, and whether it was there already.
 const FORM: Form = Form::of(

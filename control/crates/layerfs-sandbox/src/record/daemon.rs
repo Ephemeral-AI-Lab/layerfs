@@ -8,9 +8,9 @@
 //! Sandbox record does, it keeps unknown, null and mistyped fields as read,
 //! in file order.
 use crate::host::Started;
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::home::fields::{self, Fields};
 use layerfs_home::outcome::refused;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::net::SocketAddr;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;

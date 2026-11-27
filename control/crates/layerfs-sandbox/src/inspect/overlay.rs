@@ -9,11 +9,11 @@
 //! `<run folder>/overlay/<namespace>.sqlite` per Workspace: the file is
 //! never opened and no daemon is asked.
 use super::super::deploy::Side;
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::outcome::{refused, Outcome};
+use layerfs_protocol::sdk::SdkValue;
 
 /// The inspect kind.
-pub(super) const KIND: &str = "overlay_sizes";
+pub const KIND: &str = "overlay_sizes";
 
 /// The most Workspaces one request names.
 const MOST: usize = 1024;
@@ -40,11 +40,14 @@ pub fn overlay_sizes(
             SdkValue::List(namespaces.iter().map(|n| SdkValue::Int(*n)).collect()),
         ),
     ]);
-    super::route::ask(home, machine, KIND, request)
+    super::route::ask(home, machine, KIND, request, |side, request, _| {
+        serve(side, request)
+    })
 }
 
 /// The request on the side that holds the run folder.
-pub(super) fn serve(side: &Side<'_>, args: &SdkValue) -> Outcome {
+/// One `overlay_sizes` request on `side`.
+pub fn serve(side: &Side<'_>, args: &SdkValue) -> Outcome {
     let namespaces: Vec<i64> = match args.get("namespaces") {
         Some(SdkValue::List(items)) if items.len() <= MOST => items
             .iter()

@@ -4,7 +4,7 @@
 //! and a home made again at the same path, with a new id, gets them again.
 #![cfg(feature = "machine")]
 use layerfs_api::home::paths;
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 
 #[test]
 fn built_ins_are_checked_once_per_home() {

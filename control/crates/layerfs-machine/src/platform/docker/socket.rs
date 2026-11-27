@@ -209,9 +209,13 @@ fn well_known(env: &DockerEnv) -> Vec<DockerCandidate> {
 /// (nothing listening, or no answer within the deadline).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SocketState {
+    /// It answers `GET /_ping`.
     Answering,
+    /// Nothing is at the path.
     Absent,
+    /// It refuses this user (`EACCES`).
     Denied,
+    /// It is there and does not answer in time.
     Silent,
 }
 

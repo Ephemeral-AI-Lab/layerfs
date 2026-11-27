@@ -6,7 +6,7 @@ use layerfs_content::{
     },
     ConstructionPolicy,
 };
-use layerfs_store_service::store::{BoundWorkspace, CommitError};
+use layerfs_daemon::store::{BoundWorkspace, CommitError};
 use layerfs_history::BranchSnapshot;
 use layerfs_storage::Save;
 use layerfs_telemetry::timer::Timing;

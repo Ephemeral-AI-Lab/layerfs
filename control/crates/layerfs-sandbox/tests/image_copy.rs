@@ -8,8 +8,8 @@ mod fixture;
 #[path = "support/standin.rs"]
 mod standin;
 use fixture::{Scratch, Tar};
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::events::Events;
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_sandbox::deploy::Side;
 use layerfs_sandbox::image_artifact::{self as cache, architecture, Sidecar};
 use layerfs_sandbox::image_load::{load, Loaded, Target};
@@ -50,7 +50,7 @@ fn run(
     standin: &Standin,
     home: &Path,
     image: &str,
-) -> (Result<Loaded, layerfs_protocol::provision::install::SdkRefusal>, Run) {
+) -> (Result<Loaded, layerfs_protocol::sdk::SdkRefusal>, Run) {
     let mut phases = Vec::new();
     let mut sink = |event: SdkValue| {
         if let Some(p) = event.get("progress") {
@@ -468,7 +468,7 @@ fn prune(
     target: Option<&str>,
     unused: bool,
     default: Option<&str>,
-) -> Result<SdkValue, layerfs_protocol::provision::install::SdkRefusal> {
+) -> Result<SdkValue, layerfs_protocol::sdk::SdkRefusal> {
     images::prune_in_worker(
         root,
         SdkValue::map([

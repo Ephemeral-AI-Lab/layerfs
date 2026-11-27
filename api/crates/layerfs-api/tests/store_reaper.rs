@@ -2,7 +2,7 @@
 //! lifecycle): it frees an open Store this process no longer uses. No real
 //! waiting: the reaper's own pass is run with a chosen idle period.
 use layerfs_api::home::{self};
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_store::lease;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -49,7 +49,10 @@ fn the_reaper_closes_an_unused_store() {
     // the reaper's pass once it is unused past its period closes it, and
     // nothing is left open after
     assert!(layerfs_store::admin::with_users::close_idle(Duration::ZERO) >= 1);
-    assert_eq!(layerfs_store::admin::with_users::close_idle(Duration::ZERO), 0);
+    assert_eq!(
+        layerfs_store::admin::with_users::close_idle(Duration::ZERO),
+        0
+    );
     assert_eq!(lease::holders(&home, "shop").unwrap(), Vec::<u32>::new());
     std::fs::remove_dir_all(&home).unwrap();
     std::fs::remove_dir_all(&folder).unwrap();

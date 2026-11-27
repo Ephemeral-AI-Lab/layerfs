@@ -8,8 +8,8 @@
 //! nothing is installed; a private one, and an absent one (made `0700`), are
 //! installed. These tests run in an ordinary user's process: no bucket, no
 //! install permission, no timing.
-use layerfs_protocol::provision::install::SdkRefusal;
 use layerfs_home::home::{self, paths};
+use layerfs_protocol::sdk::SdkRefusal;
 use layerfs_store::backup::restore::install;
 use layerfs_store::record::StoreRecord;
 use layerfs_store::Related;

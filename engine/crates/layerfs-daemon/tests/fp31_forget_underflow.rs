@@ -63,9 +63,11 @@ mod mounted;
 #[allow(dead_code)]
 #[path = "support/mounted_commit.rs"]
 mod rig;
-use layerfs_protocol::provision::install::{Activity, MountPhase, MountWork, Reply, Request, TeardownStage, WorkspaceToken};
-use {layerfs_daemon::control::Failure, layerfs_store_service::OwnerClient};
+use layerfs_daemon::{control::Failure, OwnerClient};
 use layerfs_overlay::{CleanupState, KernelMount, KernelMountState};
+use layerfs_protocol::daemon::{
+    Activity, MountPhase, MountWork, Reply, Request, TeardownStage, WorkspaceToken,
+};
 use mounted::{mount_entry, Harness};
 use rig::{root, stamp_tree, Rig};
 use std::{
@@ -221,7 +223,9 @@ fn cleanup(client: &OwnerClient, route: Route) -> CleanupState {
     job(
         client,
         route,
-        |job_client: &layerfs_store_service::OwnerClient, job_route| job_client.cleanup_state(job_route),
+        |job_client: &layerfs_store_service::OwnerClient, job_route| {
+            job_client.cleanup_state(job_route)
+        },
     )
 }
 /// One lookup decrement through the public owner port, as
@@ -491,7 +495,7 @@ fn refused_at_the_service(reduced: Reduced) {
     // Later operations answer with the same custody and attempt nothing.
     let later = client.diagnostics().unwrap().jobs.iter().sum::<u64>();
     for request in [
-        Request::Unmount(layerfs_protocol::provision::install::UnmountControl {
+        Request::Unmount(layerfs_protocol::daemon::UnmountControl {
             token,
             discard: true,
         }),

@@ -3,8 +3,8 @@
 use crate::calls::table::Kind::{Int, Name, Text};
 use crate::calls::table::{call, opt, Call};
 use crate::calls::{Context, Form, Paging, Part};
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::outcome::Outcome;
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_workspace::list::{list, ListRequest};
 
 /// One Workspace: its handle and Branch.

@@ -8,8 +8,8 @@ mod installed;
 #[allow(dead_code)]
 mod support;
 
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_history::{HistoryName, LayerStackId, StackInitialization};
+use layerfs_protocol::sdk::SdkValue;
 use std::fs;
 use support::Fixture;
 

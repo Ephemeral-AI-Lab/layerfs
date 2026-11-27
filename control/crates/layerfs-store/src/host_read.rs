@@ -1,7 +1,7 @@
 //! The native CLI worker's bounded, read-only Store protocol.
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::names::{ProjectName, StoreName};
 use layerfs_home::outcome::{refused, Outcome};
+use layerfs_protocol::sdk::SdkValue;
 use std::cell::Cell;
 use std::path::Path;
 

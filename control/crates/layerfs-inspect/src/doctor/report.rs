@@ -9,8 +9,8 @@
 //! made and nothing was found, so a notice makes it false. A thing's
 //! status is the worst outcome among its own checks; the answer's is the
 //! worst thing in it; `counts` counts things, once each.
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::state::BlockedBy;
+use layerfs_protocol::sdk::SdkValue;
 
 /// A kind of thing a doctor checks.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

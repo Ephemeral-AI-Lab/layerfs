@@ -19,10 +19,10 @@
 use crate::home::layout::{detect, Layout};
 use crate::home::{flock, paths};
 use crate::json;
+use crate::log::rotate as log_file;
 use crate::outcome::{failed, public_code, refused, Outcome};
 use crate::tail::{Backward, Cursor, Identity, Pair};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
-use crate::log::rotate as log_file;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, ErrorKind, Write};
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};

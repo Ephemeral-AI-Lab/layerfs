@@ -11,10 +11,10 @@
 //! close clears it; a stale one whose end is not confirmed stays as it was.
 use super::record::{self, ExecRecord, Route};
 use crate::record::lock_in;
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
+use crate::{Cancelled, Stop};
 use layerfs_home::home::{log_line, now_ms, write_entity};
 use layerfs_home::outcome::{failed, refused};
-use crate::{Cancelled, Stop};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 use std::time::Duration;
 

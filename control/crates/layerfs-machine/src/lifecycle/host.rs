@@ -1,12 +1,14 @@
-//! Native host power fences and holder reporting.
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
+//! The host machine's own start and stop: its recorded state, its worker's
+//! start and drain, and the holders a stop reports, which the Sandbox crate
+//! reads ([`crate::MachineUsers::host_holders`]).
+use crate::{record::MachineRecord, worker::HostPaths};
 use layerfs_home::{
     events::Events,
     home::{lock, with_field},
     names::MachineName,
     outcome::{refused, Outcome},
 };
-use crate::{record::MachineRecord, worker::HostPaths};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 
 use std::path::Path;
 
@@ -57,6 +59,7 @@ pub(crate) fn stop(
     events: &mut Events<'_>,
     name: &MachineName,
     force: bool,
+    users: &crate::MachineUsers,
 ) -> Outcome {
     let _operation = crate::force_stop_lock(home, name.as_str())?;
     if force {
@@ -100,7 +103,9 @@ pub(crate) fn stop(
         false
     };
     let forced = if force {
-        Some(crate::lifecycle::force_stop::host_locked(home, events, name)?)
+        Some(crate::lifecycle::force_stop::host_locked(
+            home, events, name, users,
+        )?)
     } else {
         None
     };
@@ -113,33 +118,7 @@ pub(crate) fn stop(
         }
         error
     };
-    let mut blocking = Vec::new();
-    for sandbox in layerfs_sandbox::status::inventory::sandboxes(home).map_err(with_forced)? {
-        if sandbox.machine() == name.as_str() && !sandbox.machine_stopped() {
-            blocking.push(format!("Sandbox {}", sandbox.name()));
-        }
-    }
-    let stores = layerfs_sandbox::status::inventory::stores_on(home, name.as_str()).map_err(with_forced)?;
-    // this process's own idle copies close first, as a move's settle does
-    // (Store I/O, so before any record lock): only other processes and a
-    // call running here hold the machine; a copy in use stays a holder
-    for store in &stores {
-        let file = layerfs_home::home::paths::store_file(home, store);
-        match layerfs_store::open::close(&file) {
-            Err(error) if error.code != "InUse" => {
-                blocking.push(format!("Store {store} (close failed: {})", error.message));
-            }
-            _ => {}
-        }
-    }
-    for store in stores {
-        if let Err(error) = store_holders(home, name, &store, &mut blocking) {
-            blocking.push(format!(
-                "Store {store} (holders not read: {})",
-                error.message
-            ));
-        }
-    }
+    let blocking = (users.host_holders)(home, name.as_str()).map_err(with_forced)?;
     if !blocking.is_empty() {
         let mut error = refused(
             "InUse",
@@ -169,29 +148,6 @@ pub(crate) fn stop(
         &[],
     )))
 }
-/// The holders of host Store `store` on machine `name`: this process's
-/// lease and every other live one.
-fn store_holders(
-    home: &Path,
-    name: &MachineName,
-    store: &str,
-    blocking: &mut Vec<String>,
-) -> Result<(), SdkRefusal> {
-    let _guard = layerfs_store::record::lock(home, store)?;
-    let record = layerfs_store::record::StoreRecord::of(home, store)?;
-    if !matches!(record.store_ref()?,layerfs_store::record::StoreRef::Sqlite{machine,..} if machine==name.as_str())
-    {
-        return Ok(());
-    }
-    if layerfs_store::lease::held_here(home, store) {
-        blocking.push(format!("Store {store} (pid {})", std::process::id()));
-    }
-    for pid in layerfs_store::lease::holders(home, store)? {
-        blocking.push(format!("Store {store} (pid {pid})"));
-    }
-    Ok(())
-}
-
 /// What the host worker's drain answered.
 #[derive(Default)]
 struct Drained {

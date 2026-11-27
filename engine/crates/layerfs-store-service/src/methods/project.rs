@@ -5,12 +5,12 @@ use crate::{
     store::Store,
     StoreService,
 };
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_content::compare::TreeTable;
 use layerfs_content::filesystem::FilesystemRootId;
 use layerfs_history::{
     LayerStackRecord, NodeId, PathRemovalKind, PathRemovalRequest, MAXIMUM_PAGE_RECORDS,
 };
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::sync::Arc;
 
 /// `list_branches({ name?, prefix?, excludePrefix?, after?, limit? })`: the
@@ -52,7 +52,7 @@ pub fn stats(service: &StoreService, args: &SdkValue) -> Answer {
         &service.store,
         &stack,
         &reader,
-        &layerfs_protocol::sdk::node_text(node),
+        &crate::history::lookup::node_text(node),
     )?;
     crate::read::tree_stats::count(
         &service.store,

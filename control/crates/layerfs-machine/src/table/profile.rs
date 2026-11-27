@@ -2,10 +2,10 @@
 //! [`Profile`], one `PROFILE` per platform folder (H §7.10.1, #535 §6.2).
 //! [`Platform::profile`] is the one match; every other per-platform value is
 //! read from the profile.
-use crate::table::options::OptSpec;
 use crate::platform::{apple_container, docker, host, lima};
+use crate::table::backend::Backend;
+use crate::table::options::OptSpec;
 pub use layerfs_protocol::KernelRoute;
-use crate::table::backend;
 use std::net::Ipv4Addr;
 
 /// Which kernel Sandboxes run on.
@@ -122,7 +122,7 @@ pub(crate) const MACOS: &[HostOs] = &[HostOs::Macos];
 
 /// A VM machine's backend: Linux namespaces in its guest.
 pub(crate) fn namespaces(_: HostOs) -> Option<Backend> {
-    Some(backend::Namespaces)
+    Some(Backend::Namespaces)
 }
 
 /// A FUSE kernel route on every host.

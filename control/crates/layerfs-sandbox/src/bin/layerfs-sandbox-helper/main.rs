@@ -21,6 +21,14 @@
 //!   `backend/namespaces/seccomp.rs`).
 #![deny(unsafe_code)]
 
+#[cfg(target_os = "linux")]
+mod exec;
+#[cfg(target_os = "linux")]
+mod init;
+#[cfg(target_os = "linux")]
+mod netns;
+#[cfg(target_os = "linux")]
+mod root;
 
 #[cfg(target_os = "linux")]
 fn main() {
@@ -48,9 +56,9 @@ fn run() -> Result<i32, String> {
     let arguments: Vec<std::ffi::OsString> = std::env::args_os().skip(1).collect();
     let (stage, rest) = arguments.split_first().ok_or(USAGE)?;
     match stage.to_str() {
-        Some("init") => super::init::outer(spec(rest)?),
-        Some("init-inner") => super::init::inner(spec(rest)?),
-        Some("exec") => super::exec::run(rest),
+        Some("init") => init::outer(spec(rest)?),
+        Some("init-inner") => init::inner(spec(rest)?),
+        Some("exec") => exec::run(rest),
         _ => Err(USAGE.to_owned()),
     }
 }

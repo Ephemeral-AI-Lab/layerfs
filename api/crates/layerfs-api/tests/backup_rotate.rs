@@ -6,8 +6,8 @@
 //! cannot be written puts the old secret back, and the call log keeps the
 //! secret's byte count only. Records only: runs on macOS.
 use layerfs_api::home::{self, paths, read_record, write_record};
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::names::BucketName;
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_store::backup::record::{BucketConnect, BucketRecord};
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
@@ -140,7 +140,7 @@ fn connect(
     access: &str,
     secret: &str,
     detail: bool,
-) -> Result<SdkValue, layerfs_protocol::provision::install::SdkRefusal> {
+) -> Result<SdkValue, layerfs_protocol::sdk::SdkRefusal> {
     let mut args = vec![
         ("name".to_owned(), t("b1")),
         ("url".to_owned(), t(url)),

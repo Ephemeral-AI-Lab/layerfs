@@ -2,8 +2,8 @@
 //! and dependency plan open), so every call answers `Unsupported`.
 use crate::platform::error::MachineError;
 use crate::setup::guest::Guest;
-use crate::setup::Status;
 use crate::setup::spec::{Bundle, Running, Spec};
+use crate::setup::Status;
 
 fn unsupported(spec: &Spec) -> MachineError {
     MachineError::missing(

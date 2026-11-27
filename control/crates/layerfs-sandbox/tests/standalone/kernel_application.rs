@@ -5,9 +5,13 @@ mod daemon_binary;
 #[allow(dead_code)]
 #[path = "../../../../../engine/crates/layerfs-daemon/tests/support/host_install.rs"]
 mod support;
-use layerfs_protocol::{provision::{install::{ControlCode, DaemonPhase, HelloRequest, Reply, Request}, daemon_setup::{DaemonLimits, DaemonSetup}}, duplex};
-use layerfs_protocol::{DaemonStore, KernelRoute};
 use layerfs_history::WorkspaceId;
+use layerfs_protocol::daemon::{ControlCode, DaemonPhase, HelloRequest, Reply, Request};
+use layerfs_protocol::{
+    duplex,
+    provision::daemon_setup::{DaemonLimits, DaemonSetup},
+};
+use layerfs_protocol::{DaemonStore, KernelRoute};
 use layerfs_sandbox::internal::Control;
 use std::{
     fs::{self, File},
@@ -147,7 +151,7 @@ fn actual_daemon_install_hello_bind_status_no_constructor_and_session_end() {
     // The real binary's Commit of an unchanged Workspace: the same root, no
     // new Commit record.
     assert!(
-        matches!(control.call(Request::Commit(layerfs_protocol::provision::install::CommitControl { token: bound.token, force: false, message: None, expected: None })).unwrap(), Reply::Committed(layerfs_history::CommitOutcome::UpToDate { head: None, root }) if root == bound.binding.effective_root)
+        matches!(control.call(Request::Commit(layerfs_protocol::daemon::CommitControl { token: bound.token, force: false, message: None, expected: None })).unwrap(), Reply::Committed(layerfs_history::CommitOutcome::UpToDate { head: None, root }) if root == bound.binding.effective_root)
     );
     let after = layerfs_sandbox::internal::workspace(&mut control)
         .status(bound.token)

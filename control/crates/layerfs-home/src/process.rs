@@ -1,9 +1,9 @@
 //! This process as a record names it (an `op`'s owner, a Store lease, a
 //! forward): its id, kernel start time and boot, so a reused id does not
 //! keep a record alive (moved from the Store leases, layerfs-project#103).
-//! The facts come from `layerfs_bridge::process`, not a driver (#112).
-use layerfs_protocol::provision::install::SdkValue;
+//! The facts come from `layerfs_os::process`, not a driver (#112).
 use layerfs_os::process::LocalProcess;
+use layerfs_protocol::sdk::SdkValue;
 use std::sync::OnceLock;
 
 /// This process as leases name it, read once; `None` where the kernel does

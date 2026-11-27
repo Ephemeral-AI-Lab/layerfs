@@ -4,12 +4,12 @@
 //! with `layerfs_home::tail` on the side that holds the file. They read
 //! `worker.log` with `worker.1.log`, and `daemon.log`, and nothing else:
 //! never `log/uncertain.jsonl` (#179 D8) or any other file.
-use layerfs_sandbox::deploy::Side;
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::home::paths;
 use layerfs_home::names::MachineName;
 use layerfs_home::outcome::{refused, Outcome};
 use layerfs_home::tail::{self, Pair};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
+use layerfs_sandbox::deploy::Side;
 use layerfs_store::place::Executor;
 use std::path::Path;
 
@@ -99,7 +99,7 @@ pub fn machine_log(home: &Path, machine: &MachineName, window: &Window) -> Outco
     if let Executor::Local = layerfs_sandbox::inspect::owner::on_owner(home, machine)? {
         return Err(no_worker(Some(machine)));
     }
-    layerfs_sandbox::inspect::route::ask(home, machine, MACHINE_LOG, window.request(None))
+    crate::ask(home, machine, MACHINE_LOG, window.request(None))
 }
 
 /// `sandbox.log(sandbox, { before, limit })`: one window of the
@@ -117,18 +117,18 @@ pub fn sandbox_log(home: &Path, name: &str, window: &Window) -> Outcome {
     )?;
     let record = layerfs_sandbox::family::sandbox_of(home, name)?;
     let request = window.request(Some(("sandbox", name)));
-    layerfs_sandbox::inspect::route::ask(home, record.machine(), SANDBOX_LOG, request)
+    crate::ask(home, record.machine(), SANDBOX_LOG, request)
 }
 
 /// The inspect kind of [`machine_log`].
-pub(super) const MACHINE_LOG: &str = "machine_log";
+pub(crate) const MACHINE_LOG: &str = "machine_log";
 /// The inspect kind of [`sandbox_log`].
-pub(super) const SANDBOX_LOG: &str = "sandbox_log";
+pub(crate) const SANDBOX_LOG: &str = "sandbox_log";
 
 /// [`machine_log`] on the side that holds the file: a worker's root. A
 /// worker started by a build that wrote no `log/worker.log` answers an
 /// empty log.
-pub(super) fn machine(side: &Side<'_>, args: &SdkValue) -> Outcome {
+pub(crate) fn machine(side: &Side<'_>, args: &SdkValue) -> Outcome {
     let Side::Worker(root) = side else {
         return Err(no_worker(None));
     };
@@ -136,7 +136,8 @@ pub(super) fn machine(side: &Side<'_>, args: &SdkValue) -> Outcome {
 }
 
 /// [`sandbox_log`] on the side that holds the Sandbox's run folder.
-pub(super) fn sandbox(side: &Side<'_>, args: &SdkValue) -> Outcome {
-    let folder = layerfs_sandbox::inspect::route::run_folder(side, args.get_text("sandbox").unwrap_or(""))?;
+pub(crate) fn sandbox(side: &Side<'_>, args: &SdkValue) -> Outcome {
+    let folder =
+        layerfs_sandbox::inspect::route::run_folder(side, args.get_text("sandbox").unwrap_or(""))?;
     Window::of(args).read(&Pair::of(folder.join(DAEMON_LOG)), "sandbox.log")
 }

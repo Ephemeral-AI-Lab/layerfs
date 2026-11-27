@@ -6,22 +6,22 @@
 //! read ([`unread`]: a field missing or of another shape, or a native
 //! record on Linux) is refused with the records-only `sandbox remove` as
 //! its fix, and that remove takes it without a signal (RV3 FAIL 2, 3).
-use crate::host::Host;
-use crate::record::DaemonRecord;
 #[cfg(target_os = "linux")]
-use crate::runtime::NAMESPACES;
-use crate::runtime::NATIVE;
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
-use layerfs_os::process::LocalProcess;
-use layerfs_home::helpers;
-use layerfs_home::outcome::shell_word;
-use layerfs_home::outcome::{failed, refused, with_fix};
+use crate::backend::select::NAMESPACES;
+use crate::backend::select::NATIVE;
+use crate::host::Host;
 #[cfg(target_os = "macos")]
 use crate::process;
+use crate::record::DaemonRecord;
 use crate::LocalRecord;
 #[cfg(target_os = "linux")]
 use crate::SandboxRecord;
 use crate::{ContainerId, Sandbox, WireFailure};
+use layerfs_home::helpers;
+use layerfs_home::outcome::shell_word;
+use layerfs_home::outcome::{failed, refused, with_fix};
+use layerfs_os::process::LocalProcess;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::PathBuf;
 
 /// A daemon record's runtime id, required.
@@ -150,7 +150,7 @@ pub fn unread(value: &DaemonRecord) -> Option<String> {
     if runtime == NATIVE && !cfg!(target_os = "macos") {
         return Some("a native Sandbox, which this build runs on macOS only".to_owned());
     }
-    if runtime != NATIVE && runtime != crate::runtime::NAMESPACES {
+    if runtime != NATIVE && runtime != crate::backend::select::NAMESPACES {
         return None;
     }
     let checked = || -> Result<()> {
@@ -163,7 +163,7 @@ pub fn unread(value: &DaemonRecord) -> Option<String> {
             .ok_or_else(|| refused("InvalidInput", "local Sandbox record port"))?;
         u16::try_from(port).map_err(failed)?;
         value.labels()?;
-        if runtime == crate::runtime::NAMESPACES {
+        if runtime == crate::backend::select::NAMESPACES {
             let image = helpers::required(value.image(), "image")?;
             crate::Image::parse(image).map_err(failed)?;
         }
@@ -316,16 +316,15 @@ fn namespaces(
     };
     let root = (directory.parent())
         .ok_or_else(|| refused("InvalidInput", "namespaces Sandbox directory"))?;
-    let provider =
-        crate::namespaces::NamespaceProvider::new(root).map_err(|error| {
-            refused(
-                "Unsupported",
-                format!(
-                    "namespaces Sandbox at {} cannot run on this host: {error}",
-                    directory.display()
-                ),
-            )
-        })?;
+    let provider = crate::namespaces::NamespaceProvider::new(root).map_err(|error| {
+        refused(
+            "Unsupported",
+            format!(
+                "namespaces Sandbox at {} cannot run on this host: {error}",
+                directory.display()
+            ),
+        )
+    })?;
     Ok(Recorded::Namespaces(
         crate::Runtime::Namespaces(provider),
         ContainerId::parse(container(value)?).map_err(failed)?,

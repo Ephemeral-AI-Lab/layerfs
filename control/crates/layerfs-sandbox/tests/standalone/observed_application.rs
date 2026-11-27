@@ -6,10 +6,17 @@ mod daemon_binary;
 #[allow(dead_code)]
 #[path = "../../../../../engine/crates/layerfs-daemon/tests/support/host_install.rs"]
 mod support;
-use layerfs_protocol::{provision::{install::{Reply, Request}, daemon_setup::{DaemonLimits, DaemonSetup}, manifest::StoreManifest}, duplex};
+use layerfs_history::WorkspaceId;
+use layerfs_protocol::daemon::{Reply, Request};
+use layerfs_protocol::{
+    duplex,
+    provision::{
+        daemon_setup::{DaemonLimits, DaemonSetup},
+        manifest::StoreManifest,
+    },
+};
 #[cfg(target_os = "linux")]
 use layerfs_protocol::{DaemonStore, KernelRoute};
-use layerfs_history::WorkspaceId;
 use layerfs_sandbox::internal::Control;
 use std::{
     fs::{self, File},
@@ -29,8 +36,8 @@ use std::{
 fn observed_status(
     control: &mut Control,
     scope: [u8; 32],
-    token: layerfs_protocol::provision::install::WorkspaceToken,
-) -> layerfs_protocol::provision::install::WorkspaceStatus {
+    token: layerfs_protocol::daemon::WorkspaceToken,
+) -> layerfs_protocol::daemon::WorkspaceStatus {
     let request = Request::Observed {
         scope,
         request: Box::new(Request::Status(token)),

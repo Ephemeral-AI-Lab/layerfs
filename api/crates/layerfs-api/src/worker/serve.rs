@@ -39,40 +39,35 @@
 pub use layerfs_store::admin::host_worker::server::serve_host;
 
 pub use super::connection::REQUEST_WAIT;
-use layerfs_protocol::provision::install::SdkValue;
+pub use layerfs_machine::worker::accept::Served;
+use layerfs_machine::worker::accept::{passing, Limited};
 use layerfs_machine::worker::{Hello, HELLO_WAIT};
+use layerfs_protocol::sdk::SdkValue;
 use std::io::Write;
 use std::net::{TcpListener, TcpStream};
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
-
-/// What a worker served before it stopped.
-#[derive(Debug, Default)]
-pub struct Served {
-    /// Requests answered.
-    pub requests: u64,
-}
+use std::time::Duration;
 
 /// How long the worker waits, and how often it logs one kind of failure.
 #[derive(Clone, Copy, Debug)]
-struct Waits {
+pub(crate) struct Waits {
     /// The whole hello: every byte of the secret's frame.
-    hello: Duration,
+    pub(crate) hello: Duration,
     /// The next byte of a request.
-    request: Duration,
+    pub(crate) request: Duration,
     /// One send that makes no progress.
-    write: Duration,
+    pub(crate) write: Duration,
     /// The caller's close, once it has its answer.
-    close: Duration,
+    pub(crate) close: Duration,
     /// Between a failed `accept` and the next.
-    accept_pause: Duration,
+    pub(crate) accept_pause: Duration,
     /// Between two log lines of one kind of accept or thread failure.
-    log_every: Duration,
+    pub(crate) log_every: Duration,
 }
 
 impl Waits {
-    const SHIPPED: Self = Self {
+    pub(crate) const SHIPPED: Self = Self {
         hello: HELLO_WAIT,
         request: REQUEST_WAIT,
         write: REQUEST_WAIT,
@@ -83,20 +78,20 @@ impl Waits {
 }
 
 /// One worker: what every connection of it reads.
-struct Server {
-    secret: String,
+pub(crate) struct Server {
+    pub(crate) secret: String,
     /// Its own state root.
-    root: PathBuf,
+    pub(crate) root: PathBuf,
     /// What it answers every secret with, read once.
-    ready: SdkValue,
+    pub(crate) ready: SdkValue,
     /// When it began to serve, in milliseconds since the epoch.
-    started: i64,
+    pub(crate) started: i64,
     /// This worker process's incarnation: one fresh token per start, which
     /// the mounts it places carry and the host's start reconcile records.
-    incarnation: String,
-    waits: Waits,
+    pub(crate) incarnation: String,
+    pub(crate) waits: Waits,
     #[cfg(feature = "worker-fault")]
-    faults: Arc<super::fault::Faults>,
+    pub(crate) faults: Arc<super::fault::Faults>,
 }
 
 /// One fresh incarnation for a worker no host supplied one to (an older
@@ -169,52 +164,6 @@ pub fn serve_with(
     server.run(&listener)
 }
 
-/// The name of an `accept` failure that says nothing about the listener:
-/// the process or the system is out of descriptors, buffers or memory, or
-/// the peer gave up before it was accepted. `None` for every other failure
-/// (`EBADF`, `EINVAL`, `ENOTSOCK`: the listener is not one), which ends
-/// [`serve`].
-fn passing(error: &std::io::Error) -> Option<&'static str> {
-    match error.raw_os_error()? {
-        libc::EMFILE => Some("EMFILE"),
-        libc::ENFILE => Some("ENFILE"),
-        libc::ENOBUFS => Some("ENOBUFS"),
-        libc::ENOMEM => Some("ENOMEM"),
-        libc::ECONNABORTED => Some("ECONNABORTED"),
-        libc::EINTR => Some("EINTR"),
-        _ => None,
-    }
-}
-
-/// When each kind of failure was last logged, and how many of it were not.
-struct Limited {
-    every: Duration,
-    kinds: Vec<(&'static str, Instant, u64)>,
-}
-
-impl Limited {
-    /// Whether a failure of `kind` is logged now: at most one line of a
-    /// kind in each `every`. `Some` holds how many of that kind went
-    /// unlogged since its last line.
-    fn due(&mut self, kind: &'static str) -> Option<u64> {
-        let now = Instant::now();
-        match self.kinds.iter_mut().find(|(known, ..)| *known == kind) {
-            None => {
-                self.kinds.push((kind, now, 0));
-                Some(0)
-            }
-            Some((_, at, unlogged)) if now.duration_since(*at) >= self.every => {
-                *at = now;
-                Some(std::mem::take(unlogged))
-            }
-            Some((_, _, unlogged)) => {
-                *unlogged += 1;
-                None
-            }
-        }
-    }
-}
-
 impl Server {
     fn new(secret: String, root: PathBuf, supplied: Option<String>) -> Self {
         Self {
@@ -233,7 +182,7 @@ impl Server {
 
     /// One line of the worker's log (its stderr, `worker.log`). It never
     /// holds a request's arguments or a secret.
-    fn log(&self, line: &str) {
+    pub(crate) fn log(&self, line: &str) {
         let _ = writeln!(std::io::stderr(), "layerfs worker: {line}");
         #[cfg(feature = "worker-fault")]
         self.faults.logged(line);

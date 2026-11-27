@@ -1,9 +1,9 @@
 //! `sandbox.create`'s `installed` step repairs an incomplete SQLite project
 //! record (missing `manifest`/`installed`, no `op`) from the local Store file
 //! before launching the daemon (#749).
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::home::{paths, private_dir};
 use layerfs_home::names::StoreName;
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_sandbox::host::{Deploy, Host, Message};
 use layerfs_sandbox::lifecycle;
 use layerfs_store::backup::restored;
@@ -86,7 +86,7 @@ fn sandbox_create_repairs_an_incomplete_sqlite_project_record() {
     // starts one, which is removed again
     match lifecycle::create(&host, None, None) {
         Ok(_) => {
-            lifecycle::close(&host, true, &[]).expect("the started Sandbox is removed");
+            lifecycle::close(&host, true, &[], &NoDrain).expect("the started Sandbox is removed");
         }
         Err(err) => assert_ne!(
             err.code, "NoSuchProject",
@@ -99,4 +99,11 @@ fn sandbox_create_repairs_an_incomplete_sqlite_project_record() {
     discovery::project(Some(&home), Some("shop"), Some("api"))
         .expect("repaired project opens cleanly");
     let _ = std::fs::remove_dir_all(&home);
+}
+
+/// A close here has no mounted Workspace to drain.
+struct NoDrain;
+
+impl layerfs_sandbox::lifecycle::WorkspaceDrain for NoDrain {
+    fn drain(&self, _: &layerfs_sandbox::host::Host, _: &str) {}
 }

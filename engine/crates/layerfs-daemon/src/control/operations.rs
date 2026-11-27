@@ -4,15 +4,20 @@ use super::{
     types::KernelFailure,
     Failure, Service, Success,
 };
-use layerfs_store_service::store::{BindError, BindIntent, BindPhase, BindRequest, BoundWorkspace, CapturedConstruction, CommitError, CommitFailure, CommitOptions, CommitSuccess, NamedBindRequest};
-use layerfs_protocol::provision::install::{Activity, ConflictReport, ControlCode, MergedCommit, MountPlace, Reply, Request, WorkspaceToken};
 use layerfs_content::filesystem::FilesystemRootId;
 use layerfs_content::merge::{Conflict, ConflictKind};
 use layerfs_history::BranchSnapshot;
 use layerfs_overlay::Capture;
+use layerfs_protocol::daemon::{
+    Activity, ConflictReport, ControlCode, MergedCommit, MountPlace, Reply, Request, WorkspaceToken,
+};
 use layerfs_storage::Save;
 use layerfs_store_service::history::lookup::{
     no_branch as missing_branch, no_project as missing_project,
+};
+use layerfs_store_service::store::{
+    BindError, BindIntent, BindPhase, BindRequest, BoundWorkspace, CapturedConstruction,
+    CommitError, CommitFailure, CommitOptions, CommitSuccess, NamedBindRequest,
 };
 use std::sync::Arc;
 /// The reply of a Commit with a known result.
@@ -84,13 +89,13 @@ impl Service {
             // Store calls run in the SDK's process (#352 F-020): one route.
             // Bodies a refused call declared are drained by the connection.
             Request::Sdk(call) => Ok(Success::reply(Reply::SdkRefused(
-                layerfs_protocol::provision::install::SdkRefusal {
+                layerfs_protocol::sdk::SdkRefusal {
                     code: "UnknownMethod".into(),
                     message: format!(
                         "{}: Store calls are not served by the daemon; they run in the SDK's process",
                         call.method
                     ),
-                    detail: layerfs_protocol::provision::install::SdkValue::Null,
+                    detail: layerfs_protocol::sdk::SdkValue::Null,
                 },
             ))),
             Request::Hello(_) => Err(Failure::Rejected(
@@ -98,7 +103,7 @@ impl Service {
                 "daemon Hello requires application startup owner",
             )),
             Request::Mount { workspace, branch } => {
-                layerfs_store_service::telemetry::timed("sandbox.mount.bind", |timing| {
+                crate::telemetry::timed("sandbox.mount.bind", |timing| {
                     let request = BindRequest {
                         workspace: *workspace,
                         branch: *branch,
@@ -110,7 +115,7 @@ impl Service {
                 workspace,
                 branch,
                 place,
-            } => layerfs_store_service::telemetry::timed("sandbox.mount.bind", |timing| {
+            } => crate::telemetry::timed("sandbox.mount.bind", |timing| {
                 let request = BindRequest {
                     workspace: *workspace,
                     branch: *branch,
@@ -121,7 +126,7 @@ impl Service {
                 workspace,
                 project,
                 branch,
-            } => layerfs_store_service::telemetry::timed("sandbox.mount.bind", |timing| {
+            } => crate::telemetry::timed("sandbox.mount.bind", |timing| {
                 let request = NamedBindRequest {
                     workspace: *workspace,
                     project: project.clone(),
@@ -134,7 +139,7 @@ impl Service {
                 project,
                 branch,
                 place,
-            } => layerfs_store_service::telemetry::timed("sandbox.mount.bind", |timing| {
+            } => crate::telemetry::timed("sandbox.mount.bind", |timing| {
                 let request = NamedBindRequest {
                     workspace: *workspace,
                     project: project.clone(),
@@ -156,7 +161,7 @@ impl Service {
                 token,
                 relinquish_unknown,
             } => self.force_unmount(*token, *relinquish_unknown),
-            Request::Attach(token) => layerfs_store_service::telemetry::timed("sandbox.mount.attach", |timing| {
+            Request::Attach(token) => crate::telemetry::timed("sandbox.mount.attach", |timing| {
                 self.attach(*token, timing)
             }),
             Request::Locate(workspace) => self.locate(*workspace),
@@ -203,7 +208,7 @@ impl Service {
             }
             entries.insert(workspace, Entry::Binding);
         }
-        let bound = match layerfs_store_service::telemetry::phase(timing, "store.bind", || match intent {
+        let bound = match crate::telemetry::phase(timing, "store.bind", || match intent {
             BindIntent::Id(request) => self.store.bind_placed(self.owner.clone(), request, place),
             BindIntent::Named(request) => {
                 self.store
@@ -445,7 +450,10 @@ impl Service {
     pub(super) fn job<T>(
         &self,
         route: layerfs_vfs::Route,
-        command: impl FnOnce(&layerfs_store_service::OwnerClient, layerfs_vfs::Route) -> Result<T, layerfs_store_service::OwnerError>
+        command: impl FnOnce(
+                &layerfs_store_service::OwnerClient,
+                layerfs_vfs::Route,
+            ) -> Result<T, layerfs_store_service::OwnerError>
             + Send,
     ) -> Result<T, Failure> {
         command(&self.owner, route).map_err(Failure::Owner)

@@ -8,13 +8,13 @@
 //! SQLite Store file under a file name; LayerFS never opens SQLite over the
 //! network. Each request is sent once; nothing is resent after an uncertain
 //! outcome.
-pub mod list;
-pub mod object;
 pub mod heads;
+pub mod list;
 pub mod load;
+pub mod object;
 
-pub use list::{list_stores, Copy};
-pub use object::Expected;
-pub use heads::{heads, HEADS};
 pub use super::bucket::registry::{store_object, Provider, STORE_FILE};
+pub use heads::{heads, HEADS};
+pub use list::{list_stores, Copy};
 pub use load::{load, Loaded, PullFailure};
+pub use object::Expected;

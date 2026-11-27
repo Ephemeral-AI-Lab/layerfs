@@ -12,8 +12,8 @@
 //! PostgreSQL write. A streamed PostgreSQL write comes in on the write
 //! endpoint and waits for its slot in the write lane (`write.rs`).
 use super::server::{log, peer_gone, Activity, Endpoint, HostServer, Pending, Served, POSTGRES};
-use layerfs_protocol::provision::install::SdkValue;
 use crate::postgresql::pool::{self, Kind, Reservation};
+use layerfs_protocol::sdk::SdkValue;
 use std::os::unix::net::UnixStream;
 
 /// Where a PostgreSQL call went.
@@ -111,10 +111,7 @@ impl HostServer {
     /// containers and 45 fields and commas (a write's 7 envelope fields and
     /// 12 named ones, all scalar; a read's 6 and 8), which bounds the
     /// lane's decoded memory (workers-and-reach.md, per-lane table).
-    pub(in layerfs_api::worker::serve) fn lane_request(
-        &self,
-        request: SdkValue,
-    ) -> Result<SdkValue, SdkValue> {
+    pub(super) fn lane_request(&self, request: SdkValue) -> Result<SdkValue, SdkValue> {
         let identified =
             (request.get_text("request_id")).is_some_and(|id| (1..=128).contains(&id.len()));
         if !identified || self.runnable(&request).is_none() {
@@ -166,7 +163,7 @@ impl HostServer {
                 pool::hold(slot);
             }
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                layerfs_api::worker::connection::serve_host_connection(
+                super::connection::serve_host_connection(
                     self,
                     &stream,
                     Endpoint::Ordinary,
@@ -207,7 +204,7 @@ impl HostServer {
                         POSTGRES.slots
                     ),
                 );
-                let refusal = layerfs_protocol::provision::install::SdkRefusal {
+                let refusal = layerfs_protocol::sdk::SdkRefusal {
                     detail: SdkValue::map([
                         ("state", SdkValue::text("postgresql-reads-full")),
                         ("reads", SdkValue::Int(POSTGRES.slots as i64)),
@@ -215,7 +212,7 @@ impl HostServer {
                     ..refusal
                 };
                 let answered =
-                    layerfs_api::worker::connection::refuse_host_request(self, &open, request, refusal);
+                    super::connection::refuse_host_request(self, &open, request, refusal);
                 (Some(open), Ok(Served::Answered(answered)))
             }
             HandOver::Queued => (None, Ok(Served::HandedOver)),

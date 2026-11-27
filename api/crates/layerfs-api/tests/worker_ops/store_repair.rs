@@ -7,13 +7,13 @@
 #[path = "../support/worker_store.rs"]
 mod worker_store;
 
-use layerfs_protocol::provision::install::SdkValue;
-use layerfs_protocol::sdk::hex;
-use layerfs_store::admin::with_users::RepairRequest;
 use layerfs_history::records::{GcIntent, GcIntentKind, GcScopeKind};
 use layerfs_history::{HistoryName, NamedSnapshot, PlaceAuthority};
 use layerfs_home::names::StoreName;
 use layerfs_machine::worker;
+use layerfs_protocol::sdk::hex;
+use layerfs_protocol::sdk::SdkValue;
+use layerfs_store::admin::with_users::RepairRequest;
 use layerfs_store::open_args::OpenArgs;
 use layerfs_store::project::add::{add_project, ProjectAdd};
 use layerfs_store::record::StoreRecord;
@@ -213,13 +213,17 @@ fn repair_previews_settles_and_releases_through_the_worker() {
 
     // Release without settle is refused; a settle of a holder that still
     // looks live is refused `InUse` unless forced, and marks the one op.
-    let refused =
-        layerfs_store::admin::with_users::repair(&placed.home, &request("release", Some(0x21), false))
-            .unwrap_err();
+    let refused = layerfs_store::admin::with_users::repair(
+        &placed.home,
+        &request("release", Some(0x21), false),
+    )
+    .unwrap_err();
     assert_eq!(refused.code, "Conflict", "{refused:?}");
-    let refused =
-        layerfs_store::admin::with_users::repair(&placed.home, &request("settle", Some(0x21), false))
-            .unwrap_err();
+    let refused = layerfs_store::admin::with_users::repair(
+        &placed.home,
+        &request("settle", Some(0x21), false),
+    )
+    .unwrap_err();
     assert_eq!(refused.code, "InUse", "{refused:?}");
     assert!(
         refused
@@ -300,9 +304,11 @@ fn the_worker_judges_with_the_sent_view_and_pages_the_audit_by_key() {
         liveness(&placed),
         (Some("live".to_owned()), Some(SdkValue::Bool(false)))
     );
-    let refused =
-        layerfs_store::admin::with_users::repair(&placed.home, &request("settle", Some(0x21), false))
-            .unwrap_err();
+    let refused = layerfs_store::admin::with_users::repair(
+        &placed.home,
+        &request("settle", Some(0x21), false),
+    )
+    .unwrap_err();
     assert_eq!(refused.code, "InUse", "{refused:?}");
 
     // The host home now holds the tombstone of generation `generation:1` of

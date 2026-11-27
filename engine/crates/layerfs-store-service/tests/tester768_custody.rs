@@ -26,9 +26,9 @@ mod tester768;
 
 use adversary::{tree_of, wait_until, Node, Service, TestStore};
 use fault_proxy::{Fault, FaultProxy};
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_history::{BranchId, HistoryError};
 use layerfs_persistence::{CompactRequest, Handles};
+use layerfs_protocol::sdk::SdkValue;
 use std::time::{Duration, Instant};
 use tester768::*;
 
@@ -97,7 +97,7 @@ fn compact(store: &TestStore, op: u8) -> String {
     }
 }
 
-fn code(answer: &Result<SdkValue, layerfs_protocol::provision::install::SdkRefusal>) -> String {
+fn code(answer: &Result<SdkValue, layerfs_protocol::sdk::SdkRefusal>) -> String {
     match answer {
         Ok(_) => "Ok".into(),
         Err(refusal) => refusal.code.clone(),

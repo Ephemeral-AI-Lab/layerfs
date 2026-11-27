@@ -314,9 +314,8 @@ fn free(root: &Path, folder: &Path, records: &[Recorded]) -> bool {
     }
     let mut private_root = folder.as_os_str().to_owned();
     private_root.push(".root");
-    let unmounted = |point: &Path| {
-        crate::spawn::mounts_under(point).is_ok_and(|mounts| mounts.is_empty())
-    };
+    let unmounted =
+        |point: &Path| crate::spawn::mounts_under(point).is_ok_and(|mounts| mounts.is_empty());
     unmounted(folder) && unmounted(Path::new(&private_root))
 }
 

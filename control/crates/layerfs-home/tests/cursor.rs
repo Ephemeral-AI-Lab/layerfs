@@ -1,8 +1,8 @@
 //! The one cursor of the call surface (2.0): it carries its call, its place
 //! and the filters and pins of the call that made it, and is refused for
 //! another call, for a filter given differently and when it is no cursor.
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::cursor::{limit, make, resume, DEFAULT_LIMIT, MAX_LIMIT};
+use layerfs_protocol::sdk::SdkValue;
 
 fn t(text: &str) -> SdkValue {
     SdkValue::text(text)

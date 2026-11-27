@@ -17,20 +17,20 @@
 //!   read by its own path. In a home (`native`) there is no such view: the
 //!   machine is its owner's own computer, and a path outside the LayerFS
 //!   folders is `InvalidInput`.
-use super::super::files::walk::{answer, FilesRequest, Rules, Scope};
 use super::super::files::roots;
-use layerfs_sandbox::deploy::Side;
-use layerfs_protocol::provision::install::SdkValue;
+use super::super::files::walk::{answer, FilesRequest, Rules, Scope};
 use layerfs_home::home::with_field;
 use layerfs_home::names::MachineName;
 use layerfs_home::outcome::{refused, Outcome};
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_sandbox::backend::confined::View;
+use layerfs_sandbox::deploy::Side;
 use std::path::{Path, PathBuf};
 
 /// The call this view serves.
 const CALL: &str = "machine.files";
 /// The inspect kind of [`machine_files`].
-pub(super) const KIND: &str = "machine_files";
+pub(crate) const KIND: &str = "machine_files";
 /// The entries of a machine's `/` that are the kernel's own.
 const SYSTEM: [&str; 4] = ["proc", "sys", "dev", "run"];
 
@@ -61,7 +61,7 @@ pub fn machine_files(home: &Path, machine: &MachineName, request: &FilesRequest)
             args = with_field(args, "workspaces", SdkValue::List(sent));
         }
     }
-    layerfs_sandbox::inspect::route::ask(home, name, KIND, args)
+    crate::ask(home, name, KIND, args)
 }
 
 /// [`machine_files`] on the side that holds the machine's data. `spent`

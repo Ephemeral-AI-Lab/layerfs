@@ -1,8 +1,8 @@
 //! Which failed steps end their request alone as a stale serial: only the
 //! engine's own Stale answer, never a wrapper that merely carries one.
 use layerfs_content::ContentError;
-use layerfs_vfs::ports::mount::{stale, ServiceError};
 use layerfs_overlay::{KernelObservation, OverlayError};
+use layerfs_vfs::ports::mount::{stale, ServiceError};
 use layerfs_vfs::{KernelReadDecision, KernelReadFailure, WorkspaceError};
 use std::sync::Arc;
 

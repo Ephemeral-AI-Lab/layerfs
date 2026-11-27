@@ -13,10 +13,10 @@
 //! test starts stands for a live daemon. A mount point is not made (that
 //! needs root).
 #![cfg(any(target_os = "linux", target_os = "macos"))]
-use layerfs_protocol::provision::install::SdkValue;
-use layerfs_os::process::LocalProcess;
 use layerfs_home::home::{self, paths, write_record};
 use layerfs_machine::worker::{self, Endpoint};
+use layerfs_os::process::LocalProcess;
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_sandbox::record::{DaemonRecord, Local};
 use layerfs_sandbox::sweep::{run_root, Swept};
 use std::net::TcpListener;

@@ -3,9 +3,9 @@
 //! and under the one-attempt rule a part refused `Busy` would fail the
 //! Init. Checked against the worker itself; the caller's side, with its
 //! parts held in flight, is `layerfs-api` `project_init_worker`.
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::home::paths;
 use layerfs_machine::worker;
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_store::project::frame::{StageFrame, StageStep};
 
 #[path = "../support/worker_store.rs"]

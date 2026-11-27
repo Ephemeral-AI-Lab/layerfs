@@ -6,9 +6,14 @@
 //! refusals with stable codes.
 use super::workspace::{CommitReply, MountedWorkspace, Unmounted};
 use crate::{OperationCause, OperationFailure};
-use layerfs_protocol::provision::install::{AbortDisposition, DetachDisposition, ForcedOutcome, SdkRefusal, SdkValue, TeardownStage, WorkspaceStatus};
-use layerfs_protocol::sdk::{commit_value, conflicts, conflicts_truncated, hex, lww, lww_truncated};
 use layerfs_history::{CommitId, CommitOutcome};
+use layerfs_protocol::daemon::{
+    AbortDisposition, DetachDisposition, ForcedOutcome, TeardownStage, WorkspaceStatus,
+};
+use layerfs_protocol::sdk::{
+    commit_value, conflicts, conflicts_truncated, hex, lww, lww_truncated,
+};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 
 fn head(id: Option<CommitId>) -> SdkValue {
     SdkValue::opt_text(id.map(|id| hex(id.as_slice())))
@@ -151,8 +156,8 @@ pub const ATTEMPTED: &str = "attempted";
 /// Sandbox daemon of another LayerFS build): `Failed` for a read, which
 /// changed nothing; `Unknown` for any other request, whose effect is not
 /// known. Its fix is the doctor that names the daemon's build.
-fn unreadable(request: &layerfs_protocol::provision::install::Request) -> SdkRefusal {
-    use layerfs_protocol::provision::install::Request;
+fn unreadable(request: &layerfs_protocol::daemon::Request) -> SdkRefusal {
+    use layerfs_protocol::daemon::Request;
     let read = matches!(
         request,
         Request::Status(_) | Request::Hello(_) | Request::Sdk(_)

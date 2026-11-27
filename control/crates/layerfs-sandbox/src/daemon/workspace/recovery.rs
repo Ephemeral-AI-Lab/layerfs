@@ -1,7 +1,9 @@
 //! Original component controls and read-only lost-reply recovery.
 use crate::{BoundWorkspace, OperationFailure, WorkspaceApi};
-use layerfs_protocol::provision::install::{CleanupObservation, ReadyMount, Reply, Request, WorkspaceStatus, WorkspaceToken};
 use layerfs_history::{BranchId, WorkspaceId};
+use layerfs_protocol::daemon::{
+    CleanupObservation, ReadyMount, Reply, Request, WorkspaceStatus, WorkspaceToken,
+};
 impl WorkspaceApi<'_> {
     /// Prepares one logical Store/engine binding once. This is not a kernel mount.
     /// Lost delivery keeps the original request/unknown, with no automatic rebind.

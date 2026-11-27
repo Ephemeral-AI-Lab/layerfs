@@ -6,7 +6,7 @@
 use crate::banner::paint;
 use crate::output;
 use layerfs_api::Call;
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use std::io::{self, Write};
 
 /// Prints `value`, the answer of `call` given as `words`, readably: the

@@ -15,12 +15,12 @@ use crate::backup::record::StoreLink;
 use crate::intent;
 use crate::record::{StoreRecord, StoreRef};
 use crate::state;
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::home::{observed, paths};
 use layerfs_home::outcome::{failed, Outcome};
 use layerfs_home::state::State;
 use layerfs_home::time;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;

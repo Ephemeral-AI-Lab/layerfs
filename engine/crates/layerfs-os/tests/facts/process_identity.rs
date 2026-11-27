@@ -1,4 +1,4 @@
-//! The local process identity (`layerfs_bridge::process`, moved from the
+//! The local process identity (`layerfs_os::process`, moved from the
 //! Sandbox driver by layerfs-project#112) on this kernel: this process is
 //! observed with its start time and boot, another start time or boot is
 //! another process, a record without a boot is matched by id and start and

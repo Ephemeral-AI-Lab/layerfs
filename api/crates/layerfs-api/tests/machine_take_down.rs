@@ -7,7 +7,7 @@
 #![cfg(feature = "machine")]
 #![allow(deprecated)] // nix's flock, as the product uses it
 use layerfs_api::home::{self, paths, read_record, write_record};
-use layerfs_protocol::provision::install::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use std::os::fd::AsRawFd;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -119,7 +119,9 @@ fn a_machine_being_removed_is_used_by_no_call() {
         assert_eq!(code, "Busy", "{name}: {message}");
         assert!(message.contains("machine.remove"), "{message}");
     }
-    let refused = layerfs_machine::with_users::running(&home, "dev").unwrap_err();
+    let refused =
+        layerfs_machine::with_users::running(&home, "dev", &layerfs_sandbox::users::MACHINE)
+            .unwrap_err();
     assert_eq!(refused.code, "Busy", "{}", refused.message);
     // a read answers, probing nothing
     let got = call(&home, "machine.get", &[("machine", t("dev"))]).unwrap();

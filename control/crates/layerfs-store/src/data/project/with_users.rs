@@ -4,25 +4,26 @@
 //! the Sandboxes that use it; and the project reads, which take this
 //! layer's machine state (`project.get`, `project.list`). The other
 //! `project` calls are `layerfs-store`'s own.
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
+use crate::project::op::{self, DELETE, INIT};
+use crate::project::read::{self, ProjectList};
+use crate::project::record::ProjectRecord;
+use crate::StoreUsers;
 use layerfs_home::events::Events;
 use layerfs_home::names::ProjectRef;
 use layerfs_home::op::Standing;
 use layerfs_home::outcome::Outcome;
-use crate::project::op::{self, DELETE, INIT};
-use crate::project::read::{self, ProjectList};
-use crate::project::record::ProjectRecord;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 
 /// `project.get(project)`: one project, its state and main's head; its
 /// Store's machine state is the inventory's.
-pub fn get(home: &Path, project: &ProjectRef) -> Outcome {
-    read::get(home, project, &crate::admin::with_users::machine_state)
+pub fn get(home: &Path, project: &ProjectRef, users: &StoreUsers) -> Outcome {
+    read::get(home, project, &users.machine_state)
 }
 
 /// `project.list({ store, limit, cursor, with: stats })`.
-pub fn list(home: &Path, request: &ProjectList) -> Outcome {
-    read::list(home, request, &crate::admin::with_users::machine_state)
+pub fn list(home: &Path, request: &ProjectList, users: &StoreUsers) -> Outcome {
+    read::list(home, request, &users.machine_state)
 }
 
 /// `project.delete(project)`: retires the project in its Store and removes
@@ -39,19 +40,19 @@ pub fn list(home: &Path, request: &ProjectList) -> Outcome {
 /// v20). Answers `{ ok, home_entry_kept,
 /// outcome, deleted_at }`; a home entry it could not remove is kept for the
 /// next run, the project being retired already.
-pub fn delete(home: &Path, events: &mut Events<'_>, project: &ProjectRef) -> Outcome {
+pub fn delete(
+    home: &Path,
+    events: &mut Events<'_>,
+    project: &ProjectRef,
+    users: &StoreUsers,
+) -> Outcome {
     let (store, name) = (project.store.as_str(), project.project.as_str());
     let prior = ProjectRecord::read(home, store, name)?.and_then(|record| record.op());
     let left_init = prior
         .as_ref()
         .is_some_and(|op| op.name() == INIT && op.standing() != Standing::Running);
     op::begin(home, store, name, DELETE, "mark")?;
-    let outcome = match crate::project::delete::delete(
-        home,
-        events,
-        project,
-        crate::admin::with_users::RELATED,
-    ) {
+    let outcome = match crate::project::delete::delete(home, events, project, users.related) {
         Err(refusal) if refusal.code == "NoSuchProject" => {
             // a list that cannot be read leaves the Store's answer and
             // the entry as they are

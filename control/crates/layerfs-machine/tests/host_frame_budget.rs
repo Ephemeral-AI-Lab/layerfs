@@ -2,9 +2,9 @@
 //! the worker's check of the change frame it decodes, `{"change": value}`
 //! printed, at and past each bound, so a list the CLI streams is never
 //! refused for size.
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_home::json;
 use layerfs_machine::worker::{value_within_budget, within_budget};
+use layerfs_protocol::sdk::SdkValue;
 
 /// The change frame's JSON text the worker checks.
 fn framed(value: &SdkValue) -> String {

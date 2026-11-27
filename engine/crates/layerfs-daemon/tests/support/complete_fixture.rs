@@ -1,7 +1,11 @@
 //! Kernel source creation and authenticated installation, retaining failures.
 use super::{bytes, support};
 use layerfs_content::filesystem::attributes::PortableMetadata;
-use {layerfs_store_service::bootstrap::{open_store_observed, OpenedStore}, layerfs_daemon::{install::receive_install, install_types::StoreSettings}};
+use layerfs_daemon::{
+    bootstrap::{open_store_observed, OpenedStore},
+    install::receive_install,
+    install_types::StoreSettings,
+};
 use layerfs_history::{BranchId, HistoryCatalogConfig, HistoryName, LayerStackId};
 use layerfs_persistence::{PersistenceConfig, SqlitePersistenceProfile};
 use layerfs_project::store::{InitRequest, ProjectApi};

@@ -6,12 +6,6 @@ pub(crate) struct NamespacesBackend;
 pub(crate) static ADAPTER: NamespacesBackend = NamespacesBackend;
 
 impl BackendAdapter for NamespacesBackend {
-    fn stored_name(&self) -> &'static str {
-        "namespaces"
-    }
-    fn description(&self) -> &'static str {
-        "Sandboxes run in Linux namespaces and a cgroup"
-    }
     /// A Sandbox owns its mount, PID and IPC namespaces, its cgroup and its
     /// commands' network namespace on the kernel that runs it: a VM's on
     /// `lima` and `apple-container`, the host's own on a Linux host's

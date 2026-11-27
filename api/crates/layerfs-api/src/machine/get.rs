@@ -6,11 +6,11 @@ use crate::calls::table::{a, call, Call};
 use crate::calls::Context;
 use crate::calls::{Form, Section};
 #[cfg(feature = "machine")]
-use layerfs_protocol::provision::install::SdkValue;
-#[cfg(feature = "machine")]
 use layerfs_home::names::MachineName;
 #[cfg(feature = "machine")]
 use layerfs_home::outcome::Outcome;
+#[cfg(feature = "machine")]
+use layerfs_protocol::sdk::SdkValue;
 
 /// Its answer: the platform and the state with its companion, then what
 /// the record holds and what is on the machine.
@@ -66,7 +66,12 @@ pub(crate) const CALL: Call = call(
 #[cfg(feature = "machine")]
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let machine = MachineName::parse(args.get_text("machine").unwrap_or(""))?;
-    layerfs_machine::with_users::get(&context.home, &machine, context.with("live"))
+    layerfs_machine::with_users::get(
+        &context.home,
+        &machine,
+        context.with("live"),
+        &layerfs_sandbox::users::MACHINE,
+    )
 }
 
 // without the `machine` feature (the guest worker's build) it is

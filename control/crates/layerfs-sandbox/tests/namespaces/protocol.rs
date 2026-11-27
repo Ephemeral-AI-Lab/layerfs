@@ -1,7 +1,10 @@
 //! The namespace backend's formats and records: the init stage's spec, the
 //! recorded facts a reopen reads, and the refusals that keep one runtime's
 //! records from another. Nothing here starts a process.
-use layerfs_sandbox::{Bind, HelperSpec, Image, LocalRecord, NamespaceRecord, RuntimeError, SandboxRecord, RESOLVER_FILES};
+use layerfs_sandbox::{
+    Bind, HelperSpec, Image, LocalRecord, NamespaceRecord, RuntimeError, SandboxRecord,
+    RESOLVER_FILES,
+};
 use std::path::{Path, PathBuf};
 
 /// The image digest these records name.
@@ -137,7 +140,7 @@ fn the_daemon_starts_through_the_runtime_loader_when_the_spec_has_one() {
         ..spec()
     };
     let command = with.daemon_command().unwrap();
-    let loader = layerfs_sandbox::backend::namespaces::linux::runtime::LOADER.unwrap();
+    let loader = layerfs_os::runtime::LOADER.unwrap();
     assert_eq!(
         line(&command),
         [

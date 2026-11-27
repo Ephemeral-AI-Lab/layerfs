@@ -10,8 +10,8 @@
 //! and a hard deadline ([`HARD`]), after which its caller is answered
 //! `Unavailable` and the helper is left to end by itself, still holding
 //! its permit.
-use layerfs_protocol::provision::install::SdkRefusal;
 use layerfs_home::outcome::{refused, Outcome};
+use layerfs_protocol::sdk::SdkRefusal;
 use layerfs_store::place::{self, Executor};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::Path;

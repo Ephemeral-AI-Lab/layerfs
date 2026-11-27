@@ -3,18 +3,18 @@
 //! `exec` runs `bash -c <command>` as the Sandbox's command identity in the
 //! Workspace directory and returns the exit code and output when it ends; the
 //! daemon is not involved. A local Sandbox
-//! (`layerfs_sandbox_backend::Sandbox::Process`) runs the same commands as
+//! (`layerfs_sandbox::Sandbox::Process`) runs the same commands as
 //! processes of this kernel. Each command has an exec id, a stop handle and,
 //! on the side that keeps its Workspace's record, a record while it runs
 //! (`super::record`), through which another process cancels it.
+use layerfs_home::helpers::required;
+use layerfs_home::outcome::{refused, Outcome};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_sandbox::exec::id::ExecId;
 use layerfs_sandbox::exec::record::{ExecRecord, Running};
 use layerfs_sandbox::host::Host;
 use layerfs_sandbox::output::{Place, Spool};
 use layerfs_sandbox::registry::{sandbox, SandboxState};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
-use layerfs_home::helpers::required;
-use layerfs_home::outcome::{refused, Outcome};
 use layerfs_sandbox::{ExecSlot, Stop};
 
 /// One exec as a host operation carries it.
@@ -47,7 +47,7 @@ pub struct Exec<'a> {
 /// `place`. Its home is the Sandbox's scratch directory, since the command
 /// identity has no account there; the caller's variables come after it,
 /// so a `HOME` of theirs wins. While this thread's steps are timed, so are
-/// the runtime's (`layerfs_sandbox_backend::trace`), and `command` is the
+/// the runtime's (`layerfs_sandbox::trace`), and `command` is the
 /// whole run.
 fn run(
     state: &SandboxState,
@@ -60,9 +60,12 @@ fn run(
     if stepped {
         layerfs_sandbox::trace::begin();
     }
-    let mut environment = vec![format!("HOME={}", layerfs_sandbox::runtime::scratch(runtime))];
+    let mut environment = vec![format!(
+        "HOME={}",
+        layerfs_sandbox::backend::select::scratch(runtime)
+    )];
     environment.extend(env.iter().cloned());
-    let ran = layerfs_sandbox::runtime::run(
+    let ran = layerfs_sandbox::backend::select::run(
         (&state.id, runtime),
         state.identity,
         (arguments, environment, stdin.map(<[u8]>::to_vec)),
@@ -154,11 +157,14 @@ pub fn exec(host: &Host, exec: &Exec<'_>) -> Outcome {
     let start = start_folder(&directory, exec.cwd)?;
     // a Sandbox with no runtime is refused before any record is made
     let runtime = state.runtime()?;
-    let place =
-        layerfs_sandbox::output::folder(&layerfs_sandbox::runtime::scratch(runtime), &workspace).map(|folder| Place {
-            folder,
-            exec: id.to_string(),
-        });
+    let place = layerfs_sandbox::output::folder(
+        &layerfs_sandbox::backend::select::scratch(runtime),
+        &workspace,
+    )
+    .map(|folder| Place {
+        folder,
+        exec: id.to_string(),
+    });
     let running = match exec.workspace {
         Some(_) => None,
         None => {

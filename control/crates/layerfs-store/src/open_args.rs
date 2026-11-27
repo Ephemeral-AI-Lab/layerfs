@@ -6,9 +6,9 @@
 //! ([`ROUTING`]).
 use crate::postgresql::open::{schema_of, setting_of, url_of};
 use crate::record::{StoreRecord, StoreRef};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::home::paths;
 use layerfs_home::outcome::refused;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::{Path, PathBuf};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;

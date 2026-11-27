@@ -1,8 +1,8 @@
 //! The folder driver and the pieces layout: whole files, ranged reads,
 //! pieces with a manifest, verification and stale-piece cleanup.
-use layerfs_store::backup::providers::local_folder::LocalFolder;
 use layerfs_store::backup::bucket::pieces::{self, piece_name, Manifest, Piece};
 use layerfs_store::backup::bucket::{Driver, Limits, Metadata, RemoteError, Span};
+use layerfs_store::backup::providers::local_folder::LocalFolder;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};

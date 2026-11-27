@@ -8,9 +8,10 @@ mod fixture;
 #[path = "support/host_install.rs"]
 mod support;
 
-use layerfs_protocol::provision::install::{MountPlace, Reply, Request, SdkValue, WorkspaceToken};
 use layerfs_history::records::GcScopeKind;
 use layerfs_history::{BranchId, ForkRequest, ForkSource, HistoryName, LayerStackId, WorkspaceId};
+use layerfs_protocol::daemon::{MountPlace, Reply, Request, WorkspaceToken};
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_store_service::history::{lookup, removal};
 
 /// The fixture's Store with a `work` Branch forked from the project's head.
@@ -72,10 +73,12 @@ fn bind_named(f: &fixture::Fixture, tag: u8) -> WorkspaceToken {
 fn unmount(f: &fixture::Fixture, token: WorkspaceToken) {
     let reply = f
         .service
-        .execute_control(&Request::Unmount(layerfs_protocol::provision::install::UnmountControl {
-            token,
-            discard: true,
-        }))
+        .execute_control(&Request::Unmount(
+            layerfs_protocol::daemon::UnmountControl {
+                token,
+                discard: true,
+            },
+        ))
         .unwrap()
         .reply;
     assert_eq!(reply, Reply::Unmounted(token));

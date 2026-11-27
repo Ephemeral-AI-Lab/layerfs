@@ -7,11 +7,11 @@
 //! URL. Each test creates and drops its own database. Without the variable
 //! it reports NOT_RUN. The sessions are process-wide: run with
 //! `--test-threads 1`.
-use layerfs_protocol::provision::install::SdkValue;
 use layerfs_history::HistoryCatalogConfig;
 use layerfs_home::home;
 use layerfs_home::names::ProjectRef;
 use layerfs_persistence::{PostgresHandles, PostgresSelection};
+use layerfs_protocol::sdk::SdkValue;
 use layerfs_storage::StoragePolicy;
 use layerfs_store::open_args::OpenArgs;
 use layerfs_store::postgresql::pool;
@@ -503,7 +503,7 @@ fn an_upgrade_renews_the_login_revision() {
     pool::close_idle(Duration::ZERO);
 }
 
-fn idle(_: &std::path::Path, _: &str) -> Result<(), layerfs_protocol::provision::install::SdkRefusal> {
+fn idle(_: &std::path::Path, _: &str) -> Result<(), layerfs_protocol::sdk::SdkRefusal> {
     Ok(())
 }
 

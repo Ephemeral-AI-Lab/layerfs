@@ -59,8 +59,8 @@ fn macos_init_handoff_to_linux_daemon_has_no_host_data_path() {
 #[test]
 #[ignore = "external daemon role; invoked explicitly by the macOS handoff proof"]
 fn linux_daemon_install_role() {
-    use layerfs_protocol::duplex;
     use layerfs_daemon::{install::receive_install, install_types::StoreSettings};
+    use layerfs_protocol::duplex;
     use std::{io::Write, net::TcpListener, path::Path};
     assert_eq!(std::env::var("LAYERFS_INSTALL_CHILD").as_deref(), Ok("1"));
     let listener = TcpListener::bind("0.0.0.0:43210").unwrap();

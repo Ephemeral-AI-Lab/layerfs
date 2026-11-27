@@ -1,5 +1,9 @@
 //! Reuse the typed History vocabulary for bounded control results.
-use crate::{provision::install::{ControlError, WorkspaceToken}, wire::{Reader, Writer}};
+use crate::{
+    daemon::WorkspaceToken,
+    provision::install::ControlError,
+    wire::{Reader, Writer},
+};
 use layerfs_content::ObjectId;
 use layerfs_history::{
     error::MovedState, BranchId, BranchRecord, BranchSnapshot, CommitId, CommitMeta, CommitOutcome,

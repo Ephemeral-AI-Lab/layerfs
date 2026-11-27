@@ -16,7 +16,16 @@
 #[path = "support/host_install.rs"]
 mod host;
 
-use layerfs_protocol::{provision::{install::{Answer, Call, CapacityModel, ControlCode, DaemonPhase, HelloRequest, Reply, Request, SdkCall, SdkValue, OPERATION, RECLAIM}, daemon_setup::{DaemonLimits, DaemonSetup}}, duplex::{self, ChannelError, Connection}, DaemonStore, KernelRoute};
+use layerfs_protocol::daemon::{
+    Answer, Call, CapacityModel, ControlCode, DaemonPhase, HelloRequest, Reply, Request, OPERATION,
+    RECLAIM,
+};
+use layerfs_protocol::{
+    duplex::{self, ChannelError, Connection},
+    provision::daemon_setup::{DaemonLimits, DaemonSetup},
+    sdk::{SdkCall, SdkValue},
+    DaemonStore, KernelRoute,
+};
 use std::{
     fs::{self, File},
     io::{BufRead, BufReader, Read},
@@ -299,7 +308,10 @@ fn no_vacant_slot_writes_the_capacity_notice() {
         u16::from_be_bytes([framed[0], framed[1]]) as usize,
         layerfs_protocol::duplex::admission::BODY_LEN
     );
-    assert_eq!(&framed[2..2 + 16], layerfs_protocol::duplex::admission::MAGIC);
+    assert_eq!(
+        &framed[2..2 + 16],
+        layerfs_protocol::duplex::admission::MAGIC
+    );
     let notice = layerfs_protocol::duplex::admission::classify(&framed[2..])
         .expect("the body is not a capacity notice");
     // No Store is installed, so the daemon is still starting.
@@ -624,7 +636,10 @@ fn reserved_slot_serves_recovery_and_refuses_everything_else() {
             .reply
         {
             Reply::Refused(refusal) => {
-                assert_eq!(refusal.code, layerfs_protocol::provision::install::ControlCode::Capacity)
+                assert_eq!(
+                    refusal.code,
+                    layerfs_protocol::daemon::ControlCode::Capacity
+                )
             }
             other => panic!("non-recovery request was not refused: {other:?}"),
         }

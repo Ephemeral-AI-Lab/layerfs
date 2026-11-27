@@ -29,12 +29,12 @@
 //! the same budget, holding one frame and that value.
 #![cfg(any(target_os = "macos", target_os = "linux"))]
 use crate::host_write::{header, InputKind};
-use layerfs_protocol::provision::install::{SdkRefusal, SdkValue};
 use layerfs_home::json;
 use layerfs_home::outcome::{refused, Outcome};
 use layerfs_machine::worker::{
     StreamFrame, StreamReader, StreamSender, FRAME_LIMITS, STREAM_KEEPALIVE, STREAM_PIECE,
 };
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_store_service::methods::Source;
 use std::io::{BufRead, BufReader, Read};
 use std::path::Path;
