@@ -1,0 +1,13 @@
+
+running 7 tests
+test blame_stops_at_a_hidden_version_and_refuses_a_hidden_anchor ... ok
+test branch_diff_treats_a_hidden_side_as_absent_on_both_routes ... ok
+test file_diff_reports_hidden_sides_as_removed_added_and_both ... ok
+test grep_omits_hidden_hits_and_refuses_a_hidden_target ... ok
+test one_shot_edit_and_cp_from_a_hidden_path_refuse_removed ... ok
+test paged_list_and_glob_skip_hidden_entries_before_paging ... ok
+test revision_stops_at_a_hidden_version_and_refuses_a_hidden_anchor ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.36s
+
+run_bounded: exit 0 after 1.1 s

@@ -36,8 +36,13 @@ pub enum NamedBindFailure {
     /// the call capacity is full.
     Admission(String),
     /// The bind itself refused: no such project or Branch, a read or a
-    /// later bind step.
-    Bind(Box<BindRefusal>),
+    /// later bind step. `looked_up` is false when it refused before it read
+    /// the project and Branch (its reader did not open), so the caller's
+    /// own lookups still answer first.
+    Bind {
+        refusal: Box<BindRefusal>,
+        looked_up: bool,
+    },
 }
 
 /// Private Workspaces one process's Store calls may hold at once: one per
@@ -235,11 +240,15 @@ impl StoreService {
             project: project.to_owned(),
             branch: branch.to_owned(),
         };
+        let looked_up = std::cell::Cell::new(false);
         let bound = crate::telemetry::phase(timing, "store.bind", || {
-            self.store.bind_named_private(self.owner.clone(), request)
+            (self.store).bind_named_private(self.owner.clone(), request, &looked_up)
         });
         self.bound_or_released(bound)
-            .map_err(|refusal| NamedBindFailure::Bind(Box::new(refusal)))
+            .map_err(|refusal| NamedBindFailure::Bind {
+                refusal: Box::new(refusal),
+                looked_up: looked_up.get(),
+            })
     }
 
     /// Admits one more private Workspace, before any read: refused while

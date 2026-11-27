@@ -1,7 +1,9 @@
 //! Demand reads through current public content APIs, without a base-tree mirror.
 use crate::{CanonicalClient, WorkspaceResult};
 use layerfs_content::filesystem::attributes::PortableMetadata;
-use layerfs_content::filesystem::directory::read::{list_after, lookup_counted, DirectoryReadWork};
+use layerfs_content::filesystem::directory::read::{
+    list_after, lookup_counted, lookup_many as names_in, root_shapes, DirectoryReadWork,
+};
 use layerfs_content::filesystem::inode::{lookup, lookup_many, InodeReadWork, InodeTable};
 use layerfs_content::filesystem::{
     DirectoryListing, DirectoryRoot, FilesystemRead, FilesystemRoot, FilesystemRootId, InodeScope,
@@ -18,6 +20,8 @@ pub(crate) const SIBLING_LENGTHS: usize = 128;
 /// Encoded listing bytes of that window. One row is at most 265 bytes.
 const SIBLING_BYTES: usize = 64 * 1024;
 
+/// A planned name's serial and value, if its directory binds it (#818 W6).
+pub type Planned = Option<(u64, InodeValue)>;
 /// Immutable binding whose identity remains valid across later local installs.
 #[derive(Clone)]
 pub struct BaseView {
@@ -175,6 +179,76 @@ impl BaseView {
     pub fn values(&self, serials: &[u64]) -> ContentResult<Vec<Option<InodeValue>>> {
         let work = &mut InodeReadWork::default();
         lookup_many(self.client.as_ref(), self.table(), serials, work)
+    }
+    /// Serials one planned level's inode wave asks for (#818 W6), as many
+    /// as a listed page's (`PAGE_ROWS`): the caller's names, and the
+    /// children of the directories whose counts the level derives while
+    /// they fit.
+    pub const PLAN_SERIALS: usize = 1_024;
+    /// One level of a planned path walk (#818 W6): the root pages of the
+    /// directories in `wanted` as one grouped demand (`root_shapes`), its
+    /// names looked up in them (a name below a root page descends as
+    /// [`Self::child`] does), and one inode wave for the children found and,
+    /// of each directory whose root page holds all its entries and whose
+    /// child-directory count is not remembered, all its children, whose
+    /// count it then remembers as [`Self::subdirs`] derives it. That is the
+    /// wave a full stat of the directory reads, once for the level. Per
+    /// directory, per name: the child's serial and value, or `None`. The
+    /// reads fill the client's caches; a later lookup gives its own answer.
+    /// At most `MAXIMUM_READ_DEMANDS` directories and
+    /// [`Self::PLAN_SERIALS`] names; a directory's children join the wave
+    /// only while it stays within that bound.
+    pub fn plan_level(
+        &self,
+        wanted: &[(InodeValue, Vec<PathName>)],
+    ) -> ContentResult<Vec<Vec<Planned>>> {
+        let client = self.client.as_ref();
+        let roots: Vec<DirectoryRoot> = wanted
+            .iter()
+            .map(|(directory, _)| DirectoryRoot(directory.content_root))
+            .collect();
+        let shapes = root_shapes(client, &roots)?;
+        let work = &mut DirectoryReadWork::default();
+        let (mut found, mut serials, mut listed) = (Vec::new(), Vec::new(), Vec::new());
+        for (((_, names), root), (level, count)) in wanted.iter().zip(roots).zip(shapes) {
+            let names = names_in(client, root, names, work)?;
+            found.push((serials.len(), names));
+            serials.extend(found[found.len() - 1].1.iter().flatten());
+            let fits = serials.len() as u64 + count <= Self::PLAN_SERIALS as u64;
+            if level != 0 || count == 0 || !fits || client.is_resident() {
+                continue;
+            }
+            if client.directory_count(root.0)?.is_some() {
+                continue;
+            }
+            let page = list_after(client, root, None, count as usize, usize::MAX, work)?;
+            if page.continuation.is_none() && page.entries.len() as u64 == count {
+                listed.push((root.0, serials.len(), page.entries.len()));
+                serials.extend(page.entries.iter().map(|(_, serial)| *serial));
+            }
+        }
+        let values = self.values(&serials)?;
+        for (root, start, length) in listed {
+            let mut count = 0_u64;
+            for value in &values[start..start + length] {
+                let value = value.ok_or(ContentError::InvalidRecord("bound inode is absent"))?;
+                count += u64::from(value.kind == InodeKind::Directory);
+            }
+            client.remember_directory_count(root, count)?;
+        }
+        Ok(found
+            .into_iter()
+            .map(|(start, names)| {
+                let mut next = start;
+                (names.into_iter())
+                    .map(|serial| {
+                        let value = values[next..].first().copied().flatten();
+                        next += usize::from(serial.is_some());
+                        Some((serial?, value?))
+                    })
+                    .collect()
+            })
+            .collect())
     }
     pub fn list(
         &self,

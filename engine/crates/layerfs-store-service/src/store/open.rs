@@ -371,6 +371,12 @@ impl Store {
     pub fn prefill_reader(&self) -> Option<StorageResult<()>> {
         self.readers.prefill()
     }
+    /// Whether the Store's provider pays a round trip per demand and reads
+    /// a grouped demand in one (PostgreSQL): a planned read pays only there
+    /// (#818 W6).
+    pub(crate) fn batched_reads(&self) -> bool {
+        self.writer.batched_chain_reads()
+    }
     pub fn mount_reader(&self, workspace: WorkspaceId) -> Result<(), Arc<PortError>> {
         self.readers.mount(workspace, false)
     }

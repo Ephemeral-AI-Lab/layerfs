@@ -247,35 +247,58 @@ fn workspace_id() -> Result<WorkspaceId, SdkRefusal> {
 
 /// The private Workspace on Branch `branch` of `project`, bound by name
 /// (#818 W2) with the refusals [`resolve`] gives, in its order: a refusal
-/// the call meets before the bind reads (no Workspace key, overlay
-/// maintenance stopped, call capacity full) comes after the lookups, as
-/// before.
+/// the call meets before the bind reads the project and Branch (no
+/// Workspace key, overlay maintenance stopped, call capacity full, a
+/// reader that did not open) comes after the lookups, as before, and is
+/// `Failed` when they pass.
 fn bind_named(
     service: &StoreService,
     project: &str,
     branch: &str,
 ) -> Result<Arc<crate::store::BoundWorkspace>, SdkRefusal> {
-    let looked_up = |refusal: SdkRefusal| {
+    let lookups_first = |refusal: SdkRefusal| {
         let resolved = crate::telemetry::timed("files.resolve", |_| {
             resolve(&service.store, project, Ok(branch))
         });
         resolved.err().unwrap_or(refusal)
     };
-    let id = workspace_id().map_err(looked_up)?;
+    let id = workspace_id().map_err(lookups_first)?;
     let bound = crate::telemetry::timed("files.bind", |timing| {
         service.bind_named(id, project, branch, timing)
     });
     bound.map_err(|failure| match failure {
-        NamedBindFailure::Admission(message) => looked_up(args::failed(message)),
-        NamedBindFailure::Bind(refusal) => match &refusal.error {
-            BindError::NoSuchProject(_) => args::no_project(project),
-            BindError::NoSuchBranch(_) => args::no_branch(branch),
-            BindError::Read(error) if matches!(refusal.phase, BindPhase::Snapshot) => {
-                args::published(error.clone())
-            }
-            _ => args::failed(refusal),
-        },
+        NamedBindFailure::Admission(message) => lookups_first(args::failed(message)),
+        NamedBindFailure::Bind {
+            refusal,
+            looked_up: false,
+        } => lookups_first(args::failed(refusal)),
+        NamedBindFailure::Bind { refusal, .. } => {
+            lookup_answer(&refusal, project, branch).unwrap_or_else(|| args::failed(refusal))
+        }
     })
+}
+
+/// The answer of a named bind's own lookup, as [`resolve`] gives it: no
+/// such project or Branch, or its failed read, also under a cleanup failure
+/// that followed it (the lookup answered first). `None` for a later step.
+fn lookup_answer(
+    refusal: &crate::store::BindRefusal,
+    project: &str,
+    branch: &str,
+) -> Option<SdkRefusal> {
+    let mut error = &refusal.error;
+    while let BindError::Cleanup { original, .. } = error {
+        error = original;
+    }
+    match error {
+        BindError::NoSuchProject(_) => Some(args::no_project(project)),
+        BindError::NoSuchBranch(_) => Some(args::no_branch(branch)),
+        // In phase Snapshot after the lookup began, a read is the lookup's.
+        BindError::Read(error) if matches!(refusal.phase, BindPhase::Snapshot) => {
+            Some(args::published(error.clone()))
+        }
+        _ => None,
+    }
 }
 
 /// Applies `changes` to the private Workspace: how many texts its edits
@@ -330,7 +353,16 @@ fn change(
     let mut mutation = Mutation::new(workspace)?;
     let (mut result, mut replaced) = (Ok(()), 0u64);
     for (index, change) in changes.iter().enumerate() {
-        result = (|| match change.as_ref().map_err(Clone::clone)? {
+        result = (|| {
+            // #818 W6: the next window's paths are planned before its first
+            // change; a failed plan read refuses at that change.
+            if index % super::plan::PLAN_PATHS == 0 {
+                let end = changes.len().min(index + super::plan::PLAN_PATHS);
+                mutation.plan(&changes[index..end])?;
+            }
+            Ok(())
+        })()
+        .and_then(|()| match change.as_ref().map_err(Clone::clone)? {
             Change::Write { path, bytes, mode } => mutation.write(path, bytes, *mode),
             Change::Edit {
                 path,
@@ -363,7 +395,7 @@ fn change(
             // `NoSuchPath` (see the `NotFound` mapping above); unlike
             // `edit`/`cp`-from it does not consult the base view.
             Change::Mv { from, to } => mutation.rename(from, to),
-        })()
+        })
         .map_err(|mut e| {
             if let SdkValue::Map(fields) = &mut e.detail {
                 fields.push(("index".into(), SdkValue::Int(index as i64)));

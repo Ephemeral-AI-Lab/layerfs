@@ -107,6 +107,55 @@ fn scenario(store: &mut Store) {
     opened.stop();
 }
 
+/// A bind that fails before it reads the project and Branch (its reader
+/// does not open: the Store's Workspace readers are all held) still answers
+/// the lookups first, as before W2: `NoSuchProject`, `NoSuchBranch`, and
+/// only then `Failed` with the bind's text, never `Unknown` (M1 review).
+/// SQLite only: holding every reader on PostgreSQL holds `CALLS`
+/// connections of the shared test server.
+#[test]
+fn sqlite_reader_refusal_keeps_the_lookups_first() {
+    use layerfs_history::WorkspaceId;
+    let mut store = Store::sqlite("w2-reader-full");
+    let source = store.dir.join("source");
+    std::fs::create_dir_all(&source).unwrap();
+    std::fs::write(source.join("a.txt"), "a\n").unwrap();
+    store.init(&source, &mut |_, _| {});
+    let opened = store.open("full");
+    rt::fork_work(&opened);
+    let held: Vec<WorkspaceId> = (0..layerfs_store_service::CALLS)
+        .map(|n| WorkspaceId::from_authority([n as u8 + 1; 32]).unwrap())
+        .collect();
+    for workspace in &held {
+        opened.service.store.mount_reader(*workspace).unwrap();
+    }
+    let fields = |project: &str, branch: &str| {
+        vec![
+            ("project", t(project)),
+            ("branch", t(branch)),
+            ("path", t("/a.txt")),
+            ("content", t("new\n")),
+        ]
+    };
+    assert_eq!(
+        refused(&opened, fields("ghost", rt::BRANCH)),
+        pair("NoSuchProject", "project ghost does not exist")
+    );
+    assert_eq!(
+        refused(&opened, fields(rt::PROJECT, "ghost")),
+        pair("NoSuchBranch", "Branch ghost does not exist")
+    );
+    let (code, message) = refused(&opened, fields(rt::PROJECT, rt::BRANCH));
+    assert_eq!(code, "Failed", "{message}");
+    assert!(message.contains("Capacity"), "{message}");
+    for workspace in &held {
+        opened.service.store.close_reader(*workspace).unwrap();
+    }
+    let written = write(&opened, fields(rt::PROJECT, rt::BRANCH)).expect("a write");
+    assert_eq!(written.get_text("kind"), Some("Committed"), "{written:?}");
+    opened.stop();
+}
+
 #[test]
 fn sqlite_named_bind_keeps_the_refusal_order() {
     let mut store = Store::sqlite("w2-named-sqlite");

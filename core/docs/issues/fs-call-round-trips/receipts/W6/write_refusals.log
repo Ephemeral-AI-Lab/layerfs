@@ -1,0 +1,10 @@
+
+running 4 tests
+test a_failed_read_keeps_no_store_call_workspace ... ok
+test a_write_refusal_is_a_plain_sentence ... ok
+test a_write_refusal_names_its_cause ... ok
+test a_write_through_a_non_directory_is_not_directory ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+
+run_bounded: exit 0 after 1.1 s
