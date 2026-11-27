@@ -14,3 +14,15 @@ libproc = { version = "=0.14.11", optional = true }
 nix = { version = "=0.31.3", features = ["resource"], optional = true }
 [target.'cfg(unix)'.dependencies]
 nix = { version = "=0.31.3", features = ["feature", "poll", "fs"], optional = true }
+
+[[test]]
+name = "off_allocations"
+path = "tests/standalone/off_allocations.rs"
+
+[[test]]
+name = "owned_allocations"
+path = "tests/standalone/owned_allocations.rs"
+
+[[test]]
+name = "platform"
+path = "tests/standalone/platform.rs"

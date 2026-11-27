@@ -15,12 +15,12 @@
 //! [`write_json`](crate::timer::TimingReport::write_json).
 
 mod bounded_json;
-mod format;
 mod json;
 mod limits;
 mod recording;
 mod report;
 mod scope;
+pub(crate) mod text;
 pub mod waits;
 
 pub use recording::{MAX_DEPTH, MAX_LABEL_BYTES, MAX_NODES};
