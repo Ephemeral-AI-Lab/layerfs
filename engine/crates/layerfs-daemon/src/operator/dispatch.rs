@@ -16,12 +16,12 @@ pub(crate) fn admits(method: &str) -> bool {
 
 pub(crate) fn dispatch(service: &Service, call: &SdkCall) -> Reply {
     let answer = match call.method.as_str() {
-        "backend.daemon.workspace.get_storage" => super::list_changes::overlay(service, &call.args),
+        "backend.daemon.workspace.get_storage" => super::get_storage::overlay(service, &call.args),
         "backend.daemon.workspace.list_changes" => {
             super::list_changes::changes(service, &call.args)
         }
         "backend.daemon.workspace.list_changed" => {
-            super::list_changes::changed(service, &call.args)
+            super::list_changed::changed(service, &call.args)
         }
         "sandbox.list_workspaces" => return service.inspect(call),
         "sandbox.doctor_workspaces" => return service.diagnostic_workspaces(call),

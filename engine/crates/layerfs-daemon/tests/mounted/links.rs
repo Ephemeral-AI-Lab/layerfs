@@ -3,21 +3,9 @@
 //! directories alike, after every mkdir, rmdir and rename, through ordinary
 //! syscalls of processes the daemon never registered.
 #![cfg(target_os = "linux")]
-#[allow(dead_code)]
-#[path = "../support/complete/bytes.rs"]
-mod bytes;
-#[allow(dead_code)]
-#[path = "../support/complete/fixture.rs"]
-mod fixture;
-#[allow(dead_code)]
-#[path = "../support/mounted.rs"]
-mod mounted;
-#[allow(dead_code)]
-#[path = "../support/mutating.rs"]
-mod mutating;
-#[allow(dead_code)]
-#[path = "../support/install/host.rs"]
-mod support;
+use crate::fixture;
+use crate::mounted;
+use crate::mutating;
 use mounted::COMMAND;
 use mutating::{forced, harness, path_only, quiet, shell, unmounted};
 use std::{fs, os::unix::fs::MetadataExt, path::Path};

@@ -30,6 +30,7 @@ mod mounted;
 #[path = "../support/mounted_commit.rs"]
 mod rig;
 use layerfs_content::ObjectId;
+use layerfs_daemon::{workspace::Failure, OwnerWork};
 use layerfs_history::{
     BranchId, BranchSnapshot, ForkRequest, ForkSource, HistoryName, WorkspaceId,
 };
@@ -57,7 +58,6 @@ use std::{
     thread,
     time::{Duration, Instant},
 };
-use {layerfs_daemon::workspace::Failure, layerfs_store_service::OwnerWork};
 
 const WAIT: Duration = Duration::from_secs(8);
 

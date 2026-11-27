@@ -2,18 +2,8 @@
 //! lookup decrement, and a terminal unmount that stops after effects and keeps
 //! `Retained` custody instead of reporting a guessed success.
 #![cfg(target_os = "linux")]
-#[allow(dead_code)]
-#[path = "../support/complete/bytes.rs"]
-mod bytes;
-#[allow(dead_code)]
-#[path = "../support/complete/fixture.rs"]
-mod fixture;
-#[allow(dead_code)]
-#[path = "../support/mounted.rs"]
-mod mounted;
-#[allow(dead_code)]
-#[path = "../support/install/host.rs"]
-mod support;
+use crate::fixture;
+use crate::mounted;
 use layerfs_daemon::workspace::Failure;
 use layerfs_history::BranchId;
 use layerfs_protocol::daemon::{

@@ -7,14 +7,10 @@
 //! The Commit under test runs over a Store whose history wrapper holds its
 //! first `publish_lane` call until the test has landed the other Commit, at
 //! the public catalog boundary. Every wait is bounded.
-#[path = "../../../layerfs-store-service/tests/support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../../../layerfs-store-service/tests/support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::sdk::{installed, support};
 
 use layerfs_content::filesystem::PathName;
+use layerfs_daemon::store::{ReaderFactory, Store, StoreReader};
 use layerfs_daemon::workspace::Service;
 use layerfs_history::records::*;
 use layerfs_history::*;
@@ -22,7 +18,6 @@ use layerfs_persistence::SqliteHandles;
 use layerfs_protocol::daemon::{CommitControl, Reply, Request, UnmountControl};
 use layerfs_protocol::sdk::SdkValue;
 use layerfs_storage::{ReservationBlocks, Storage};
-use layerfs_store_service::store::{ReaderFactory, Store, StoreReader};
 use layerfs_vfs::{Operation, Outcome, Position, Time};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
@@ -495,7 +490,7 @@ fn a_conflict_landing_before_the_lane_follows_the_conflict_rules() {
 fn more_than_the_lane_bound_is_refused_and_counted() {
     let fixture = fixture("lane-merge-refused");
     let token = mounted_write(&fixture, 83, "a.txt", b"a\n");
-    let many = layerfs_store_service::store::LANE_MERGE_PATHS + 1;
+    let many = layerfs_daemon::store::LANE_MERGE_PATHS + 1;
     let held = commit_held(&fixture, token, || {
         let changes = (0..many)
             .map(|n| support::write(&format!("/many{n:05}"), "x\n"))

@@ -1,3 +1,6 @@
-pub(crate) mod file;
+//! Authenticated one-time Store file installation into this daemon.
+mod file;
 pub mod outcome;
-pub mod receive;
+mod receive;
+pub use outcome::StoreSettings;
+pub use receive::{receive_install, receive_install_manifest};

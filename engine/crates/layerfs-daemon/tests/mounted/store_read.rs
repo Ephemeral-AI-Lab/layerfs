@@ -29,18 +29,17 @@
 //! table and the caller's own answers. Nothing is timed. Product
 //! expectations are collected and reported after the mount is gone.
 #![cfg(target_os = "linux")]
-#[allow(dead_code)]
-#[path = "../support/kernel/fusectl.rs"]
-mod fusectl;
-#[allow(dead_code)]
-#[path = "../support/installed_store.rs"]
-mod installed;
-#[allow(dead_code)]
-#[path = "../support/mounted.rs"]
-mod mounted;
+use crate::fusectl;
+use crate::installed;
+use crate::mounted;
 #[allow(dead_code)]
 #[path = "../support/gate/store.rs"]
 mod store_gate;
+use layerfs_daemon::{
+    store::{Store, StoreReader},
+    workspace::Failure,
+    OwnerClient,
+};
 use layerfs_overlay::{CleanupState, KernelMount, KernelMountState, StoredCounts};
 use layerfs_persistence::SqliteHandles;
 use layerfs_protocol::daemon::{
@@ -64,13 +63,6 @@ use std::{
     time::{Duration, Instant},
 };
 use store_gate::{Gate, Gated};
-use {
-    layerfs_daemon::workspace::Failure,
-    layerfs_store_service::{
-        store::{Store, StoreReader},
-        OwnerClient,
-    },
-};
 
 /// Every bounded readiness or completion observation of the test.
 const WAIT: Duration = Duration::from_secs(5);
@@ -368,7 +360,7 @@ impl Staged {
         let gate = Gate::new();
         let reader_config = fixture.config.clone();
         let reader_gate = gate.clone();
-        let factory: layerfs_store_service::store::ReaderFactory = Arc::new(move |_| {
+        let factory: layerfs_daemon::store::ReaderFactory = Arc::new(move |_| {
             let read = SqliteHandles::open_read_only(
                 reader_config.clone(),
                 installed::BINDING,

@@ -1,8 +1,7 @@
 //! Direct ports and multiple Workspace bindings over one installed global Store.
 #[path = "../support/gate/held_writer.rs"]
 mod held_writer;
-#[path = "../support/installed_store.rs"]
-mod support;
+use crate::installed as support;
 use layerfs_content::filesystem::PathName;
 use layerfs_content::{AuthenticatedObjects, ContentError, ObjectId};
 use layerfs_history::{BranchId, WorkspaceId};

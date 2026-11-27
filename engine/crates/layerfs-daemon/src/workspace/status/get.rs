@@ -10,7 +10,7 @@ use layerfs_protocol::daemon::{
 impl Service {
     /// Observation by incarnation for a caller that holds no namespace. The
     /// registry supplies the token; nothing is replayed, bound or settled.
-    pub(super) fn locate(&self, workspace: WorkspaceId) -> Result<Success, Failure> {
+    pub(crate) fn locate(&self, workspace: WorkspaceId) -> Result<Success, Failure> {
         let token = {
             let entries = self.entries.lock().map_err(|_| Failure::Poisoned)?;
             match entries.get(&workspace) {
@@ -33,7 +33,7 @@ impl Service {
         }
         Ok(success)
     }
-    pub(super) fn status(&self, token: WorkspaceToken) -> Result<Success, Failure> {
+    pub(crate) fn status(&self, token: WorkspaceToken) -> Result<Success, Failure> {
         let (workspace, binding, activity, epoch, published, kernel) = {
             let entries = self.entries.lock().map_err(|_| Failure::Poisoned)?;
             let value = bound(&entries, token)?;
@@ -49,9 +49,7 @@ impl Service {
         };
         let observed = self.job(
             workspace.route(),
-            |job_client: &layerfs_store_service::OwnerClient, job_route| {
-                job_client.observe_state(job_route)
-            },
+            |job_client: &crate::OwnerClient, job_route| job_client.observe_state(job_route),
         );
         let (local, observation_failure) = match observed {
             Ok(state) => (

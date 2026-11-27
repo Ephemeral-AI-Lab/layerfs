@@ -16,6 +16,8 @@ use super::{
     detach_retry::Retried,
 };
 #[cfg(target_os = "linux")]
+use crate::store::BoundWorkspace;
+#[cfg(target_os = "linux")]
 use layerfs_fuse::{
     mount::AbortWrite,
     session::{DetachAttempt, Drained, SessionFacts, SessionObserver, Undrained},
@@ -28,8 +30,6 @@ use layerfs_protocol::daemon::{
     MountPhase, Reply, TeardownStage,
 };
 use layerfs_protocol::daemon::{Activity, CommitKnowledge, ControlCode, WorkspaceToken};
-#[cfg(target_os = "linux")]
-use layerfs_store_service::store::BoundWorkspace;
 #[cfg(target_os = "linux")]
 use nix::errno::Errno;
 #[cfg(target_os = "linux")]
@@ -50,7 +50,7 @@ fn refused(code: ControlCode, phase: &'static str, detail: &'static str) -> Fail
 /// The whole before-effect decision, made under the registry lock and in this
 /// order. A refusal changes nothing. Admitted, it returns the Commit knowledge
 /// the receipt will carry: copied here, never settled by a later read.
-pub(super) fn guard(
+pub(crate) fn guard(
     value: &Binding,
     token: WorkspaceToken,
     relinquish_unknown: bool,
@@ -155,7 +155,7 @@ fn connection(kernel: &Kernel) -> Result<bool, Failure> {
 #[cfg(not(target_os = "linux"))]
 impl Service {
     /// The same guard as on Linux; no entry here can pass it.
-    pub(super) fn force_unmount(
+    pub(crate) fn force_unmount(
         &self,
         token: WorkspaceToken,
         relinquish_unknown: bool,
@@ -218,7 +218,7 @@ fn detach(attempt: DetachAttempt) -> DetachDisposition {
 }
 #[cfg(target_os = "linux")]
 impl Service {
-    pub(super) fn force_unmount(
+    pub(crate) fn force_unmount(
         &self,
         token: WorkspaceToken,
         relinquish_unknown: bool,
@@ -406,9 +406,7 @@ impl Service {
         self.leaving(token, MountPhase::Draining);
         match self.job(
             workspace.route(),
-            |job_client: &layerfs_store_service::OwnerClient, job_route| {
-                job_client.kernel_revoke(job_route, mount)
-            },
+            |job_client: &crate::OwnerClient, job_route| job_client.kernel_revoke(job_route, mount),
         ) {
             Ok(()) => Ok(drained),
             Err(failure) => Err(self.retain(

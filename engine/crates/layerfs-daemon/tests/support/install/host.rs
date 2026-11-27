@@ -1,4 +1,5 @@
 //! External authenticated endpoints and complete small-root installation oracle.
+use layerfs_daemon::{install::outcome::InstalledStore, store::BindRequest, Owner, OwnerConfig};
 use layerfs_history::{BranchId, HistoryCatalogConfig, HistoryName, LayerStackId, WorkspaceId};
 use layerfs_persistence::{PersistenceConfig, SqlitePersistenceProfile};
 use layerfs_project::store::{InitRequest, ProjectApi, SealedProject};
@@ -11,10 +12,6 @@ use std::{
     path::{Path, PathBuf},
     thread::{self, JoinHandle},
     time::{Duration, Instant},
-};
-use {
-    layerfs_daemon::install::outcome::InstalledStore,
-    layerfs_store_service::{store::BindRequest, Owner, OwnerConfig},
 };
 
 pub const CLIENT_PRIVATE: [u8; 32] = [51; 32];

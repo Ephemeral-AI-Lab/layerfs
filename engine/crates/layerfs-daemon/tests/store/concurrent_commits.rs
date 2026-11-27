@@ -4,12 +4,7 @@
 //! start the Commits together and every wait is bounded by the test ceiling.
 //! Workspace Commits go through the daemon; the SDK calls that set up and read
 //! back run in-process over the same Store (#352 F-020).
-#[path = "../../../layerfs-store-service/tests/support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../../../layerfs-store-service/tests/support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::sdk::support;
 
 use layerfs_content::filesystem::PathName;
 use layerfs_daemon::workspace::Service;

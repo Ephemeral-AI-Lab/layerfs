@@ -1,7 +1,7 @@
 //! Positive-progress writes, no retries. The exclusive temporary-file
 //! claim is the shared installer's (`crate::shared_install`).
 use crate::install::outcome::InstallWork;
-pub(super) use layerfs_store_service::install::{absent, claim, paths};
+pub(super) use crate::shared_install::{absent, claim, paths};
 use std::{
     fs::File,
     io::{self, Write},

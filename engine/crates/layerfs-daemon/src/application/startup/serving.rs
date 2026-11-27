@@ -1,13 +1,12 @@
 //! Kernel serving assembly over the daemon's one Store and one overlay owner.
+use crate::{
+    store::Store,
+    workspace::{ExportServing, ExportServingConfig, Helper, KernelServing, Mounter, Service},
+    Owner,
+};
 use layerfs_protocol::provision::daemon_setup::DaemonSetup;
 use layerfs_protocol::KernelRoute;
 use std::{path::Path, sync::Arc};
-use {
-    crate::workspace::{
-        ExportServing, ExportServingConfig, Helper, KernelServing, Mounter, Service,
-    },
-    layerfs_store_service::{store::Store, Owner},
-};
 
 /// Optional helper command lines (`{port}`, `{dir}` replaced) overriding the
 /// host client's defaults for the NFS route.

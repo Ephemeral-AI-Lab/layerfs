@@ -1,12 +1,7 @@
 //! #G4: a daemon mount registers the Sandbox and machine beside its
 //! Workspace, and a mount that knows neither still registers the Workspace
 //! alone. `MountsActive` reports exactly what the intent placed.
-#[allow(dead_code)]
-#[path = "../support/install/control_fixture.rs"]
-mod fixture;
-#[allow(dead_code)]
-#[path = "../support/install/host.rs"]
-mod support;
+use crate::fixture;
 
 use layerfs_history::records::GcScopeKind;
 use layerfs_history::{BranchId, ForkRequest, ForkSource, HistoryName, LayerStackId, WorkspaceId};

@@ -70,7 +70,7 @@ impl Service {
                 SdkValue::map([
                     (
                         "workspace",
-                        SdkValue::text(layerfs_protocol::sdk::hex(&id.to_bytes())),
+                        SdkValue::text(layerfs_store_service::history::lookup::hex(&id.to_bytes())),
                     ),
                     ("activity", SdkValue::text(state)),
                     ("mounted", SdkValue::Bool(mounted)),

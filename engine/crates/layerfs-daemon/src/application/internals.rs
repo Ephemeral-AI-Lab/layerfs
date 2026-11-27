@@ -14,7 +14,7 @@ pub use super::connection::retained::{
     RetainedFailure, RetainedFailures, RetainedSnapshot, LIMIT, TTL,
 };
 #[doc(hidden)]
-pub use super::startup::lifecycle::{
+pub use super::connection::slots::{
     disposition, recovery_request, AdmissionClass, Disposition, Finished, Phase, SlotClass,
     SlotCounts, SlotTicket, Slots, RESERVED_SLOTS,
 };

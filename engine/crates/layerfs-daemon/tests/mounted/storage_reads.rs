@@ -4,12 +4,8 @@
 //! there cost minutes of Store reads per call and saturated the daemon.
 //! `list_changes` still names the changed paths on request. Normal profile.
 #![cfg(target_os = "linux")]
-#[allow(dead_code)]
-#[path = "../support/installed_store.rs"]
-mod installed;
-#[allow(dead_code)]
-#[path = "../support/mounted.rs"]
-mod mounted;
+use crate::installed;
+use crate::mounted;
 use layerfs_protocol::daemon::{Reply, Request};
 use layerfs_protocol::sdk::{SdkCall, SdkValue};
 use layerfs_store_service::bootstrap::open_store_observed;

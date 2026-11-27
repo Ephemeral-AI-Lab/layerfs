@@ -21,6 +21,11 @@ use super::{
     mounted::{until, Harness, COMMAND},
 };
 use layerfs_content::ObjectId;
+use layerfs_daemon::{
+    bootstrap::open_store,
+    store::{CapturedConstruction, ReleasedOwner, Store},
+    workspace::{Failure, Success},
+};
 use layerfs_history::{
     CommitHistoryRequest, CommitId, CommitOutcome, CommitRecord, PageResult, WorkspaceId,
 };
@@ -46,13 +51,6 @@ use std::{
     process::{Child, Command, ExitStatus, Output, Stdio},
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
-};
-use {
-    layerfs_daemon::workspace::{Failure, Success},
-    layerfs_store_service::{
-        bootstrap::open_store,
-        store::{CapturedConstruction, ReleasedOwner, Store},
-    },
 };
 
 /// The marker `clock_masked` puts in place of a time the clock chose.

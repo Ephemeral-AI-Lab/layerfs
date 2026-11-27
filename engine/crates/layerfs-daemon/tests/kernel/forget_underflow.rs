@@ -51,18 +51,9 @@
 //! The incarnation is the lane's own identity, never kernel input
 //! (`layerfs-fuse` `request/inline.rs`).
 #![cfg(target_os = "linux")]
-#[allow(dead_code)]
-#[path = "../support/installed_store.rs"]
-mod installed;
-#[allow(dead_code)]
-#[path = "../support/rigs/namespace_model.rs"]
-mod model;
-#[allow(dead_code)]
-#[path = "../support/mounted.rs"]
-mod mounted;
-#[allow(dead_code)]
-#[path = "../support/mounted_commit.rs"]
-mod rig;
+use crate::mounted;
+use crate::rig;
+use layerfs_daemon::{workspace::Failure, OwnerClient};
 use layerfs_overlay::{CleanupState, KernelMount, KernelMountState};
 use layerfs_protocol::daemon::{
     Activity, MountPhase, MountWork, Reply, Request, TeardownStage, WorkspaceToken,
@@ -79,7 +70,6 @@ use std::{
     thread,
     time::{Duration, Instant},
 };
-use {layerfs_daemon::workspace::Failure, layerfs_store_service::OwnerClient};
 
 /// Every bounded readiness or completion observation of the tests.
 const WAIT: Duration = Duration::from_secs(5);

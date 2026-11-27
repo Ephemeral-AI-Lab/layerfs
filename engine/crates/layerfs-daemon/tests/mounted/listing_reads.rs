@@ -11,12 +11,8 @@
 //! process, so VmRSS and VmHWM are its resident memory. The test asserts the
 //! listing only; the counts are the measurement.
 #![cfg(target_os = "linux")]
-#[allow(dead_code)]
-#[path = "../support/installed_store.rs"]
-mod installed;
-#[allow(dead_code)]
-#[path = "../support/mounted.rs"]
-mod mounted;
+use crate::installed;
+use crate::mounted;
 use layerfs_store_service::bootstrap::{open_store_observed, OpenedStore};
 use mounted::Harness;
 use std::{

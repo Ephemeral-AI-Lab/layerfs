@@ -2,12 +2,7 @@
 //! does not hold (#355 F-041). The merge lists at most 4,096 paths it changed
 //! in the Workspace; past that the reply says `truncated`, below it the list
 //! is complete and `truncated` is false.
-#[path = "../../../layerfs-store-service/tests/support/installed_store.rs"]
-#[allow(dead_code)]
-mod installed;
-#[path = "../../../layerfs-store-service/tests/support/sdk.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::sdk::support;
 
 use layerfs_content::filesystem::PathName;
 use layerfs_daemon::workspace::Service;

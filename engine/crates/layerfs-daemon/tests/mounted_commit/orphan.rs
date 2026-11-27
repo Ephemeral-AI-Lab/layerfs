@@ -33,19 +33,15 @@
 #[allow(dead_code)]
 #[path = "../support/gate/history.rs"]
 mod history_gate;
-#[allow(dead_code)]
-#[path = "../support/installed_store.rs"]
-mod installed;
-#[allow(dead_code)]
-#[path = "../support/rigs/namespace_model.rs"]
-mod model;
-#[allow(dead_code)]
-#[path = "../support/mounted.rs"]
-mod mounted;
-#[allow(dead_code)]
-#[path = "../support/mounted_commit.rs"]
-mod rig;
+use crate::installed;
+use crate::model;
+use crate::mounted;
+use crate::rig;
 use history_gate::Point;
+use layerfs_daemon::{
+    store::{ReaderFactory, ReleasedOwner, Store, StoreReader},
+    workspace::Service,
+};
 use layerfs_history::CommitOutcome;
 use layerfs_persistence::SqliteHandles;
 use layerfs_protocol::daemon::{CommitControl, Reply, Request, UnmountControl, WorkspaceToken};
@@ -63,10 +59,6 @@ use std::{
     sync::{mpsc, Arc},
     thread::{self, JoinHandle},
     time::{Duration, Instant},
-};
-use {
-    layerfs_daemon::workspace::Service,
-    layerfs_store_service::store::{ReaderFactory, ReleasedOwner, Store, StoreReader},
 };
 
 /// The wait for the Commit and for each step and call of the experiment.

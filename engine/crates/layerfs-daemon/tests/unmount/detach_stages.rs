@@ -40,26 +40,19 @@
 //! Every hold is a real resource taken through a public API and returned by
 //! a guard on every path. Counts only; nothing is timed.
 #![cfg(target_os = "linux")]
-#[allow(dead_code)]
-#[path = "../support/kernel/holds.rs"]
-mod holds;
-#[allow(dead_code)]
-#[path = "../support/installed_store.rs"]
-mod installed;
-#[allow(dead_code)]
-#[path = "../support/rigs/namespace_model.rs"]
-mod model;
-#[allow(dead_code)]
-#[path = "../support/mounted.rs"]
-mod mounted;
+use crate::holds;
+use crate::installed;
+use crate::mounted;
 #[path = "../support/kernel/read_pressure.rs"]
 mod read_pressure;
 #[allow(dead_code)]
-#[path = "../support/mounted_commit.rs"]
-mod rig;
-#[allow(dead_code)]
 #[path = "../support/gate/store.rs"]
 mod store_gate;
+use layerfs_daemon::{
+    store::{Store, StoreReader},
+    workspace::Failure,
+    OwnerClient,
+};
 use layerfs_fuse::request::Opcode;
 use layerfs_history::HistoryCatalog;
 use layerfs_overlay::{CleanupState, KernelMount, KernelMountState, StoredCounts};
@@ -84,13 +77,6 @@ use std::{
     time::{Duration, Instant},
 };
 use store_gate::{Gate, Gated};
-use {
-    layerfs_daemon::workspace::Failure,
-    layerfs_store_service::{
-        store::{Store, StoreReader},
-        OwnerClient,
-    },
-};
 
 /// Every bounded readiness or completion observation of the tests.
 const WAIT: Duration = Duration::from_secs(5);
@@ -447,7 +433,7 @@ impl Staged {
         let gate = Gate::new();
         let reader_config = fixture.config.clone();
         let reader_gate = gate.clone();
-        let factory: layerfs_store_service::store::ReaderFactory = Arc::new(move |_| {
+        let factory: layerfs_daemon::store::ReaderFactory = Arc::new(move |_| {
             let read = SqliteHandles::open_read_only(
                 reader_config.clone(),
                 installed::BINDING,

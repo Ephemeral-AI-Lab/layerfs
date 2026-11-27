@@ -1,7 +1,5 @@
 //! Real read-only connections: mount lifetime, stale clients, failed bind and stop races.
-#[allow(dead_code)]
-#[path = "../support/installed_store.rs"]
-mod support;
+use crate::installed as support;
 use layerfs_content::AuthenticatedObjects;
 use layerfs_history::*;
 use layerfs_persistence::{SqliteHandles, StorageProvider};
@@ -331,7 +329,7 @@ fn shutdown_racing_a_bind_closes_the_acquired_reader_without_reopening() {
     release.send(()).unwrap();
     let failure = child.join().unwrap().err().unwrap();
     assert!(
-        matches!(failure.error, BindError::Read(ref error) if matches!(error.as_ref(), PortError::ReadAdmission(layerfs_store_service::store::ReadAdmissionError::Stopped)))
+        matches!(failure.error, BindError::Read(ref error) if matches!(error.as_ref(), PortError::ReadAdmission(layerfs_daemon::store::ReadAdmissionError::Stopped)))
     );
     assert_eq!(store.read_handles(), 0);
     assert_eq!(weak.lock().unwrap().len(), 2);
@@ -428,7 +426,7 @@ fn a_failed_reader_close_still_releases_the_mount_intent() {
 
     let error = bound.close().unwrap_err();
     assert!(
-        matches!(error, layerfs_store_service::store::CloseError::Reader(_)),
+        matches!(error, layerfs_daemon::store::CloseError::Reader(_)),
         "{error:?}"
     );
     assert_eq!(held(), 0, "the closed mount no longer holds its Branch");

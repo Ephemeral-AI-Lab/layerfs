@@ -35,36 +35,26 @@
 //! The safety rule of `support/fusectl.rs` binds this file: nothing here
 //! writes under `/sys/fs/fuse/connections` or reads another connection.
 #![cfg(target_os = "linux")]
-#[allow(dead_code)]
-#[path = "../support/kernel/fusectl.rs"]
-mod fusectl;
+use crate::fusectl;
 #[allow(dead_code)]
 #[path = "../support/gate/held_writer.rs"]
 mod held_writer;
 #[allow(dead_code)]
 #[path = "../support/gate/history_boundary.rs"]
 mod history_boundary;
-#[allow(dead_code)]
-#[path = "../support/gate/history.rs"]
-mod history_gate;
-#[allow(dead_code)]
-#[path = "../support/kernel/holds.rs"]
-mod holds;
-#[allow(dead_code)]
-#[path = "../support/installed_store.rs"]
-mod installed;
-#[allow(dead_code)]
-#[path = "../support/rigs/namespace_model.rs"]
-mod model;
-#[allow(dead_code)]
-#[path = "../support/mounted.rs"]
-mod mounted;
-#[allow(dead_code)]
-#[path = "../support/mounted_commit.rs"]
-mod rig;
+use crate::history_gate;
+use crate::installed;
+use crate::model;
+use crate::mounted;
+use crate::rig;
 use history_boundary::{Boundary, ObservedHistory};
 use history_gate::Point;
 use layerfs_content::{filesystem::FilesystemRootId, ObjectId};
+use layerfs_daemon::{
+    bootstrap::open_store,
+    store::{CommitError, CommitPhase, ReleasedOwner, Store, StoreReader},
+    workspace::{Failure, Service, Success},
+};
 use layerfs_history::{CommitOutcome, HistoryCatalog, HistoryError, WorkspaceId};
 use layerfs_overlay::CleanupState;
 use layerfs_persistence::SqliteHandles;
@@ -87,13 +77,6 @@ use std::{
     sync::{atomic::AtomicBool, Arc, Condvar, Mutex, MutexGuard},
     thread::{self, JoinHandle},
     time::{Duration, Instant},
-};
-use {
-    layerfs_daemon::workspace::{Failure, Service, Success},
-    layerfs_store_service::{
-        bootstrap::open_store,
-        store::{CommitError, CommitPhase, ReleasedOwner, Store, StoreReader},
-    },
 };
 
 /// Every bounded readiness or completion observation of the test.
@@ -286,7 +269,7 @@ impl Fx {
         let writer: Arc<dyn PackPersistence> = handles.storage.clone();
         let history = history(handles, &fixture.config.path);
         let reader_config = fixture.config.clone();
-        let factory: layerfs_store_service::store::ReaderFactory = Arc::new(move |_| {
+        let factory: layerfs_daemon::store::ReaderFactory = Arc::new(move |_| {
             let read = SqliteHandles::open_read_only(
                 reader_config.clone(),
                 installed::BINDING,

@@ -3,14 +3,14 @@
 //! skips invalidation only for an install that changes nothing the kernel
 //! showed; this one sends it before the caller's answer.
 use super::super::{Failure, Service};
+use crate::store::BoundWorkspace;
 use layerfs_content::ObjectId;
 use layerfs_protocol::daemon::WorkspaceToken;
-use layerfs_store_service::store::BoundWorkspace;
 
 impl Service {
     /// One notification per changed inode and per rebound name the Workspace
     /// showed. A Workspace with no kernel connection has nothing cached.
-    pub(super) fn invalidate(
+    pub(crate) fn invalidate(
         &self,
         token: WorkspaceToken,
         workspace: &BoundWorkspace,
@@ -26,8 +26,8 @@ impl Service {
         #[cfg(target_os = "linux")]
         {
             use super::super::{kernel::Kernel, registry::bound};
+            use crate::store::Stale;
             use layerfs_protocol::daemon::ControlCode;
-            use layerfs_store_service::store::Stale;
             let invalidator = {
                 let entries = self.entries.lock().map_err(|_| Failure::Poisoned)?;
                 match &bound(&entries, token)?.kernel {

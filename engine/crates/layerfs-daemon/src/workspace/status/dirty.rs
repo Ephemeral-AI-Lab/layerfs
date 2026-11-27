@@ -65,7 +65,7 @@ pub(super) fn join(parent: &str, name: &str) -> String {
 
 impl Service {
     /// The uncommitted changes of one bound Workspace, or `None` when clean.
-    pub(super) fn dirty(&self, token: WorkspaceToken) -> Result<Option<DirtyReport>, Failure> {
+    pub(crate) fn dirty(&self, token: WorkspaceToken) -> Result<Option<DirtyReport>, Failure> {
         let workspace = {
             let entries = self.entries.lock().map_err(|_| Failure::Poisoned)?;
             bound(&entries, token)?.workspace.clone()

@@ -6,9 +6,7 @@
 //! #88: a small (whole-file) result takes the replaced file whole as its
 //! base, and a fresh file written where the base held a file, with no rename
 //! (`rm f` then writing `f`, as `git checkout` does), is offered that file.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::installed as support;
 use layerfs_content::filesystem::{FilesystemRead, FilesystemRootId, PathName};
 use layerfs_content::object::inode_leaf::InodeValue;
 use layerfs_history::{CommitOutcome, WorkspaceId};

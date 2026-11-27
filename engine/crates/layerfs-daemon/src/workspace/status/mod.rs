@@ -1,3 +1,5 @@
+//! Workspace reads: status, listings, dirty and changed views, doctor and
+//! observation tokens.
 pub(crate) mod changed;
 pub(crate) mod cleanup;
 pub(crate) mod dirty;

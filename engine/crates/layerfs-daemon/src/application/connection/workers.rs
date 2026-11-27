@@ -1,14 +1,11 @@
 //! Bounded real authenticated connection workers and retained original failures.
 use super::{
-    super::{
-        startup::lifecycle::{
-            disposition, recovery_request, AdmissionClass, Finished, SlotClass, SlotCounts,
-            SlotTicket,
-        },
-        Application, ApplicationError, ConnectionFailure,
-    },
     retained::{RetainedFailure, RetainedSnapshot},
+    slots::{
+        disposition, recovery_request, AdmissionClass, Finished, SlotClass, SlotCounts, SlotTicket,
+    },
 };
+use crate::application::{Application, ApplicationError, ConnectionFailure};
 use layerfs_protocol::{
     daemon::{Call, DaemonPhase, Reply, Request, RECLAIM},
     duplex::{
@@ -658,7 +655,7 @@ impl Application {
             eprintln!("layerfs-daemon: reclaim thread after a Commit not started: {error}");
         }
     }
-    pub(super) fn control_operation(
+    pub(crate) fn control_operation(
         &self,
         request: &Request,
         class: SlotClass,

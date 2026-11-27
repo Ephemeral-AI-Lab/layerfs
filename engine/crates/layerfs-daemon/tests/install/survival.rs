@@ -15,15 +15,8 @@
 //! the way an ordinary process does. Counted work is printed; nothing is
 //! timed.
 #![cfg(target_os = "linux")]
-#[allow(dead_code)]
-#[path = "../support/complete/bytes.rs"]
-mod bytes;
-#[allow(dead_code)]
-#[path = "../support/complete/fixture.rs"]
-mod fixture;
-#[allow(dead_code)]
-#[path = "../support/installed_store.rs"]
-mod installed;
+use crate::fixture;
+use crate::installed;
 #[allow(dead_code)]
 #[path = "../support/rigs/namespace_model.rs"]
 mod model;
@@ -36,9 +29,6 @@ mod mutating;
 #[allow(dead_code)]
 #[path = "../support/mounted_commit.rs"]
 mod rig;
-#[allow(dead_code)]
-#[path = "../support/install/host.rs"]
-mod support;
 use model::{assert_same, Flat, Seen, FILE};
 use mounted::{mount_entry, until, COMMAND};
 use mutating::{c, direct, frames, Mapping};

@@ -423,7 +423,7 @@ pub fn read(workspace: &BoundWorkspace, path: &str) -> Vec<u8> {
 /// Its completions are released before this returns.
 pub fn commit(workspace: &BoundWorkspace) -> ObjectId {
     let done = workspace
-        .commit_captured(&layerfs_store_service::store::CommitOptions::default())
+        .commit_captured(&layerfs_daemon::store::CommitOptions::default())
         .unwrap_or_else(|failure| panic!("Commit: {:?}", failure.error));
     drop(done);
     workspace.snapshot().unwrap().effective_root

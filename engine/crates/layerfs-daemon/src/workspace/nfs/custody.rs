@@ -14,21 +14,21 @@ use layerfs_protocol::daemon::{
 use std::{fmt, sync::Arc};
 
 /// A serving export and the mount the host client holds of it.
-pub(super) struct Exported {
+pub(crate) struct Exported {
     pub server: Arc<Server>,
     pub mount: KernelMount,
     pub ready: ReadyMount,
     pub tracked: bool,
 }
 /// A terminal operation owns the export; status still observes it.
-pub(super) struct ExportLeaving {
+pub(crate) struct ExportLeaving {
     pub ready: ReadyMount,
     pub phase: MountPhase,
     pub work: MountWork,
 }
 /// Export custody a terminal or attach step could not finish disposing:
 /// kept exactly, never retried or settled by a later observation.
-pub(super) struct ExportKept {
+pub(crate) struct ExportKept {
     pub ready: Option<ReadyMount>,
     pub stage: TeardownStage,
     pub detail: String,
@@ -48,13 +48,13 @@ impl ExportKept {
     /// by name, and a failed force would leave the same custody. It stays
     /// retained until the daemon exits; the next start's `reclaim` forces the
     /// leftover host mount off. This predates #644.
-    pub(super) fn forceable(&self) -> bool {
+    pub(crate) fn forceable(&self) -> bool {
         self.exported.is_some()
             && self.stage == TeardownStage::Detach
             && self.forced.is_none()
             && self.ready.is_some()
     }
-    pub(super) fn custody(&self, token: WorkspaceToken) -> TeardownCustody {
+    pub(crate) fn custody(&self, token: WorkspaceToken) -> TeardownCustody {
         TeardownCustody {
             token,
             stage: self.stage,

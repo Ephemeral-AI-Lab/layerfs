@@ -1,10 +1,5 @@
 //! Public control lifetime and backing-file custody proofs for private overlay files.
-#[allow(dead_code)]
-#[path = "../support/install/control_fixture.rs"]
-mod fixture;
-#[allow(dead_code)]
-#[path = "../support/install/host.rs"]
-mod support;
+use crate::fixture;
 use layerfs_history::{BranchId, WorkspaceId};
 use layerfs_protocol::daemon::{CleanupObservation, Reply, Request, WorkspaceToken};
 

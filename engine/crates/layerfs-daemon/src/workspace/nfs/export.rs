@@ -28,7 +28,7 @@
 //!   also how an export kept at Detach for a mount still listed is finished.
 //!   A helper that outlives its KILL goes to the retained queue, whose one
 //!   background thread polls it (no call waits for it).
-pub(super) use super::custody::{ExportKept, ExportLeaving, Exported};
+pub(crate) use super::custody::{ExportKept, ExportLeaving, Exported};
 use super::{
     super::{
         kernel::Kernel,
@@ -285,7 +285,7 @@ pub(super) fn work(server: &Server) -> MountWork {
     }
 }
 /// The status block of an export-owning entry.
-pub(super) fn block(kernel: &Kernel) -> Option<MountStatus> {
+pub(crate) fn block(kernel: &Kernel) -> Option<MountStatus> {
     Some(match kernel {
         Kernel::Exported(exported) => MountStatus {
             phase: MountPhase::Ready,
@@ -349,7 +349,7 @@ enum Stop {
 impl Service {
     /// Attach over NFS: Ready is acknowledged only after the export serves
     /// and the host client's mount helper reported the mount.
-    pub(super) fn attach_export(
+    pub(crate) fn attach_export(
         &self,
         serving: &ExportServing,
         token: WorkspaceToken,
@@ -434,9 +434,7 @@ impl Service {
         if let Err(error) = operation.workspace().prepare_serials(operation.ports()) {
             let failure = match operation.ports().failure() {
                 Ok(Some(cause)) => match cause.as_ref() {
-                    layerfs_store_service::store::PortError::History(error) => {
-                        Failure::History(error.clone())
-                    }
+                    crate::store::PortError::History(error) => Failure::History(error.clone()),
                     _ => Failure::Workspace(error),
                 },
                 Ok(None) | Err(_) => Failure::Workspace(error),
@@ -451,10 +449,9 @@ impl Service {
                 format!("mount directory {text}: {error}"),
             )));
         }
-        let mount = match self.job(
-            workspace.route(),
-            |client: &layerfs_store_service::OwnerClient, route| client.kernel_mount(route, root),
-        ) {
+        let mount = match self.job(workspace.route(), |client: &crate::OwnerClient, route| {
+            client.kernel_mount(route, root)
+        }) {
             Ok(mount) => mount,
             Err(failure) => {
                 drop(std::fs::remove_dir(&directory));
@@ -537,10 +534,9 @@ impl Service {
         released: Option<Released>,
         failure: Failure,
     ) -> Stop {
-        match self.job(
-            workspace.route(),
-            |client: &layerfs_store_service::OwnerClient, route| client.kernel_revoke(route, mount),
-        ) {
+        match self.job(workspace.route(), |client: &crate::OwnerClient, route| {
+            client.kernel_revoke(route, mount)
+        }) {
             Ok(()) => Stop::Unattached(failure),
             Err(revoke) => Stop::Retained(Box::new(ExportKept {
                 ready: None,
@@ -556,7 +552,7 @@ impl Service {
     /// Before a Commit: the client writes back what it buffered, and the
     /// export closes its implicit file descriptors. Runs outside the
     /// registry lock; a Workspace without an export has nothing to flush.
-    pub(super) fn flush_export(&self, token: WorkspaceToken) -> Result<(), Failure> {
+    pub(crate) fn flush_export(&self, token: WorkspaceToken) -> Result<(), Failure> {
         let (server, directory) = {
             let entries = self.entries.lock().map_err(|_| Failure::Poisoned)?;
             match &super::super::registry::bound(&entries, token)?.kernel {
@@ -598,7 +594,7 @@ impl Service {
     /// Commit reply never waits on the client. Best effort: a walk that stops
     /// at the bound, a chmod that fails or one the client never sends leaves
     /// the rest to the client's own revalidation. False without an export.
-    pub(super) fn installed_export(
+    pub(crate) fn installed_export(
         &self,
         token: WorkspaceToken,
         workspace: &BoundWorkspace,
@@ -625,8 +621,8 @@ impl Service {
         // the rest is revalidated on the client's own schedule.
         let _ = workspace.stale_after_install(shown, installed, |found| {
             stale.insert(match found {
-                layerfs_store_service::store::Stale::Inode(serial) => serial,
-                layerfs_store_service::store::Stale::Entry { parent, .. } => parent,
+                crate::store::Stale::Inode(serial) => serial,
+                crate::store::Stale::Entry { parent, .. } => parent,
             });
             if stale.len() >= REFRESHED {
                 return Err(std::io::Error::other("refresh bound"));
@@ -645,7 +641,7 @@ impl Service {
     }
     /// Normal terminal unmount of an export-owning entry, admitted by
     /// [`take`]. A busy client mount is the reversible answer.
-    pub(super) fn unmount_export(
+    pub(crate) fn unmount_export(
         &self,
         token: WorkspaceToken,
         workspace: Arc<BoundWorkspace>,
@@ -738,10 +734,9 @@ impl Service {
                 ))
             }
         };
-        if let Err(failure) = self.job(
-            workspace.route(),
-            |client: &layerfs_store_service::OwnerClient, route| client.kernel_revoke(route, mount),
-        ) {
+        if let Err(failure) = self.job(workspace.route(), |client: &crate::OwnerClient, route| {
+            client.kernel_revoke(route, mount)
+        }) {
             let custody = ExportKept {
                 ready: Some(ready),
                 stage: TeardownStage::Revoke,
@@ -839,7 +834,7 @@ impl Service {
     /// Forced terminal unmount of an export-owning entry: the same
     /// before-effect guard as FUSE, one forced client unmount, then the
     /// normal teardown and Close.
-    pub(super) fn force_export(
+    pub(crate) fn force_export(
         &self,
         token: WorkspaceToken,
         relinquish_unknown: bool,
@@ -928,7 +923,7 @@ impl Service {
 }
 /// Terminal admission over an export-owning entry; the entry observes the
 /// export as leaving until the operation settles it.
-pub(super) fn take(kernel: &mut Kernel, phase: MountPhase) -> Result<Exported, Failure> {
+pub(crate) fn take(kernel: &mut Kernel, phase: MountPhase) -> Result<Exported, Failure> {
     let exported = match kernel {
         Kernel::Exported(_) => match std::mem::replace(kernel, Kernel::Unattached) {
             Kernel::Exported(exported) => *exported,

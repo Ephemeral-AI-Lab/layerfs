@@ -40,18 +40,18 @@ impl fmt::Debug for KernelServing {
             .finish()
     }
 }
-pub(super) struct Attached {
+pub(crate) struct Attached {
     pub session: KernelSession,
     pub ready: ReadyMount,
 }
-pub(super) struct Leaving {
+pub(crate) struct Leaving {
     pub ready: ReadyMount,
     pub observer: SessionObserver,
     pub phase: MountPhase,
 }
 /// Custody that a terminal or attach operation could not finish disposing.
 /// Nothing here is dropped, retried or settled by a later observation.
-pub(super) struct Kept {
+pub(crate) struct Kept {
     pub ready: Option<ReadyMount>,
     pub stage: TeardownStage,
     pub detail: String,
@@ -77,7 +77,7 @@ impl fmt::Debug for Kept {
 /// What a retained entry owns. `Stalled` can still be ended by one forced
 /// unmount, and a `Forced` connection whose one detach the kernel refused
 /// can be asked for that detach again; every other owner is kept as it is.
-pub(super) enum Evidence {
+pub(crate) enum Evidence {
     /// A normal unmount's drain that stopped at `Join` after its plain detach.
     Stalled(Box<Undrained>),
     /// A forced teardown's connection, wherever its drain stopped (#538).
@@ -96,7 +96,7 @@ impl fmt::Debug for Evidence {
 }
 impl Kept {
     /// A stalled normal unmount whose abort control is bound and unused.
-    pub(super) fn forceable(&self) -> bool {
+    pub(crate) fn forceable(&self) -> bool {
         let facts = self.observer.as_ref().map(SessionObserver::facts);
         matches!(self.evidence, Evidence::Stalled(_))
             && self.forced.is_none()
@@ -107,7 +107,7 @@ impl Kept {
     /// A forced teardown stopped at its one plain detach, which the kernel
     /// refused `EBUSY`: its abort is written and the mount still held. A
     /// later unmount or force may ask for that detach again (#538).
-    pub(super) fn retryable(&self) -> bool {
+    pub(crate) fn retryable(&self) -> bool {
         matches!(self.evidence, Evidence::Forced(_))
             && self.stage == TeardownStage::Detach
             && self.ready.is_some()
@@ -116,7 +116,7 @@ impl Kept {
                 facts.abort == AbortDisposition::Written && facts.detach == DetachDisposition::Busy
             })
     }
-    pub(super) fn custody(&self, token: WorkspaceToken) -> TeardownCustody {
+    pub(crate) fn custody(&self, token: WorkspaceToken) -> TeardownCustody {
         let facts = self.observer.as_ref().map(SessionObserver::facts);
         TeardownCustody {
             token,
@@ -128,7 +128,7 @@ impl Kept {
         }
     }
 }
-pub(super) fn stage(stage: DrainStage) -> TeardownStage {
+pub(crate) fn stage(stage: DrainStage) -> TeardownStage {
     match stage {
         DrainStage::Detach => TeardownStage::Detach,
         DrainStage::Join => TeardownStage::Join,
@@ -140,7 +140,7 @@ pub(super) fn stage(stage: DrainStage) -> TeardownStage {
 fn narrow(value: usize) -> u32 {
     u32::try_from(value).unwrap_or(u32::MAX)
 }
-pub(super) fn work(facts: &SessionFacts) -> MountWork {
+pub(crate) fn work(facts: &SessionFacts) -> MountWork {
     let lane = facts.work.unwrap_or_default();
     let count = |value: usize| u16::try_from(value).unwrap_or(u16::MAX);
     let (configured, entered, exited, joined) = facts.loops.map_or((0, 0, 0, 0), |loops| {

@@ -103,7 +103,7 @@ impl Service {
                 "daemon Hello requires application startup owner",
             )),
             Request::Mount { workspace, branch } => {
-                layerfs_store_service::telemetry::timed("sandbox.mount.bind", |timing| {
+                crate::telemetry::timed("sandbox.mount.bind", |timing| {
                     let request = BindRequest {
                         workspace: *workspace,
                         branch: *branch,
@@ -115,7 +115,7 @@ impl Service {
                 workspace,
                 branch,
                 place,
-            } => layerfs_store_service::telemetry::timed("sandbox.mount.bind", |timing| {
+            } => crate::telemetry::timed("sandbox.mount.bind", |timing| {
                 let request = BindRequest {
                     workspace: *workspace,
                     branch: *branch,
@@ -126,7 +126,7 @@ impl Service {
                 workspace,
                 project,
                 branch,
-            } => layerfs_store_service::telemetry::timed("sandbox.mount.bind", |timing| {
+            } => crate::telemetry::timed("sandbox.mount.bind", |timing| {
                 let request = NamedBindRequest {
                     workspace: *workspace,
                     project: project.clone(),
@@ -139,7 +139,7 @@ impl Service {
                 project,
                 branch,
                 place,
-            } => layerfs_store_service::telemetry::timed("sandbox.mount.bind", |timing| {
+            } => crate::telemetry::timed("sandbox.mount.bind", |timing| {
                 let request = NamedBindRequest {
                     workspace: *workspace,
                     project: project.clone(),
@@ -161,7 +161,7 @@ impl Service {
                 token,
                 relinquish_unknown,
             } => self.force_unmount(*token, *relinquish_unknown),
-            Request::Attach(token) => layerfs_store_service::telemetry::timed("sandbox.mount.attach", |timing| {
+            Request::Attach(token) => crate::telemetry::timed("sandbox.mount.attach", |timing| {
                 self.attach(*token, timing)
             }),
             Request::Locate(workspace) => self.locate(*workspace),
@@ -208,41 +208,38 @@ impl Service {
             }
             entries.insert(workspace, Entry::Binding);
         }
-        let bound =
-            match layerfs_store_service::telemetry::phase(timing, "store.bind", || match intent {
-                BindIntent::Id(request) => {
-                    self.store.bind_placed(self.owner.clone(), request, place)
-                }
-                BindIntent::Named(request) => {
-                    self.store
-                        .bind_named_placed(self.owner.clone(), request, place)
-                }
-            }) {
-                Ok(value) => value,
-                Err(value) => {
-                    let phase = value.phase;
-                    let missing = match &value.error {
-                        BindError::NoSuchProject(name) => Some(missing_project(name)),
-                        BindError::NoSuchBranch(name) => Some(missing_branch(name)),
-                        _ => None,
-                    };
-                    let failure = Failure::Bind(Box::new(value));
-                    let mut withdrawn = false;
-                    if phase != BindPhase::Open || !failure.uncertain() {
-                        // The original bind proves no local ownership was created.
-                        // If the registry is poisoned, its retained entry stays put.
-                        if let Ok(mut entries) = self.entries.lock() {
-                            entries.remove(&workspace);
-                            withdrawn = true;
-                        }
+        let bound = match crate::telemetry::phase(timing, "store.bind", || match intent {
+            BindIntent::Id(request) => self.store.bind_placed(self.owner.clone(), request, place),
+            BindIntent::Named(request) => {
+                self.store
+                    .bind_named_placed(self.owner.clone(), request, place)
+            }
+        }) {
+            Ok(value) => value,
+            Err(value) => {
+                let phase = value.phase;
+                let missing = match &value.error {
+                    BindError::NoSuchProject(name) => Some(missing_project(name)),
+                    BindError::NoSuchBranch(name) => Some(missing_branch(name)),
+                    _ => None,
+                };
+                let failure = Failure::Bind(Box::new(value));
+                let mut withdrawn = false;
+                if phase != BindPhase::Open || !failure.uncertain() {
+                    // The original bind proves no local ownership was created.
+                    // If the registry is poisoned, its retained entry stays put.
+                    if let Ok(mut entries) = self.entries.lock() {
+                        entries.remove(&workspace);
+                        withdrawn = true;
                     }
-                    // a lookup refusal is the answer only once nothing stays admitted
-                    if let (Some(refusal), true) = (missing, withdrawn && !failure.uncertain()) {
-                        return Ok(Success::reply(Reply::SdkRefused(refusal)));
-                    }
-                    return Err(failure);
                 }
-            };
+                // a lookup refusal is the answer only once nothing stays admitted
+                if let (Some(refusal), true) = (missing, withdrawn && !failure.uncertain()) {
+                    return Ok(Success::reply(Reply::SdkRefused(refusal)));
+                }
+                return Err(failure);
+            }
+        };
         let token = WorkspaceToken {
             workspace,
             namespace: bound.workspace.route().namespace(),
@@ -402,7 +399,7 @@ impl Service {
     }
     /// Poison recovery stores this exact owner only; a poisoned registry never
     /// authorizes another product operation.
-    pub(super) fn settle(
+    pub(crate) fn settle(
         &self,
         token: WorkspaceToken,
         kernel: super::super::kernel::Kernel,
@@ -450,7 +447,7 @@ impl Service {
             }
         }
     }
-    pub(super) fn job<T>(
+    pub(crate) fn job<T>(
         &self,
         route: layerfs_vfs::Route,
         command: impl FnOnce(

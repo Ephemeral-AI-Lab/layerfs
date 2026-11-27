@@ -28,7 +28,7 @@ pub enum KernelServing {}
 pub use super::fuse::dispatcher::KernelServing;
 
 /// The registry is the sole authority for which connection an entry owns.
-pub(super) enum Kernel {
+pub(crate) enum Kernel {
     Unattached,
     /// One Attach is admitted, or its engine outcome is unknown.
     Attaching,

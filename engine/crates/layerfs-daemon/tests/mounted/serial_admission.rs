@@ -3,22 +3,15 @@
 //! held. Commit Begin must still answer Busy. All observations are counts;
 //! subprocesses and the writer have independent finite lifetimes.
 #![cfg(target_os = "linux")]
-#[allow(dead_code)]
-#[path = "../support/gate/held_writer.rs"]
-mod held_writer;
-#[allow(dead_code)]
-#[path = "../support/installed_store.rs"]
-mod installed;
-#[allow(dead_code)]
-#[path = "../support/rigs/namespace_model.rs"]
-mod model;
-#[allow(dead_code)]
-#[path = "../support/mounted.rs"]
-mod mounted;
-#[allow(dead_code)]
-#[path = "../support/mounted_commit.rs"]
-mod rig;
+use crate::held_writer;
+use crate::installed;
+use crate::mounted;
+use crate::rig;
 use held_writer::HeldWriter;
+use layerfs_daemon::{
+    store::{CommitError, CommitPhase},
+    workspace::Failure,
+};
 use layerfs_storage::StorageError;
 use mounted::COMMAND;
 use rig::{root, Rig};
@@ -26,10 +19,6 @@ use std::{
     fs,
     os::unix::{fs::MetadataExt, process::CommandExt},
     process::{Command, Stdio},
-};
-use {
-    layerfs_daemon::workspace::Failure,
-    layerfs_store_service::store::{CommitError, CommitPhase},
 };
 
 #[test]

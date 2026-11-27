@@ -6,18 +6,9 @@
 //! read again through daemon READs, committed, read from the published root
 //! and through a fresh mount. Counts are printed; nothing is timed.
 #![cfg(target_os = "linux")]
-#[allow(dead_code)]
-#[path = "../support/installed_store.rs"]
-mod installed;
-#[allow(dead_code)]
-#[path = "../support/rigs/namespace_model.rs"]
-mod model;
-#[allow(dead_code)]
-#[path = "../support/mounted.rs"]
-mod mounted;
-#[allow(dead_code)]
-#[path = "../support/mounted_commit.rs"]
-mod rig;
+use crate::model;
+use crate::mounted;
+use crate::rig;
 use model::assert_same;
 use mounted::COMMAND;
 use nix::libc;

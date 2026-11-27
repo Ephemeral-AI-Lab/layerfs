@@ -9,10 +9,10 @@ use super::super::{
     registry::bound_mut,
     Failure, Service, Success,
 };
+use crate::store::BoundWorkspace;
 use layerfs_fuse::session::{Drained, SessionObserver, Undrained};
 use layerfs_overlay::KernelMount;
 use layerfs_protocol::daemon::{Activity, ForcedFacts, MountPhase, WorkspaceToken};
-use layerfs_store_service::store::BoundWorkspace;
 use std::sync::Arc;
 
 /// A retained forced connection taken out of its entry for one more detach.

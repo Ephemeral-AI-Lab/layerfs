@@ -3,18 +3,8 @@
 //! through the mount makes the name visible at once, and a merged install
 //! makes a name another Workspace added visible after its Commit returns.
 #![cfg(target_os = "linux")]
-#[allow(dead_code)]
-#[path = "../support/installed_store.rs"]
-mod installed;
-#[allow(dead_code)]
-#[path = "../support/rigs/namespace_model.rs"]
-mod model;
-#[allow(dead_code)]
-#[path = "../support/mounted.rs"]
-mod mounted;
-#[allow(dead_code)]
-#[path = "../support/mounted_commit.rs"]
-mod rig;
+use crate::mounted;
+use crate::rig;
 use layerfs_fuse::request::Opcode;
 use layerfs_protocol::daemon::Reply;
 use mounted::COMMAND;

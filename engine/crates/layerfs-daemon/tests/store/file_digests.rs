@@ -5,9 +5,7 @@
 //! digests only of chunked files, at or above the small-file threshold
 //! (#91): a smaller file is one whole-file object, which a rebuild finds by
 //! its identity, so it is built again and stores nothing new.
-#[path = "../support/installed_store.rs"]
-#[allow(dead_code)]
-mod support;
+use crate::installed as support;
 use layerfs_content::filesystem::{FilesystemRead, FilesystemRootId, PathName};
 use layerfs_content::object::inode_leaf::InodeValue;
 use layerfs_history::{CommitOutcome, WorkspaceId};

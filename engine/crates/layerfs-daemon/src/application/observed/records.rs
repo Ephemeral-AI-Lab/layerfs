@@ -1,7 +1,7 @@
 //! Explicit per-control numeric observations of existing counters only.
 pub(crate) use super::schema::{commit_parts, namespace_values, storage_values};
 
-use super::super::startup::lifecycle::SlotClass;
+use super::super::connection::slots::SlotClass;
 use super::super::Application;
 use crate::workspace::{Failure, Success};
 use layerfs_protocol::daemon::{Call, ControlCode, Request};
@@ -47,7 +47,12 @@ impl<'a, W: Write> Records<'a, W> {
             unavailable: 0,
         }
     }
-    fn row(&mut self, section: u16, index: i64, values: Option<&[u64]>) -> io::Result<()> {
+    pub(crate) fn row(
+        &mut self,
+        section: u16,
+        index: i64,
+        values: Option<&[u64]>,
+    ) -> io::Result<()> {
         if self.records >= self.maximum as u64 {
             return Err(io::Error::other("diagnostic record count exceeded"));
         }
@@ -141,7 +146,7 @@ pub(super) type Observed = (
     Option<SdkValue>,
 );
 impl Application {
-    pub(super) fn observed_control(&self, call: &Call, slot: usize, class: SlotClass) -> Observed {
+    pub(crate) fn observed_control(&self, call: &Call, slot: usize, class: SlotClass) -> Observed {
         let operation = match call.request.without_observation() {
             Ok(operation) => operation,
             Err(_) => {
@@ -183,13 +188,9 @@ impl Application {
         // A traced call's SQL work is the Store sessions' totals after it
         // minus before it.
         let sessions = traced
-            .then(|| {
-                self.observed_store(layerfs_store_service::bootstrap::OpenedStore::sql_sessions)
-            })
+            .then(|| self.observed_store(crate::bootstrap::OpenedStore::sql_sessions))
             .flatten();
-        let before = sessions
-            .as_ref()
-            .map(layerfs_store_service::bootstrap::SqlSessions::totals);
+        let before = sessions.as_ref().map(crate::bootstrap::SqlSessions::totals);
         // And its delta selection work: the Store's Save totals after it minus
         // before it.
         let saves = traced
@@ -197,22 +198,18 @@ impl Application {
             .flatten();
         let saves_before = saves.as_ref().map(|store| store.save_counters());
         let observed_before = observing.elapsed();
-        let recording = traced.then(layerfs_store_service::telemetry::Recording::start);
+        let recording = traced.then(crate::telemetry::Recording::start);
         let outcome = self.control_operation(operation, class);
-        let reports = recording.map(layerfs_store_service::telemetry::Recording::finish);
+        let reports = recording.map(crate::telemetry::Recording::finish);
         let observed_after = std::time::Instant::now();
         let sql = sessions
             .as_ref()
             .zip(before)
-            .and_then(|(sessions, before)| {
-                layerfs_store_service::telemetry::sql(before, sessions.totals())
-            });
+            .and_then(|(sessions, before)| crate::telemetry::sql(before, sessions.totals()));
         let delta = saves
             .as_ref()
             .zip(saves_before)
-            .and_then(|(store, before)| {
-                layerfs_store_service::telemetry::delta(before, store.save_counters())
-            });
+            .and_then(|(store, before)| crate::telemetry::delta(before, store.save_counters()));
         // A traced status or unmount carries the Workspace's kernel opcode
         // counts since attach.
         #[cfg(target_os = "linux")]
@@ -367,7 +364,7 @@ impl Application {
     /// `read` over the installed, existing or failed-install opened Store.
     fn observed_store<T>(
         &self,
-        read: impl FnOnce(&layerfs_store_service::bootstrap::OpenedStore) -> T,
+        read: impl FnOnce(&crate::bootstrap::OpenedStore) -> T,
     ) -> Option<T> {
         let state = self.state.lock().ok()?;
         let startup = &state.startup;

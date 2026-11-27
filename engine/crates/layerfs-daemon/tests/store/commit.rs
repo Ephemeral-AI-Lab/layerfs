@@ -3,8 +3,7 @@
 mod held_writer;
 #[path = "../support/gate/history_boundary.rs"]
 mod history_boundary;
-#[path = "../support/installed_store.rs"]
-mod support;
+use crate::installed as support;
 use layerfs_content::filesystem::{
     FilesystemInput, FilesystemObjects, FilesystemRead, FilesystemResources, FilesystemRoot,
     FilesystemRootId, InodeScope, InodeUpdate, PathName,
@@ -582,10 +581,10 @@ fn observed_store(
         SqliteHandles::open_writable(f.config.clone(), support::BINDING, support::CURSOR).unwrap(),
     );
     let config = f.config.clone();
-    let factory: layerfs_store_service::store::ReaderFactory = Arc::new(move |_| {
+    let factory: layerfs_daemon::store::ReaderFactory = Arc::new(move |_| {
         let read =
             SqliteHandles::open_read_only(config.clone(), support::BINDING, support::CURSOR)?;
-        Ok(layerfs_store_service::store::StoreReader::new(
+        Ok(layerfs_daemon::store::StoreReader::new(
             layerfs_storage::Storage::new(read.storage)?,
             Arc::new(read.history),
         ))
@@ -796,7 +795,7 @@ fn unknown_publication(
     Arc<Store>,
     Owner,
     Arc<BoundWorkspace>,
-    Box<layerfs_store_service::store::CommitFailure>,
+    Box<layerfs_daemon::store::CommitFailure>,
 ) {
     let f = support::Fixture::new(8, label);
     let (store, _handles) = observed_store(&f, boundary);

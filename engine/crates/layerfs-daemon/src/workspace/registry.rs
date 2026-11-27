@@ -13,7 +13,7 @@ use std::{
     collections::BTreeMap,
     sync::{Arc, Mutex},
 };
-pub(super) struct Binding {
+pub(crate) struct Binding {
     pub kernel: Kernel,
     pub workspace: Arc<BoundWorkspace>,
     pub snapshot: BranchSnapshot,
@@ -108,7 +108,7 @@ impl Service {
     pub fn operation(
         &self,
         token: WorkspaceToken,
-    ) -> Result<layerfs_store_service::store::StoreOperation, Failure> {
+    ) -> Result<crate::store::StoreOperation, Failure> {
         let workspace = {
             let entries = self.entries.lock().map_err(|_| Failure::Poisoned)?;
             let value = bound(&entries, token)?;

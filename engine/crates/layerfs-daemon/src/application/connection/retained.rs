@@ -57,24 +57,20 @@ impl RetainedFailure {
     /// The record for a slot whose in-flight request passed
     /// `request_deadline` (#547 slice 5): its effect is unknown, so it is
     /// recorded rather than released, with `reply_sent: false`.
-    pub fn expired(ticket: super::super::startup::lifecycle::SlotTicket, owner: &str) -> Self {
+    pub fn expired(ticket: super::slots::SlotTicket, owner: &str) -> Self {
         Self::phase(ticket, owner, "Expired")
     }
 
     /// The record for a slot an operator reclaimed by
     /// `backend.daemon.reclaim` (#547 slice 5): its in-flight effect is
     /// unknown and its worker's socket is closed.
-    pub fn reclaimed(ticket: super::super::startup::lifecycle::SlotTicket, owner: &str) -> Self {
+    pub fn reclaimed(ticket: super::slots::SlotTicket, owner: &str) -> Self {
         Self::phase(ticket, owner, "Reclaimed")
     }
 
     /// The common shape of an `Expired` or `Reclaimed` record: no decoded
     /// request, no reply sent, and a bounded textual deciding cause.
-    fn phase(
-        ticket: super::super::startup::lifecycle::SlotTicket,
-        owner: &str,
-        cause: &str,
-    ) -> Self {
+    fn phase(ticket: super::slots::SlotTicket, owner: &str, cause: &str) -> Self {
         Self {
             slot: ticket.index,
             class: ticket.class.as_str(),
@@ -96,7 +92,7 @@ impl RetainedFailure {
     /// The bounded record for `failure`, built outside the state lock.
     pub fn describe(
         failure: &ConnectionFailure,
-        class: super::super::startup::lifecycle::SlotClass,
+        class: super::slots::SlotClass,
         generation: u64,
         owner: &str,
     ) -> Self {

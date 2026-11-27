@@ -9,12 +9,8 @@
 //! process's resident peak during it (the daemon serves in this process).
 //! Normal profile; the daemon's 64 MiB object cache.
 #![cfg(target_os = "linux")]
-#[allow(dead_code)]
-#[path = "../support/installed_store.rs"]
-mod installed;
-#[allow(dead_code)]
-#[path = "../support/mounted.rs"]
-mod mounted;
+use crate::installed;
+use crate::mounted;
 use layerfs_persistence::SqlWork;
 use layerfs_store_service::bootstrap::{open_store_observed, OpenedStore};
 use mounted::Harness;

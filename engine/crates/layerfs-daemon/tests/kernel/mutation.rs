@@ -1,21 +1,9 @@
 //! Real kernel mounts: ordinary mutation through plain filesystem syscalls,
 //! with cached reads, uncached reads and attributes agreeing at once.
 #![cfg(target_os = "linux")]
-#[allow(dead_code)]
-#[path = "../support/complete/bytes.rs"]
-mod bytes;
-#[allow(dead_code)]
-#[path = "../support/complete/fixture.rs"]
-mod fixture;
-#[allow(dead_code)]
-#[path = "../support/mounted.rs"]
-mod mounted;
-#[allow(dead_code)]
-#[path = "../support/mutating.rs"]
-mod mutating;
-#[allow(dead_code)]
-#[path = "../support/install/host.rs"]
-mod support;
+use crate::fixture;
+use crate::mounted;
+use crate::mutating;
 use mounted::COMMAND;
 use mutating::{direct, errno, harness, quiet, shell, unmounted};
 use nix::errno::Errno;

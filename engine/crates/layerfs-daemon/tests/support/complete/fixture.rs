@@ -1,6 +1,11 @@
 //! Kernel source creation and authenticated installation, retaining failures.
 use super::{bytes, support};
 use layerfs_content::filesystem::attributes::PortableMetadata;
+use layerfs_daemon::{
+    bootstrap::{open_store_observed, OpenedStore},
+    install::outcome::StoreSettings,
+    install::receive_install,
+};
 use layerfs_history::{BranchId, HistoryCatalogConfig, HistoryName, LayerStackId};
 use layerfs_persistence::{PersistenceConfig, SqlitePersistenceProfile};
 use layerfs_project::store::{InitRequest, ProjectApi};
@@ -15,10 +20,6 @@ use std::{
     },
     path::{Path, PathBuf},
     time::{Duration, Instant, SystemTime},
-};
-use {
-    layerfs_daemon::install::{outcome::StoreSettings, receive::receive_install},
-    layerfs_store_service::bootstrap::{open_store_observed, OpenedStore},
 };
 #[derive(Clone, Copy, Debug)]
 pub enum Shape {

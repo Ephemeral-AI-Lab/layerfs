@@ -150,9 +150,7 @@ impl Service {
         // Drain barrier holds: one fixed logical mark, then indexed retirement.
         match self.job(
             workspace.route(),
-            |job_client: &layerfs_store_service::OwnerClient, job_route| {
-                job_client.kernel_revoke(job_route, mount)
-            },
+            |job_client: &crate::OwnerClient, job_route| job_client.kernel_revoke(job_route, mount),
         ) {
             Ok(()) => {}
             Err(failure) => {

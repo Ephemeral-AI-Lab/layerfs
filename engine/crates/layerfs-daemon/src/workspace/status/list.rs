@@ -1,9 +1,9 @@
 //! The operator read model's Workspace half: this daemon's bound Workspaces,
 //! copied from the registry, with one engine observation each.
 use super::super::{registry::Entry, Service};
+use crate::operator::{self, WorkspaceView};
 use layerfs_protocol::daemon::{Activity, MountPhase, Reply};
 use layerfs_protocol::sdk::{SdkCall, SdkRefusal, SdkValue};
-use {crate::operator, layerfs_store_service::operator::WorkspaceView};
 
 pub(super) fn activity(value: Activity) -> &'static str {
     match value {
@@ -53,7 +53,9 @@ impl Service {
                     .ok();
                 let pending = matches!(workspace.pending_conflicts(), Ok(Some(_)));
                 WorkspaceView {
-                    workspace: layerfs_protocol::sdk::hex(&workspace.identity().to_bytes()),
+                    workspace: layerfs_store_service::history::lookup::hex(
+                        &workspace.identity().to_bytes(),
+                    ),
                     namespace: route.namespace(),
                     activity: activity(state),
                     mounted: kernel.phase == MountPhase::Ready,

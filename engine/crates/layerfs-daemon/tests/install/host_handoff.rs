@@ -2,9 +2,7 @@
 #[cfg(target_os = "macos")]
 #[path = "../support/install/docker.rs"]
 mod docker;
-#[allow(dead_code)]
-#[path = "../support/install/host.rs"]
-mod support;
+use crate::support;
 
 #[cfg(target_os = "macos")]
 #[test]
@@ -59,7 +57,7 @@ fn macos_init_handoff_to_linux_daemon_has_no_host_data_path() {
 #[test]
 #[ignore = "external daemon role; invoked explicitly by the macOS handoff proof"]
 fn linux_daemon_install_role() {
-    use layerfs_daemon::install::{outcome::StoreSettings, receive::receive_install};
+    use layerfs_daemon::{install::outcome::StoreSettings, install::receive_install};
     use layerfs_protocol::duplex;
     use std::{io::Write, net::TcpListener, path::Path};
     assert_eq!(std::env::var("LAYERFS_INSTALL_CHILD").as_deref(), Ok("1"));

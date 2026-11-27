@@ -1,4 +1,9 @@
-//! Live Workspace diagnostics over bounded source/list windows, with exact release.
+//! `backend.daemon.workspace.list_changes`: live Workspace diagnostics over
+//! bounded source/list windows, with exact release.
+use crate::{
+    store::{BoundWorkspace, StoreOperation},
+    workspace::Service,
+};
 use layerfs_content::{
     compare::{EntryFacts, TreeTable},
     filesystem::FilesystemRootId,
@@ -16,10 +21,6 @@ use layerfs_store_service::{
 };
 use layerfs_vfs::{OverlayRead, SourceView, ViewStat};
 use std::sync::Arc;
-use {
-    crate::workspace::Service,
-    layerfs_store_service::store::{BoundWorkspace, StoreOperation},
-};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 struct Frame {
@@ -125,7 +126,7 @@ impl VisibleBase<'_> {
     }
 }
 
-fn selected(service: &Service, args: &SdkValue) -> Result<Arc<BoundWorkspace>> {
+pub(super) fn selected(service: &Service, args: &SdkValue) -> Result<Arc<BoundWorkspace>> {
     service
         .operator_workspace(text(args, "path")?)
         .map_err(|e| args::failed(format!("{e:?}")))
@@ -351,67 +352,4 @@ pub fn changes_of(service: &Service, workspace: &BoundWorkspace, args: &SdkValue
             ("nextPagePos", next),
         ]))
     })
-}
-
-/// `backend.daemon.workspace.list_changed { path, under? }`: what a Commit
-/// would capture now, from one bounded read of the overlay
-/// (`Service::changed`): `{ entries: [{ path, change, type }], partial,
-/// activity, activityPhase, activitySinceMs }`, `type` `dir` or `file`.
-/// The activity is observed just before the read: its word (as the Status
-/// record's `activity` prints), the phase its operation is in (null when
-/// none runs) and when it began. It rides here, not in the Status record,
-/// so that record keeps the bytes other builds read.
-pub(crate) fn changed(service: &Service, args: &SdkValue) -> Answer {
-    let workspace = selected(service, args)?;
-    let activity = service.operator_activity(text(args, "path")?);
-    let under = args.get_text("under");
-    let found = service
-        .changed(&workspace, under)
-        .map_err(|e| args::failed(format!("{e:?}")))?;
-    let entries = (found.entries.into_iter())
-        .map(|(path, change, folder)| {
-            SdkValue::map([
-                ("path", SdkValue::Text(path)),
-                ("change", SdkValue::text(change)),
-                ("type", SdkValue::text(if folder { "dir" } else { "file" })),
-            ])
-        })
-        .collect();
-    let (word, phase, since) = match activity {
-        Some((activity, phase, since)) => (
-            SdkValue::text(format!("{activity:?}")),
-            SdkValue::opt_text(Some(phase).filter(|phase| !phase.is_empty())),
-            SdkValue::Int(since),
-        ),
-        None => (SdkValue::Null, SdkValue::Null, SdkValue::Null),
-    };
-    Ok(SdkValue::map([
-        ("entries", SdkValue::List(entries)),
-        ("partial", SdkValue::Bool(found.partial)),
-        ("activity", word),
-        ("activityPhase", phase),
-        ("activitySinceMs", since),
-    ]))
-}
-
-/// The overlay's own row counts, read from its database alone (#508). Path
-/// change counts are `null`: naming them walks the base tree, which costs
-/// minutes on a large tree, and state reads call this for every Workspace.
-/// `list_changes` pages the changed paths on request.
-pub(crate) fn overlay(service: &Service, args: &SdkValue) -> Answer {
-    let workspace = selected(service, args)?;
-    let op = workspace.operation().map_err(args::failed)?;
-    let resources = op.overlay().resources().map_err(args::failed)?;
-    let c = resources.counts;
-    Ok(SdkValue::map([
-        ("inodes", SdkValue::Int(c.inode_rows as i64)),
-        ("entries", SdkValue::Int(c.directory_entry_rows as i64)),
-        ("payload", SdkValue::Int(c.payload_bytes as i64)),
-        ("metadata", SdkValue::Null),
-        (
-            "metadataRows",
-            SdkValue::Int((c.inode_rows + c.directory_entry_rows + c.operation_record_rows) as i64),
-        ),
-        ("changes", SdkValue::Null),
-    ]))
 }

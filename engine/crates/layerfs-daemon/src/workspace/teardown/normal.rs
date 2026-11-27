@@ -4,8 +4,8 @@ use super::super::{
     registry::{bound_mut, idle},
     Failure, KernelEvidence, Service, Success,
 };
+use crate::store::BoundWorkspace;
 use layerfs_protocol::daemon::{Activity, ForcedFacts, Reply, UnmountControl, WorkspaceToken};
-use layerfs_store_service::store::BoundWorkspace;
 use std::sync::Arc;
 
 /// Original kernel connection receipt carried to Close.
@@ -121,7 +121,7 @@ impl Service {
         Ok((value.workspace.clone(), departure))
     }
     /// Logical Close and routing removal, after every kernel owner is revoked.
-    pub(super) fn close(
+    pub(crate) fn close(
         &self,
         token: WorkspaceToken,
         workspace: &BoundWorkspace,
@@ -146,7 +146,7 @@ impl Service {
     }
     /// The one logical Close. Acknowledged, it hands back its completion with
     /// the receipts it was given; otherwise the entry keeps them.
-    pub(super) fn closed(
+    pub(crate) fn closed(
         &self,
         token: WorkspaceToken,
         workspace: &BoundWorkspace,
@@ -157,11 +157,9 @@ impl Service {
             Ok(()) => Ok(kernel),
             Err(error) => {
                 let failure = match error {
-                    layerfs_store_service::store::CloseError::Owner(cause) => Failure::Owner(cause),
-                    layerfs_store_service::store::CloseError::Intent(cause) => {
-                        Failure::History(cause)
-                    }
-                    layerfs_store_service::store::CloseError::Reader(cause) => {
+                    crate::store::CloseError::Owner(cause) => Failure::Owner(cause),
+                    crate::store::CloseError::Intent(cause) => Failure::History(cause),
+                    crate::store::CloseError::Reader(cause) => {
                         Failure::Workspace(layerfs_vfs::WorkspaceError::Service(Box::new(cause)))
                     }
                 };
@@ -170,7 +168,7 @@ impl Service {
         }
     }
     /// Routing removal after an acknowledged Close; the reply is already known.
-    pub(super) fn depart(
+    pub(crate) fn depart(
         &self,
         token: WorkspaceToken,
         success: Success,
@@ -230,7 +228,7 @@ impl Service {
     }
     /// FUSE Attach is a Linux capability; elsewhere only NFS serving attaches.
     #[cfg(not(target_os = "linux"))]
-    pub(super) fn attach(
+    pub(crate) fn attach(
         &self,
         token: WorkspaceToken,
         _timing: &layerfs_telemetry::timer::TimingScope<'_, layerfs_telemetry::timer::Active>,

@@ -27,24 +27,12 @@
 //! `read(2)` inside its file's size, with one request waiting for a Store
 //! reader; the receipt's READ count is printed at the end. Nothing is timed.
 #![cfg(target_os = "linux")]
-#[allow(dead_code)]
-#[path = "../support/kernel/fusectl.rs"]
-mod fusectl;
+use crate::fusectl;
 #[allow(dead_code)]
 #[path = "../support/kernel/holds.rs"]
 mod holds;
-#[allow(dead_code)]
-#[path = "../support/installed_store.rs"]
-mod installed;
-#[allow(dead_code)]
-#[path = "../support/rigs/namespace_model.rs"]
-mod model;
-#[allow(dead_code)]
-#[path = "../support/mounted.rs"]
-mod mounted;
-#[allow(dead_code)]
-#[path = "../support/mounted_commit.rs"]
-mod rig;
+use crate::mounted;
+use crate::rig;
 use layerfs_protocol::daemon::{MountPhase, MountWork, WorkspaceToken};
 use mounted::{mount_entry, COMMAND};
 use rig::{bash_in, passed, pattern, root, stamp_tree, Rig};

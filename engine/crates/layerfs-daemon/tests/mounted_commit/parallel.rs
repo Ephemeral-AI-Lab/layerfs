@@ -6,18 +6,10 @@
 //! and publishes inside the Store's publication lane, so the second merges once
 //! with the first's Commit and both publish (no HeadMoved, no second merge).
 #![cfg(target_os = "linux")]
-#[allow(dead_code)]
-#[path = "../support/installed_store.rs"]
-mod installed;
-#[allow(dead_code)]
-#[path = "../support/rigs/namespace_model.rs"]
-mod model;
-#[allow(dead_code)]
-#[path = "../support/mounted.rs"]
-mod mounted;
-#[allow(dead_code)]
-#[path = "../support/mounted_commit.rs"]
-mod rig;
+use crate::model;
+use crate::mounted;
+use crate::rig;
+use layerfs_daemon::{store::CommitError, workspace::Failure};
 use layerfs_history::{CommitOutcome, HistoryError};
 use layerfs_protocol::daemon::{Activity, Reply};
 use mounted::COMMAND;
@@ -29,7 +21,6 @@ use std::{
     thread,
     time::{Duration, Instant},
 };
-use {layerfs_daemon::workspace::Failure, layerfs_store_service::store::CommitError};
 
 struct AdmissionHolder(Child);
 impl AdmissionHolder {

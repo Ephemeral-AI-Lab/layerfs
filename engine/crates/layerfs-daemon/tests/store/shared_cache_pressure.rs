@@ -16,18 +16,14 @@
 #[allow(dead_code)]
 #[path = "../support/rigs/captured_drive.rs"]
 mod drive;
-#[allow(dead_code)]
-#[path = "../support/rigs/namespace_model.rs"]
-mod model;
+use crate::model;
 #[allow(dead_code)]
 #[path = "../support/rigs/shared_cache.rs"]
 mod rig;
-#[allow(dead_code)]
-#[path = "../support/installed_store.rs"]
-mod support;
+use crate::installed as support;
 use drive::evidence;
 use layerfs_content::{AuthenticatedObjects, ObjectId};
-use layerfs_store_service::store::BoundWorkspace;
+use layerfs_daemon::store::BoundWorkspace;
 use rig::{apply, commit, pattern, read, Daemon, Do, Tree};
 use std::{
     collections::BTreeSet,

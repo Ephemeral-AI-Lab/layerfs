@@ -16,12 +16,12 @@
 //! the same read. Paths are found as the Dirty check finds them.
 use super::super::{Failure, Service};
 use super::dirty::{join, Names, WALK};
+use crate::store::BoundWorkspace;
 use layerfs_content::compare::{locate, TreeTable};
 use layerfs_content::filesystem::attributes::{read_portable, AttributeReadWork};
 use layerfs_content::filesystem::{FilesystemRootId, PathName};
 use layerfs_content::object::inode_leaf::InodeKind;
 use layerfs_content::ObjectId;
-use layerfs_store_service::store::BoundWorkspace;
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Overlay rows one read takes.

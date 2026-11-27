@@ -2,12 +2,8 @@
 //! A transparent observer records actual kernel owner outcomes; it injects no
 //! fault, changes no input and retains no response or owner credit.
 #![cfg(target_os = "linux")]
-#[allow(dead_code)]
-#[path = "../support/kernel/fusectl.rs"]
-mod fusectl;
-#[allow(dead_code)]
-#[path = "../support/installed_store.rs"]
-mod installed;
+use crate::fusectl;
+use crate::installed;
 use layerfs_fuse::{
     attributes::Identity,
     mount::AbortWrite,

@@ -82,7 +82,7 @@ pub(crate) fn fuse(w: &layerfs_fuse::request::OpcodeWork) -> SdkValue {
         .collect();
     fields.push(("ns".to_owned(), SdkValue::Map(nanos)));
     // Steps inside the callbacks: [count, ns] for the steps that ran.
-    use layerfs_vfs::requests::phase::Phase;
+    use layerfs_fuse::request::Phase;
     let phases = Phase::NAMES
         .iter()
         .zip(w.phase_counts.iter().zip(w.phase_nanos))

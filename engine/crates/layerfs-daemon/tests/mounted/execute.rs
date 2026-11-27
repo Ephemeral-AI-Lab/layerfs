@@ -1,21 +1,8 @@
 //! Real kernel mounts: a program stored in the Workspace is executed by the
 //! kernel, and after an in-place rewrite the next execution is the rewrite.
 #![cfg(target_os = "linux")]
-#[allow(dead_code)]
-#[path = "../support/complete/bytes.rs"]
-mod bytes;
-#[allow(dead_code)]
-#[path = "../support/complete/fixture.rs"]
-mod fixture;
-#[allow(dead_code)]
-#[path = "../support/mounted.rs"]
-mod mounted;
-#[allow(dead_code)]
-#[path = "../support/mutating.rs"]
-mod mutating;
-#[allow(dead_code)]
-#[path = "../support/install/host.rs"]
-mod support;
+use crate::mounted;
+use crate::mutating;
 use mounted::COMMAND;
 use mutating::{direct, errno, harness, shell, unmounted};
 use nix::errno::Errno;

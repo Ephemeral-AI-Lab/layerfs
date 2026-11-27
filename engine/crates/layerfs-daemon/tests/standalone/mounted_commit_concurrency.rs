@@ -46,6 +46,7 @@ mod mounted;
 #[allow(dead_code)]
 #[path = "../support/mounted_commit.rs"]
 mod rig;
+use layerfs_daemon::{workspace::Service, OwnerClient, OwnerWork, ServiceClass};
 use layerfs_history::{CommitOutcome, CommitRecord};
 use layerfs_protocol::daemon::{
     Activity, MountWork, ReadyMount, Reply, Request, WorkspaceStatus, WorkspaceToken,
@@ -69,10 +70,6 @@ use std::{
     },
     thread::{self, JoinHandle},
     time::{Duration, Instant},
-};
-use {
-    layerfs_daemon::workspace::Service,
-    layerfs_store_service::{OwnerClient, OwnerWork, ServiceClass},
 };
 
 /// Every bounded readiness or completion observation of the test.

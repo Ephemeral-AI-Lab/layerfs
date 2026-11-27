@@ -10,7 +10,8 @@
 #![forbid(unsafe_code)]
 
 mod operator;
-pub use self::request as mount_request;
+mod ports;
+pub use ports::{request as mount_request, Mounted};
 pub mod telemetry;
 pub use layerfs_store_service::{bootstrap, install as shared_install, store};
 
@@ -23,15 +24,9 @@ pub mod workspace;
 
 pub mod application;
 pub mod install;
-pub(crate) mod ports;
-
-// Daemon service observations and completion ownership.
-pub use ports::{request, Mounted};
 
 // #828 compat: old public module paths, removed in wave 3.
 #[doc(hidden)]
-pub use crate::install::outcome as install_types;
+pub use crate::install::outcome as install_types; // #828 compat
 #[doc(hidden)]
-pub use crate::install::receive as install; // #828 compat
-#[doc(hidden)]
-pub use crate::workspace as control; // #828 compat // #828 compat
+pub use crate::workspace as control; // #828 compat

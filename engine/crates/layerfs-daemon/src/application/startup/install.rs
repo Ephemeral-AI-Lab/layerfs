@@ -12,7 +12,7 @@ use layerfs_protocol::{
 use layerfs_storage::ReservationBlocks;
 
 impl Application {
-    pub(super) fn install(
+    pub(crate) fn install(
         &self,
         connection: &mut Connection,
         manifest: StoreManifest,
@@ -73,7 +73,7 @@ impl Application {
             cache_bytes: usize::try_from(l.cache_bytes).map_err(|_| self.poisoned(slot))?,
             reservations: ReservationBlocks::default(),
         };
-        let result = crate::install::receive::receive_install_manifest(
+        let result = crate::install::receive_install_manifest(
             connection,
             std::path::Path::new(match &self.setup.store {
                 layerfs_protocol::DaemonStore::Sqlite { locator, .. } => locator.as_str(),

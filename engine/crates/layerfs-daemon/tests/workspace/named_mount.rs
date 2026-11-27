@@ -6,12 +6,7 @@
 //! project name, an invalid Branch name and `main` refuse as the lookup
 //! does. On the installed SQLite Store; the PostgreSQL statement is counted
 //! by store-service `postgresql_open_cost` and `postgresql_phase_attribution`.
-#[allow(dead_code)]
-#[path = "../support/install/control_fixture.rs"]
-mod fixture;
-#[allow(dead_code)]
-#[path = "../support/install/host.rs"]
-mod support;
+use crate::fixture;
 use layerfs_history::{BranchId, ForkRequest, ForkSource, HistoryName, LayerStackId, WorkspaceId};
 use layerfs_protocol::daemon::{Reply, Request};
 

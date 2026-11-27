@@ -4,7 +4,7 @@ use layerfs_overlay::CleanupState;
 use layerfs_protocol::daemon::{CleanupObservation, Reply, WorkspaceToken};
 
 impl Service {
-    pub(super) fn cleanup(&self, token: WorkspaceToken) -> Result<Success, Failure> {
+    pub(crate) fn cleanup(&self, token: WorkspaceToken) -> Result<Success, Failure> {
         let done = self
             .owner
             .observe_cleanup(None, token.namespace, token.workspace.to_bytes())

@@ -3,21 +3,7 @@
 //! `EINVAL`; positions taken since still resume strictly after their name.
 //! Ordinary libc calls of a process the daemon never registered.
 #![cfg(target_os = "linux")]
-#[allow(dead_code)]
-#[path = "../support/complete/bytes.rs"]
-mod bytes;
-#[allow(dead_code)]
-#[path = "../support/complete/fixture.rs"]
-mod fixture;
-#[allow(dead_code)]
-#[path = "../support/mounted.rs"]
-mod mounted;
-#[allow(dead_code)]
-#[path = "../support/mutating.rs"]
-mod mutating;
-#[allow(dead_code)]
-#[path = "../support/install/host.rs"]
-mod support;
+use crate::mutating;
 use mutating::{harness, quiet, unmounted};
 use nix::{errno::Errno, libc};
 use std::{

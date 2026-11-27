@@ -8,7 +8,7 @@ impl Service {
     pub(crate) fn operator_workspace(
         &self,
         directory: &str,
-    ) -> Result<Arc<layerfs_store_service::store::BoundWorkspace>, Failure> {
+    ) -> Result<Arc<crate::store::BoundWorkspace>, Failure> {
         let entries = self.entries.lock().map_err(|_| Failure::Poisoned)?;
         entries
             .values()
@@ -56,13 +56,13 @@ impl Service {
         })
     }
 
-    pub(crate) fn observed_store(&self) -> Arc<layerfs_store_service::store::Store> {
+    pub(crate) fn observed_store(&self) -> Arc<crate::store::Store> {
         self.store.clone()
     }
     pub(crate) fn observed_overlay(
         &self,
         token: WorkspaceToken,
-    ) -> Result<layerfs_store_service::OwnerClient, Failure> {
+    ) -> Result<crate::OwnerClient, Failure> {
         let entries = self.entries.lock().map_err(|_| Failure::Poisoned)?;
         let workspace = &bound(&entries, token)?.workspace;
         workspace

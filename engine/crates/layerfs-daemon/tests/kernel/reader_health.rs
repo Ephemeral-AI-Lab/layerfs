@@ -43,19 +43,11 @@
 //! and cannot be: the lane was at its bound by the Store's own answer, the
 //! READ was granted no reader, and no failed demand was recorded.
 #![cfg(target_os = "linux")]
-#[allow(dead_code)]
-#[path = "../support/installed_store.rs"]
-mod installed;
-#[allow(dead_code)]
-#[path = "../support/rigs/namespace_model.rs"]
-mod model;
-#[allow(dead_code)]
-#[path = "../support/mounted.rs"]
-mod mounted;
-#[allow(dead_code)]
-#[path = "../support/mounted_commit.rs"]
-mod rig;
+use crate::installed;
+use crate::mounted;
+use crate::rig;
 use layerfs_content::ObjectId;
+use layerfs_daemon::store::{PortError, Store, StoreReader};
 use layerfs_persistence::{SqliteHandles, SqlitePersistenceProfile, StorageProvider};
 use layerfs_protocol::daemon::{MountWork, WorkspaceToken};
 use layerfs_storage::{
@@ -63,7 +55,6 @@ use layerfs_storage::{
     port::{PackPersistence, PackReadChoice, PackReadPlan, PersistenceError},
     ReservationBlocks, Storage,
 };
-use layerfs_store_service::store::{PortError, Store, StoreReader};
 use mounted::{mount_entry, Harness};
 use nix::{errno::Errno, libc};
 use rig::{pattern, root, stamp_tree};
@@ -175,7 +166,7 @@ impl Fx {
         let readers = Arc::new(Mutex::new(Vec::new()));
         let reader_config = fixture.config.clone();
         let observed_readers = readers.clone();
-        let factory: layerfs_store_service::store::ReaderFactory = Arc::new(move |_| {
+        let factory: layerfs_daemon::store::ReaderFactory = Arc::new(move |_| {
             let read = SqliteHandles::open_read_only(
                 reader_config.clone(),
                 installed::BINDING,

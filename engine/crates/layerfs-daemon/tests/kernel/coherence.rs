@@ -2,21 +2,8 @@
 //! directory mutation, size ordering under concurrent append, refusals that
 //! stay refused and mutation racing the reversible unmount probe.
 #![cfg(target_os = "linux")]
-#[allow(dead_code)]
-#[path = "../support/complete/bytes.rs"]
-mod bytes;
-#[allow(dead_code)]
-#[path = "../support/complete/fixture.rs"]
-mod fixture;
-#[allow(dead_code)]
-#[path = "../support/mounted.rs"]
-mod mounted;
-#[allow(dead_code)]
-#[path = "../support/mutating.rs"]
-mod mutating;
-#[allow(dead_code)]
-#[path = "../support/install/host.rs"]
-mod support;
+use crate::mounted;
+use crate::mutating;
 use layerfs_daemon::workspace::Failure;
 use layerfs_fuse::request::Opcode;
 use layerfs_protocol::daemon::{Activity, ControlCode, MountPhase};

@@ -2,18 +2,8 @@
 //! an abort control refuses forced teardown before any effect. This binary
 //! never mounts fusectl, so that it stays absent for its one test.
 #![cfg(target_os = "linux")]
-#[allow(dead_code)]
-#[path = "../support/installed_store.rs"]
-mod installed;
-#[allow(dead_code)]
-#[path = "../support/rigs/namespace_model.rs"]
-mod model;
-#[allow(dead_code)]
-#[path = "../support/mounted.rs"]
-mod mounted;
-#[allow(dead_code)]
-#[path = "../support/mounted_commit.rs"]
-mod rig;
+use crate::mounted;
+use crate::rig;
 use layerfs_daemon::workspace::Failure;
 use layerfs_protocol::daemon::{Activity, ControlCode, MountPhase};
 use mounted::{mount_entry, COMMAND};

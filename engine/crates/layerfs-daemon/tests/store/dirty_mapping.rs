@@ -20,24 +20,13 @@ mod bytes;
 #[allow(dead_code)]
 #[path = "../support/complete/fixture.rs"]
 mod fixture;
-#[allow(dead_code)]
-#[path = "../support/installed_store.rs"]
-mod installed;
-#[allow(dead_code)]
-#[path = "../support/rigs/namespace_model.rs"]
-mod model;
-#[allow(dead_code)]
-#[path = "../support/mounted.rs"]
-mod mounted;
+use crate::model;
+use crate::mounted;
 #[allow(dead_code)]
 #[path = "../support/mutating.rs"]
 mod mutating;
-#[allow(dead_code)]
-#[path = "../support/mounted_commit.rs"]
-mod rig;
-#[allow(dead_code)]
-#[path = "../support/install/host.rs"]
-mod support;
+use crate::rig;
+use crate::support;
 use layerfs_fuse::request::Opcode;
 use layerfs_protocol::daemon::{Activity, WorkspaceToken};
 use model::{assert_same, Flat, FILE};

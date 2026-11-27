@@ -1,4 +1,12 @@
 //! Authenticated one-time file installation and concrete Store bootstrap.
+use crate::{
+    bootstrap::open_store_observed,
+    install::{
+        file,
+        outcome::{InstallError, InstallFailure, InstallWork, InstalledStore, StoreSettings},
+    },
+    shared_install::{check_initial, InitialCheck},
+};
 use layerfs_persistence::{PersistenceConfig, SqlitePersistenceProfile};
 use layerfs_protocol::{
     duplex::Connection,
@@ -8,16 +16,6 @@ use layerfs_protocol::{
     },
 };
 use std::{fs, path::Path};
-use {
-    crate::install::{
-        file,
-        outcome::{InstallError, InstallFailure, InstallWork, InstalledStore, StoreSettings},
-    },
-    layerfs_store_service::{
-        bootstrap::open_store_observed,
-        install::{check_initial, InitialCheck},
-    },
-};
 
 /// Installs into the explicitly provisioned local destination. No caller-supplied
 /// locator can select another file. Every failure retains partial/output custody.

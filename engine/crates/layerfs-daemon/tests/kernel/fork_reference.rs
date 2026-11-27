@@ -3,21 +3,7 @@
 //! copies, a mount file this thread had open still references the mount, and
 //! the plain unmount gets the kernel's reversible EBUSY with no product fault.
 #![cfg(target_os = "linux")]
-#[allow(dead_code)]
-#[path = "../support/complete/bytes.rs"]
-mod bytes;
-#[allow(dead_code)]
-#[path = "../support/complete/fixture.rs"]
-mod fixture;
-#[allow(dead_code)]
-#[path = "../support/mounted.rs"]
-mod mounted;
-#[allow(dead_code)]
-#[path = "../support/mutating.rs"]
-mod mutating;
-#[allow(dead_code)]
-#[path = "../support/install/host.rs"]
-mod support;
+use crate::mutating;
 use layerfs_daemon::workspace::Failure;
 use layerfs_protocol::daemon::{ControlCode, MountPhase};
 use mutating::{harness, quiet, unmounted};

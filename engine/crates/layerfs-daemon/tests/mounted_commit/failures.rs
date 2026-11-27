@@ -48,20 +48,20 @@ mod held_writer;
 #[allow(dead_code)]
 #[path = "../support/gate/history_boundary.rs"]
 mod history_boundary;
-#[allow(dead_code)]
-#[path = "../support/installed_store.rs"]
-mod installed;
-#[allow(dead_code)]
-#[path = "../support/rigs/namespace_model.rs"]
-mod model;
-#[allow(dead_code)]
-#[path = "../support/mounted.rs"]
-mod mounted;
-#[allow(dead_code)]
-#[path = "../support/mounted_commit.rs"]
-mod rig;
+use crate::installed;
+use crate::model;
+use crate::mounted;
+use crate::rig;
 use history_boundary::{Boundary, ObservedHistory};
 use layerfs_content::{ContentError, ObjectId};
+use layerfs_daemon::{
+    bootstrap::open_store,
+    store::{
+        CapturedConstruction, CommitError, CommitFailure, CommitPhase, ReleasedOwner, Store,
+        StoreReader,
+    },
+    workspace::{Failure, Success},
+};
 use layerfs_history::{
     CommitId, CommitOutcome, CommitRecord, HistoryCatalog, HistoryError, WorkspaceId,
 };
@@ -82,16 +82,6 @@ use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc, Mutex,
-    },
-};
-use {
-    layerfs_daemon::workspace::{Failure, Success},
-    layerfs_store_service::{
-        bootstrap::open_store,
-        store::{
-            CapturedConstruction, CommitError, CommitFailure, CommitPhase, ReleasedOwner, Store,
-            StoreReader,
-        },
     },
 };
 
@@ -295,7 +285,7 @@ fn wrapped(
         SqliteHandles::open_writable(config(), installed::BINDING, installed::CURSOR).unwrap(),
     );
     let reader_config = fixture.config.clone();
-    let factory: layerfs_store_service::store::ReaderFactory = Arc::new(move |_| {
+    let factory: layerfs_daemon::store::ReaderFactory = Arc::new(move |_| {
         let read = SqliteHandles::open_read_only(
             reader_config.clone(),
             installed::BINDING,

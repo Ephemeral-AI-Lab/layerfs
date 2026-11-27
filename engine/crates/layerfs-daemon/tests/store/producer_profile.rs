@@ -36,23 +36,13 @@
 #[allow(dead_code)]
 #[path = "../support/gate/history.rs"]
 mod history_gate;
-#[allow(dead_code)]
-#[path = "../support/installed_store.rs"]
-mod installed;
-#[allow(dead_code)]
-#[path = "../support/rigs/namespace_model.rs"]
-mod model;
-#[allow(dead_code)]
-#[path = "../support/mounted.rs"]
-mod mounted;
-#[allow(dead_code)]
-#[path = "../support/mounted_commit.rs"]
-mod rig;
-#[allow(dead_code)]
-#[path = "../support/install/host.rs"]
-mod support;
+use crate::installed;
+use crate::model;
+use crate::mounted;
+use crate::rig;
 use history_gate::Point;
 use layerfs_content::ObjectId;
+use layerfs_daemon::store::{Store, StoreReader};
 use layerfs_history::{CommitOutcome, CommitRecord, HistoryCatalog, WorkspaceId};
 use layerfs_persistence::{SqliteHandles, SqlitePersistenceProfile};
 use layerfs_protocol::daemon::{Activity, Reply, Request, WorkspaceToken};
@@ -64,7 +54,6 @@ use layerfs_storage::{
     },
     ReservationBlocks, Storage, StoragePolicy,
 };
-use layerfs_store_service::store::{Store, StoreReader};
 use model::{assert_same, Flat, Model};
 use mounted::{until, Harness, COMMAND};
 use rig::{base_tree, bash_in, host, passed, root};
@@ -307,7 +296,7 @@ fn r5_10_each_mounted_commit_has_one_producer_on_the_one_open_disposable_writer_
     hold.release();
     let history: Arc<dyn HistoryCatalog> = Arc::new(catalog);
     let reader_config = fixture.config.clone();
-    let factory: layerfs_store_service::store::ReaderFactory = Arc::new(move |_| {
+    let factory: layerfs_daemon::store::ReaderFactory = Arc::new(move |_| {
         let read = SqliteHandles::open_read_only(
             reader_config.clone(),
             installed::BINDING,

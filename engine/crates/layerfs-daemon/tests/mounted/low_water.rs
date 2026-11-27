@@ -26,27 +26,17 @@
 //! Product expectations are collected and reported after the mount has been
 //! torn down, so a deviation still leaves its whole evidence. Counts only.
 #![cfg(target_os = "linux")]
-#[allow(dead_code)]
-#[path = "../support/gate/held_writer.rs"]
-mod held_writer;
-#[allow(dead_code)]
-#[path = "../support/installed_store.rs"]
-mod installed;
-#[allow(dead_code)]
-#[path = "../support/rigs/namespace_model.rs"]
-mod model;
-#[allow(dead_code)]
-#[path = "../support/mounted.rs"]
-mod mounted;
-#[allow(dead_code)]
-#[path = "../support/mounted_commit.rs"]
-mod rig;
+use crate::held_writer;
+use crate::installed;
+use crate::model;
+use crate::mounted;
+use crate::rig;
 use held_writer::HeldWriter;
+use layerfs_daemon::store::{PortError, Store, StoreReader};
 use layerfs_history::{HistoryCatalog, HistoryError};
 use layerfs_persistence::{SqliteHandles, SqlitePersistenceProfile};
 use layerfs_protocol::daemon::{Reply, WorkspaceToken};
 use layerfs_storage::{port::PackPersistence, ReservationBlocks, Storage};
-use layerfs_store_service::store::{PortError, Store, StoreReader};
 use layerfs_vfs::{WorkspaceError, SERIAL_REFILL};
 use model::Model;
 use mounted::{mount_entry, Harness, COMMAND};
@@ -268,7 +258,7 @@ impl Fx {
             attempts: Mutex::new(Vec::new()),
         });
         let reader_config = fixture.config.clone();
-        let factory: layerfs_store_service::store::ReaderFactory = Arc::new(move |_| {
+        let factory: layerfs_daemon::store::ReaderFactory = Arc::new(move |_| {
             let read = SqliteHandles::open_read_only(
                 reader_config.clone(),
                 installed::BINDING,

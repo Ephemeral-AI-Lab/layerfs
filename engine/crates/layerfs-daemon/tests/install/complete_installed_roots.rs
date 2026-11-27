@@ -1,13 +1,8 @@
 //! Q1 full kernel roots read through the installed daemon's direct Store ports.
-#[path = "../support/complete/bytes.rs"]
-mod bytes;
-#[path = "../support/complete/fixture.rs"]
-mod fixture;
+use crate::bytes;
+use crate::fixture;
 #[path = "../support/complete/oracle.rs"]
 mod oracle;
-#[allow(dead_code)]
-#[path = "../support/install/host.rs"]
-mod support;
 use layerfs_history::WorkspaceId;
 use layerfs_store_service::{store::BindRequest, Owner, OwnerConfig};
 fn proof(shape: fixture::Shape) {
