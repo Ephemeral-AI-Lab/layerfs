@@ -67,6 +67,18 @@
 | D16 | **Keep today's refusal order:** keep the eager marker read when the kept markers are absent | no order change |
 | D17 | I2a/I2b add a `first_dependent`-style check | no order change |
 
+### Owner deferrals (owner decision 2026-11-27, relayed by the parent session)
+
+Deferred, not built, and **not misses**:
+- D2 / R7: the cross-call cache, including a root-keyed path memo;
+- D4 / O4: returning the root object's location in the context statement;
+- joining locate and fetch per level on the read path;
+- preparing all read statements at Store open;
+- raising the 8 KiB constructed staging limit so create/mkdir/cp/mv/rm/apply
+  take the fused Commit (the Phase 0 W0 finding).
+
+The plan stays: M2, M3, then R6; H7 skipped (D6).
+
 ## Items
 
 Per item: prediction vs measured (trips and time per arm), within 15%,
