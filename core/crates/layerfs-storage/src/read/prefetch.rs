@@ -122,6 +122,12 @@ pub(crate) fn chains_each(
         frontier = Vec::new();
         let unvisited: Vec<_> = ids.into_iter().filter(|id| !visited.contains(id)).collect();
         for id in unvisited {
+            // A base whose pack row is gone fails as its level's locate does.
+            if let Some(error) = source.unpacked(id) {
+                visited.insert(id);
+                failed.insert(id, error);
+                continue;
+            }
             match source.base_location(id, i64::MAX)? {
                 Some(location) => frontier.push(location),
                 None => {

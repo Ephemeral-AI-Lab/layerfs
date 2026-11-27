@@ -164,7 +164,10 @@ fn pack_row(row: &Row, at: usize) -> Result<(PackInfo, Vec<u8>), BackendError> {
 
 /// Locates `roots` like `locate` into `rows` and returns the chains of the
 /// located delta roots with the directories of every pack named; `kept` is
-/// the session's [`ChainPacks`] at catalog `incarnation`.
+/// the session's [`ChainPacks`] at catalog `incarnation`. A located row
+/// whose pack row is gone refuses the call, or, given `unpacked` (a
+/// per-object demand, #818 H5), is left out of `rows` and listed there.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn locate_chains(
     tx: &Transaction<'_>,
     policy: &StoragePolicy,
@@ -173,6 +176,7 @@ pub(crate) fn locate_chains(
     rows: &mut Vec<LocatedObject>,
     chains: &mut LocatedChains,
     joined: Option<(&[i64], &mut Vec<PersistedPack>)>,
+    mut unpacked: Option<&mut Vec<ObjectId>>,
 ) -> Result<(), PersistenceError> {
     let ids: Vec<Vec<u8>> = roots
         .iter()
@@ -248,10 +252,14 @@ pub(crate) fn locate_chains(
     // Every located row's pack came back with it, as `locate` joins it.
     let mut kept = Vec::with_capacity(located.len());
     for (location, list) in located {
-        let pack = packs
-            .get(&location.pack_id)
-            .ok_or(BackendError::Integrity)?
-            .0;
+        let pack = match (packs.get(&location.pack_id), unpacked.as_deref_mut()) {
+            (Some(pack), _) => pack.0,
+            (None, Some(unpacked)) => {
+                unpacked.push(location.object_id);
+                continue;
+            }
+            (None, None) => return Err(BackendError::Integrity.into()),
+        };
         kept.push(Located {
             object: LocatedObject { location, pack },
             list,

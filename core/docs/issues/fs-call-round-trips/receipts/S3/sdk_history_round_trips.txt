@@ -1,0 +1,10 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.08s
+     Running tests/sdk_history_round_trips.rs (target/debug/deps/sdk_history_round_trips-1431b882328fa2ee)
+
+running 2 tests
+test sqlite_history_counts ... ok
+test postgresql_history_counts ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.20s
+
+run_bounded: exit 0 after 3.2 s

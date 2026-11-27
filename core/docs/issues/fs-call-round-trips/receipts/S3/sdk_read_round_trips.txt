@@ -1,0 +1,10 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.09s
+     Running tests/sdk_read_round_trips.rs (target/debug/deps/sdk_read_round_trips-61e97e3bf6c6a4bf)
+
+running 2 tests
+test sqlite_read_counts ... ok
+test postgresql_read_counts ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.90s
+
+run_bounded: exit 0 after 4.0 s

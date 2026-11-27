@@ -22,19 +22,6 @@ use crate::{
 use layerfs_content::{ObjectId, ObjectRole};
 use std::collections::{BTreeMap, BTreeSet};
 
-/// The packs a per-object demand saw refused, each with its failure (#818
-/// H5): at most one entry per pack the demand reads, dropped with it.
-pub(crate) type Refused = BTreeMap<i64, StorageError>;
-
-/// Holds a per-object demand open ([`Fetch::per_object`]); dropping it ends
-/// the demand's per-object reads and drops its refused packs.
-pub(crate) struct PerObject<'a>(&'a Fetch);
-impl Drop for PerObject<'_> {
-    fn drop(&mut self) {
-        *self.0.refused.borrow_mut() = None;
-    }
-}
-
 /// Positions one chain contributes at most: its root and every member.
 const CHAIN_ENTRIES: usize = layerfs_content::MAXIMUM_DELTA_MAX_DEPTH as usize + 1;
 
@@ -498,38 +485,6 @@ impl Fetch {
                 .all(|row| matches!(row.role, ObjectRole::InodeLeaf | ObjectRole::InodeBranch));
         self.fetch_page([locations], packs, true, compact_inode_packs)
             .map(drop)
-    }
-    /// Makes the demand that holds the guard a per-object demand (#818 H5)
-    /// until the guard drops: every page of it, the walk's and the
-    /// reconstruction's included, is read with `read_groups_classified` (one
-    /// call, as `read_groups`), so a pack the provider refuses (`Missing`,
-    /// `Malformed`) or whose answer fails admission is kept refused with its
-    /// failure, for the objects that need it, instead of failing the call; a
-    /// pack only members name is still a stale hint (and refused when
-    /// `Missing`). A refused pack is not planned or acquired again in the
-    /// demand. A failure of the call, or one the answer does not tie to a
-    /// pack, fails the call.
-    pub(crate) fn per_object(&self) -> PerObject<'_> {
-        *self.refused.borrow_mut() = Some(Refused::new());
-        PerObject(self)
-    }
-    /// The failure of pack `id` if this per-object demand saw it refused.
-    pub(crate) fn refused_pack(&self, id: i64) -> Option<StorageError> {
-        let refused = self.refused.borrow();
-        refused.as_ref()?.get(&id).map(super::objects::duplicate)
-    }
-    /// Keeps pack `id` refused with `error` for the rest of a per-object
-    /// demand (its first failure stands).
-    pub(crate) fn refuse(&self, id: i64, error: StorageError) {
-        if let Some(refused) = self.refused.borrow_mut().as_mut() {
-            refused.entry(id).or_insert(error);
-        }
-    }
-    fn is_refused(&self, id: i64) -> bool {
-        let refused = self.refused.borrow();
-        refused
-            .as_ref()
-            .is_some_and(|refused| refused.contains_key(&id))
     }
     /// [`Fetch::whole_packs`] for a per-object demand (#818 H5): the same
     /// packs in one classified call of whole reads; a refused one is kept
