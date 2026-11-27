@@ -27,3 +27,23 @@ postgres = "=0.19.14"
 layerfs-project = { path = "../layerfs-project" }
 rusqlite = { version = "=0.40.2", features = ["cache", "limits", "blob"] }
 blake3 = { version = "=1.8.5", default-features = false }
+
+[[test]]
+name = "commit_fused_sizes_seeded"
+path = "tests/standalone/commit_fused_sizes_seeded.rs"
+
+[[test]]
+name = "snapshot_reads_replay"
+path = "tests/standalone/snapshot_reads_replay.rs"
+
+[[test]]
+name = "writer_reopen_sweep"
+path = "tests/standalone/writer_reopen_sweep.rs"
+
+[[test]]
+name = "commit_abort_failed_save"
+path = "tests/standalone/commit_abort_failed_save.rs"
+
+[[test]]
+name = "commit_abort_paused_commit_sweeps"
+path = "tests/standalone/commit_abort_paused_commit_sweeps.rs"

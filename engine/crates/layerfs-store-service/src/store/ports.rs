@@ -1,5 +1,5 @@
 //! One operation's original failures over batched public Store demands.
-use super::{read_handle::ReadSession, ReadAdmissionError, Store};
+use super::{super::workspace::bind::reader::ReadSession, ReadAdmissionError, Store};
 use layerfs_content::{AuthenticatedObjects, ContentError, ContentResult, ObjectId};
 use layerfs_history::{HistoryError, ReserveRequest, WorkspaceId};
 use layerfs_storage::{read::CapturedLocators, StorageError};

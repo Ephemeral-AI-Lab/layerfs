@@ -8,7 +8,6 @@
 //! how many (`matches`). On main a publication is a Layer, so a Layer's
 //! identity is read the same way. A reference (`<ref>`, `--from`) is a
 //! Branch name first, and a Commit only when no Branch has that name.
-use super::lookup::{self as args, hex, invalid, refuse};
 use super::MAIN;
 use crate::store::Store;
 use layerfs_content::ObjectId;
@@ -18,6 +17,10 @@ use layerfs_history::{
 };
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::sync::Arc;
+use {
+    super::super::lookup::{self as args, invalid, refuse},
+    layerfs_protocol::sdk::hex,
+};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 

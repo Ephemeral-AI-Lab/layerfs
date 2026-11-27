@@ -17,8 +17,8 @@
 //! row a read would return; a row that failed to read is that Commit's
 //! refusal, met only when the walk reaches it. On SQLite no window is read
 //! and the walk reads each row as before.
-use super::{lookup as args, MAIN};
-use crate::read::visibility::Visibility;
+use super::{super::lookup as args, MAIN};
+use crate::filesystem::tree::visibility::Visibility;
 use crate::store::Store;
 use layerfs_content::ObjectId;
 use layerfs_history::{BranchId, ChainRow, CommitId, HistoryResult, NodeId, NodeRecord};
