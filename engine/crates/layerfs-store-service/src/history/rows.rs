@@ -6,8 +6,9 @@
 //! the last [`RECENT`] rows are kept, so a node read as a parent is not read
 //! again as the next node, nor for its `ref` or `comparedTo`. Saved rows
 //! never change, so a held row is the row a read would return. Branch names
-//! are kept for the call (one entry per Branch id met, at most one per
-//! walked node).
+//! are kept for the call, at most [`NAMES`] of them: a name met once the
+//! memo is full is read each time it is needed (a fresh read, not a retry),
+//! so the memo never grows with the Store's history.
 //!
 //! A walk along first parents ([`Rows::walk`], [`Rows::walked`]) reads its
 //! Commits in windows where the Store batches reads (PostgreSQL): 16, 32,
@@ -30,6 +31,9 @@ type Result<T> = std::result::Result<T, SdkRefusal>;
 /// Rows kept: a node, its parent, its second parent and base Layer, and a
 /// few more for a Layer's source Commit.
 const RECENT: usize = 8;
+
+/// Branch names kept per call.
+const NAMES: usize = 1_024;
 
 /// The window sizes, one after another, then the last for every window
 /// after (#818 H4, D5).
@@ -81,7 +85,7 @@ impl<'a> Rows<'a> {
     pub fn hold(&mut self, node: NodeId, record: NodeRecord, recorded: Option<Option<String>>) {
         if let (NodeRecord::Commit(commit), Some(name)) = (&record, recorded) {
             if let Some(branch) = commit.meta.branch {
-                self.names.insert(branch, name);
+                self.remember(branch, name);
             }
         }
         self.keep(node, record, None);
@@ -163,7 +167,8 @@ impl<'a> Rows<'a> {
         }
     }
 
-    /// A Branch's name, without the visibility filter, once per call.
+    /// A Branch's name, without the visibility filter, once per call while
+    /// the memo has room.
     pub fn name(&mut self, branch: BranchId) -> Result<Option<String>> {
         if let Some(name) = self.names.get(&branch) {
             return Ok(name.clone());
@@ -173,8 +178,15 @@ impl<'a> Rows<'a> {
             .published(|history| history.branch_any(branch))
             .map_err(args::published)?
             .map(|b| b.name.as_str().to_owned());
-        self.names.insert(branch, name.clone());
+        self.remember(branch, name.clone());
         Ok(name)
+    }
+
+    /// Keeps a Branch's name while the memo has room.
+    fn remember(&mut self, branch: BranchId, name: Option<String>) {
+        if self.names.len() < NAMES {
+            self.names.insert(branch, name);
+        }
     }
 
     /// The node's root, parent and record value (`operator::files::revision`).

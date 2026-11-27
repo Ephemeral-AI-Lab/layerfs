@@ -1,6 +1,8 @@
 //! Server-side aligned provenance. Byte equality is never an owner shortcut.
 use super::{
-    blame, file_facts, query,
+    blame,
+    cached::Cached,
+    file_facts, query,
     snapshot::{self, Snap},
     visibility::Visibility,
 };
@@ -45,7 +47,7 @@ struct Owners {
 
 fn owners(
     store: &Arc<Store>,
-    reader: &StorePorts,
+    cached: &Cached<'_>,
     snap: &Snap,
     path: &str,
     visibility: &Visibility,
@@ -53,8 +55,7 @@ fn owners(
 ) -> Result<Owners, SdkRefusal> {
     let (mut lines, mut from, mut exact) = (BTreeMap::new(), 1u64, true);
     let mut rows = crate::history::rows::Rows::new(store);
-    // One cache for the file's blame pages (#818 H3).
-    let cached = super::cached::Cached::new(reader)?;
+    // The blame pages read through the call's one cache (#818 H3).
     loop {
         if budget.work == 0 {
             exact = false;
@@ -66,7 +67,7 @@ fn owners(
         };
         let page = blame::blame(
             &mut rows,
-            &cached,
+            cached,
             snap,
             path,
             visibility,
@@ -114,10 +115,11 @@ fn identity(owner: &SdkValue) -> Option<(&str, &str)> {
     Some((r.get_text("kind")?, r.get_text("id")?))
 }
 
-/// Align one pair of bounded texts, optionally obtaining both saved owners.
+/// Align one pair of bounded texts, optionally obtaining both saved owners
+/// through the call's one cache.
 pub fn align(
     store: &Arc<Store>,
-    reader: &StorePorts,
+    reader: &Cached<'_>,
     sides: ((&Snap, &str, &Visibility), (&Snap, &str, &Visibility)),
     texts: (&str, &str),
     include: bool,
@@ -134,7 +136,7 @@ pub fn align(
 
 fn align_bounded(
     store: &Arc<Store>,
-    reader: &StorePorts,
+    reader: &Cached<'_>,
     sides: ((&Snap, &str, &Visibility), (&Snap, &str, &Visibility)),
     texts: (&str, &str),
     include: bool,
@@ -332,9 +334,10 @@ pub fn compare_bounded(
     };
     let left_seen = Visibility::for_snap(store, left)?;
     let right_seen = Visibility::for_snap(store, right)?;
+    // Both sides' owners through one cache for this path (#818 H3).
     Ok(align_bounded(
         store,
-        reader,
+        &Cached::new(reader)?,
         ((left, path, &left_seen), (right, path, &right_seen)),
         (&a, &b),
         true,

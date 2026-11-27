@@ -1,0 +1,13 @@
+ 9:32  up 3 days,  8:05, 1 user, load averages: 6.19 9.50 8.55
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.09s
+     Running tests/history_diff_oracle.rs (target/debug/deps/history_diff_oracle-d13f1bddb64b4416)
+
+running 1 test
+test change_walk_equals_the_full_walk ... DIFF_ORACLE seed=352 diffs=120 entries=1539 named_alike=289 profile=Normal
+DIFF_ORACLE seed=7 diffs=120 entries=1353 named_alike=275 profile=Normal
+DIFF_ORACLE seed=2026 diffs=120 entries=1820 named_alike=318 profile=Normal
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.27s
+
+run_bounded: exit 0 after 5.0 s

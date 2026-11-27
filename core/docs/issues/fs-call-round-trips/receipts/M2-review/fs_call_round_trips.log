@@ -1,0 +1,19 @@
+ 9:33  up 3 days,  8:06, 1 user, load averages: 5.24 9.08 8.42
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.09s
+     Running tests/fs_call_round_trips.rs (target/debug/deps/fs_call_round_trips-9eab8e660a198019)
+
+running 5 tests
+test fs_calls ... NOT_RUN: FS818_ARM must be sqlite, pg, pg2 or pg10
+ok
+test init_flat_10k ... NOT_RUN: FS818_ARM must be sqlite, pg, pg2 or pg10
+ok
+test init_flat_1k ... NOT_RUN: FS818_ARM must be sqlite, pg, pg2 or pg10
+ok
+test init_nested_10k ... NOT_RUN: FS818_ARM must be sqlite, pg, pg2 or pg10
+ok
+test init_nested_1k ... NOT_RUN: FS818_ARM must be sqlite, pg, pg2 or pg10
+ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+run_bounded: exit 0 after 0.8 s

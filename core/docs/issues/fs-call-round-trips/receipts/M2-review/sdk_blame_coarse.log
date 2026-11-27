@@ -1,0 +1,24 @@
+ 9:33  up 3 days,  8:06, 1 user, load averages: 6.15 9.12 8.45
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.08s
+     Running tests/sdk_blame_coarse.rs (target/debug/deps/sdk_blame_coarse-16770bb689757658)
+
+running 15 tests
+test a_dropped_final_newline_is_new_text ... ok
+test a_file_without_a_final_newline_keeps_its_last_line_origin ... ok
+test a_last_line_cut_short_without_a_final_newline_keeps_the_commit_that_cut_it ... ok
+test a_line_that_lost_its_first_characters_keeps_the_commit_that_cut_it ... ok
+test a_split_last_line_keeps_the_commit_that_split_it ... ok
+test a_split_last_line_without_a_final_newline_keeps_the_commit_that_split_it ... ok
+test a_split_line_in_a_small_file_is_credited_to_the_commit_that_split_it ... ok
+test a_split_line_in_the_middle_keeps_the_commit_that_split_it ... ok
+test a_split_line_is_not_credited_to_an_older_rewrite_of_the_line ... ok
+test a_split_line_keeps_the_commit_that_split_it ... ok
+test an_added_final_newline_is_new_text ... ok
+test lines_before_dropped_last_lines_keep_their_origin ... ok
+test lines_behind_a_joined_line_keep_their_origin ... ok
+test lines_behind_an_added_or_dropped_first_line_keep_their_origin ... ok
+test lines_between_distant_edits_keep_their_origin ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.56s
+
+run_bounded: exit 0 after 3.4 s

@@ -107,12 +107,18 @@ impl NodeRecord {
     }
 }
 
+/// A node's `history_serial` with its stack's `path_removed` markers, or
+/// `None` when the node has no row ([`HistoryCatalog::node_path_removals`]).
+pub type NodeRemovals = Option<(u64, Vec<PathRemovalRecord>)>;
+
 /// What one read call needs from history before its path, found by its
 /// project's name and the snapshot it names ([`HistoryCatalog::read_context`]).
 /// Each part is `None` where the read stopped: no stack ends the read, no
 /// Branch ends it after the stack, and a missing node row leaves `node`
 /// `None`. `removals` and `recorded` are `None` when not read here; the
-/// caller then reads them itself, as it did before (#818 R5).
+/// caller then reads them itself, as it did before (#818 R5). Each is its
+/// own result: a part read here but not decoded is that part's error, which
+/// the caller meets where it read the part before, after its other checks.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ReadContext {
     /// The project's stack.
@@ -123,10 +129,10 @@ pub struct ReadContext {
     pub node: Option<NodeRecord>,
     /// The node's `history_serial` with the stack's `path_removed` markers,
     /// as [`HistoryCatalog::node_path_removals`] reads them.
-    pub removals: Option<Option<(u64, Vec<PathRemovalRecord>)>>,
+    pub removals: Option<HistoryResult<NodeRemovals>>,
     /// A Commit's recorded Branch, as [`HistoryCatalog::branch_any`] reads
     /// it; `Some(None)` when it records none or its row is gone.
-    pub recorded: Option<Option<BranchRecord>>,
+    pub recorded: Option<HistoryResult<Option<BranchRecord>>>,
 }
 
 /// [`HistoryCatalog::read_context`]'s default: the stack, the Branch and the

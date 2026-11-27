@@ -629,8 +629,12 @@ fn postgresql_one_statement_reads_answer() {
     let work = history
         .read_context(&project, &targets[1])
         .expect("read_context");
-    assert_eq!(work.removals.expect("read").expect("the node").1, markers);
-    assert_eq!(work.recorded.expect("read").map(|b| b.id), Some(branch));
+    let removals = work.removals.expect("read").expect("decoded");
+    assert_eq!(removals.expect("the node").1, markers);
+    assert_eq!(
+        work.recorded.expect("read").expect("decoded").map(|b| b.id),
+        Some(branch)
+    );
     assert_eq!(
         history
             .read_context(&support::name("absent"), &ContextTarget::Main)
@@ -654,14 +658,14 @@ fn expected(
             NodeRecord::Commit(record) => NodeId::Commit(record.id),
             NodeRecord::Layer(record) => NodeId::Layer(record.id),
         };
-        context.removals = Some(history.node_path_removals(stack, id).expect("markers"));
-        context.recorded = Some(match node {
+        context.removals = Some(Ok(history.node_path_removals(stack, id).expect("markers")));
+        context.recorded = Some(Ok(match node {
             NodeRecord::Commit(record) => record
                 .meta
                 .branch
                 .and_then(|id| history.branch_any(id).expect("branch_any")),
             NodeRecord::Layer(_) => None,
-        });
+        }));
     }
     context
 }

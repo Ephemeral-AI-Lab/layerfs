@@ -662,3 +662,50 @@ green (`receipts/M2-lint/`). Host free space 195 GB.
   `-D warnings` (all targets) clean on history, persistence, store-service.
 - `blame::blame` no longer takes the Store (its serials come from `Rows`).
 - Deleted tests: none.
+
+### M2 review fixes (one commit after H4)
+
+Each checked against source first; receipts `receipts/M2-review/`.
+
+1. `history/rows.rs`: the Branch-name memo keeps at most 1,024 names; a
+   name met once it is full is read each time (a fresh read). Confirmed
+   unbounded before: `operator/files.rs` met one name per distinct Branch.
+2. `fs.diff_files` with attribution: `attribution::align`/`owners` take the
+   call's `Cached` instead of building a second one (confirmed:
+   `owners` built `Cached::new` while `file_compare::diff` held its own).
+   A branch comparison now builds one cache per path for both sides' owners
+   (it built one per side, one at a time).
+3. `layerfs-content` `DirectoryMemo::insert`: a full memo adds no empty map
+   for a new directory (confirmed: `entry().or_default()` ran before the
+   capacity check). Unit test `a_full_memo_adds_no_directory`.
+4. Refusal order on a corrupt Store: `ReadContext.removals`/`recorded` are
+   each their own result (`NodeRemovals` alias); persistence decodes them
+   into those results, the store service carries the markers' error to the
+   marker step (`Visibility::load`, after `path`) and treats an
+   undecodable recorded Branch as not read, so the answer's `at` reads it
+   where it always did and refuses there (one extra read, corruption only).
+   New `sdk_read_context_corrupt_rh.rs` (PostgreSQL): with a corrupt marker
+   row and then a corrupt recorded-Branch row, `fs.stat` by full id (one
+   statement) and by prefix (reads one by one) refuse alike: `relative`
+   `InvalidInput` first, a valid path at the marker step / at `at`.
+   Residual, fault-only, not changed: a failure of the context statement
+   itself refuses before the `path` argument. Before R5 the project read
+   (first, before `path`) failed the same way; only a fault that lands
+   exactly on the marker read (sent after `path`) refused after an invalid
+   `path` before. Restoring it needs the markers as a second statement (an
+   extra trip on every read), and checking `path` before the statement
+   would reorder `NoSuchProject`/`NoSuchBranch` vs `InvalidInput` on a
+   healthy Store, so neither was done.
+5. Recorded only: `operator/files.rs` reads Branch names through
+   `published` with its error mapping (text differs from `store.history()`
+   only on a fault).
+
+Tests (once each): `sdk_read_context_corrupt_rh`, `sdk_read_context_rh`,
+`sdk_read_round_trips`, `sdk_read_fault_rh_{drop,kill}`, `sdk_compare`,
+`sdk_file_compare_budget`, `history_diff_oracle`, `saved_branch_queries`,
+`fs_call_round_trips`, `sdk_history_round_trips`,
+`sdk_round_trip_equivalence_seeded`, `method_refusal_order`,
+`sdk_file_history`, `sdk_blame_coarse`, `operator_history`,
+`history_surface`, `postgresql_statement_schema`, `compare_across`, the
+content unit test: green. Pins unchanged. Clippy `-D warnings` clean on
+content, history, persistence, store-service. Deleted tests: none.
