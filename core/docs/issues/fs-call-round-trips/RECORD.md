@@ -737,3 +737,25 @@ an owner deferral), and the ±10% latency band on 7 rows at +10 ms (new at M3:
 statements equal server top-level calls, so time without statements;
 unattributed — needs a per-statement timing trace). PG local Init 10k time
 (5.9 / 6.0 s) is server foreign-key work, not trips.
+
+## R6 (D3) — lane RH `773de194be`
+
+Unpaged `fs.grep` / `fs.glob` directory pages up to 256 names (8,192-byte page
+bound unchanged); grep windows up to 256 files, root demands ≤ 256 roots and the
+existing 4 MiB; PostgreSQL only (`batched_reads`); SQLite unchanged. Production
+LOC 232,428 -> 232,476 (+48, layerfs-store-service).
+
+| Case (PG pins) | Before cold / warm | After | Predicted | Target (cold rule) | Verdict |
+|---|---|---|---|---|---|
+| grep.tree_1k | 92 / 24 | **62 / 15** | ~45–60 / ~12–20 | warm ≤ ~29 (SPEC), cold 29 + 33 = 62 | met (cold 3% over prediction) |
+| grep.one_file_dir | 20 / 5 | 20 / 5 | unchanged | — | — |
+| glob.tree | 30 / 6 | 30 / 6 | ~25–30 / ~4–6 | — | within |
+| glob.dir_100 | 21 / 5 | 21 / 5 | ~19–21 / ~3–5 | — | within |
+
+Large-file shape (new `sdk_read_large_rh`, 1/4/16/64 MiB texts): PG grep.large
+321/280 → 291/255; glob unchanged; peak RSS PG 242.24 → 242.22 MB, SQLite 232.65 →
+233.00 MB (setup alone 238.9 MB): no regression. **Open:** `grep.large` counts vary
+run to run on the same code and Store (SQLite cold 289–293, warm 257–267; PG warm
+248/249); not diagnosed (bounded reader caches suspected); its pin holds round
+trips and statements within ±8 (other cases and fields exact). Recorded as a
+weak pin, not a guard loosening of an existing pin.
