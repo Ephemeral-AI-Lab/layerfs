@@ -426,3 +426,37 @@ Recorded, within 15% but noted:
   Needs a per-statement trace to attribute; recorded.
 - Peak memory 13.5–15.7 MiB per fs command, Init 12 MiB (1k) / 23–29 MiB (10k);
   no P0 memory receipt existed to compare.
+
+## M2 (merged at `7a79aaaea5`)
+
+Merges (each with its LOC block): lane C `7647c0479f` → `fef2f4ccc8` (+567, core
+layerfs-content); lane RH R4, R3 review fix, R5, H1, H2, H3 → `642c3ddbab`
+(+634); lane W W2 fix, W6, W6 SQLite guardrail → `7a79aaaea5` (+279). Production
+LOC 228,392 -> 229,872 (delta +1,480). Pins, equivalence and refusal order green
+on the merged tip (`receipts/M2/merge-*.log`).
+
+| Item | Prediction | Measured (pins) | 15% | Notes |
+|---|---|---|---|---|
+| R4 | 0 PG (SPEC) | 0 PG; SQLite −1 per read | yes | one `Cached` per call |
+| R3 fix | — | — | — | caches made at first demand: review nit fixed |
+| R5 | −4 warm / −8 cold reads | exact; stat `/` warm 4 | yes | `read_context_named/node` swept (75 msgs); SQLite unchanged (corrections rule) |
+| H1 | blame h100 −450..−550 | −452 (writer 0); revision −725 | yes / better | Branch names read once on the control reader |
+| H2 | revision h100 ~1,860–2,060 | 1,705 warm | better (>15%) | a path walk cost ~13.5, not 10–12 |
+| H3 | blame h100 ~900–1,100 | 254 warm (491 cold); revision 253; diff 23 | better (>15%) | a version's objects sit in one held pack (~2 trips/version) |
+| W2 fix | parent refusals restored | reader-capacity test now `NoSuchProject` | — | `looked_up` flag; SQLite-only test (64 readers) |
+| W6 | apply.10_dirs ~36 / ~9 | 34 / 8 Workspace reader | yes | PG only; SQLite keeps M1 full-stat walk (every SQLite pin = M1) |
+
+Better-than-predicted H2/H3 were diagnosed once from per-role counts (above);
+recorded, nothing to fix. SQLite pins (D1): blame.h100 6,746+597 → 779, revision.h100
+12,382 → 769, diff_files 187 → 71.
+
+### M2 benchmark (`receipts/M2/REPORT.md`)
+
+All 28 `fs.*` rows within 15% of the lane expectation (22 exact). Every history
+row now runs directly at +10 ms: blame h100 2,428 → 459 trips (31.2 s at P0 →
+5.4 s), revision h100 3,887 → 256 (50.9 s → 3.1 s), diff 87 → 35 (423 ms), stat `/`
+4 (50 ms), read small 6 (75 ms). Writes unchanged (cp 33 → 32). Init counts
+unchanged (no-change check). Flags: SQLite Init flat_10k time (I2b scan, fixed on
+lane I's branch, merges at M3); read.lines_100_200 latency 1.13 on 5 trips; load
+8.5–11.5; peak memory +1.5–4.3 MiB per command (history 18.1 MiB: H3's 3 MiB-bounded
+per-call cache plus memo; writes moved too without code change).
