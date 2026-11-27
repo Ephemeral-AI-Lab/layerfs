@@ -11,7 +11,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-HERE = Path(__file__).resolve().parent
+HERE = Path(__file__).resolve().parents[1]  # api/python/test
 sys.path.insert(0, str(HERE.parent / "src"))
 
 import layerfs  # noqa: E402

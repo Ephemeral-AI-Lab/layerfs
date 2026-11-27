@@ -8,10 +8,10 @@ import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 if (process.platform !== "linux" || process.arch !== "x64") {
-  throw new Error(`build-cli-dist.mjs requires linux x64, got ${process.platform}/${process.arch}`);
+  throw new Error(`cli-dist.mjs requires linux x64, got ${process.platform}/${process.arch}`);
 }
 
-const usage = "usage: build-cli-dist.mjs <output-dir>";
+const usage = "usage: cli-dist.mjs <output-dir>";
 const args = process.argv.slice(2);
 if (args.length !== 1 || args[0].startsWith("-")) {
   console.error(usage);

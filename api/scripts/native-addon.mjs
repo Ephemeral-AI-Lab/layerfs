@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const suffix = { darwin: "dylib", linux: "so" }[process.platform];
 if (!suffix) throw new Error(`native addon builds require macOS or Linux, got ${process.platform}`);
-const usage = "usage: build-native.mjs [--debug] [--features tls]";
+const usage = "usage: native-addon.mjs [--debug] [--features tls]";
 const flags = process.argv.slice(2);
 const featuresAt = flags.indexOf("--features");
 const features = featuresAt < 0 ? [] : (flags[featuresAt + 1] ?? "").split(",");

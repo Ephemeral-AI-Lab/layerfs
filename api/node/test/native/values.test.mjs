@@ -8,8 +8,8 @@ import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync, chmodSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { client, LayerFSError } from "../src/index.js";
-import { encode, decode } from "../src/values.js";
+import { client, LayerFSError } from "../../src/index.js";
+import { encode, decode } from "../../src/values.js";
 
 const I64_MAX = 2n ** 63n - 1n;
 const I64_MIN = -(2n ** 63n);

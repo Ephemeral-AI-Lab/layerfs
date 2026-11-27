@@ -14,7 +14,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "test": "node --test --test-concurrency=1 test/*.test.mjs"
+    "test": "node --test --test-concurrency=1 test/*/*.test.mjs"
   },
   "dependencies": {
     "@layerfs/node": "file:../node",

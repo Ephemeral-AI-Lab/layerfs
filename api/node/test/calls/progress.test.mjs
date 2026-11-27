@@ -14,10 +14,10 @@ import { createServer, connect } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { client, table, LayerFSError } from "../src/index.js";
+import { client, table, LayerFSError } from "../../src/index.js";
 
 const hostMachine = process.platform === "darwin" ? "macos-host" : "linux-host";
-const root = fileURLToPath(new URL("../../../", import.meta.url));
+const root = fileURLToPath(new URL("../../../../", import.meta.url));
 const target = process.env.CARGO_TARGET_DIR ? resolve(root, process.env.CARGO_TARGET_DIR) : join(root, "target");
 const command = join(target, "debug", "layerfs");
 const noCommand = !existsSync(command) && `the layerfs command is not built (${command})`;
@@ -125,7 +125,7 @@ test("an async handler that rejects is not caught: Node's unhandled-rejection ru
   const folder = folderOf(1);
   try {
     const script = `
-      import { client } from ${JSON.stringify(new URL("../src/index.js", import.meta.url).href)};
+      import { client } from ${JSON.stringify(new URL("../../src/index.js", import.meta.url).href)};
       const lfs = client({ home: ${JSON.stringify(home)} });
       await lfs.store.create("shop");
       await lfs.project.init("shop/api", ${JSON.stringify(folder)}, {

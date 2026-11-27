@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const src = fileURLToPath(new URL("../src", import.meta.url));
+const src = fileURLToPath(new URL("../../src", import.meta.url));
 
 /** `{ status, stdout, stderr }` of importing the copied native.js with `env`. */
 function load(root, env) {
@@ -39,7 +39,7 @@ test("a missing addon is one clear error, and no source-tree path is tried", () 
   assert.match(none.stderr, /the LayerFS native addon is missing/);
   assert.ok(none.stderr.includes(join(root, "api/node/layerfs.node")), "names the path it looked at");
   assert.ok(none.stderr.includes(`${process.platform}/${process.arch}`), "names the platform and architecture");
-  assert.match(none.stderr, /build-native\.mjs/);
+  assert.match(none.stderr, /native-addon\.mjs/);
   assert.match(none.stderr, /LAYERFS_NATIVE/);
   assert.doesNotMatch(none.stderr, /could not be loaded/, "the decoys were not tried");
 
@@ -54,7 +54,7 @@ test("a missing addon is one clear error, and no source-tree path is tried", () 
   assert.match(broken.stderr, /could not be loaded on /);
 
   // the package's own addon is used when it is there
-  cpSync(process.env.LAYERFS_NATIVE ?? fileURLToPath(new URL("../layerfs.node", import.meta.url)), join(root, "api/node/layerfs.node"));
+  cpSync(process.env.LAYERFS_NATIVE ?? fileURLToPath(new URL("../../layerfs.node", import.meta.url)), join(root, "api/node/layerfs.node"));
   const own = load(root, {});
   assert.equal(own.status, 0, own.stderr);
   assert.equal(own.stdout.trim(), "function");

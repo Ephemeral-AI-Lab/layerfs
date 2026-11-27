@@ -5,7 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { rmSync } from "node:fs";
-import { CLI, SERVER, temp } from "./helpers.mjs";
+import { CLI, SERVER, temp } from "../helpers.mjs";
 
 const INITIALIZE = {
   jsonrpc: "2.0",

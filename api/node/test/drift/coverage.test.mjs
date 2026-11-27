@@ -7,7 +7,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { collect, document, locate, render, splice } from "../../scripts/gen-coverage.mjs";
+import { collect, document, locate, render, splice } from "../../../scripts/coverage-doc.mjs";
 
 let view = null;
 let skip = false;

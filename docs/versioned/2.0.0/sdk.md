@@ -242,4 +242,4 @@ MCP test suites (`api/node/test`, `api/python/test`, `api/mcp/test`) run the
 table, refusals and a live Store read through each front end.
 
 Run each test under a wall limit of at most 120 s, for example
-`perl -e 'alarm 100; exec @ARGV' node --test api/node/test/calls.mjs`.
+`perl -e 'alarm 100; exec @ARGV' node --test api/node/test/calls/every-call.test.mjs`.

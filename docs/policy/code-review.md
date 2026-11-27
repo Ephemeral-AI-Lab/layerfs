@@ -81,7 +81,7 @@ diff contains only what the code claims.
 | **D1 editorial** | only Markdown text changes: wording, links, formatting | tier P3; the author may self-merge with a review record | the contract docs set; owner-only paths; a doc that states a new invariant, limit, format or design (that is reviewed at the tier it describes) |
 | **D2 comment-only** | only comments or rustdoc change | P3 evidence | a removed code line (commenting code out is a code change); a `SAFETY` comment |
 | **D3 test-only** | only `tests/`, `examples/`, `benches/` change | no measurement or mount proof unless the test is one; the same reviewer | golden and fixture files in the `risk:format` set; a changed expected value or weakened assertion (a contract change); a file that names Durable |
-| **D4 generated** | blocks from `gen-coverage.mjs` or `gen-profiles.mjs` | the block is not read; the generator's `--check` passes | |
+| **D4 generated** | blocks from `coverage-doc.mjs` or `mcp-profiles.mjs` | the block is not read; the generator's `--check` passes | |
 | **D5 relocation-only** | files moved or renamed with no behaviour change | LOC labelled relocation; tests run | a move mixed with a behaviour change (land the move as its own commit) |
 
 ### Recording the tier

@@ -9,8 +9,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { table } from "@layerfs/node";
-import { call, connect, value, workspace } from "./helpers.mjs";
-import { InvalidArguments, encodeResult, readArguments } from "../src/values.js";
+import { call, connect, value, workspace } from "../helpers.mjs";
+import { InvalidArguments, encodeResult, readArguments } from "../../src/values.js";
 
 const BINARY = Buffer.from([0x00, 0x01, 0x02, 0xff, 0xfe, 0x80, 0x7f]);
 

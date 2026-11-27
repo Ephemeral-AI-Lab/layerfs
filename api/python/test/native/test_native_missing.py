@@ -10,7 +10,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
+HERE = Path(__file__).resolve().parents[1]  # api/python/test
 PACKAGE_SRC = HERE.parent / "src" / "layerfs"
 
 

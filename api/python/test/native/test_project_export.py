@@ -20,7 +20,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-SOURCE = Path(__file__).resolve().parents[1] / "src" / "layerfs"
+SOURCE = Path(__file__).resolve().parents[2] / "src" / "layerfs"
 SPEC = {
     "family": "project",
     "call": "export",

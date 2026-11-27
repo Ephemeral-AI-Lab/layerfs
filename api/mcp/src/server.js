@@ -20,7 +20,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import layerfs, { LayerFSError } from "@layerfs/node";
 import { errorResult } from "./errors.js";
-import { exportRefusal, resolveRoots } from "./exportroots.js";
+import { exportRefusal, resolveRoots } from "./export-roots.js";
 import { PROFILES, check as checkProfiles, tools as toolsOfProfile } from "./profiles.js";
 import { progressReporter } from "./progress.js";
 import { toolsOf } from "./tools.js";

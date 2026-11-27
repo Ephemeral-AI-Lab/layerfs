@@ -18,7 +18,7 @@ public surface:
   #536 C1, which placed it here); see the [control guide](../control/AGENTS.md).
 - `crates/layerfs-cli`: the `layerfs` command and the machine worker.
 - `crates/layerfs-node`: the Node binding, built as the package's addon at
-  `node/layerfs.node` by `scripts/build-native.mjs`; the package loads that
+  `node/layerfs.node` by `scripts/native-addon.mjs`; the package loads that
   file or the one `LAYERFS_NATIVE` names, nothing else.
 - `crates/layerfs-python`: the PyO3 module `layerfs._native`.
 - `node/`: the SDK for Node, `@layerfs/node`.

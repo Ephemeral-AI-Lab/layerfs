@@ -7,11 +7,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
+HERE = Path(__file__).resolve().parents[1]  # api/python/test
 sys.path.insert(0, str(HERE.parent / "src"))
 import layerfs
 
-FIXTURE = (HERE.parent.parent / "test/disabled-platforms.json").read_text()
+FIXTURE = (HERE.parent.parent / "crates/layerfs-api/tests/support/disabled-platforms.json").read_text()
 
 
 class DisabledPlatforms(unittest.TestCase):

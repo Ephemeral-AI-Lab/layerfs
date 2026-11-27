@@ -16,7 +16,7 @@ Which front end has which call, what lives outside the call table, and where the
                 +---> `layerfs help <family>` ------+    call, problems listed
                 +---> MCP tools and profiles -------+
                                                     v
-                         gen-coverage.mjs  (rewrite) | --check (exit 1)
+                         coverage-doc.mjs  (rewrite) | --check (exit 1)
 ```
 
 One row per call of the Node package's `table`. A cell is `yes` when that
@@ -209,7 +209,7 @@ export LAYERFS_PYTHON=<python with layerfs importable>   # default python3
 node api/scripts/coverage-doc.mjs                  # rewrite the matrix
 node api/scripts/coverage-doc.mjs --check          # fail when it is stale
 cd api/node
-perl -e 'alarm 120; exec @ARGV' node --test test/coverage.mjs test/contract.mjs
+perl -e 'alarm 120; exec @ARGV' node --test test/drift/coverage.test.mjs test/contract/front-ends.test.mjs
 ```
 
 `LAYERFS_CONTRACT_REPORT=<file>` writes each case's normalized answer per

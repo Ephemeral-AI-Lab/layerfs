@@ -7,8 +7,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { table } from "@layerfs/node";
 import { ToolSchema } from "@modelcontextprotocol/sdk/types.js";
-import { tools as toolsOfProfile } from "../src/profiles.js";
-import { call, connect, value, workspace } from "./helpers.mjs";
+import { tools as toolsOfProfile } from "../../src/profiles.js";
+import { call, connect, value, workspace } from "../helpers.mjs";
 
 const hostMachine = process.platform === "darwin" ? "macos-host" : "linux-host";
 const calls = (profile) => toolsOfProfile(table, profile).length;

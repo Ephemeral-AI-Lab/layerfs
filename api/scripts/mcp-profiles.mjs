@@ -6,9 +6,9 @@
 // A call without a profile bucket is an error, never a row with a blank cell.
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { bucketOf, check, renderRows } from "../src/profiles.js";
+import { bucketOf, check, renderRows } from "../mcp/src/profiles.js";
 
-export const document = fileURLToPath(new URL("../../../docs/architecture/api/front-ends/mcp.md", import.meta.url));
+export const document = fileURLToPath(new URL("../../docs/architecture/api/front-ends/mcp.md", import.meta.url));
 const BEGIN = "<!-- BEGIN GENERATED: api/scripts/mcp-profiles.mjs -->";
 const END = "<!-- END GENERATED -->";
 
