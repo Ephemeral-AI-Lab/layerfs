@@ -62,7 +62,7 @@ pub(crate) fn stop(
     events: &mut Events<'_>,
     name: &MachineName,
     force: bool,
-    users: &crate::MachineUsers,
+    users: &dyn crate::MachineUsers,
 ) -> Outcome {
     let _operation = crate::force_stop_lock(home, name.as_str())?;
     if force {
@@ -121,7 +121,9 @@ pub(crate) fn stop(
         }
         error
     };
-    let blocking = (users.host_holders)(home, name.as_str()).map_err(with_forced)?;
+    let blocking = users
+        .host_holders(home, name.as_str())
+        .map_err(with_forced)?;
     if !blocking.is_empty() {
         let mut error = refused(
             "InUse",

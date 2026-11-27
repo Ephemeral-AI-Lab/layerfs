@@ -10,6 +10,7 @@ use layerfs_home::home::{self, lock, paths};
 use layerfs_home::op::Op;
 use layerfs_home::outcome::{failed, refused, Outcome};
 use layerfs_machine::record::MachineRecord;
+use layerfs_machine::MachineUsers;
 use layerfs_machine::{force_record, machine_refusal as refusal, machine_spec, Phases};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
@@ -53,7 +54,7 @@ pub(crate) fn force_stop(home: &Path, name: &str, mut phases: Phases<'_, '_>) ->
             }
         }
         let spec = machine_spec(home, &machine)
-            .map_err(|r| MACHINE.related.nameless_fix(home, name, r))?;
+            .map_err(|r| MACHINE.related().nameless_fix(home, name, r))?;
         for child in &hosted {
             force_record(home, child)?;
         }

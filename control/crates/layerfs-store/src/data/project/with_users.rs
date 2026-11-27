@@ -18,13 +18,17 @@ use std::path::Path;
 
 /// `project.get(project)`: one project, its state and main's head; its
 /// Store's machine state is the inventory's.
-pub fn get(home: &Path, project: &ProjectRef, users: &StoreUsers) -> Outcome {
-    get::get(home, project, &users.machine_state)
+pub fn get(home: &Path, project: &ProjectRef, users: &dyn StoreUsers) -> Outcome {
+    get::get(home, project, &|home: &Path, machine: &str| {
+        users.machine_state(home, machine)
+    })
 }
 
 /// `project.list({ store, limit, cursor, with: stats })`.
-pub fn list(home: &Path, request: &ProjectList, users: &StoreUsers) -> Outcome {
-    list::list(home, request, &users.machine_state)
+pub fn list(home: &Path, request: &ProjectList, users: &dyn StoreUsers) -> Outcome {
+    list::list(home, request, &|home: &Path, machine: &str| {
+        users.machine_state(home, machine)
+    })
 }
 
 /// `project.delete(project)`: retires the project in its Store and removes
@@ -45,7 +49,7 @@ pub fn delete(
     home: &Path,
     events: &mut Events<'_>,
     project: &ProjectRef,
-    users: &StoreUsers,
+    users: &dyn StoreUsers,
 ) -> Outcome {
     let (store, name) = (project.store.as_str(), project.project.as_str());
     let prior = ProjectRecord::read(home, store, name)?.and_then(|record| record.op());
@@ -54,7 +58,7 @@ pub fn delete(
         .is_some_and(|op| op.name() == INIT && op.standing() != Standing::Running);
     intent::begin(home, store, name, DELETE, "mark")?;
     let outcome =
-        match crate::data::project::delete::run::delete(home, events, project, users.related) {
+        match crate::data::project::delete::run::delete(home, events, project, users.related()) {
             Err(refusal) if refusal.code == "NoSuchProject" => {
                 // a list that cannot be read leaves the Store's answer and
                 // the entry as they are

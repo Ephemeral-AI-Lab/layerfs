@@ -18,25 +18,25 @@ pub(crate) fn stop(
     home: &Path,
     events: &mut Events<'_>,
     name: &MachineName,
-    users: &MachineUsers,
+    users: &dyn MachineUsers,
 ) -> Outcome {
     let name = name.as_str();
     let mut phases = Phases::new(events, &STOP_PHASES);
     phases.begin("check");
     force_record(home, name)?;
     let _start = crate::force_stop_lock(home, name)?;
-    (users.force_stop)(home, name, phases)
+    users.force_stop(home, name, phases)
 }
 
 pub(crate) fn host_locked(
     home: &Path,
     events: &mut Events<'_>,
     name: &MachineName,
-    users: &MachineUsers,
+    users: &dyn MachineUsers,
 ) -> Outcome {
     let mut phases = Phases::new(events, &STOP_PHASES);
     phases.begin("check");
-    (users.force_stop)(home, name.as_str(), phases)
+    users.force_stop(home, name.as_str(), phases)
 }
 
 /// A new explicit force call may reconcile an unknown stop that this

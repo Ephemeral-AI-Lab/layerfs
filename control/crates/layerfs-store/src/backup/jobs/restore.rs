@@ -45,9 +45,9 @@ pub fn restore(
     home: &Path,
     events: &mut Events<'_>,
     request: &BackupRestore,
-    users: &crate::StoreUsers,
+    users: &dyn crate::StoreUsers,
 ) -> Outcome {
-    let related = users.related;
+    let related = users.related();
     let home = home.to_path_buf();
     let store = request.store.as_str();
     layerfs_home::names::StoreName::parse(store)?;

@@ -13,34 +13,28 @@ type Names = fn(home: &Path, name: &str) -> Result<Vec<String>, SdkRefusal>;
 /// An `InUse` check on machine `name` in home `home`.
 type Check = fn(home: &Path, name: &str) -> Result<(), SdkRefusal>;
 
-/// Settles, in each Store on machine `machine`, the mount intents an
-/// earlier worker incarnation left, with incarnation `incarnation`.
-type Reconcile = fn(home: &Path, machine: &str, incarnation: &str) -> Result<(), SdkRefusal>;
-/// Forgets removed machine `name` where the records of its users name it.
-type Forget = fn(home: &Path, name: &str) -> Result<(), SdkRefusal>;
-/// A forced stop of machine `name` and its Sandboxes, its machine lock
-/// held, reporting on `phases`.
-#[cfg(feature = "machine")]
-type ForceStop = fn(home: &Path, name: &str, phases: crate::Phases<'_, '_>) -> Outcome;
-
 /// What a machine call reads from and does to the Stores and Sandboxes on
-/// the machine, passed in by the crates that own them.
-#[derive(Clone, Copy)]
-pub struct MachineUsers {
+/// the machine, implemented by the crate that owns them (the Sandbox
+/// crate's `users::MACHINE`).
+pub trait MachineUsers {
     /// The reads and `InUse` checks.
-    pub related: Related,
-    /// `machine.start`: settles a previous incarnation's mount intents.
-    pub reconcile: Reconcile,
-    /// `machine.remove`: forgets the machine's PostgreSQL Store
-    /// attachments and its image copy locks.
-    pub forget: Forget,
+    fn related(&self) -> Related;
+    /// `machine.start`: settles, in each Store on machine `machine`, the
+    /// mount intents an earlier worker incarnation left, with incarnation
+    /// `incarnation`.
+    fn reconcile(&self, home: &Path, machine: &str, incarnation: &str) -> Result<(), SdkRefusal>;
+    /// `machine.remove`: forgets removed machine `name` where the records of
+    /// its users name it (its PostgreSQL Store attachments and its image
+    /// copy locks).
+    fn forget(&self, home: &Path, name: &str) -> Result<(), SdkRefusal>;
     /// `machine.stop` of the host machine: what still holds it (Sandboxes
     /// not stopped, and Stores another process or a call here holds), each
     /// named; this process's idle Store copies are closed first.
-    pub host_holders: Names,
-    /// `machine.stop --force`.
+    fn host_holders(&self, home: &Path, name: &str) -> Result<Vec<String>, SdkRefusal>;
+    /// `machine.stop --force`: a forced stop of machine `name` and its
+    /// Sandboxes, its machine lock held, reporting on `phases`.
     #[cfg(feature = "machine")]
-    pub force_stop: ForceStop,
+    fn force_stop(&self, home: &Path, name: &str, phases: crate::Phases<'_, '_>) -> Outcome;
 }
 
 /// The reads and `InUse` checks over a machine's Stores and Sandboxes.

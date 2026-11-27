@@ -31,7 +31,7 @@ pub fn compact(
     home: &Path,
     events: &mut Events<'_>,
     name: &StoreName,
-    users: &StoreUsers,
+    users: &dyn StoreUsers,
 ) -> Outcome {
     let store = name.as_str();
     crate::admin::maintenance::compact::compact(home, events, store)
@@ -51,7 +51,7 @@ pub fn upgrade(
     home: &Path,
     events: &mut Events<'_>,
     name: &StoreName,
-    users: &StoreUsers,
+    users: &dyn StoreUsers,
 ) -> Outcome {
     let store = name.as_str();
     let cancel = layerfs_home::cancel::flag();
@@ -62,7 +62,7 @@ pub fn upgrade(
         events,
         store,
         cancel,
-        users.related,
+        users.related(),
     );
     layerfs_home::cancel::clear();
     outcome.map_err(|refusal| {
@@ -96,7 +96,7 @@ fn with_store_fix(
     store: &str,
     refusal: SdkRefusal,
     call: &str,
-    users: &StoreUsers,
+    users: &dyn StoreUsers,
 ) -> SdkRefusal {
     if refusal
         .detail
@@ -114,7 +114,7 @@ fn with_store_fix(
     let fix = match refusal.code.as_str() {
         "Unavailable" => match machine() {
             Some(machine) if layerfs_machine::worker::is_mismatch(&refusal) => {
-                let on = (users.sandboxes_on)(home, &machine).map_or(0, |on| on.len());
+                let on = users.sandboxes_on(home, &machine).map_or(0, |on| on.len());
                 Some(layerfs_machine::state::replace_worker(&machine, on))
             }
             Some(machine) => Some(format!(
@@ -250,8 +250,8 @@ fn paged(answer: SdkValue, filters: &[(&str, SdkValue)]) -> SdkValue {
 }
 
 /// `store.remove`: a sqlite Store no Sandbox uses, with its file.
-pub fn remove(home: &Path, name: &StoreName, users: &StoreUsers) -> Outcome {
-    crate::backend::sqlite::remove::remove(home, name, users.related)
+pub fn remove(home: &Path, name: &StoreName, users: &dyn StoreUsers) -> Outcome {
+    crate::backend::sqlite::remove::remove(home, name, users.related())
 }
 
 /// `store.move`: a sqlite Store from the machine that holds it to
@@ -261,17 +261,17 @@ pub fn move_to(
     events: &mut Events<'_>,
     store: &str,
     machine: &str,
-    users: &StoreUsers,
+    users: &dyn StoreUsers,
 ) -> Outcome {
-    crate::backend::sqlite::move_phases::move_to(home, events, store, machine, users.related)
+    crate::backend::sqlite::move_phases::move_to(home, events, store, machine, users.related())
 }
 
 /// `store.disconnect(store)`: forget a PostgreSQL Store, its saved login
 /// and its attachments (its data stays), refused `InUse` while a process
 /// holds it or a Sandbox of its projects exists. A sqlite Store is
 /// `InvalidInput`, naming `store remove`.
-pub fn disconnect(home: &Path, name: &StoreName, users: &StoreUsers) -> Outcome {
-    connect::disconnect(home, name, users.related)
+pub fn disconnect(home: &Path, name: &StoreName, users: &dyn StoreUsers) -> Outcome {
+    connect::disconnect(home, name, users.related())
 }
 
 /// `store.connect(store, url, { user, password, synchronous_commit,
@@ -289,7 +289,7 @@ pub fn connect(
     home: &Path,
     events: &mut Events<'_>,
     request: &StoreConnect,
-    users: &StoreUsers,
+    users: &dyn StoreUsers,
 ) -> Outcome {
     let Some(update) = connect::prepare(home, request)? else {
         return connect::connect(home, request);
@@ -418,7 +418,7 @@ pub fn attach(
     name: &StoreName,
     machine: &MachineName,
     dry_run: bool,
-    users: &StoreUsers,
+    users: &dyn StoreUsers,
 ) -> Outcome {
     let machine = machine.as_str();
     let record = attachable(home, name, machine)?;
@@ -456,10 +456,15 @@ fn attach_answer(outcome: &str, name: &StoreName, machine: &str, checked: &SdkVa
 /// Refused `InUse` while a Sandbox of the Store's projects is on it,
 /// `NotFound` when it is not attached. Answers `{ ok, outcome: detached,
 /// store, machine }`.
-pub fn detach(home: &Path, name: &StoreName, machine: &MachineName, users: &StoreUsers) -> Outcome {
+pub fn detach(
+    home: &Path,
+    name: &StoreName,
+    machine: &MachineName,
+    users: &dyn StoreUsers,
+) -> Outcome {
     let machine = machine.as_str();
     attachable(home, name, machine)?;
-    let idle = |home: &Path| (users.store_idle_on)(home, name, machine);
+    let idle = |home: &Path| users.store_idle_on(home, name, machine);
     check::detach(home, name, machine, &idle)?;
     Ok(SdkValue::map([
         ("ok", SdkValue::Bool(true)),
@@ -570,7 +575,7 @@ pub fn check_from(
     events: &mut Events<'_>,
     record: &StoreRecord,
     machine: &str,
-    users: &StoreUsers,
+    users: &dyn StoreUsers,
 ) -> (Option<String>, Result<SdkValue, SdkRefusal>) {
     match crate::admin::record::store::url(record) {
         Ok(url) => check_dialling(home, events, record, machine, url, users),
@@ -595,7 +600,7 @@ fn check_dialling(
     record: &StoreRecord,
     machine: &str,
     url: String,
-    users: &StoreUsers,
+    users: &dyn StoreUsers,
 ) -> (Option<String>, Result<SdkValue, SdkRefusal>) {
     let (host, checked) = dial_from(home, events, record, machine, url, users);
     (
@@ -611,7 +616,7 @@ fn dial_from(
     record: &StoreRecord,
     machine: &str,
     url: String,
-    users: &StoreUsers,
+    users: &dyn StoreUsers,
 ) -> (Option<String>, Result<SdkValue, SdkRefusal>) {
     let name = record.name();
     let configuration = |refusal| check::at_step(refusal, ConnectionStep::Configuration);
@@ -622,10 +627,10 @@ fn dial_from(
         Ok(Err(refusal)) => {
             return (
                 None,
-                Err(configuration((users.nameless_fix)(home, machine, refusal))),
+                Err(configuration(users.nameless_fix(home, machine, refusal))),
             )
         }
-        Err(refusal) => return (None, Err((users.nameless_fix)(home, machine, refusal))),
+        Err(refusal) => return (None, Err(users.nameless_fix(home, machine, refusal))),
     };
     // the host named is read from the address the machine dials, with no
     // login: the URL dialled holds the password

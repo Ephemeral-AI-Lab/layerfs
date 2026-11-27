@@ -12,30 +12,24 @@ use std::path::Path;
 type Check = fn(home: &Path, name: &str) -> Result<(), SdkRefusal>;
 type Except = fn(home: &Path, name: &str, owner: &Owner) -> Result<(), SdkRefusal>;
 
-/// The Sandboxes on machine `machine` in home `home`.
-type Names = fn(home: &Path, machine: &str) -> Result<Vec<String>, SdkRefusal>;
-/// A machine's records-only state.
-type MachineState = fn(home: &Path, machine: &str) -> Result<State, SdkRefusal>;
-/// Refused while a Sandbox of Store `store`'s projects is on `machine`.
-type IdleOn = fn(home: &Path, store: &str, machine: &str) -> Result<(), SdkRefusal>;
-/// `refusal` with the fix of machine `machine` when it has no VM name.
-type Nameless = fn(home: &Path, machine: &str, refusal: SdkRefusal) -> SdkRefusal;
-
 /// What the Store calls read from the Sandboxes and machines that use a
-/// Store, passed in by the crates that own them.
-#[derive(Clone, Copy)]
-pub struct StoreUsers {
+/// Store, implemented by the crate that owns them (the Sandbox crate's
+/// `users::STORE`).
+pub trait StoreUsers {
     /// The checks over a Store's users.
-    pub related: Related,
-    /// A machine's state as `machine get` derives it from the records, so a
-    /// Store's `blocked_by` says what `machine get` says of its machine.
-    pub machine_state: MachineState,
-    /// The Sandboxes on a machine (a refusal's fix counts them).
-    pub sandboxes_on: Names,
-    /// `store.detach`: refused while a Sandbox of the Store is on the machine.
-    pub store_idle_on: IdleOn,
-    /// The fix of a machine with no VM name, for a check dialled from it.
-    pub nameless_fix: Nameless,
+    fn related(&self) -> Related;
+    /// Machine `machine`'s state as `machine get` derives it from the
+    /// records, so a Store's `blocked_by` says what `machine get` says of
+    /// its machine.
+    fn machine_state(&self, home: &Path, machine: &str) -> Result<State, SdkRefusal>;
+    /// The Sandboxes on machine `machine` (a refusal's fix counts them).
+    fn sandboxes_on(&self, home: &Path, machine: &str) -> Result<Vec<String>, SdkRefusal>;
+    /// `store.detach`: refused while a Sandbox of Store `store`'s projects
+    /// is on `machine`.
+    fn store_idle_on(&self, home: &Path, store: &str, machine: &str) -> Result<(), SdkRefusal>;
+    /// `refusal` with the fix of machine `machine` when it has no VM name,
+    /// for a check dialled from it.
+    fn nameless_fix(&self, home: &Path, machine: &str, refusal: SdkRefusal) -> SdkRefusal;
 }
 
 /// The checks over a Store's users.

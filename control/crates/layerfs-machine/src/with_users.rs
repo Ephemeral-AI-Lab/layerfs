@@ -17,28 +17,28 @@ use std::time::Duration;
 /// `Failed`, or a Store call refused `Unavailable` (LF10), before a
 /// nameless machine's worker is dialled. The holders are read here, on the
 /// refusal path alone; any other refusal is kept.
-pub fn nameless_chain(home: &Path, refusal: SdkRefusal, users: &MachineUsers) -> SdkRefusal {
+pub fn nameless_chain(home: &Path, refusal: SdkRefusal, users: &dyn MachineUsers) -> SdkRefusal {
     let named = (refusal.detail.get_text(layerfs_home::reply::outcome::FIX))
         .and_then(|fix| fix.strip_prefix("layerfs machine remove "))
         .filter(|name| layerfs_home::names::MachineName::parse(name).is_ok())
         .map(str::to_owned);
     match named {
         Some(name) if matches!(refusal.code.as_str(), "Failed" | "Unavailable") => {
-            users.related.nameless_fix(home, &name, refusal)
+            users.related().nameless_fix(home, &name, refusal)
         }
         _ => refusal,
     }
 }
 
 /// `machine.list`: from the records; with `live`, every machine probed.
-pub fn list(home: &Path, live: bool, users: &MachineUsers) -> Outcome {
-    crate::list(home, live, users.related)
+pub fn list(home: &Path, live: bool, users: &dyn MachineUsers) -> Outcome {
+    crate::list(home, live, users.related())
 }
 
 /// `machine.get`: from its record; with `live`, one probe and the `live`
 /// section.
-pub fn get(home: &Path, name: &MachineName, live: bool, users: &MachineUsers) -> Outcome {
-    let answer = crate::get(home, name, live, users.related)?;
+pub fn get(home: &Path, name: &MachineName, live: bool, users: &dyn MachineUsers) -> Outcome {
+    let answer = crate::get(home, name, live, users.related())?;
     #[cfg(any(target_os = "macos", target_os = "linux"))]
     if live
         && name.as_str() == layerfs_home::names::HOST_MACHINE
@@ -60,17 +60,17 @@ pub fn start(
     home: &Path,
     events: &mut Events<'_>,
     name: &MachineName,
-    users: &MachineUsers,
+    users: &dyn MachineUsers,
 ) -> Outcome {
     #[cfg(unix)]
     if name.as_str() == layerfs_home::names::HOST_MACHINE {
         return crate::lifecycle::host::start(home, name);
     }
-    let started = crate::start(home, name, users.related, events)?;
+    let started = crate::start(home, name, users.related(), events)?;
     let incarnation = record_start(home, name)?;
     // A Store the reconcile cannot reach is left for the next start.
     if let Some(incarnation) = incarnation {
-        let _ = (users.reconcile)(home, name.as_str(), &incarnation);
+        let _ = users.reconcile(home, name.as_str(), &incarnation);
     }
     Ok(started)
 }
@@ -138,9 +138,9 @@ fn worker_incarnation(home: &Path, machine: &str) -> Result<Option<String>, SdkR
 pub fn running(
     home: &Path,
     name: &str,
-    users: &MachineUsers,
+    users: &dyn MachineUsers,
 ) -> Result<Option<Endpoint>, SdkRefusal> {
-    crate::running(home, name, users.related)
+    crate::running(home, name, users.related())
 }
 
 /// `machine.stop`, with its phases on `events`; `force` stops it and this
@@ -150,7 +150,7 @@ pub fn stop(
     events: &mut Events<'_>,
     name: &MachineName,
     force: bool,
-    users: &MachineUsers,
+    users: &dyn MachineUsers,
 ) -> Outcome {
     #[cfg(unix)]
     if name.as_str() == layerfs_home::names::HOST_MACHINE {
@@ -158,7 +158,7 @@ pub fn stop(
     }
     match force {
         true => crate::lifecycle::force_stop::stop(home, events, name, users),
-        false => crate::stop(home, name, users.related, events),
+        false => crate::stop(home, name, users.related(), events),
     }
 }
 
@@ -167,9 +167,9 @@ pub fn create(
     home: &Path,
     events: &mut Events<'_>,
     request: &MachineCreate,
-    users: &MachineUsers,
+    users: &dyn MachineUsers,
 ) -> Outcome {
-    crate::create(home, events, request, users.related)
+    crate::create(home, events, request, users.related())
 }
 
 /// `machine.remove`. A removed machine's attachment to each PostgreSQL
@@ -180,14 +180,14 @@ pub fn remove(
     home: &Path,
     events: &mut Events<'_>,
     name: &MachineName,
-    users: &MachineUsers,
+    users: &dyn MachineUsers,
 ) -> Outcome {
-    let removed = crate::remove(home, name, users.related, events)?;
-    (users.forget)(home, name.as_str())?;
+    let removed = crate::remove(home, name, users.related(), events)?;
+    users.forget(home, name.as_str())?;
     Ok(removed)
 }
 
 /// `machine.update`.
-pub fn update(home: &Path, request: &MachineUpdate, users: &MachineUsers) -> Outcome {
-    crate::update(home, request, users.related)
+pub fn update(home: &Path, request: &MachineUpdate, users: &dyn MachineUsers) -> Outcome {
+    crate::update(home, request, users.related())
 }

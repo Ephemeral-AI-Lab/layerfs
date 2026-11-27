@@ -55,7 +55,7 @@ fn upgrade_with(home: &Path, cancel: &AtomicBool) -> (Result<SdkValue, SdkRefusa
         &mut Events::new(&mut sink),
         "shop",
         cancel,
-        layerfs_sandbox::users::STORE.related,
+        layerfs_store::StoreUsers::related(&layerfs_sandbox::users::STORE),
     );
     (outcome, seen)
 }

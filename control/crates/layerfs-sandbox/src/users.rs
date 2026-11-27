@@ -14,38 +14,86 @@ use std::path::Path;
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
 /// What a machine holds and what its calls do to it, from the Sandbox and
-/// Store records.
-pub const MACHINE: MachineUsers = MachineUsers {
-    related: Related {
-        stores_on: inventory::stores_on,
-        sandboxes_on: inventory::sandboxes_on,
-        hosted_on: inventory::hosted_on,
-        can_remove: inventory::can_remove_machine,
-        can_stop: inventory::can_stop_machine,
-        can_change: inventory::can_change_machine,
-    },
-    reconcile,
-    forget,
-    host_holders,
-    #[cfg(feature = "machine")]
-    force_stop: crate::lifecycle::machine_stop::force_stop,
+/// Store records: this crate's [`MachineUsers`].
+#[derive(Clone, Copy)]
+pub struct Machine;
+
+/// The [`MachineUsers`] machine calls take ([`Machine`]).
+pub const MACHINE: Machine = Machine;
+
+/// The reads and `InUse` checks over a machine's Stores and Sandboxes.
+const MACHINE_RELATED: Related = Related {
+    stores_on: inventory::stores_on,
+    sandboxes_on: inventory::sandboxes_on,
+    hosted_on: inventory::hosted_on,
+    can_remove: inventory::can_remove_machine,
+    can_stop: inventory::can_stop_machine,
+    can_change: inventory::can_change_machine,
 };
 
+impl MachineUsers for Machine {
+    fn related(&self) -> Related {
+        MACHINE_RELATED
+    }
+
+    fn reconcile(&self, home: &Path, machine: &str, incarnation: &str) -> Result<()> {
+        reconcile(home, machine, incarnation)
+    }
+
+    fn forget(&self, home: &Path, name: &str) -> Result<()> {
+        forget(home, name)
+    }
+
+    fn host_holders(&self, home: &Path, name: &str) -> Result<Vec<String>> {
+        host_holders(home, name)
+    }
+
+    #[cfg(feature = "machine")]
+    fn force_stop(
+        &self,
+        home: &Path,
+        name: &str,
+        phases: layerfs_machine::Phases<'_, '_>,
+    ) -> layerfs_home::reply::outcome::Outcome {
+        crate::lifecycle::machine_stop::force_stop(home, name, phases)
+    }
+}
+
 /// Who uses a Store or a project, and the machine reads the Store calls
-/// take, from the Sandbox and machine records.
-pub const STORE: StoreUsers = StoreUsers {
-    related: layerfs_store::Related {
-        store_idle: inventory::store_idle,
-        store_idle_except: Some(|home, store, owner| {
-            inventory::store_idle_with(home, store, Some(owner))
-        }),
-        can_remove_project: inventory::can_remove_project,
-    },
-    machine_state,
-    sandboxes_on: inventory::sandboxes_on,
-    store_idle_on: inventory::store_idle_on,
-    nameless_fix,
-};
+/// take, from the Sandbox and machine records: this crate's [`StoreUsers`].
+#[derive(Clone, Copy)]
+pub struct Store;
+
+/// The [`StoreUsers`] Store calls take ([`Store`]).
+pub const STORE: Store = Store;
+
+impl StoreUsers for Store {
+    fn related(&self) -> layerfs_store::Related {
+        layerfs_store::Related {
+            store_idle: inventory::store_idle,
+            store_idle_except: Some(|home, store, owner| {
+                inventory::store_idle_with(home, store, Some(owner))
+            }),
+            can_remove_project: inventory::can_remove_project,
+        }
+    }
+
+    fn machine_state(&self, home: &Path, machine: &str) -> Result<State> {
+        machine_state(home, machine)
+    }
+
+    fn sandboxes_on(&self, home: &Path, machine: &str) -> Result<Vec<String>> {
+        inventory::sandboxes_on(home, machine)
+    }
+
+    fn store_idle_on(&self, home: &Path, store: &str, machine: &str) -> Result<()> {
+        inventory::store_idle_on(home, store, machine)
+    }
+
+    fn nameless_fix(&self, home: &Path, machine: &str, refusal: SdkRefusal) -> SdkRefusal {
+        nameless_fix(home, machine, refusal)
+    }
+}
 
 /// A machine's records-only state as the Store reads take it
 /// ([`layerfs_store::state::Machines`]): the machine family's one
@@ -69,7 +117,7 @@ pub fn reads() -> layerfs_store::state::Machines<'static> {
 fn nameless_fix(home: &Path, machine: &str, refusal: SdkRefusal) -> SdkRefusal {
     #[cfg(feature = "machine")]
     {
-        MACHINE.related.nameless_fix(home, machine, refusal)
+        MACHINE_RELATED.nameless_fix(home, machine, refusal)
     }
     #[cfg(not(feature = "machine"))]
     {
