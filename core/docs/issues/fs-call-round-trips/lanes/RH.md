@@ -839,3 +839,52 @@ gap to SPEC, to diagnose from the merge-time trace.
   locates the right side before reading the left text, so a demand failure
   in the right side's locate now precedes the left text's demands.
 - Deleted tests: none.
+
+## H5/H6 switch-on — measured (after lane S, merge eb0d8c6b69, 2026-11-27)
+
+`StorePorts::{objects_each_with, lengths_each_with}` now make one demand
+each through `ReadSession` → `Storage::read_each_with` /
+`lengths_each_with` (lane S); `reads_each_at_once` is true. An object's own
+failure stays its own; any other failure an object meets fails the demand
+and is retained. `Batching::Forced` is replaced by `Batching::Alone`, which
+the tests hold the product's windows to. Measured once, PostgreSQL control
+(warm unless noted); SQLite pins unchanged:
+
+| Row | Before | Measured | Predicted (H6) | Within 15% | SPEC M3 |
+| --- | --- | --- | --- | --- | --- |
+| `blame.h100` | 59 | 22 | ~18–28 | yes | ~29 (met) |
+| `blame.h10` | 16 | 12 | ~8–12 | yes | ~17 (met) |
+| `revision.h100` | 72 | 48 | ~22–32 | **no** | ~30 (not met) |
+| `revision.h10` cold | 66 | 52 | ~50–60 (H5) | yes | — |
+| `diff_files` | 23 | 22 | ~20–21 | yes | ~12 (not met) |
+| cold `blame.h100` / `blame.h10` / `revision.h100` / `diff_files` | 296 / 54 / 301 / 49 | 65 / 38 / 92 / 48 | — | — | — |
+
+Diagnosis, once, from a PostgreSQL statement log of the warm calls (my
+database only, `log_statement` reset afterwards; a temporary test, not
+committed):
+
+- `revision.h100` (48): the provenance walk leaves the 100 Commits for the
+  Branch's base Layers. The Commit part costs ~26 (3 row windows, the
+  version windows' demands, two lone-walk serials and rows): inside the
+  prediction. The other ~22 are the Layer part: 12 Layer rows read one at a
+  time (`layer`/`layer_lineage` by id) and ~10 object demands of Layer
+  versions walked alone. H4's row windows follow first-parent Commits only,
+  so `Rows::upcoming` names no Layer and no version window opens there. The
+  prediction missed that the probe's walk reaches Layers. Not retuned; the
+  fix would be a Layer-chain row window (an H4-style statement over
+  `layer.parent_layer_id`), a new item.
+- `diff_files` (22): H6's two-sided plan is one demand (both sides' lengths
+  and texts). The rest is per side: the Commit row read 4 times (resolve,
+  the `belongs` check, `for_snap`, the side's reference), the tree-root
+  object, the path walk's group read, the serial and the stack's markers,
+  then a Branch row per reference. ~12 would need one row read per side and
+  the markers once per call (−6 to −9): the R5 read-context route applied to
+  `diff_files`' sides, not file facts.
+
+Checks, once each: history and read pins (both backends),
+`sdk_history_versions_rh` (product windows vs `Alone`: 3/3),
+`sdk_history_fault_rh_{drop,kill}` (now the sweep of the per-object reads
+in history calls: green, 22 s / 28 s, was 55 s / 62 s with fewer trips to
+cut), equivalence, `method_refusal_order`, `visibility_guard`,
+`postgresql_statement_schema`, and the blame/revision/compare/diff tests.
+Clippy `-D warnings` clean. Deleted tests: none.

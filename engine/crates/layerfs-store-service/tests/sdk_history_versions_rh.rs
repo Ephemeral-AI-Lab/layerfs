@@ -10,11 +10,11 @@
 //! both sides' files together. A damaged text past the point where the walk
 //! stops never surfaces either, and one the call reaches refuses there.
 //!
-//! The windows are forced ([`Batching::Forced`]): the Store's reader reads
-//! per-object demands one object at a time until the storage reader serves
-//! them at once, which is when the product turns them on. PostgreSQL only
-//! (the row windows that name a window's versions are PostgreSQL's); NOT_RUN
-//! without `LAYERFS_TEST_POSTGRES_URL`.
+//! The product's windows ([`Batching::Provider`], on PostgreSQL with the
+//! storage reader's per-object demands, #818 lane S) are held to the walk
+//! that looks each version up alone ([`Batching::Alone`]). PostgreSQL only
+//! (the row windows that name a window's versions are PostgreSQL's);
+//! NOT_RUN without `LAYERFS_TEST_POSTGRES_URL`.
 #[path = "support/round_trips.rs"]
 mod rt;
 
@@ -149,19 +149,18 @@ fn alike(
     alike_in(label, true, call)
 }
 
-/// [`alike`], requiring a window to be read when `windowed`.
+/// [`alike`], requiring a window to be read when `windowed_call`.
 fn alike_in(
     label: &str,
-    windowed: bool,
+    windowed_call: bool,
     call: impl Fn(Batching) -> Result<SdkValue, SdkRefusal>,
 ) -> Result<SdkValue, SdkRefusal> {
-    let alone = call(Batching::Provider);
+    let alone = call(Batching::Alone);
     let before = windows_resolved();
-    let forced = call(Batching::Forced);
-    if windowed {
+    let windowed = call(Batching::Provider);
+    if windowed_call {
         assert!(windows_resolved() > before, "{label}: a window was read");
     }
-    let windowed = forced;
     assert_eq!(windowed, alone, "{label}: windows answer as the lone walk");
     alone
 }

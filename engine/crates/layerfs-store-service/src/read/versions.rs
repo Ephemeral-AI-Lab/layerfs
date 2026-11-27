@@ -54,10 +54,9 @@ pub enum Batching {
     /// Where the Store pays a round trip per demand and the reader serves
     /// per-object reads at once: the product's choice.
     Provider,
-    /// Always, whatever the reader: per-object reads one by one where the
-    /// reader has no per-object demand. For tests of the windows' answers
-    /// and refusal order; it costs more reads, never fewer.
-    Forced,
+    /// Never: each version walked alone, as SQLite walks it. For tests that
+    /// hold the windows' answers and refusal order to the lone walk's.
+    Alone,
 }
 
 impl Batching {
@@ -65,7 +64,7 @@ impl Batching {
     pub fn on(self, store: &Store, reader: &Cached<'_>) -> bool {
         match self {
             Self::Provider => store.batched_reads() && reader.reads_each_at_once(),
-            Self::Forced => true,
+            Self::Alone => false,
         }
     }
 }
