@@ -1,0 +1,502 @@
+//! LayerStack creation, Layer publication, reads and the publication chain.
+//!
+//! Publication is a bounded metadata operation with no content traversal: a
+//! Layer records a root the caller already saved; besides its own row it writes
+//! its lineage (`lineage.rs`) and one conditional stack-head advance. All of it
+//! happens inside the caller's transaction, so a refused advance inserts
+//! nothing.
+//!
+//! An exact earlier publication is checked before any expected-head comparison,
+//! because asking twice is idempotent while a re-read of the head is not: the
+//! stack may legitimately have advanced since the first successful publication.
+
+use super::super::params;
+use super::super::statement::transaction::Transaction;
+use layerfs_content::ObjectId;
+use layerfs_history::error::{
+    HistoryError, HistoryResult, HolderKind, HolderState, Missing, MovedState, NameHolder,
+    NameSource, NameTakenState,
+};
+use layerfs_history::identity::{CatalogId, HistoryName, LayerId, LayerStackId};
+use layerfs_history::records::{
+    AddLayerOutcome, AddLayerRequest, LayerHistoryRequest, LayerRecord, LayerStackRecord, Page,
+    PageResult, StackInitialization,
+};
+
+use super::super::statement::rows::{cell, layer_row, many, one, sql, stack_row};
+use layerfs_history::catalog::query::{self, Context, Cursor, Range};
+
+const STACK_BY_ID: &str = "layerstack_stack_by_id";
+
+const STACK_BY_NAME: &str = "layerstack_stack_by_name";
+
+const STACK_FIRST_PAGE: &str = "layerstack_stack_first_page";
+
+const STACK_NEXT_PAGE: &str = "layerstack_stack_next_page";
+
+const LAYER_BY_ID: &str = "layerstack_layer_by_id";
+
+const LAYER_ROOT: &str = "layerstack_layer_root";
+
+const INSERT_STACK: &str = "layerstack_insert_stack";
+
+const INSERT_LAYER: &str = "layerstack_insert_layer";
+
+const STACK_NAME_TAKEN: &str = "layerstack_stack_name_taken";
+
+const ADVANCE_STACK: &str = "layerstack_advance_stack";
+
+const STACK_HEAD: &str = "layerstack_stack_head";
+
+const LAYER_BY_SOURCE: &str = "layerstack_layer_by_source";
+
+const INSERT_PROJECT_EPOCH: &str = "layerstack_insert_project_epoch";
+
+const BUMP_PROJECT_EPOCH: &str = "layerstack_bump_project_epoch";
+
+const INSERT_RETIRED: &str = "layerstack_insert_retired";
+
+const DELETED_MS: &str = "layerstack_deleted_ms";
+
+/// Creates the genesis Layer and the stack in one transaction.
+pub(crate) fn initialize_layerstack(
+    tx: &Transaction<'_>,
+    request: &StackInitialization,
+) -> HistoryResult<LayerStackRecord> {
+    if layer_stack(tx, request.stack)?.is_some() {
+        return Err(HistoryError::Integrity("LayerStack identity"));
+    }
+    if let Some(state) = name_taken(tx, &request.name)? {
+        return Err(HistoryError::NameTaken(Box::new(state)));
+    }
+    let genesis = LayerId::derive(request.stack, None, request.genesis_root);
+    let serial = super::super::counters::position::next_serial(tx)?;
+    tx.execute(
+        INSERT_STACK,
+        params![
+            request.stack.as_slice(),
+            request.name.as_str(),
+            request.scope.as_bytes().as_slice(),
+            request.profile.as_bytes().as_slice(),
+            genesis.as_slice(),
+        ],
+    )
+    .map_err(sql)?;
+    tx.execute(INSERT_PROJECT_EPOCH, [request.stack.as_slice()])
+        .map_err(sql)?;
+    tx.execute(
+        INSERT_LAYER,
+        params![
+            genesis.as_slice(),
+            request.stack.as_slice(),
+            Option::<Vec<u8>>::None,
+            request.genesis_root.as_bytes().as_slice(),
+            Option::<Vec<u8>>::None,
+            Option::<Vec<u8>>::None,
+            i64::try_from(request.logical).map_err(|_| HistoryError::Capacity("logical bytes"))?,
+            Vec::<u8>::new(),
+            i64::try_from(serial).map_err(|_| HistoryError::Capacity("history serials"))?,
+        ],
+    )
+    .map_err(sql)?;
+    super::super::lineage::records::record_layer(tx, genesis, request.stack, 0, 0)?;
+    layer_stack(tx, request.stack)?.ok_or(HistoryError::Integrity("LayerStack insertion"))
+}
+
+/// The typed `NameTaken` state for a project name, live or deleted.
+pub(crate) fn name_taken(
+    tx: &Transaction<'_>,
+    name: &HistoryName,
+) -> HistoryResult<Option<NameTakenState>> {
+    one(tx, STACK_NAME_TAKEN, [name.as_str()], |row| {
+        let name = cell::<String>(row, 0)?;
+        let deleted = cell::<i64>(row, 1)? != 0;
+        let state = if deleted {
+            HolderState::Deleted
+        } else {
+            HolderState::Live
+        };
+        Ok(NameTakenState::new(
+            NameHolder::new(HolderKind::Project, name, state),
+            NameSource::Store,
+        ))
+    })
+}
+
+/// Reads one stack by identity.
+pub(crate) fn layer_stack(
+    tx: &Transaction<'_>,
+    id: LayerStackId,
+) -> HistoryResult<Option<LayerStackRecord>> {
+    one(tx, STACK_BY_ID, [id.as_slice()], stack_row)
+}
+
+/// Reads one stack by its name, through the unique name index.
+pub(crate) fn layer_stack_named(
+    tx: &Transaction<'_>,
+    name: &HistoryName,
+) -> HistoryResult<Option<LayerStackRecord>> {
+    one(tx, STACK_BY_NAME, params![name.as_str()], stack_row)
+}
+
+/// Records a project.delete marker in one write transaction: the project's
+/// epoch is bumped with the marker, and the marker is the commit point. A
+/// hidden or absent stack, and a repeat, are Missing(LayerStack); a repeat
+/// writes nothing, so it cannot bump the epoch twice.
+pub(crate) fn mark_stack_deleted(
+    tx: &Transaction<'_>,
+    stack: LayerStackId,
+    deleted_ms: i64,
+) -> HistoryResult<()> {
+    if layer_stack(tx, stack)?.is_none() {
+        return Err(HistoryError::Missing(Missing::LayerStack));
+    }
+    let bumped = tx
+        .execute(BUMP_PROJECT_EPOCH, [stack.as_slice()])
+        .map_err(sql)?;
+    if bumped != 1 {
+        return Err(HistoryError::Conflict("project epoch"));
+    }
+    let marked = tx
+        .execute(INSERT_RETIRED, params![stack.as_slice(), deleted_ms])
+        .map_err(sql)?;
+    if marked == 0 {
+        return Err(HistoryError::Missing(Missing::LayerStack));
+    }
+    Ok(())
+}
+
+/// The deleted_ms a project.delete marker recorded. The same-home retry
+/// reads it by the stack id its intent recorded before the marker; a live or
+/// absent stack has none.
+pub(crate) fn stack_deleted_ms(
+    tx: &Transaction<'_>,
+    stack: LayerStackId,
+) -> HistoryResult<Option<i64>> {
+    one(tx, DELETED_MS, [stack.as_slice()], |row| {
+        cell::<i64>(row, 0)
+    })
+}
+
+/// Reads stacks in name order, one bounded page at a time.
+pub(crate) fn layer_stacks(
+    tx: &Transaction<'_>,
+    catalog: CatalogId,
+    incarnation: u64,
+    key: &[u8; 32],
+    page: &Page,
+) -> HistoryResult<PageResult<LayerStackRecord>> {
+    page.check()?;
+    let capacity = query::capacity(page.limit, LayerStackRecord::MAXIMUM_ENCODED_BYTES)?;
+    let window = capacity as i64 + 1;
+    let context = Context {
+        key,
+        catalog,
+        incarnation,
+        range: Range::StackNames,
+        subject: &[],
+    };
+    let after = match &page.cursor {
+        None => None,
+        Some(bytes) => {
+            let cursor = query::decode(context, bytes)?;
+            if !cursor.anchor.is_empty() {
+                return Err(HistoryError::InvalidInput("page cursor anchor"));
+            }
+            Some(
+                layer_stack(tx, LayerStackId::from_slice(&cursor.position)?)?
+                    .ok_or(HistoryError::Integrity("page cursor position"))?
+                    .name
+                    .as_str()
+                    .to_owned(),
+            )
+        }
+    };
+    let records = match after {
+        Some(name) => many(tx, STACK_NEXT_PAGE, params![name, window], stack_row)?,
+        None => many(tx, STACK_FIRST_PAGE, params![window], stack_row)?,
+    };
+    let more = records.len() > capacity;
+    query::page(records, capacity, more, |record| {
+        query::encode(
+            context,
+            &Cursor {
+                anchor: Vec::new(),
+                position: record.id.as_slice().to_vec(),
+            },
+        )
+        .map(Some)
+    })
+}
+
+/// Reads one Layer by identity.
+pub(crate) fn layer(tx: &Transaction<'_>, id: LayerId) -> HistoryResult<Option<LayerRecord>> {
+    one(tx, LAYER_BY_ID, [id.as_slice()], layer_row)
+}
+
+/// Root recorded by one Layer.
+pub(crate) fn layer_root(tx: &Transaction<'_>, id: LayerId) -> HistoryResult<ObjectId> {
+    one(tx, LAYER_ROOT, [id.as_slice()], |row| {
+        super::super::statement::rows::object(row, 0)
+    })?
+    .ok_or(HistoryError::Missing(Missing::Layer))
+}
+
+/// True when an existing row for this identity carries the same immutable fields.
+pub(crate) fn verify_layer(tx: &Transaction<'_>, expected: &LayerRecord) -> HistoryResult<bool> {
+    match layer(tx, expected.id)? {
+        None => Ok(false),
+        Some(stored) => {
+            if stored.parent == expected.parent
+                && stored.root == expected.root
+                && stored.stack == expected.stack
+                && stored.source_branch == expected.source_branch
+                && stored.source_commit == expected.source_commit
+                && stored.logical == expected.logical
+                && stored.overwrote_count == expected.overwrote_count
+            {
+                Ok(true)
+            } else {
+                Err(HistoryError::Integrity("Layer provenance"))
+            }
+        }
+    }
+}
+
+/// Walks one stack's publication chain from an immutable start, newest first.
+pub(crate) fn layer_history(
+    tx: &Transaction<'_>,
+    catalog: CatalogId,
+    incarnation: u64,
+    key: &[u8; 32],
+    request: &LayerHistoryRequest,
+) -> HistoryResult<PageResult<LayerRecord>> {
+    let stack =
+        layer_stack(tx, request.stack)?.ok_or(HistoryError::Missing(Missing::LayerStack))?;
+    let capacity = query::capacity(request.limit, LayerRecord::MAXIMUM_ENCODED_BYTES)?;
+    let context = Context {
+        key,
+        catalog,
+        incarnation,
+        range: Range::LayerChain,
+        subject: request.stack.as_slice(),
+    };
+    let cursor = request
+        .cursor
+        .as_ref()
+        .map(|bytes| query::decode(context, bytes))
+        .transpose()?;
+    let (start, mut current) = if let Some(cursor) = cursor {
+        let anchor = LayerId::from_slice(&cursor.anchor)?;
+        if request.start.is_some_and(|start| start != anchor) {
+            return Err(HistoryError::InvalidInput("page cursor anchor"));
+        }
+        let position = LayerId::from_slice(&cursor.position)?;
+        // Authentication attests to the immutable anchor/position relationship
+        // established by the page traversal that issued this cursor.
+        let last = layer(tx, position)?.ok_or(HistoryError::Integrity("Layer chain"))?;
+        if last.stack != request.stack {
+            return Err(HistoryError::Integrity("Layer ownership"));
+        }
+        (anchor, last.parent)
+    } else {
+        let start = request.start.unwrap_or(stack.head_layer);
+        (start, Some(start))
+    };
+    if layer(tx, start)?
+        .ok_or(HistoryError::Missing(Missing::Layer))?
+        .stack
+        != request.stack
+    {
+        return Err(HistoryError::Integrity("Layer ownership"));
+    }
+    let mut records = Vec::new();
+    while let Some(id) = current {
+        if records.len() > capacity {
+            break;
+        }
+        let record = layer(tx, id)?.ok_or(HistoryError::Integrity("Layer chain"))?;
+        if record.stack != request.stack {
+            return Err(HistoryError::Integrity("Layer ownership"));
+        }
+        current = record.parent;
+        records.push(record);
+    }
+    let more = records.len() > capacity;
+    query::page(records, capacity, more, |record| {
+        query::encode(
+            context,
+            &Cursor {
+                anchor: start.as_slice().to_vec(),
+                position: record.id.as_slice().to_vec(),
+            },
+        )
+        .map(Some)
+    })
+}
+
+/// Publishes one Commit root as a new Layer against the expected stack head.
+pub(crate) fn add_layer(
+    tx: &Transaction<'_>,
+    request: &AddLayerRequest,
+) -> HistoryResult<AddLayerOutcome> {
+    // Spec 5: the fence opens before the Branch and Commit reads. The stack
+    // is read once to refuse a missing project with `Missing`, then the
+    // fence, then the stack is read again so a removal that committed in the
+    // window is visible (its row is filtered) instead of the stale head
+    // being extended.
+    let _ = layer_stack(tx, request.stack)?.ok_or(HistoryError::Missing(Missing::LayerStack))?;
+    let fence = crate::gc::fence::open(tx, request.stack)?;
+    let stack =
+        layer_stack(tx, request.stack)?.ok_or(HistoryError::Missing(Missing::LayerStack))?;
+    let branch =
+        super::branch::branch(tx, request.branch)?.ok_or(HistoryError::Missing(Missing::Branch))?;
+    if branch.stack != request.stack {
+        return Err(HistoryError::Integrity("Branch ownership"));
+    }
+    let commit =
+        super::commit::commit(tx, request.commit)?.ok_or(HistoryError::Missing(Missing::Commit))?;
+    if commit.stack != request.stack {
+        return Err(HistoryError::Integrity("Commit ownership"));
+    }
+    if let Some(id) = published_source(tx, request.branch, request.commit)? {
+        let stored = layer(tx, id)?.ok_or(HistoryError::Integrity("Layer provenance"))?;
+        if stored.stack != request.stack
+            || stored.root != commit.root
+            || stored.source_branch != Some(request.branch)
+            || stored.source_commit != Some(request.commit)
+        {
+            return Err(HistoryError::Integrity("Layer provenance"));
+        }
+        return Ok(AddLayerOutcome::UpToDate { layer: id });
+    }
+    let moved = || {
+        HistoryError::HeadMoved(Box::new(MovedState {
+            expected_head: Some(request.commit),
+            actual_head: branch.head_commit,
+            expected_base: request.expected_branch_base,
+            actual_base: branch.base_layer,
+        }))
+    };
+    // The Commit is the Branch's head or one its head holds: a Branch moved
+    // to a history without it is `HeadMoved`.
+    let held = match branch.head_commit {
+        Some(head) => {
+            use layerfs_history::NodeId::Commit;
+            super::super::lineage::ancestry::is_ancestor(tx, Commit(request.commit), Commit(head))?
+        }
+        None => false,
+    };
+    if !held {
+        return Err(moved());
+    }
+    if branch.base_layer != request.expected_branch_base {
+        return Err(moved());
+    }
+    if commit.base_layer != branch.base_layer {
+        return Err(HistoryError::BaseMismatch {
+            commit_base: commit.base_layer,
+            branch_base: branch.base_layer,
+        });
+    }
+    if stack.head_layer != request.expected_stack_head {
+        return Err(HistoryError::StackMoved {
+            expected: request.expected_stack_head,
+            actual: stack.head_layer,
+        });
+    }
+    // Overwrite-only here: the new Layer sits on the stack head, whatever
+    // main gained since the Branch's base. `branch.publish` refuses that
+    // case before this call unless the caller passed `force` (#691).
+    if commit.root == layer_root(tx, stack.head_layer)? {
+        return Ok(AddLayerOutcome::NoChanges {
+            head: stack.head_layer,
+        });
+    }
+    // Skipped Layers are the chain above the newest one the Commit covers:
+    // only their count is written, whatever lies between.
+    let head = super::super::lineage::records::layer_line(tx, stack.head_layer)?.height;
+    let source = super::super::lineage::records::commit_line(tx, request.commit)?;
+    let covered = super::super::lineage::records::covered(tx, request.stack, head, &source)?;
+    let layer = LayerRecord {
+        overwrote_count: (head - covered) as u64,
+        id: LayerId::derive(request.stack, Some(stack.head_layer), commit.root),
+        stack: request.stack,
+        parent: Some(stack.head_layer),
+        root: commit.root,
+        source_branch: Some(request.branch),
+        source_commit: Some(request.commit),
+        logical: commit.meta.statistics.logical,
+    };
+    // A Layer that republishes a Commit carries that Commit's serial.
+    let serial = super::super::counters::position::node_serial(
+        tx,
+        layerfs_history::NodeId::Commit(commit.id),
+    )?
+    .unwrap_or(0);
+    if !verify_layer(tx, &layer)? {
+        tx.execute(
+            INSERT_LAYER,
+            params![
+                layer.id.as_slice(),
+                layer.stack.as_slice(),
+                layer.parent.map(|parent| parent.to_bytes().to_vec()),
+                layer.root.as_bytes().as_slice(),
+                layer.source_branch.map(|id| id.to_bytes().to_vec()),
+                layer.source_commit.map(|id| id.to_bytes().to_vec()),
+                layer.logical as i64,
+                // Overwritten Layers are addressed by height (`overwritten`);
+                // only Layers published before #353 list them here.
+                Vec::<u8>::new(),
+                i64::try_from(serial).map_err(|_| HistoryError::Capacity("history serials"))?,
+            ],
+        )
+        .map_err(sql)?;
+        super::super::lineage::records::record_layer(
+            tx,
+            layer.id,
+            request.stack,
+            head + 1,
+            head - covered,
+        )?;
+        super::super::lineage::records::absorb(tx, request.stack, &source, head + 1)?;
+    }
+    let advanced = tx
+        .execute(
+            ADVANCE_STACK,
+            params![
+                layer.id.as_slice(),
+                request.stack.as_slice(),
+                request.expected_stack_head.as_slice(),
+            ],
+        )
+        .map_err(sql)?;
+    if advanced == 0 {
+        let actual = one(tx, STACK_HEAD, [request.stack.as_slice()], |row| {
+            cell::<Vec<u8>>(row, 0)
+        })?
+        .ok_or(HistoryError::Integrity("LayerStack head"))?;
+        return Err(HistoryError::StackMoved {
+            expected: request.expected_stack_head,
+            actual: LayerId::from_slice(&actual)?,
+        });
+    }
+    fence.confirm(tx)?;
+    Ok(AddLayerOutcome::Added { layer })
+}
+
+pub(crate) fn published_source(
+    tx: &Transaction<'_>,
+    branch: layerfs_history::identity::BranchId,
+    commit: layerfs_history::identity::CommitId,
+) -> HistoryResult<Option<LayerId>> {
+    one(
+        tx,
+        LAYER_BY_SOURCE,
+        params![branch.as_slice(), commit.as_slice()],
+        |row| {
+            let bytes: Vec<u8> = cell(row, 0)?;
+            LayerId::from_slice(&bytes)
+        },
+    )
+}

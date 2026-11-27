@@ -1,15 +1,15 @@
 //! The `<store>.compact-op` sidecar record, its artifact paths and the crash failpoints.
 
 use super::types::io_error;
-use super::types::CompactFailpoint;
-use super::types::CompactKeptWaste;
-use super::types::CompactRequest;
 use super::types::MarkTuple;
-use super::types::OwnerLiveness;
 use super::types::ARTIFACT_SUFFIXES;
 use super::types::COMPACT_SUFFIX;
 use super::types::OP_SUFFIX;
 use super::types::VISITED_SUFFIX;
+use crate::gc::compact::CompactFailpoint;
+use crate::gc::compact::CompactKeptWaste;
+use crate::gc::compact::CompactRequest;
+use crate::gc::compact::OwnerLiveness;
 use layerfs_history::error::HistoryError;
 use layerfs_history::error::HistoryResult;
 use std::collections::BTreeMap;
@@ -332,7 +332,7 @@ impl CompactOpStatus {
     /// lives, and so is a gone owner's. `uncertain` stays the record's own
     /// fact: it is true for every unsettled run, live or leftover.
     #[must_use]
-    pub fn status(&self, alive: bool) -> crate::report::CompactStatus {
+    pub fn status(&self, alive: bool) -> crate::gc::compact::CompactStatus {
         // A read in the admission window still projects a §11 phase: the run
         // is about to mark, and `admission` is not one of the four.
         let phase = if self.phase == "admission" {
@@ -340,7 +340,7 @@ impl CompactOpStatus {
         } else {
             self.phase.clone()
         };
-        crate::report::CompactStatus {
+        crate::gc::compact::CompactStatus {
             id: format!("op-{}", hex(&self.op_id)),
             name: "store.compact",
             phase,
@@ -351,7 +351,7 @@ impl CompactOpStatus {
             } else {
                 "unresolved"
             },
-            phases: &crate::report::SQLITE_COMPACT_PHASES,
+            phases: &crate::gc::compact::SQLITE_COMPACT_PHASES,
         }
     }
 }

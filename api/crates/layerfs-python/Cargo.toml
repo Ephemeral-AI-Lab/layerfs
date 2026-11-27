@@ -21,8 +21,6 @@ tls = ["layerfs-api/tls"]
 [dependencies]
 pyo3 = { version = "=0.30.1", features = ["abi3-py310", "extension-module"] }
 layerfs-api = { path = "../layerfs-api" }
-layerfs-bridge = { path = "../../../engine/crates/layerfs-bridge" }
-
 [build-dependencies]
 # `-undefined dynamic_lookup` on macOS, so a plain cargo build links the
 # extension module as maturin does.

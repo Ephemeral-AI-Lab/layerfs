@@ -1,13 +1,13 @@
 //! One real kernel serving assembly over an installed Store, for mounted proofs.
-use layerfs_bridge::control::{
-    MountPhase, ReadyMount, Reply, Request, WorkspaceStatus, WorkspaceToken,
-};
 use layerfs_daemon::{
-    control::{Failure, KernelConfig, KernelServing, Service, Success},
     store::Store,
+    workspace::{Failure, KernelConfig, KernelServing, Service, Success},
     Owner, OwnerConfig,
 };
 use layerfs_history::{BranchId, WorkspaceId};
+use layerfs_protocol::daemon::{
+    MountPhase, ReadyMount, Reply, Request, WorkspaceStatus, WorkspaceToken,
+};
 use nix::unistd::{Gid, Uid};
 use std::{
     cell::Cell,
@@ -148,7 +148,7 @@ impl Harness {
     /// `execute_control`, attempted once on the caller's thread.
     pub fn try_commit(&self, token: WorkspaceToken) -> Result<Success, Failure> {
         self.service
-            .execute_control(&Request::Commit(layerfs_bridge::control::CommitControl {
+            .execute_control(&Request::Commit(layerfs_protocol::daemon::CommitControl {
                 token,
                 force: false,
                 message: None,
@@ -156,11 +156,12 @@ impl Harness {
             }))
     }
     pub fn try_unmount(&self, token: WorkspaceToken) -> Result<Success, Failure> {
-        self.service
-            .execute_control(&Request::Unmount(layerfs_bridge::control::UnmountControl {
+        self.service.execute_control(&Request::Unmount(
+            layerfs_protocol::daemon::UnmountControl {
                 token,
                 discard: true,
-            }))
+            },
+        ))
     }
     /// One forced terminal unmount, attempted once.
     pub fn try_force(

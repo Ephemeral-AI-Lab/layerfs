@@ -88,7 +88,7 @@ words against its entry:
 | any other `--x` | exit 2, listing the call's options |
 
 Values are only shaped here; the library checks them again
-([`check.rs`](../../../../api/crates/layerfs-api/src/calls/check.rs)). An
+([`arguments.rs`](../../../../api/crates/layerfs-api/src/dispatch/guard/arguments.rs)). An
 unknown call suggests the closest one in its family
 ([`run.rs`](../../../../api/crates/layerfs-cli/src/run.rs)).
 
@@ -103,14 +103,14 @@ unknown call suggests the closest one in its family
 usage lines built from the entry ([`help.rs`](../../../../api/crates/layerfs-cli/src/help.rs)):
 `<name>` required, `[name]` optional (as the rows write it), `[--name <name>]` per option (`[--name]`
 for a `Bool`, `[--progress]` for `on_progress`). The banner
-([`banner.rs`](../../../../api/crates/layerfs-cli/src/banner.rs)) prints only
+([`style.rs`](../../../../api/crates/layerfs-cli/src/style.rs)) prints only
 when stdout is a terminal; `NO_COLOR` turns colour off. `--version --json`
 gives `{ version, commit, dirty, features }` (`features`: `postgresql`, always
 on because the engine is built into every artifact; the Cargo features
 `machine` and `tls` when built in; and `sandbox-runtime` when namespaces
 Sandboxes run on the bundle's runtime layer, R5) and `help --json` gives
 `{ calls, commands, switches }` with `calls` exactly `table_json`
-([`capabilities.rs`](../../../../api/crates/layerfs-cli/src/capabilities.rs)).
+([`discovery.rs`](../../../../api/crates/layerfs-cli/src/discovery.rs)).
 
 `layerfs worker` serves a machine's worker
 ([`worker.rs`](../../../../api/crates/layerfs-cli/src/worker.rs)): it reads
@@ -121,7 +121,7 @@ setting exits 125. The protocol is in
 
 Each table call appends one call-log line with `client: "cli"`;
 `LAYERFS_LOGS_TAG` sets its tag and `LAYERFS_LOGS=0` turns the log off
-([`dispatch.rs`](../../../../api/crates/layerfs-api/src/calls/dispatch.rs)).
+([`call.rs`](../../../../api/crates/layerfs-api/src/dispatch/run/call.rs)).
 A wrong command line, `help`, `--version`, `worker` and the
 eight `quiet` calls write none.
 
@@ -131,12 +131,12 @@ eight `quiet` calls write none.
 | --- | --- |
 | Front ends add no behaviour beyond argument and output shape: each function is built from the table and calls the library once | [`run.rs`](../../../../api/crates/layerfs-cli/src/run.rs), [`index.js`](../../../../api/node/src/index.js) `bind`, [`_client.py`](../../../../api/python/src/layerfs/_client.py) `_bind`; the [coverage matrix](../calls/coverage.md) |
 | No call, argument or result name is written in a front end | [api guide](../../../../api/AGENTS.md); generated types and stubs |
-| Nothing is retried in a front end | [`calls/text.rs`](../../../../api/crates/layerfs-api/src/calls/text.rs), [`run.rs`](../../../../api/crates/layerfs-cli/src/run.rs) |
-| A wrong call is refused the same way everywhere: the checks are the library's | [`calls/check.rs`](../../../../api/crates/layerfs-api/src/calls/check.rs); compared by `shell.mjs` and `test_calls.py` |
-| Functions (`on_progress`, `stdout`, `stderr`) never cross into the library | [`calls/check.rs`](../../../../api/crates/layerfs-api/src/calls/check.rs) |
-| LayerFS reads `LAYERFS_*` settings only and names no plugin | [`dispatch.rs`](../../../../api/crates/layerfs-api/src/calls/dispatch.rs) `home`, [`worker.rs`](../../../../api/crates/layerfs-cli/src/worker.rs) |
+| Nothing is retried in a front end | [`run/call_json.rs`](../../../../api/crates/layerfs-api/src/dispatch/run/call_json.rs), [`run.rs`](../../../../api/crates/layerfs-cli/src/run.rs) |
+| A wrong call is refused the same way everywhere: the checks are the library's | [`guard/arguments.rs`](../../../../api/crates/layerfs-api/src/dispatch/guard/arguments.rs); compared by `shell.mjs` and `test_calls.py` |
+| Functions (`on_progress`, `stdout`, `stderr`) never cross into the library | [`guard/arguments.rs`](../../../../api/crates/layerfs-api/src/dispatch/guard/arguments.rs) |
+| LayerFS reads `LAYERFS_*` settings only and names no plugin | [`call.rs`](../../../../api/crates/layerfs-api/src/dispatch/run/call.rs) `home`, [`worker.rs`](../../../../api/crates/layerfs-cli/src/worker.rs) |
 | The CLI closes the Stores a call opened before it exits, so a sqlite Store leaves no write-ahead log | `layerfs_api::close()` in [`run.rs`](../../../../api/crates/layerfs-cli/src/run.rs), which runs `close_idle(Duration::ZERO)` ([`lib.rs`](../../../../api/crates/layerfs-api/src/lib.rs)) |
-| A one-shot process ends its idle Sandbox daemon sessions before it exits, so its exit is not a dropped connection in the daemon's log (layerfs-project#181). Best effort inside 250 ms in all (`SESSION_END`), sent once, after the call's result is ready; a lent or failed connection, or a daemon that does not answer in time, is dropped as before. The daemon's side is in [the daemon channel](../../control/sandboxes/daemon-channel-and-exec.md) | `end_idle_sessions` in [`registry.rs`](../../../../control/crates/layerfs-sandbox/src/registry.rs), `Controls::end_idle` in [`daemon/pool.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/pool.rs) |
+| A one-shot process ends its idle Sandbox daemon sessions before it exits, so its exit is not a dropped connection in the daemon's log (layerfs-project#181). Best effort inside 250 ms in all (`SESSION_END`), sent once, after the call's result is ready; a lent or failed connection, or a daemon that does not answer in time, is dropped as before. The daemon's side is in [the daemon channel](../../control/sandboxes/daemon-channel-and-exec.md) | `end_idle_sessions` in [`registry.rs`](../../../../control/crates/layerfs-sandbox/src/lifecycle/registry.rs), `Controls::end_idle` in [`channel/pool.rs`](../../../../control/crates/layerfs-sandbox/src/route/daemon/channel/pool.rs) |
 
 ## Limits and failures
 
@@ -154,8 +154,8 @@ eight `quiet` calls write none.
 | Artifact | Built by | Contents | Platform |
 | --- | --- | --- | --- |
 | `@layerfs/cli` 2.0.0-rc.1 ([`api/cli`](../../../../api/cli/package.json)) | `cargo +1.85.1 build --release --locked -p layerfs-cli`, copy to `api/cli/bin/layerfs`, `npm pack` (`prepack` refuses without the binary) | `bin/layerfs`, `LICENSE`, `README.md`, `package.json` | `os` linux, `cpu` x64, `libc` glibc; Node 22 or later |
-| CLI tarball | [`build-cli-dist.mjs`](../../../../api/scripts/build-cli-dist.mjs) `<output-dir>`: release build with paths remapped, then `layerfs-<version>-x86_64-unknown-linux-gnu.tar.gz` and `SHA256SUMS` | `layerfs`, `LICENSE`, `README.md` | runs on linux x64 only; the Cargo target must stay in the worktree |
-| `@layerfs/node` 2.0.0-rc.1 ([`api/node`](../../../../api/node/package.json)) | [`build-native.mjs`](../../../../api/scripts/build-native.mjs) (release by default), `npm pack` in `api/node` (`prepack` refuses without `layerfs.node`) | `src/` (with `index.d.ts`), `layerfs.node`, `LICENSE`, `README.md`, `package.json` | linux, x64, glibc; Node 22 or later |
+| CLI tarball | [`cli-dist.mjs`](../../../../api/scripts/cli-dist.mjs) `<output-dir>`: release build with paths remapped, then `layerfs-<version>-x86_64-unknown-linux-gnu.tar.gz` and `SHA256SUMS` | `layerfs`, `LICENSE`, `README.md` | runs on linux x64 only; the Cargo target must stay in the worktree |
+| `@layerfs/node` 2.0.0-rc.1 ([`api/node`](../../../../api/node/package.json)) | [`native-addon.mjs`](../../../../api/scripts/native-addon.mjs) (release by default), `npm pack` in `api/node` (`prepack` refuses without `layerfs.node`) | `src/` (with `index.d.ts`), `layerfs.node`, `LICENSE`, `README.md`, `package.json` | linux, x64, glibc; Node 22 or later |
 | `layerfs` Python 2.0.0 ([`pyproject.toml`](../../../../api/python/pyproject.toml)) | `cd api/python && maturin build --locked` | `layerfs` with `_native` (abi3), stubs, `LICENSE` | Python 3.10 or later; not on PyPI |
 | `@layerfs/mcp` 2.0.0 | not packed | | private |
 
@@ -174,12 +174,12 @@ Build first (`--no-run`), then each under a 120 s wall limit.
 
 | Test or example | Command | Platform | Shows |
 | --- | --- | --- | --- |
-| [`exit_codes.rs`](../../../../api/crates/layerfs-cli/tests/exit_codes.rs) | `cargo +1.85.1 test --locked -p layerfs-cli --test exit_codes` | Unix | 0, 2 and 125 as above |
-| [`stream.rs`](../../../../api/crates/layerfs-cli/tests/stream.rs), [`stream_exit.rs`](../../../../api/crates/layerfs-cli/tests/stream_exit.rs) | `cargo +1.85.1 test --locked -p layerfs-cli --test stream --test stream_exit` | Unix; `stream.rs`'s live half needs `LAYERFS_DAEMON`, else `NOT_RUN`; `stream_exit.rs` uses a stand-in worker | `--stream` passes output; `workspace exec` exits with the command's code with or without it |
-| [`doctor.rs`](../../../../api/crates/layerfs-cli/tests/doctor.rs) | `cargo +1.85.1 test --locked -p layerfs-cli --test doctor` | Unix | `layerfs home doctor` prints one report and changes nothing; `home leftovers` and `home prune` exit 2 |
-| [`progress.rs`](../../../../api/crates/layerfs-cli/tests/progress.rs) | `cargo +1.85.1 test --locked -p layerfs-cli --test progress` | Unix | progress lines on stderr; refusal before any event; closed stderr |
-| [`capabilities.rs`](../../../../api/crates/layerfs-cli/tests/capabilities.rs) | `cargo +1.85.1 test --locked -p layerfs-cli --test capabilities` | Unix | `--version --json`, `help --json` without a home |
-| [`package.mjs`](../../../../api/cli/test/package.mjs) | `node --test api/cli/test/package.mjs` | any | the CLI package's licence, platform fields and file list |
+| [`exit_codes.rs`](../../../../api/crates/layerfs-cli/tests/command_line/exit_codes.rs) | `cargo +1.85.1 test --locked -p layerfs-cli --test command_line exit_codes` | Unix | 0, 2 and 125 as above |
+| [`stream.rs`](../../../../api/crates/layerfs-cli/tests/exec/stream.rs), [`stream_exit.rs`](../../../../api/crates/layerfs-cli/tests/exec/stream_exit.rs) | `cargo +1.85.1 test --locked -p layerfs-cli --test exec stream --test exec stream_exit` | Unix; `stream.rs`'s live half needs `LAYERFS_DAEMON`, else `NOT_RUN`; `stream_exit.rs` uses a stand-in worker | `--stream` passes output; `workspace exec` exits with the command's code with or without it |
+| [`report.rs`](../../../../api/crates/layerfs-cli/tests/doctor_output/report.rs) | `cargo +1.85.1 test --locked -p layerfs-cli --test doctor_output report` | Unix | `layerfs home doctor` prints one report and changes nothing; `home leftovers` and `home prune` exit 2 |
+| [`progress.rs`](../../../../api/crates/layerfs-cli/tests/command_line/progress.rs) | `cargo +1.85.1 test --locked -p layerfs-cli --test command_line progress` | Unix | progress lines on stderr; refusal before any event; closed stderr |
+| [`discovery.rs`](../../../../api/crates/layerfs-cli/tests/help/discovery.rs) | `cargo +1.85.1 test --locked -p layerfs-cli --test help discovery` | Unix | `--version --json`, `help --json` without a home |
+| [`package.test.mjs`](../../../../api/cli/test/package.test.mjs) | `node --test api/cli/test/package.test.mjs` | any | the CLI package's licence, platform fields and file list |
 
 ## Pages
 

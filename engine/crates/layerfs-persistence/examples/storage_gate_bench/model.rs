@@ -41,10 +41,9 @@ use layerfs_content::ObjectRole;
 use layerfs_content::{object::decode_references, ConstructionPolicy, InodeScope, ObjectId};
 use layerfs_storage::{
     encoding::{delta::read::ChainBases, DecompressionWorkspace, PackCache},
-    location::{ObjectLocation, SignatureRow},
+    location::{ObjectLocation, SignatureRow, Source},
     pack::layout::{directory_group_views, parse_directory_header},
     port::PackPersistence,
-    source::Source,
     StorageError, StorageResult,
 };
 use postgres::{Client, NoTls};

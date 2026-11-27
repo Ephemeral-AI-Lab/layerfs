@@ -6,7 +6,7 @@
 
 | | |
 | --- | --- |
-| Source | [`api/mcp/src`](../../../../api/mcp/src): [`server.js`](../../../../api/mcp/src/server.js), [`exportroots.js`](../../../../api/mcp/src/exportroots.js), [`profiles.js`](../../../../api/mcp/src/profiles.js), [`tools.js`](../../../../api/mcp/src/tools.js), [`values.js`](../../../../api/mcp/src/values.js), [`errors.js`](../../../../api/mcp/src/errors.js), [`progress.js`](../../../../api/mcp/src/progress.js); [`gen-profiles.mjs`](../../../../api/mcp/scripts/gen-profiles.mjs) |
+| Source | [`api/mcp/src`](../../../../api/mcp/src): [`server.js`](../../../../api/mcp/src/server.js), [`export-roots.js`](../../../../api/mcp/src/export-roots.js), [`profiles.js`](../../../../api/mcp/src/profiles.js), [`tools.js`](../../../../api/mcp/src/tools.js), [`values.js`](../../../../api/mcp/src/values.js), [`errors.js`](../../../../api/mcp/src/errors.js), [`progress.js`](../../../../api/mcp/src/progress.js); [`mcp-profiles.mjs`](../../../../api/scripts/mcp-profiles.mjs) |
 
 The package is private and unpublished (`api/mcp`, version 2.0.0), Node 22 or
 later, over the [Node binding](bindings.md#layerfs-node) and
@@ -64,13 +64,13 @@ node src/server.js --help
 The scope flags are the command's [`--scope-project` and `--scope`](README.md#the-layerfs-command)
 under this server's names. The scope is fixed for the process; a scoped call
 the library refuses comes back as its own `InvalidInput` (`out of scope: …`)
-([`scope.rs`](../../../../api/crates/layerfs-api/src/calls/scope.rs)).
+([`scope.rs`](../../../../api/crates/layerfs-api/src/dispatch/guard/scope.rs)).
 
 ## Export allowlist
 
 `project_export` writes to a path on the machine running this server, and the
 client picks the path, so the operator names where it may write at launch
-([`exportroots.js`](../../../../api/mcp/src/exportroots.js)).
+([`export-roots.js`](../../../../api/mcp/src/export-roots.js)).
 
 | Destination | Result |
 | --- | --- |
@@ -111,10 +111,10 @@ calls, and the doctors: the calls that start workers, move whole Stores, hold
 credentials, retire or compact records, or change the shape of the home. A new call with
 no bucket fails `tools()`, generation and the test rather than appearing
 silently. Regenerate the table below with
-`node api/mcp/scripts/gen-profiles.mjs` (`--check` compares; both need the
+`node api/scripts/mcp-profiles.mjs` (`--check` compares; both need the
 built addon).
 
-<!-- BEGIN GENERATED: api/mcp/scripts/gen-profiles.mjs -->
+<!-- BEGIN GENERATED: api/scripts/mcp-profiles.mjs -->
 
 82 calls: 17 in `work` (the table's `agent` profile), 65 in `admin` only (`full`); `--profile admin` lists 82.
 
@@ -269,13 +269,13 @@ ext4, xfs or btrfs, the built addon (`api/node/layerfs.node`) and
 | Test | Command | Shows |
 | --- | --- | --- |
 | package | `cd api/mcp && npm install --no-audit --no-fund && npm test` | the files below, one at a time |
-| [`workflow.test.mjs`](../../../../api/mcp/test/workflow.test.mjs) | `node --test api/mcp/test/workflow.test.mjs` | initialize, `tools/list` counts, a Store/project/Branch/file history flow, export with progress, refusals, scope, the work profile |
-| [`purity.test.mjs`](../../../../api/mcp/test/purity.test.mjs) | `node --test api/mcp/test/purity.test.mjs` | stdout is JSON-RPC only while a call logs to stderr |
-| [`values.test.mjs`](../../../../api/mcp/test/values.test.mjs) | `node --test api/mcp/test/values.test.mjs` | bytes round-trip, the integer wrapper |
-| [`concurrency.test.mjs`](../../../../api/mcp/test/concurrency.test.mjs) | `node --test api/mcp/test/concurrency.test.mjs` | 10 concurrent calls; stdin close and SIGTERM exit 0 within 5 s, no process left |
-| [`export-roots.test.mjs`](../../../../api/mcp/test/export-roots.test.mjs) | `node --test api/mcp/test/export-roots.test.mjs` | the allowlist cases above |
-| [`profiles.test.mjs`](../../../../api/mcp/test/profiles.test.mjs) | `node --test api/mcp/test/profiles.test.mjs` | every call in exactly one bucket; the generated table equals this page; every schema valid |
-| coverage | `node api/scripts/gen-coverage.mjs --check` | the MCP column of the [coverage matrix](../calls/coverage.md) matches the same tool list |
+| [`workflow.test.mjs`](../../../../api/mcp/test/protocol/workflow.test.mjs) | `node --test api/mcp/test/protocol/workflow.test.mjs` | initialize, `tools/list` counts, a Store/project/Branch/file history flow, export with progress, refusals, scope, the work profile |
+| [`purity.test.mjs`](../../../../api/mcp/test/protocol/purity.test.mjs) | `node --test api/mcp/test/protocol/purity.test.mjs` | stdout is JSON-RPC only while a call logs to stderr |
+| [`values.test.mjs`](../../../../api/mcp/test/tools/values.test.mjs) | `node --test api/mcp/test/tools/values.test.mjs` | bytes round-trip, the integer wrapper |
+| [`concurrency.test.mjs`](../../../../api/mcp/test/protocol/concurrency.test.mjs) | `node --test api/mcp/test/protocol/concurrency.test.mjs` | 10 concurrent calls; stdin close and SIGTERM exit 0 within 5 s, no process left |
+| [`export-roots.test.mjs`](../../../../api/mcp/test/tools/export-roots.test.mjs) | `node --test api/mcp/test/tools/export-roots.test.mjs` | the allowlist cases above |
+| [`profiles.test.mjs`](../../../../api/mcp/test/tools/profiles.test.mjs) | `node --test api/mcp/test/tools/profiles.test.mjs` | every call in exactly one bucket; the generated table equals this page; every schema valid |
+| coverage | `node api/scripts/coverage-doc.mjs --check` | the MCP column of the [coverage matrix](../calls/coverage.md) matches the same tool list |
 
 ## Related
 

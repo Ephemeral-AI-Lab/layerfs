@@ -1,13 +1,13 @@
 [package]
 name = "layerfs-store"
-description = "Store records and calls (layerfs-project#105): which Stores exist and where, sqlite/ and postgresql/ apart, backups, projects, placement and leases"
+description = "Store records and calls (layerfs-project#105): which Stores exist and where, sqlite/ and postgresql/ apart, backups to buckets with their drivers, projects, placement, leases and the host worker"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
-layerfs-bridge = { path = "../../../engine/crates/layerfs-bridge" }
+layerfs-protocol = { path = "../../../engine/crates/layerfs-protocol" }
 layerfs-content = { path = "../../../core/crates/layerfs-content" }
 layerfs-history = { path = "../../../core/crates/layerfs-history" }
 layerfs-persistence = { path = "../../../engine/crates/layerfs-persistence" }
@@ -17,16 +17,34 @@ layerfs-project = { path = "../../../engine/crates/layerfs-project" }
 layerfs-store-service = { path = "../../../engine/crates/layerfs-store-service" }
 layerfs-home = { path = "../layerfs-home" }
 layerfs-machine = { path = "../layerfs-machine" }
-# Store backup to a bucket (#535).
-layerfs-bucket = { path = "../layerfs-bucket" }
+# The bucket drivers' sha256 manifests (backup/bucket/).
+sha2 = "=0.11.0"
+# https:// bucket endpoints, checked against the system's roots.
+native-tls = { version = "=0.2.18", optional = true }
 libc = "=0.2.189"
 # `resource` and `process`: the host worker keeps a held PostgreSQL
 # password out of core dumps (#819 P-B).
-nix = { version = "=0.31.3", default-features = false, features = ["fs", "user", "signal", "resource", "process"] }
+nix = { version = "=0.31.3", default-features = false, features = ["fs", "user", "signal", "resource", "process", "poll", "socket"] }
+layerfs-os = { path = "../../../engine/crates/layerfs-os" }
 
 [features]
-# https:// remotes: Cloudflare R2, MinIO behind TLS.
-tls = ["layerfs-bucket/tls"]
+default = ["local_folder", "minio"]
+# A folder on the local filesystem as a bucket, for tests.
+local_folder = []
+# The shared S3 API client: one-attempt SigV4 over HTTP/1.1, multipart.
+s3_api = []
+# https:// remotes: Cloudflare R2, MinIO behind TLS, checked against the
+# system's roots. Off by default; the sealed Linux build the worker runs
+# turns it on.
+tls = ["s3_api", "dep:native-tls"]
+# The MinIO provider over the S3 API.
+minio = ["s3_api"]
+# The host worker's fault switches and shorter waits, for its tests only
+# (layerfs-project#177, #179 E): `admin/host_worker` write faults. Never a
+# default feature; only layerfs-api's worker-fault names it.
+worker-fault = []
+# The host worker's server and the machine reads (host builds only).
+machine = ["layerfs-machine/machine"]
 
 # The control-level PostgreSQL `store get --with live` test drives a real server and
 # inserts the rows a compaction leaves; this is the pinned client the

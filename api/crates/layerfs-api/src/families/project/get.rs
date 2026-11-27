@@ -1,0 +1,48 @@
+//! `project.get`: one project: its Store, state and main's head.
+use crate::dispatch::table::Kind::Project;
+use crate::dispatch::table::{a, call, Call};
+use crate::dispatch::{Context, Form};
+use layerfs_home::names::ProjectRef;
+use layerfs_home::reply::outcome::Outcome;
+use layerfs_protocol::sdk::SdkValue;
+
+/// Its Store and state always, with the state's companion; `commit` is
+/// main's head.
+const FORM: Form = Form::of(
+    &["store", "state"],
+    &["commit", "op", "blocked_by", "reason", "fix"],
+    &[
+        "store",
+        "state",
+        "commit",
+        "op",
+        "blocked_by",
+        "reason",
+        "fix",
+        "project",
+        "engine",
+        "machine",
+        "created_at",
+    ],
+);
+
+/// Its table entry.
+pub(crate) const CALL: Call = call(
+    "project",
+    "get",
+    &[a("project", Project)],
+    &[],
+    "one project: its Store, state and main's head",
+    run,
+)
+.form(&FORM);
+
+/// Runs `project.get`.
+fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
+    let project = ProjectRef::parse(args.get_text("project").unwrap_or(""))?;
+    layerfs_store::data::project::with_users::get(
+        &context.home,
+        &project,
+        &layerfs_sandbox::users::STORE,
+    )
+}

@@ -1,5 +1,5 @@
 //! Bounded signature ring, insertion-stamp order preserved.
-use crate::backend::{records::BackendError, Transaction};
+use crate::backend::{error::BackendError, Transaction};
 use layerfs_content::ObjectId;
 use layerfs_storage::{location::SignatureRow, port::PersistenceError};
 pub(crate) fn read(

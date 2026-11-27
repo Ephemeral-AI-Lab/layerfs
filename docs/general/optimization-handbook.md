@@ -81,13 +81,13 @@ Start here. None of these needs new product code.
 | A mount's live request state | `NativeWork`: `received`, `admitted`, `queued`, `running`, `parked`, `retained`, `completed`, loop counts | [`control_native.rs`](https://github.com/Ephemeral-AI-Lab/layerfs/blob/2b4dc28a6d93aace6405a6baa5271e344b1cf5c2/core/crates/layerfs-bridge/src/control_native.rs) | Control Status while mounted; the unmount receipt afterwards |
 | The dispatcher as a whole | `DispatchWork`: workers, mounts, `queued`, `running`, `parked`, `retained` | [`layerfs-fuse/src/dispatch`](../../engine/crates/layerfs-fuse/src/dispatch) | Through the native serving assembly |
 | Owner jobs per class | `OwnerWork`: `admitted`, `completed[6]`, `queue_wait_ns[6]`, `service_ns[6]`, `outstanding`, `queued`, `peak_queued`, maintenance jobs and rows | [`overlay/queue.rs`](https://github.com/Ephemeral-AI-Lab/layerfs/blob/2b4dc28a6d93aace6405a6baa5271e344b1cf5c2/core/crates/layerfs-daemon/src/overlay/queue.rs) | The six classes are Read, Mutation, Capture, Lifecycle, OperationRecord and Source ([`commands.rs`](https://github.com/Ephemeral-AI-Lab/layerfs/blob/2b4dc28a6d93aace6405a6baa5271e344b1cf5c2/core/crates/layerfs-daemon/src/overlay/commands.rs)) |
-| SQL work per statement family | `StatementWork`: `executions`, `rows_returned`, `rows_changed`, `vm_steps`, `fullscan_steps`, `sorts`, `autoindex_rows`, `reprepares`, bytes, `elapsed_ns` | [`diagnostics/metrics.rs`](../../engine/crates/layerfs-overlay/src/diagnostics/metrics.rs) | Fourteen families (`StatementKind`); foreground and maintenance are separate in `OwnerWork`; each job's completion carries its own receipt |
+| SQL work per statement family | `StatementWork`: `executions`, `rows_returned`, `rows_changed`, `vm_steps`, `fullscan_steps`, `sorts`, `autoindex_rows`, `reprepares`, bytes, `elapsed_ns` | [`backing/metrics.rs`](../../engine/crates/layerfs-overlay/src/backing/metrics.rs) | Fourteen families (`StatementKind`); foreground and maintenance are separate in `OwnerWork`; each job's completion carries its own receipt |
 | Query plans of the overlay | `explain_*` functions per family | [`layerfs-overlay/src`](../../engine/crates/layerfs-overlay/src) | Reached through owner commands that return plans |
-| Stored rows and pages | `StoredCounts` | [`database/accounting.rs`](../../engine/crates/layerfs-overlay/src/database/accounting.rs) | Plateau and leak checks |
+| Stored rows and pages | `StoredCounts` | [`backing/accounting.rs`](../../engine/crates/layerfs-overlay/src/backing/accounting.rs) | Plateau and leak checks |
 | Base demands on the Store | `StoreWork`: `object_batches`, `object_ids`, `length_batches`, `length_ids`, `serial_reservations` | [`store/open.rs`](https://github.com/Ephemeral-AI-Lab/layerfs/blob/2b4dc28a6d93aace6405a6baa5271e344b1cf5c2/core/crates/layerfs-daemon/src/store/open.rs) | A warm phase must show zero object demands |
 | Store reader pool | `ReadServiceWork`: `readers`, `quarantined`, `waiting`, `leased`, `peak_outstanding`, `grants`, `queue_wait_ns`, `maximum_queue_wait_ns` | [`store/read_service.rs`](https://github.com/Ephemeral-AI-Lab/layerfs/blob/2b4dc28a6d93aace6405a6baa5271e344b1cf5c2/core/crates/layerfs-daemon/src/store/read_service.rs) | Reader contention and quarantine |
-| Namespace construction in a Commit | `CapturedNamespaceWork`: rows, pages, `parent_points`, `base_lookups`, headers, values, `files_constructed`, record jobs | [`construction/outcome.rs`](../../engine/crates/layerfs-workspace/src/construction/outcome.rs) | In the Commit success or failure |
-| Storage read and save path | `Diagnostics`: locate, pack reads and selections, reservations, publish, payload reads, locator and pack cache hits and evictions | [`read/counters.rs`](../../core/crates/layerfs-storage/src/read/counters.rs) | In the Commit outcome |
+| Namespace construction in a Commit | `CapturedNamespaceWork`: rows, pages, `parent_points`, `base_lookups`, headers, values, `files_constructed`, record jobs | [`construction/outcome.rs`](../../engine/crates/layerfs-vfs/src/construction/outcome.rs) | In the Commit success or failure |
+| Storage read and save path | `Diagnostics`: locate, pack reads and selections, reservations, publish, payload reads, locator and pack cache hits and evictions | [`source/counters.rs`](../../core/crates/layerfs-storage/src/read/source/counters.rs) | In the Commit outcome |
 | Global Store SQL | `SqlWork`: statements, actual VM steps, transactions; on PostgreSQL also `round_trips`, `prepares`, `connects` | [`sqlite/connection.rs`](../../engine/crates/layerfs-persistence/src/backend/sqlite/connection.rs) | Separate from the overlay engine |
 | Kernel queue of one connection | `waiting`, `max_background`, `congestion_threshold` | the mount's own entry under the fusectl filesystem | Read only your own connection. Nothing writes there except the product's own abort |
 
@@ -190,7 +190,7 @@ The cheapest request is one the kernel never sends.
 - **Current profile.** 60 s entry and attribute lifetime, cached reads,
   writeback off, `default_permissions`, background depth 1
   ([`reply.rs`](../../engine/crates/layerfs-fuse/src/request/reply.rs),
-  [`profile.rs`](../../engine/crates/layerfs-fuse/src/mount/profile.rs)).
+  [`mount.rs`](../../engine/crates/layerfs-fuse/src/mount.rs)).
   Changing it is an owner decision.
 - **Proofs.** `native_coherence`, `native_mutation`, `native_mount`,
   `mounted_install`.
@@ -299,7 +299,7 @@ Slow on first touch, fast afterwards.
 - **Do not.** Enable kernel writeback or acknowledge a write before it is
   published.
 - **Proofs.** `native_mutation`, `native_coherence`, `edit_backing`, the
-  `layerfs-workspace` write and truncate tests.
+  `layerfs-vfs` write and truncate tests.
 
 ### H. Commit: capture and namespace construction
 

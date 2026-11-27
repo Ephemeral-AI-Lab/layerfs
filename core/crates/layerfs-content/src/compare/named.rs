@@ -19,7 +19,7 @@ use std::rc::Rc;
 use crate::compare::tree::TreeTable;
 use crate::compare::BindingHints;
 use crate::error::ContentResult;
-use crate::filesystem::path::PathName;
+use crate::filesystem::name::path::PathName;
 use crate::object::{AuthenticatedObjects, ObjectId};
 use layerfs_telemetry::timer::TimingScope;
 

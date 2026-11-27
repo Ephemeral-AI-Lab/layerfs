@@ -8,12 +8,12 @@ use fuser::{
     Errno, FileAttr, FileHandle, FileType, FopenFlags, Generation, INodeNo, ReplyAttr, ReplyData,
     ReplyEntry, ReplyOpen,
 };
-use layerfs_mount_ports::{
-    operations::{KernelData, KernelRead, ReadDataInput},
-    ports::{Fence, RequestServices},
-};
 use layerfs_overlay::KernelMount;
-use layerfs_workspace::{KernelReadOperation, Refusal};
+use layerfs_vfs::{
+    ports::mount::{Fence, RequestServices},
+    requests::{KernelData, KernelRead, ReadDataInput},
+};
+use layerfs_vfs::{KernelReadOperation, Refusal};
 use std::{
     sync::Arc,
     time::{Duration, UNIX_EPOCH},
@@ -197,7 +197,7 @@ async fn dispose(answer: KernelRead) -> RequestDisposition {
 }
 /// The declared page-cache treatment of every opened or created file.
 pub(super) fn open_flags() -> FopenFlags {
-    let cache = crate::coherence::pages::open_cache();
+    let cache = crate::request::coherence::open_cache();
     let mut flags = FopenFlags::empty();
     flags.set(FopenFlags::FOPEN_KEEP_CACHE, cache.keep);
     flags.set(FopenFlags::FOPEN_DIRECT_IO, cache.direct);

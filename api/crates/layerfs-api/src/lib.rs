@@ -1,119 +1,65 @@
 //! The SDK's public surface: the call table, one file per call under its
-//! family (`<family>/<call>.rs`: the call's entry and the function that runs
-//! it, one call of a control crate), each family's calls listed in its
-//! `mod.rs`, and the call machinery in `calls/` (argument checks, folder
-//! scope, the one dispatcher, and the forms of an answer and a refusal;
-//! layerfs-project#107, call surface 2.0). Only this crate speaks
+//! family (`families/<family>/<call>.rs`: the call's entry and the function
+//! that runs it, one call of a control crate), each family's calls listed in
+//! its `mod.rs`, and the call machinery in `dispatch/` (argument checks,
+//! folder scope, the one dispatcher, and the forms of an answer and a
+//! refusal; layerfs-project#107, call surface 2.0). Only this crate speaks
 //! the SDK; the control crates' public paths the front ends use are
 //! re-exported here. The `branch`, `commit` and `file`
 //! calls reach the Store engine's SDK facade (layerfs-store-service
 //! `methods/`) in the caller's process, the only route for Store calls
 //! (#352 F-020). The six doctors (`home`, `machine`, `store`, `project`,
 //! `sandbox`, `backup doctor`) are table calls of their families that never
-//! open the home; they share one answer (`calls/doctor/`), which is no
-//! family.
+//! open the home; they share one answer (`dispatch/answer/doctor.rs`), which
+//! is no family.
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
-mod backup;
-mod branch;
-pub mod calls;
-mod commit;
-mod file;
-// the `home` family's folder; `home` itself names the re-exported home module below
-#[path = "home/mod.rs"]
-mod home_family;
-mod machine;
-mod project;
-mod sandbox;
-mod store;
-mod workspace;
+pub mod dispatch;
+mod families;
+pub mod worker;
 
-use calls as machinery;
-// the six doctors' shared answer (`calls/doctor/`), which each
+use dispatch as machinery;
+// the six doctors' shared answer (`dispatch/answer/doctor.rs`), which each
 // family's doctor entry names
-use calls::doctor;
-use layerfs_bridge::control::SdkValue;
-use layerfs_home::outcome::Outcome;
+use dispatch::answer::doctor;
+use layerfs_home::reply::outcome::Outcome;
+use layerfs_protocol::sdk::SdkValue;
 use std::path::Path;
 
-pub use calls::{
-    asks_detail, close, guide, home, json, keys, refusal, shape, size, Arg, Asked, Call, CallRef,
-    Calls, Client, Context, Families, Family, Form, Kind, Paging, Part, Place, Policy, Profile,
-    Redact, Run, Scope, Section, DETAIL, WITH,
+pub use dispatch::answer::{keys, refusal, shape};
+pub use dispatch::{
+    asks_detail, close, guide, home, json, size, Arg, Asked, Call, CallRef, Calls, Client, Context,
+    Families, Family, Form, Kind, Paging, Part, Place, Policy, Profile, Redact, Run, Scope,
+    Section, DETAIL, WITH,
 };
+pub use families::families;
 pub use layerfs_home::names;
 /// The home (`layerfs-home`) and the Store leases, for the front ends and
 /// their tests.
 pub mod home {
-    pub use layerfs_home::home::*;
-    pub use layerfs_home::process;
-    pub use layerfs_store::lease;
+    pub use layerfs_home::disk::*;
+    pub use layerfs_home::lock::{entity as entity_lock, flock, home as lock};
+    pub use layerfs_home::record::process;
+    pub use layerfs_home::secret::saved as secrets;
+    pub use layerfs_store::admin::open::lease;
 }
+/// The worker of machine `name`, started if it does not answer; `None`
+/// when its calls run in this process.
 #[cfg(feature = "machine")]
 #[doc(hidden)]
-pub use layerfs_control::machine::running;
-/// The worker protocol (`layerfs-machine`) and its server (`layerfs-control`),
-/// for the front ends and their tests.
-pub mod worker {
-    #[cfg(all(feature = "machine", any(target_os = "macos", target_os = "linux")))]
-    pub use layerfs_control::worker_server::serve_host;
-    pub use layerfs_control::worker_server::{prepare_network, serve, serve_with_incarnation};
-    pub use layerfs_machine::worker::*;
+pub fn running(
+    home: &std::path::Path,
+    name: &str,
+) -> Result<Option<layerfs_machine::route::Endpoint>, layerfs_protocol::sdk::SdkRefusal> {
+    layerfs_machine::with_users::running(home, name, &layerfs_sandbox::users::MACHINE)
 }
-pub use layerfs_control::store::close_idle;
 /// The process-wide cancel request a front end sets on a signal (#804 §6).
 pub use layerfs_home::cancel;
+pub use layerfs_store::admin::with_users::close_idle;
 /// The Store formats this build writes, per engine, as `layerfs --version
 /// --json` shows them (#804).
 pub use layerfs_store::upgrade::FORMATS;
-
-/// The ten families, in the order help lists them, the same from the
-/// `layerfs` binary, Node and Python.
-pub fn families() -> Families {
-    &[
-        Family {
-            name: "home",
-            list: home_family::calls,
-        },
-        Family {
-            name: "project",
-            list: project::calls,
-        },
-        Family {
-            name: "branch",
-            list: branch::calls,
-        },
-        Family {
-            name: "commit",
-            list: commit::calls,
-        },
-        Family {
-            name: "file",
-            list: file::calls,
-        },
-        Family {
-            name: "sandbox",
-            list: sandbox::calls,
-        },
-        Family {
-            name: "workspace",
-            list: workspace::calls,
-        },
-        Family {
-            name: "machine",
-            list: machine::calls,
-        },
-        Family {
-            name: "store",
-            list: store::calls,
-        },
-        Family {
-            name: "backup",
-            list: backup::calls,
-        },
-    ]
-}
 
 /// Every call, in table order.
 pub fn calls() -> Vec<CallRef> {
@@ -132,7 +78,7 @@ pub fn table_json() -> String {
 }
 
 /// Runs the call `name` (`family.call`) once with named `args`, logged as
-/// a direct library call (`client` `rust`); see [`calls::call`].
+/// a direct library call (`client` `rust`); see [`dispatch::call`].
 pub fn call(
     home: Option<&Path>,
     name: &str,
@@ -168,7 +114,7 @@ pub fn call_cli(
 
 /// A write input the CLI has not read yet.
 #[doc(hidden)]
-pub use layerfs_store::host_write::{Input as CliInput, InputKind as CliInputKind};
+pub use layerfs_store::admin::host_worker::write::{Input as CliInput, InputKind as CliInputKind};
 
 /// Whether the CLI defers the input of write `name` to `project`.
 #[doc(hidden)]

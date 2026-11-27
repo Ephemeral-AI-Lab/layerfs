@@ -6,7 +6,7 @@
 //! its own flag is given (`--password-stdin`) and taken no other way.
 //! Anything wrong here is exit 2, before any call.
 use layerfs_api::{json, Arg, Call, Kind};
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use std::io::Read;
 
 /// A command line that is wrong; nothing is called.

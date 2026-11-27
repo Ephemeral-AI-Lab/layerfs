@@ -112,7 +112,7 @@ backends must not be used as instructions for the current implementation.
 Sources: [workspace](../../Cargo.toml),
 [content public surface](../../core/crates/layerfs-content/src/lib.rs),
 [storage public surface](../../core/crates/layerfs-storage/src/lib.rs),
-[history contract](../../core/crates/layerfs-history/src/contract/catalog.rs),
+[history contract](../../core/crates/layerfs-history/src/catalog/contract.rs),
 [SQLite implementation round](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/302/SQLITE-IMPLEMENTATION-ROUND.md).
 
 ## 2. Data model: know which root you hold
@@ -190,10 +190,10 @@ let construction = storage.policy().construction();
 let capacities = construction.capacities();
 ```
 
-Source: [configuration](../../engine/crates/layerfs-persistence/src/store/config.rs),
-[open/create](../../engine/crates/layerfs-persistence/src/store/open.rs),
-[handles](../../engine/crates/layerfs-persistence/src/store/handles.rs),
-[storage](../../core/crates/layerfs-storage/src/store/handle.rs).
+Source: [configuration](../../engine/crates/layerfs-persistence/src/config/postgresql_options.rs),
+[open/create](../../engine/crates/layerfs-persistence/src/config/sqlite.rs),
+[handles](../../engine/crates/layerfs-persistence/src/config/sqlite.rs),
+[storage](../../core/crates/layerfs-storage/src/handle.rs).
 
 ### 3.2 Construction, read, and filesystem APIs
 
@@ -248,7 +248,7 @@ those adapters are integration work, not endpoints callers can invoke today.
 Sources: [content exports](../../core/crates/layerfs-content/src/lib.rs),
 [file construction](../../core/crates/layerfs-content/src/file/construction/bytes.rs),
 [filesystem exports](../../core/crates/layerfs-content/src/filesystem/mod.rs),
-[filesystem construction](../../core/crates/layerfs-content/src/filesystem/update.rs).
+[filesystem construction](../../core/crates/layerfs-content/src/filesystem/construction/operation.rs).
 
 ## 4. Construction and publication recipes
 
@@ -409,8 +409,8 @@ do not recycle serials after an aborted construction.
 Generation capture and live overlay reconciliation are caller responsibilities;
 this section specifies the cluster one history boundary only.
 
-Source: [history requests/outcomes](../../core/crates/layerfs-history/src/contract/records.rs),
-[semantic catalog](../../core/crates/layerfs-history/src/contract/catalog.rs).
+Source: [history requests/outcomes](../../core/crates/layerfs-history/src/records.rs),
+[semantic catalog](../../core/crates/layerfs-history/src/catalog/contract.rs).
 
 ### 4.4 Native namespace Init
 
@@ -439,7 +439,7 @@ genesis LayerStack, not just file payload storage. The deadline is shared with
 workers; it is not a rollback boundary. Seal is a separate consuming handle lifecycle
 operation, not a substitute for either Save finish.
 
-Source: [Init API](../../engine/crates/layerfs-project/src/import/init.rs).
+Source: [Init API](../../engine/crates/layerfs-project/src/import/run.rs).
 
 Directory construction uses bounded `Acquisition::bindings` windows containing
 name, position and canonical identity; inode and alias validation retain full
@@ -561,7 +561,7 @@ collections. A fully file-count-bounded importer remains additional work.
 
 Sources: [worker scan](../../engine/crates/layerfs-project/src/import/scan.rs),
 [batch/channel](../../engine/crates/layerfs-project/src/import/batch.rs),
-[storage bounds](../../core/crates/layerfs-storage/src/store/policy.rs),
+[storage bounds](../../core/crates/layerfs-storage/src/policy.rs),
 [construction](../../core/crates/layerfs-content/src/file/construction/bytes.rs).
 
 ## 6. Localized reads, authentication, and reuse
@@ -661,7 +661,7 @@ succeeds. Do not implement guessed cleanup of shared immutable objects.
 
 Source: [Save lifecycle](../../core/crates/layerfs-storage/src/save/operation.rs),
 [Core failure rules](../../core/AGENTS.md),
-[history errors](../../core/crates/layerfs-history/src/contract/error.rs).
+[history errors](../../core/crates/layerfs-history/src/error.rs).
 
 ## 8. Persistence profiles, physical layout, and integration limits
 

@@ -6,7 +6,7 @@ The `backup` calls: connect r2 or S3-endpoint buckets, list the Store files on t
 
 | | |
 | --- | --- |
-| Source | [`api/crates/layerfs-api/src/backup`](../../../../api/crates/layerfs-api/src/backup) (one file per call), [`layerfs-store/src/backup`](../../../../control/crates/layerfs-store/src/backup), [`layerfs-control/src/backup.rs`](../../../../control/crates/layerfs-control/src/backup.rs), [`layerfs-bucket`](../../../../control/crates/layerfs-bucket/src) |
+| Source | [`crates/layerfs-api/src/families/backup`](../../../../api/crates/layerfs-api/src/families/backup) (one file per call), [`layerfs-store/src/backup`](../../../../control/crates/layerfs-store/src/backup), [`backup/jobs/restore.rs`](../../../../control/crates/layerfs-store/src/backup/jobs/restore.rs), [`backup/bucket`](../../../../control/crates/layerfs-store/src/backup/bucket) |
 | Runs by default | the caller's process (records, bucket I/O); `backup.create` stages its snapshot on the Store's machine (here for the host machine, else in its worker) and the bytes go machine → this computer → bucket |
 | Design | [Backups](../../control/backups/README.md), [buckets](../../control/backups/buckets.md) |
 
@@ -66,7 +66,7 @@ Python  layerfs.backup.connect(name, url, *, access_key, secret_key)
 | call | writes one call-log line; MCP `admin` |
 
 Records a bucket after listing it once with the key
-([`backup/record.rs`](../../../../control/crates/layerfs-store/src/backup/record.rs)).
+([`bucket/record.rs`](../../../../control/crates/layerfs-store/src/backup/bucket/record.rs)).
 `url` names the provider, the bucket and the prefix:
 `r2://<account>/<bucket>/<prefix>` (with `?jurisdiction=eu|fedramp`) or an
 S3 endpoint `http(s)://<host:port>/<bucket>/<prefix>`; the prefix may be
@@ -131,7 +131,7 @@ bucket is deleted and the bucket is not contacted. `unlinked` lists the
 Stores whose link was removed (the first 20, `unlinked_count` only past
 those). A failure part way leaves some links removed and the record in
 place; calling again finishes it. No outcome is uncertain
-([`backup/family.rs`](../../../../control/crates/layerfs-store/src/backup/family.rs)).
+([`bucket/connect.rs`](../../../../control/crates/layerfs-store/src/backup/bucket/connect.rs)).
 
 ### backup.list
 
@@ -169,7 +169,7 @@ call: it is named in `not_listed` with `reason` `lost` or `timeout` (the
 message says which), and the others are still listed. Not paged: a row per
 Store file under each bucket's prefix; `sha256` is read for at most 64 files
 of one listing and is null past that
-([`backup/list.rs`](../../../../control/crates/layerfs-store/src/backup/list.rs)).
+([`jobs/list.rs`](../../../../control/crates/layerfs-store/src/backup/jobs/list.rs)).
 
 ```console
 $ layerfs backup list
@@ -201,16 +201,16 @@ Python  layerfs.backup.create(store, bucket, *, file=None, on_progress=None)
 
 Uploads a consistent snapshot of a sqlite Store and links the two, refusing
 to overwrite a copy this home did not last write there
-([`backup/create.rs`](../../../../control/crates/layerfs-store/src/backup/create.rs)).
+([`jobs/create.rs`](../../../../control/crates/layerfs-store/src/backup/jobs/create.rs)).
 `--file` defaults to the Store's name: `[A-Za-z0-9._-]`, at most 128, no
-leading dot ([`link.rs`](../../../../control/crates/layerfs-bucket/src/backup/link.rs)).
+leading dot ([`registry.rs`](../../../../control/crates/layerfs-store/src/backup/bucket/registry.rs)).
 It is recorded as the Store's `op` (`backup`), so every client reads the
 Store `busy`; it runs beside the Store's readers. Progress is `{phase, done,
 total}`: `check` (the bucket holds what this home expects), `snapshot`
 (staged on the Store's machine), `send` (from a machine to this computer,
 bytes), `hash`, `upload` (bytes); at most one byte update per 250 ms, each
 phase's exact last count before the next starts
-([`backup/progress.rs`](../../../../control/crates/layerfs-store/src/backup/progress.rs)).
+([`jobs/progress.rs`](../../../../control/crates/layerfs-store/src/backup/jobs/progress.rs)).
 The stage is removed afterwards; one a killed backup left is a `home
 leftovers` entry of kind `backup_staging`. A failure leaves the link as it
 was and writes what was tried to its `attempt`. The long form is `file,
@@ -259,13 +259,13 @@ staged and again under the home lock before the install. Progress phases:
 `install`. `projects` lists the projects the restored file holds (the first
 20); each project's record is rebuilt as `project init` writes it, and
 records of projects it lacks are removed
-([`backup/restored.rs`](../../../../control/crates/layerfs-store/src/backup/restored.rs)).
+([`record/restored.rs`](../../../../control/crates/layerfs-store/src/data/project/record/restored.rs)).
 It writes only after a complete, checked download, and the install is one
 rename under the home lock. A restore whose reply is lost while it replaces
 a Store leaves it `broken` `unresolved` until `layerfs store get <store>
 --with live` settles it; a killed restore's staging folder is removed by the
 next restore
-([`backup/restore.rs`](../../../../control/crates/layerfs-store/src/backup/restore.rs)).
+([`jobs/restore.rs`](../../../../control/crates/layerfs-store/src/backup/jobs/restore.rs)).
 
 | Refusal | When |
 | --- | --- |
@@ -323,11 +323,11 @@ $ layerfs backup doctor nope
 bucket or Store of that name), `Busy` or `Unresolved` (an operation on the
 Store), `Unavailable` (a bucket that does not answer or refuses the key; the
 Store's machine is stopped or its worker gone,
-[`place.rs`](../../../../control/crates/layerfs-store/src/place.rs)),
+[`executor.rs`](../../../../control/crates/layerfs-store/src/admin/route/executor.rs)),
 `Failed` (a bucket or step failure that ran once), `Unknown` (an uncertain
 upload, or a lost worker answer). New backups of a Store on a removed
 platform's machine are `Unsupported`
-([`calls/platform_policy.rs`](../../../../api/crates/layerfs-api/src/calls/platform_policy.rs)).
+([`guard/platform_policy.rs`](../../../../api/crates/layerfs-api/src/dispatch/guard/platform_policy.rs)).
 
 ## Related
 

@@ -1,17 +1,85 @@
 [package]
 name = "layerfs-machine"
-description = "Machine records, their lifecycle and the worker client (layerfs-project#104): machine/<name>/ records, the built-in native and docker, VMs created by name, and the worker protocol"
+description = "Machine records, their lifecycle and the worker client (layerfs-project#104): machine/<name>/ records, the built-in native and docker, VMs created by name, one platform adapter per kind and its setup, and the worker protocol"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
-layerfs-bridge = { path = "../../../engine/crates/layerfs-bridge" }
+libc = "=0.2.189"
+layerfs-protocol = { path = "../../../engine/crates/layerfs-protocol" }
+# The worker spawn keeps the caller's descriptors out (`process::close_inherited`, #833).
+layerfs-os = { path = "../../../engine/crates/layerfs-os" }
 layerfs-home = { path = "../layerfs-home" }
-layerfs-platform = { path = "../layerfs-platform", optional = true }
+# The platform adapters and VM setup (host builds only).
+nix = { version = "=0.31.3", optional = true, features = [
+    "poll",
+    "socket",
+    "fs",
+    "signal",
+    "mount",
+    "user",
+    "sched",
+    "process",
+] }
 
 [features]
 # The machine calls (2.0, #533): host builds only. The guest worker is built
 # without it, so no machine adapter runs inside a machine.
-machine = ["dep:layerfs-platform"]
+machine = ["dep:nix"]
+
+# The platform-origin tests (from layerfs-platform, which always built its
+# adapters) need the machine calls: `cargo test -p layerfs-machine --features machine`.
+[[test]]
+name = "docker_socket"
+path = "tests/standalone/docker_socket.rs"
+required-features = ["machine"]
+
+[[test]]
+name = "setup_tool_deadline"
+path = "tests/standalone/setup_tool_deadline.rs"
+required-features = ["machine"]
+
+[[test]]
+name = "bundle_preflight"
+path = "tests/standalone/bundle_preflight.rs"
+
+[[test]]
+name = "create_kept_vm"
+path = "tests/standalone/create_kept_vm.rs"
+
+[[test]]
+name = "docker_socket_choice"
+path = "tests/standalone/docker_socket_choice.rs"
+
+[[test]]
+name = "docker_image_reuse"
+path = "tests/standalone/docker_image_reuse.rs"
+
+[[test]]
+name = "silent_worker_start"
+path = "tests/standalone/silent_worker_start.rs"
+
+[[test]]
+name = "start_compatibility"
+path = "tests/standalone/start_compatibility.rs"
+
+[[test]]
+name = "start_ordered"
+path = "tests/standalone/start_ordered.rs"
+
+[[test]]
+name = "platform"
+path = "tests/platform/main.rs"
+required-features = ["machine"]
+
+[[test]]
+name = "setup"
+path = "tests/setup/main.rs"
+required-features = ["machine"]
+
+[[test]]
+name = "table"
+path = "tests/table/main.rs"
+required-features = ["machine"]

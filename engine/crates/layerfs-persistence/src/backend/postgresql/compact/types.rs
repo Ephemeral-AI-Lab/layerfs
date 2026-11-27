@@ -48,7 +48,7 @@ pub(crate) struct OpRow {
     /// The scratch schema's extent at the end of Phase A, the run's peak temp.
     pub(crate) peak_temp: u64,
     /// The mark's kept-waste accounting, for a resumed `G + 1` report.
-    pub(crate) kept_waste: crate::backend::sqlite::compact::CompactKeptWaste,
+    pub(crate) kept_waste: crate::gc::compact::CompactKeptWaste,
     /// `store_totals.stored` at the mark, for the resumed report's zero reasons.
     pub(crate) total_stored: i64,
 }

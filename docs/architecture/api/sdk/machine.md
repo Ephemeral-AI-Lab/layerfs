@@ -6,7 +6,7 @@ The `machine` calls: list and read the machines that hold sqlite Stores and run 
 
 | | |
 | --- | --- |
-| Source | [`api/crates/layerfs-api/src/machine`](../../../../api/crates/layerfs-api/src/machine) (one file per call), [`layerfs-control/src/machine.rs`](../../../../control/crates/layerfs-control/src/machine.rs), [`layerfs-machine/src`](../../../../control/crates/layerfs-machine/src), [`layerfs-platform/src`](../../../../control/crates/layerfs-platform/src), [`layerfs-sandbox/src/images.rs`](../../../../control/crates/layerfs-sandbox/src/images.rs), [`layerfs-sandbox/src/inspect`](../../../../control/crates/layerfs-sandbox/src/inspect) |
+| Source | [`crates/layerfs-api/src/families/machine`](../../../../api/crates/layerfs-api/src/families/machine) (one file per call), [`layerfs-machine/src/with_users.rs`](../../../../control/crates/layerfs-machine/src/with_users.rs), [`layerfs-machine/src`](../../../../control/crates/layerfs-machine/src), [`layerfs-machine/src`](../../../../control/crates/layerfs-machine/src), [`src/image/list.rs`](../../../../control/crates/layerfs-sandbox/src/image/list.rs), [`crates/layerfs-inspect/src`](../../../../control/crates/layerfs-inspect/src) |
 | Runs by default | every call in the caller's process, through the platform adapter (provider CLI or Docker); `stats`, `files` and `log` are each one inspection request served where the machine's data is, and `images`, `load_image` and `prune` reach the machine's image cache the same way. The guest worker is built without the `machine` feature, so there every machine call is `Unsupported` before any effect |
 | Design | [Machines](../../control/machines/README.md), [platforms](../../control/machines/platforms.md), [workers and reach](../../control/machines/workers-and-reach.md) |
 
@@ -61,10 +61,10 @@ start or a live read recorded, and `observed_at` from the last live read.
 Firecracker, Microsandbox and SSH machines were removed in 2.0: a record for
 one is shown by `list` and `get` as `broken` `unsupported`, `remove`
 removes only its record, and every other call on it is `Unsupported`
-([`calls/platform_policy.rs`](../../../../api/crates/layerfs-api/src/calls/platform_policy.rs)).
+([`guard/platform_policy.rs`](../../../../api/crates/layerfs-api/src/dispatch/guard/platform_policy.rs)).
 Nothing but `machine start` starts a machine; a call that needs a stopped
 machine is `Unavailable` with `fix: layerfs machine start <machine>`
-([`place.rs`](../../../../control/crates/layerfs-store/src/place.rs)).
+([`executor.rs`](../../../../control/crates/layerfs-store/src/admin/route/executor.rs)).
 
 ### machine.list
 
@@ -94,7 +94,7 @@ companion when not ready. `--with live` probes each machine's provider and
 says hello to its worker, all at the same time, within 10 s, starting
 nothing; the state, its companion, `message` and `observed_at` then come
 from the probe, and `unknown` means the probe did not answer
-([`list.rs`](../../../../control/crates/layerfs-machine/src/list.rs)). The
+([`list.rs`](../../../../control/crates/layerfs-machine/src/status/list.rs)). The
 record is written only when the state word or reason changed (which moves
 the home's `generation`); `observed_at` is kept in `observed.json` beside
 the record, which does not.
@@ -103,16 +103,16 @@ The long row: `backend` is the Sandbox backend on this host (`process`,
 `namespaces`, also on `docker`, or `-` for a removed platform); `supports`
 is a list of words: `sqlite`, `postgresql_sandbox`, and `log` when the
 machine has a worker whose log can be read (clients read this and never test
-platform names; [`support.rs`](../../../../control/crates/layerfs-platform/src/support.rs));
+platform names; [`support.rs`](../../../../control/crates/layerfs-machine/src/table/support.rs));
 `loopback` is `shared` when the machine shares this computer's loopback (a
 PostgreSQL URL naming it is dialled there as given) and `apart` when it does
 not, as the platform's adapter declares it (`Loopback`,
-[`reach.rs`](../../../../control/crates/layerfs-platform/src/reach.rs)), null
+[`reach.rs`](../../../../control/crates/layerfs-machine/src/table/reach.rs)), null
 for a removed platform or a record that describes no machine;
 `cpus`, `memory_bytes`, `disk_bytes` are the recorded size (null on a
 built-in machine); `stores` and `sandboxes` list the first 20 names, each
 count only past those
-([`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs)).
+([`inventory.rs`](../../../../control/crates/layerfs-sandbox/src/status/inventory.rs)).
 
 Run on macOS (`macos-host`) with a debug build:
 
@@ -186,7 +186,7 @@ Python  layerfs.machine.images(machine, *, with_=None)
 | call | writes one call-log line; MCP `admin` |
 
 The Sandbox images a machine holds, read without starting it
-([`images.rs`](../../../../control/crates/layerfs-sandbox/src/images.rs)):
+([`list.rs`](../../../../control/crates/layerfs-sandbox/src/image/list.rs)):
 one item per image, published unpacked images with their sidecars
 (`images/<hex>.2.json` in the machine's run root, `machine/<host machine>/run` or `machine/linux-guest/run`), what the archives its Sandboxes
 read hold, and what copies left. A published image is `ready` (a stale part
@@ -210,7 +210,7 @@ image's layers unpack to (the sum of `docker history`'s layer sizes);
 `needed_bytes` is `2 × size × 1.05` and `fits` is `needed_bytes <=` the
 cache's free bytes. A Docker that does not answer fills `reason` and
 `message` and never fails the call
-([`docker.rs`](../../../../control/crates/layerfs-sandbox/src/docker.rs)).
+([`docker.rs`](../../../../control/crates/layerfs-sandbox/src/image/copy/docker.rs)).
 
 ```console
 $ layerfs machine images macos-host
@@ -242,7 +242,7 @@ Python  layerfs.machine.load_image(machine, image, *, on_progress=None)
 | call | sends progress; writes one call-log line; MCP `admin` |
 
 Copies an image to a machine as `sandbox create --image` does, without a
-Sandbox ([`image_load.rs`](../../../../control/crates/layerfs-sandbox/src/image_load.rs)).
+Sandbox ([`load.rs`](../../../../control/crates/layerfs-sandbox/src/image/copy/load.rs)).
 The machine is asked first: an image it holds answers `reused` and needs
 neither Docker nor a byte sent. Otherwise `docker image inspect` resolves
 it, and one copy of that Id on that machine at a time holds
@@ -362,24 +362,24 @@ a client keeps its own history and turns two reads into a rate. It is one
 on the host machine, else one request to the machine's worker. It takes no lock or
 lease, opens no Store, asks no daemon and no provider tool, starts nothing
 and writes nothing, the call log included
-([`inspect/stats.rs`](../../../../control/crates/layerfs-sandbox/src/inspect/stats.rs)).
+([`machine/stats.rs`](../../../../control/crates/layerfs-inspect/src/machine/stats.rs)).
 
 | Key | Meaning | Source |
 | --- | --- | --- |
-| `cpus` | the processors the answering process may run on: on `apple-container`, the worker's quota, which can be less than the guest kernel lists | [`inspect/host.rs`](../../../../control/crates/layerfs-sandbox/src/inspect/host.rs) |
+| `cpus` | the processors the answering process may run on: on `apple-container`, the worker's quota, which can be less than the guest kernel lists | [`machine/kernel.rs`](../../../../control/crates/layerfs-inspect/src/machine/kernel.rs) |
 | `memory_total_bytes`, `memory_used_bytes` | Linux: `MemTotal` and `MemTotal - MemAvailable` of `/proc/meminfo`. macOS: `hw.memsize`, and that less the free, file-backed and purgeable pages | `host.rs` |
-| `disk_total_bytes`, `disk_used_bytes`, `disk_free_bytes` | one `statvfs` of the filesystem that holds the machine's data; `disk_free_bytes` is what the answering process may use, so used and free can sum to less than the total. On `lima` and `apple-container` that is the machine's own data volume | [`home/capacity.rs`](../../../../control/crates/layerfs-home/src/home/capacity.rs) |
-| `cpu_busy_ms`, `cpu_total_ms` | the machine's processor time since boot, from the first `cpu` line of `/proc/stat` (busy is user + nice + system + irq + softirq + steal; total adds idle and iowait). The share between two reads is Δbusy / Δtotal, of the kernel `scope` names. Null on macOS (`cpu_unsupported`) and when the read failed (`cpu_not_read`) | `host.rs`, [`inspect/process.rs`](../../../../control/crates/layerfs-sandbox/src/inspect/process.rs) |
+| `disk_total_bytes`, `disk_used_bytes`, `disk_free_bytes` | one `statvfs` of the filesystem that holds the machine's data; `disk_free_bytes` is what the answering process may use, so used and free can sum to less than the total. On `lima` and `apple-container` that is the machine's own data volume | [`disk/capacity.rs`](../../../../control/crates/layerfs-home/src/disk/capacity.rs) |
+| `cpu_busy_ms`, `cpu_total_ms` | the machine's processor time since boot, from the first `cpu` line of `/proc/stat` (busy is user + nice + system + irq + softirq + steal; total adds idle and iowait). The share between two reads is Δbusy / Δtotal, of the kernel `scope` names. Null on macOS (`cpu_unsupported`) and when the read failed (`cpu_not_read`) | `host.rs`, [`status/stats.rs`](../../../../control/crates/layerfs-sandbox/src/status/stats.rs) |
 | `scope` | whose processors and memory they are: `host` (`macos-host`, `linux-host`), `vm` (`lima`, `apple-container`), `engine_host` (`docker`: the kernel the Engine runs on) | `stats.rs` |
 | `reasons` | which values are null and why: `memory_not_read`, `disk_not_read`, `cpu_unsupported`, `cpu_not_read`, `deadline` | `stats.rs` |
 | `incomplete` | the request's soft budget (4 s) ended the Store or Sandbox part early; what was read is answered | `stats.rs` |
-| `worker` | the machine's worker process (`version`, `pid`, `started_at`, `protocol`, `bundle`); null on the host machine | [`worker_server/ops.rs`](../../../../control/crates/layerfs-control/src/worker_server/ops.rs) |
+| `worker` | the machine's worker process (`version`, `pid`, `started_at`, `protocol`, `bundle`); null on the host machine | [`worker/ops.rs`](../../../../api/crates/layerfs-api/src/worker/ops.rs) |
 | `data_disk` | the folder measured, its filesystem type, its `scope` (`host_fs`, `vm_disk`, `volume`), the provider's `volume` name and `inodes_free` | `capacity.rs` |
 | `stores` | `[{store, size, allocated_bytes}]`: the sqlite Stores the home records on the machine, from one `lstat` of `store.sqlite` and its `-wal`; no Store file is opened | `stats.rs` |
-| `sandboxes` | `[{sandbox, live, live_reason, started_at, usage, usage_reason}]`: one row per recorded Sandbox, read by the side that runs it from its daemon record, `/proc` and its cgroup; `usage` as [`sandbox get --with stats`](sandbox.md#sandboxget) answers it | [`inspect/live.rs`](../../../../control/crates/layerfs-sandbox/src/inspect/live.rs) |
+| `sandboxes` | `[{sandbox, live, live_reason, started_at, usage, usage_reason}]`: one row per recorded Sandbox, read by the side that runs it from its daemon record, `/proc` and its cgroup; `usage` as [`sandbox get --with stats`](sandbox.md#sandboxget) answers it | [`machine/live.rs`](../../../../control/crates/layerfs-inspect/src/machine/live.rs) |
 
 `--with space` adds `space`, one bounded walk of LayerFS's folders where the
-machine's data is ([`inspect/space.rs`](../../../../control/crates/layerfs-sandbox/src/inspect/space.rs)).
+machine's data is ([`machine/space.rs`](../../../../control/crates/layerfs-inspect/src/machine/space.rs)).
 Every size is the blocks a part takes, so a sparse file counts what it holds
 and a file with several names counts once. `layerfs_bytes` is the sum of
 `parts` (`[{part, bytes}]`, the parts `stores`, `sandboxes`, `images`,
@@ -436,7 +436,7 @@ Python  layerfs.machine.files(machine, path=None, *, depth=None, limit=None, cur
 Reads what is on a machine: its LayerFS folders, one page of a folder or one
 byte window of a file. Its options, folder page and file window are those of
 [`sandbox files`](sandbox.md#sandboxfiles); what differs is where a path may
-lead ([`inspect/machine.rs`](../../../../control/crates/layerfs-sandbox/src/inspect/machine.rs)).
+lead ([`machine/files.rs`](../../../../control/crates/layerfs-inspect/src/machine/files.rs)).
 It is one inspection request: in this process on the host machine, else one request
 to the machine's worker; no lock, no lease, no daemon call, nothing written.
 
@@ -514,7 +514,7 @@ answered in pieces, each but the last with `continued: true`; a last line
 the writer has not ended is held back until it is. `text` is for display:
 control characters are escaped (`\t`, `\r`, `\u{1b}`), bytes that are not
 UTF-8 are U+FFFD. It reads these two files and no other
-([`inspect/log.rs`](../../../../control/crates/layerfs-sandbox/src/inspect/log.rs)).
+([`files/log.rs`](../../../../control/crates/layerfs-inspect/src/files/log.rs)).
 It takes no lock or lease, starts nothing and writes nothing.
 
 | Refusal | When |
@@ -558,12 +558,12 @@ secret, and records it `ready`; a running machine answers
 `{"unchanged":true}` at once. It is the only call that starts a machine. It
 records its `op` before its first effect and runs under
 `machine/<name>/start.lock`, shared with `create`, `stop` and `remove`
-([`endpoint.rs`](../../../../control/crates/layerfs-machine/src/endpoint.rs));
+([`boot.rs`](../../../../control/crates/layerfs-machine/src/lifecycle/boot.rs));
 the home lock is held only to write records, never while a VM boots.
 `docker` runs the privileged worker container from the recorded image, else
 the bundle's image loaded once; `lima` and `apple-container` boot the VM.
 Guest installation copies only changed or absent bundle files and publishes
-the manifest last ([`power.rs`](../../../../control/crates/layerfs-machine/src/power.rs)).
+the manifest last ([`start.rs`](../../../../control/crates/layerfs-machine/src/lifecycle/start.rs)).
 Progress phases: `bundle`, `image` (the docker machine loading the bundle's
 image), `boot`, `worker`.
 
@@ -578,11 +578,11 @@ the same value. A start that cannot confirm the old worker is refused
 
 | Refusal | When | Next |
 | --- | --- | --- |
-| `Unavailable` | the worker is of another build: the machine runs and is recorded `broken` `outdated` ([`worker/hello.rs`](../../../../control/crates/layerfs-machine/src/worker/hello.rs)) | `fix: layerfs machine stop <machine> && layerfs machine start <machine>`, `--force` on the stop when Sandboxes are recorded on it |
-| `Unavailable` | a worker is recorded, its hello failed and the provider reports the machine running: a start would end that worker and every Sandbox on it, so nothing is started and the machine is recorded `broken` `not_answering`; the message names how many Sandboxes are on it and `layerfs machine doctor <machine>`. A provider that cannot say whether it runs is refused too, `fix: layerfs machine doctor <machine>` ([`endpoint.rs`](../../../../control/crates/layerfs-machine/src/endpoint.rs)) | `fix: layerfs machine stop <machine> && layerfs machine start <machine>`, `--force` on the stop when Sandboxes are recorded on it |
+| `Unavailable` | the worker is of another build: the machine runs and is recorded `broken` `outdated` ([`guest/hello.rs`](../../../../control/crates/layerfs-machine/src/route/guest/hello.rs)) | `fix: layerfs machine stop <machine> && layerfs machine start <machine>`, `--force` on the stop when Sandboxes are recorded on it |
+| `Unavailable` | a worker is recorded, its hello failed and the provider reports the machine running: a start would end that worker and every Sandbox on it, so nothing is started and the machine is recorded `broken` `not_answering`; the message names how many Sandboxes are on it and `layerfs machine doctor <machine>`. A provider that cannot say whether it runs is refused too, `fix: layerfs machine doctor <machine>` ([`boot.rs`](../../../../control/crates/layerfs-machine/src/lifecycle/boot.rs)) | `fix: layerfs machine stop <machine> && layerfs machine start <machine>`, `--force` on the stop when Sandboxes are recorded on it |
 | `Failed` | the old worker did not stop (the provider still reports it running, or broken where the provider cannot replace it, or its recorded endpoint still answers): no ordered incarnation is minted and no intent is settled | |
 | `Busy` | another operation on the machine runs; it names the `op` | |
-| `Unsupported` | no sealed Linux bundle (`detail.missing`); `docker` with no image ([`bundle.rs`](../../../../control/crates/layerfs-machine/src/bundle.rs)) | |
+| `Unsupported` | no sealed Linux bundle (`detail.missing`); `docker` with no image ([`bundle.rs`](../../../../control/crates/layerfs-machine/src/setup/bundle.rs)) | |
 | `Unknown` | a provider command timed out or its reply was lost: the machine is `broken` `unresolved` | `fix: layerfs machine get <machine> --with live`, which settles it by observing |
 
 ```console
@@ -626,7 +626,7 @@ removes each, then stops the machine
 (`layerfs sandbox remove a && layerfs sandbox remove b && layerfs machine stop <m>`;
 `sandbox remove` refuses while a Workspace is mounted or a command runs, so
 the chain loses nothing). `--force` is not offered as the fix: its
-Workspaces become `unknown_workspaces` ([`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs) `can_stop_machine`). `--force` stops the machine anyway:
+Workspaces become `unknown_workspaces` ([`inventory.rs`](../../../../control/crates/layerfs-sandbox/src/status/inventory.rs) `can_stop_machine`). `--force` stops the machine anyway:
 it goes straight to the provider, does not call the worker, commit or
 unmount Workspaces one by one, and deletes no record; it answers
 `stopped_sandboxes` and `unknown_workspaces` (Workspaces whose state could
@@ -636,7 +636,7 @@ runtimes and commands, without opening the Store or calling the daemon, and
 the machine stays `ready`. Stopped Sandboxes are recorded `broken`
 `missing`, or `unresolved` when the stop could not be confirmed. A provider
 failure or uncertain outcome is reported, never replayed or turned into
-success ([`machine_force.rs`](../../../../control/crates/layerfs-control/src/machine_force.rs)).
+success ([`force_stop.rs`](../../../../control/crates/layerfs-machine/src/lifecycle/force_stop.rs)).
 A lost reply leaves the machine `broken` `unresolved` with `fix: layerfs
 machine get <machine> --with live`.
 
@@ -673,7 +673,7 @@ Python  layerfs.machine.create(name, platform, *, cpus=None, memory=None, disk=N
 | call | sends progress; writes one call-log line; MCP `admin` |
 
 Makes a VM machine on this host, copies the sealed Linux bundle in and
-starts its worker ([`create.rs`](../../../../control/crates/layerfs-machine/src/create.rs)).
+starts its worker ([`create.rs`](../../../../control/crates/layerfs-machine/src/lifecycle/create.rs)).
 `--os-image` is the VM's operating-system image (an installed OCI reference
 for Apple Container, an image location for Lima); absent, an installed
 prepared image, else the provider's stock image; `stock` asks for the
@@ -726,13 +726,13 @@ The long form's `outcome` is `removed`. Of a machine of a removed platform
 (`firecracker`, `microsandbox`, `ssh`) only its record is removed: `{"ok":true}`,
 the long form's `message` "only its record was removed (<reason>); nothing
 on its host was touched"
-([`remove.rs`](../../../../control/crates/layerfs-machine/src/remove.rs)).
+([`remove.rs`](../../../../control/crates/layerfs-machine/src/lifecycle/remove.rs)).
 Progress phases: `check`, `delete`.
 
 | Refusal | When |
 | --- | --- |
 | `Busy` | a live process's create or remove holds it |
-| `InUse` | sqlite Stores, Sandboxes or old Firecracker records are on it (`detail.related`); the next fields `stores`, `sandboxes`, `machines` name each kind. Held by Sandboxes alone, the `fix` removes them, then the machine (`layerfs sandbox remove a && layerfs machine remove <m>`); a machine its record says is stopped gets no fix, since `sandbox remove` cannot reach a daemon on it, and the message says so. A machine whose record has no 2.0 name (`vm_name`) gets the whole chain whatever holds it: each Sandbox's remove, each Store's, each old Firecracker record's, then the machine's, every one of them records-only (RV3 FAIL 1) ([`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs) `can_remove_machine`) |
+| `InUse` | sqlite Stores, Sandboxes or old Firecracker records are on it (`detail.related`); the next fields `stores`, `sandboxes`, `machines` name each kind. Held by Sandboxes alone, the `fix` removes them, then the machine (`layerfs sandbox remove a && layerfs machine remove <m>`); a machine its record says is stopped gets no fix, since `sandbox remove` cannot reach a daemon on it, and the message says so. A machine whose record has no 2.0 name (`vm_name`) gets the whole chain whatever holds it: each Sandbox's remove, each Store's, each old Firecracker record's, then the machine's, every one of them records-only (RV3 FAIL 1) ([`inventory.rs`](../../../../control/crates/layerfs-sandbox/src/status/inventory.rs) `can_remove_machine`) |
 | `Unavailable`, `Failed` | the provider refused or failed; the record is put back |
 | `Unknown` | the provider timed out: `op` kept, uncertain; read `machine get --with live`, then remove again |
 
@@ -768,7 +768,7 @@ next `machine start` or `sandbox create`
 Refused `InUse` while Sandboxes run on the machine: the next field
 `sandboxes` names them and the `fix` removes each
 (`layerfs sandbox remove a && layerfs sandbox remove b`;
-[`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs) `can_change_machine`). There is no `--disk`:
+[`inventory.rs`](../../../../control/crates/layerfs-sandbox/src/status/inventory.rs) `can_change_machine`). There is no `--disk`:
 resizing is not in 2.0.
 
 | Option | Applies to | Rule |
@@ -833,12 +833,12 @@ $ layerfs machine doctor macos-host
 
 | Error | When | Source |
 | --- | --- | --- |
-| `InvalidInput` | a bad name or option; a folder scope | [`calls/check.rs`](../../../../api/crates/layerfs-api/src/calls/check.rs) |
-| `NotFound` | no machine of that name | [`record.rs`](../../../../control/crates/layerfs-machine/src/record.rs) |
-| `Busy` | a `create`, `start`, `stop` or `remove` of the machine runs; it names the `op` | [`op.rs`](../../../../control/crates/layerfs-home/src/op.rs) |
-| `Unsupported` | a removed platform; a build without the `machine` feature; a platform this host does not support | [`calls/platform_policy.rs`](../../../../api/crates/layerfs-api/src/calls/platform_policy.rs) |
-| `Unavailable` | the machine is stopped or its worker does not answer; nothing starts it | [`place.rs`](../../../../control/crates/layerfs-store/src/place.rs) |
-| `Unknown` | a provider command or a worker's answer was lost; the `op` stays uncertain | [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) |
+| `InvalidInput` | a bad name or option; a folder scope | [`guard/arguments.rs`](../../../../api/crates/layerfs-api/src/dispatch/guard/arguments.rs) |
+| `NotFound` | no machine of that name | [`machine.rs`](../../../../control/crates/layerfs-machine/src/record/machine.rs) |
+| `Busy` | a `create`, `start`, `stop` or `remove` of the machine runs; it names the `op` | [`intent.rs`](../../../../control/crates/layerfs-home/src/record/intent.rs) |
+| `Unsupported` | a removed platform; a build without the `machine` feature; a platform this host does not support | [`guard/platform_policy.rs`](../../../../api/crates/layerfs-api/src/dispatch/guard/platform_policy.rs) |
+| `Unavailable` | the machine is stopped or its worker does not answer; nothing starts it | [`executor.rs`](../../../../control/crates/layerfs-store/src/admin/route/executor.rs) |
+| `Unknown` | a provider command or a worker's answer was lost; the `op` stays uncertain | [`guest/client.rs`](../../../../control/crates/layerfs-machine/src/route/guest/client.rs) |
 
 ## Related
 

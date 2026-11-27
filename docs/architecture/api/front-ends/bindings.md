@@ -6,7 +6,7 @@ The Node and Python bindings: a native library per language that passes JSON tex
 
 | | |
 | --- | --- |
-| Source | [`api/crates/layerfs-node/src`](../../../../api/crates/layerfs-node/src), [`api/node`](../../../../api/node), [`api/crates/layerfs-python/src`](../../../../api/crates/layerfs-python/src), [`api/python`](../../../../api/python), [`gen-node-types.mjs`](../../../../api/scripts/gen-node-types.mjs), [`build-native.mjs`](../../../../api/scripts/build-native.mjs), [`gen_stubs.py`](../../../../api/python/tools/gen_stubs.py) |
+| Source | [`api/crates/layerfs-node/src`](../../../../api/crates/layerfs-node/src), [`api/node`](../../../../api/node), [`api/crates/layerfs-python/src`](../../../../api/crates/layerfs-python/src), [`api/python`](../../../../api/python), [`node-types.mjs`](../../../../api/scripts/node-types.mjs), [`native-addon.mjs`](../../../../api/scripts/native-addon.mjs), [`python_stubs.py`](../../../../api/scripts/python_stubs.py) |
 
 Both bindings share these rules: the client is built from the table
 (`table_json`), so a call is added only in `layerfs-api`; arguments are split
@@ -58,8 +58,8 @@ lfs.file.read(p, b, path, {..})
 | Values out | a whole number as `number` when safe, else `bigint`; `{ base64 }` → `Buffer`, so exec output is a `string` or a `Buffer` per event. A map whose only key is `base64` with base64 text is bytes both ways | [`values.js`](../../../../api/node/src/values.js) |
 | Outside the table | `close()` only, synchronous, answering how many Stores it closed. The six doctors are table calls (`layerfs.home.doctor()`, …); the 1.x `doctor()` function and `doctor.fix` were removed with no alias | [`index.js`](../../../../api/node/src/index.js) |
 | Loading | the file `LAYERFS_NATIVE` names, else `layerfs.node` beside `src`; nothing else is tried. A missing or unloadable file throws one error naming the path, `platform/arch`, the Node version and how to build | [`native.js`](../../../../api/node/src/native.js) |
-| Build | `npm --prefix api run build:native` runs `cargo +1.85.1 build --offline --locked [--release] -p layerfs-node` (`--debug` for dev; `--features tls` opt-in; PostgreSQL is always built) and copies the result to `api/node/layerfs.node`, or `LAYERFS_NATIVE_OUTPUT`, through a staged rename. Only `darwin` and `linux`; a set `CARGO_BUILD_TARGET` or a target outside the worktree is refused | [`build-native.mjs`](../../../../api/scripts/build-native.mjs) |
-| Typings | `index.d.ts` from the table (`npm --prefix api run gen:types`; `--check` compares): per family an interface, positionals typed by kind (`int` → `number \| bigint`, `size` → `number \| bigint \| string`, `content` → `string \| Uint8Array`, `json` → `Value`), options extending `CallOptions` (`detail`, `with`, `log_tag`; an entry with sections narrows `with` to their names); every call answers `Promise<Result>`, since the table has no result schema | [`gen-node-types.mjs`](../../../../api/scripts/gen-node-types.mjs) |
+| Build | `npm --prefix api run build:native` runs `cargo +1.85.1 build --offline --locked [--release] -p layerfs-node` (`--debug` for dev; `--features tls` opt-in; PostgreSQL is always built) and copies the result to `api/node/layerfs.node`, or `LAYERFS_NATIVE_OUTPUT`, through a staged rename. Only `darwin` and `linux`; a set `CARGO_BUILD_TARGET` or a target outside the worktree is refused | [`native-addon.mjs`](../../../../api/scripts/native-addon.mjs) |
+| Typings | `index.d.ts` from the table (`npm --prefix api run gen:types`; `--check` compares): per family an interface, positionals typed by kind (`int` → `number \| bigint`, `size` → `number \| bigint \| string`, `content` → `string \| Uint8Array`, `json` → `Value`), options extending `CallOptions` (`detail`, `with`, `log_tag`; an entry with sections narrows `with` to their names); every call answers `Promise<Result>`, since the table has no result schema | [`node-types.mjs`](../../../../api/scripts/node-types.mjs) |
 
 The package is an ES module, MIT, for Node 22 or later (exact whole numbers
 use `JSON.rawJSON` and the source text of `JSON.parse`)
@@ -69,20 +69,20 @@ links it and holds the build and type scripts.
 
 | Test | Checks |
 | --- | --- |
-| [`calls.mjs`](../../../../api/node/test/calls.mjs) | ten families and 83 calls, every function; required-argument refusals; a Store, Init with progress, file and Branch calls, bytes, a folder scope; the call log's `client` and `log_tag` |
-| [`shell.mjs`](../../../../api/node/test/shell.mjs) | the command and the package refuse every call alike; a live Store read both ways (needs `target/debug/layerfs`) |
-| [`events.mjs`](../../../../api/node/test/events.mjs), [`progress.mjs`](../../../../api/node/test/progress.mjs) | handler failures, delivery before settling, exec output through functions and `stream: true` (exec half needs `LAYERFS_DAEMON`) |
-| [`values.mjs`](../../../../api/node/test/values.mjs) | exact `bigint`, refused values, bytes and the one-key map |
-| [`native.mjs`](../../../../api/node/test/native.mjs) | a missing addon is one clear error; `LAYERFS_NATIVE` wins; no fallback is tried |
-| [`package.mjs`](../../../../api/node/test/package.mjs) | licence, file list, `engines`, and `index.d.ts` equal to what the table generates |
-| [`close.mjs`](../../../../api/node/test/close.mjs) | `close()`, the one function outside the table |
-| [`doctor.mjs`](../../../../api/node/test/doctor.mjs) | `home.doctor` and its siblings as table calls that change nothing; `home.leftovers` and `home.prune` are gone |
-| [`coverage.mjs`](../../../../api/node/test/coverage.mjs), [`contract.mjs`](../../../../api/node/test/contract.mjs) | the [coverage matrix](../calls/coverage.md) and cross-front-end answers |
+| [`every-call.test.mjs`](../../../../api/node/test/calls/every-call.test.mjs) | ten families and 83 calls, every function; required-argument refusals; a Store, Init with progress, file and Branch calls, bytes, a folder scope; the call log's `client` and `log_tag` |
+| [`shell.test.mjs`](../../../../api/node/test/contract/shell.test.mjs) | the command and the package refuse every call alike; a live Store read both ways (needs `target/debug/layerfs`) |
+| [`events.test.mjs`](../../../../api/node/test/calls/events.test.mjs), [`progress.test.mjs`](../../../../api/node/test/calls/progress.test.mjs) | handler failures, delivery before settling, exec output through functions and `stream: true` (exec half needs `LAYERFS_DAEMON`) |
+| [`values.test.mjs`](../../../../api/node/test/native/values.test.mjs) | exact `bigint`, refused values, bytes and the one-key map |
+| [`native.test.mjs`](../../../../api/node/test/native/native.test.mjs) | a missing addon is one clear error; `LAYERFS_NATIVE` wins; no fallback is tried |
+| [`package.test.mjs`](../../../../api/node/test/drift/package.test.mjs) | licence, file list, `engines`, and `index.d.ts` equal to what the table generates |
+| [`close.test.mjs`](../../../../api/node/test/calls/close.test.mjs) | `close()`, the one function outside the table |
+| [`doctor.test.mjs`](../../../../api/node/test/calls/doctor.test.mjs) | `home.doctor` and its siblings as table calls that change nothing; `home.leftovers` and `home.prune` are gone |
+| [`coverage.test.mjs`](../../../../api/node/test/drift/coverage.test.mjs), [`front-ends.test.mjs`](../../../../api/node/test/contract/front-ends.test.mjs) | the [coverage matrix](../calls/coverage.md) and cross-front-end answers |
 
 Build the addon first; run one file at a time, for example
-`perl -e 'alarm 120; exec @ARGV' node --test api/node/test/calls.mjs`, with
+`perl -e 'alarm 120; exec @ARGV' node --test api/node/test/calls/every-call.test.mjs`, with
 `TMPDIR` on ext4, xfs or btrfs. The typings sample
-[`test/types/sample.ts`](../../../../api/node/test/types/sample.ts) is checked
+[`test/drift/types-sample.ts`](../../../../api/node/test/drift/types-sample.ts) is checked
 with `tsc --noEmit --strict` outside the repository (TypeScript is not a
 dependency).
 
@@ -111,7 +111,7 @@ api/python/src/layerfs
 | Values | `bytes`, `bytearray`, `memoryview` → `{ base64 }`; NaN, Infinity, lone surrogates (also in a home or scope), non-text map keys and types with no JSON form raise `InvalidInput` before any call; `int` exact both ways, the library refusing past signed 64 bits; exec output arrives as `str` when UTF-8, else `bytes` | [`_values.py`](../../../../api/python/src/layerfs/_values.py) |
 | `layerfs.aio` | each call runs in `asyncio.to_thread`; functions are queued to the loop, and the coroutine awaits a barrier behind them before returning. Cancelling it stops the functions; the native call runs to its end and its outcome is dropped | [`aio.py`](../../../../api/python/src/layerfs/aio.py) |
 | Outside the table | `close()` only; the six doctors are table calls (`layerfs.home.doctor()`, …), and the 1.x `doctor()` function was removed with no alias | [`__init__.py`](../../../../api/python/src/layerfs/__init__.py) |
-| Stubs | `_client.pyi`, `aio.pyi`, `__init__.pyi` generated from the table: positionals as listed (`X \| None = None` when optional), options keyword-only (every call also takes `detail`, `with_` and `log_tag`), kinds `int` → `int`, `size` → `int \| str`, `content` → `str \| bytes \| bytearray \| memoryview`, `json` → `JSON`; every call returns `Result` (`Any`). `_values.pyi` and `_errors.pyi` are hand written | [`gen_stubs.py`](../../../../api/python/tools/gen_stubs.py) |
+| Stubs | `_client.pyi`, `aio.pyi`, `__init__.pyi` generated from the table: positionals as listed (`X \| None = None` when optional), options keyword-only (every call also takes `detail`, `with_` and `log_tag`), kinds `int` → `int`, `size` → `int \| str`, `content` → `str \| bytes \| bytearray \| memoryview`, `json` → `JSON`; every call returns `Result` (`Any`). `_values.pyi` and `_errors.pyi` are hand written | [`python_stubs.py`](../../../../api/scripts/python_stubs.py) |
 | Build | `cd api/python && maturin build --locked` (maturin 1.9.6 or a later 1.x) builds `layerfs._native`; on macOS `pyo3-build-config` links with `-undefined dynamic_lookup`, so a plain Cargo build also works | [`pyproject.toml`](../../../../api/python/pyproject.toml), [`Cargo.toml`](../../../../api/crates/layerfs-python/Cargo.toml) |
 
 The distribution is `layerfs` 2.0.0, MIT (`api/python/LICENSE`, a copy of
@@ -120,12 +120,12 @@ the repository's, ships in the wheel and the source distribution), Python
 
 | Test | Checks |
 | --- | --- |
-| [`test_calls.py`](../../../../api/python/test/test_calls.py) | the table as functions; refusals equal the command's; a live Store read both ways; `aio` delivery and cancellation; exec output (needs `LAYERFS_DAEMON`) |
-| [`test_values.py`](../../../../api/python/test/test_values.py) | refused values never reach the library; 64-bit bounds; bytes and the one-key map; malformed scopes |
-| [`test_flow.py`](../../../../api/python/test/test_flow.py) | a mountless file and history flow through `aio`, read through both packages alike |
-| [`test_progress.py`](../../../../api/python/test/test_progress.py), [`test_project_export.py`](../../../../api/python/test/test_project_export.py) | progress delivery and handler failures; export events |
-| [`test_stubs.py`](../../../../api/python/test/test_stubs.py) | committed stubs equal `gen_stubs.py`'s output; licence; `mypy --strict` on `typed_samples/` (skipped without mypy) |
-| [`test_native_missing.py`](../../../../api/python/test/test_native_missing.py), [`test_doctor.py`](../../../../api/python/test/test_doctor.py), [`test_disabled_platforms.py`](../../../../api/python/test/test_disabled_platforms.py) | a clear `ImportError` without `_native`; the doctors as table calls; `home.leftovers` and `home.prune` gone; removed platforms refused |
+| [`test_calls.py`](../../../../api/python/test/calls/test_calls.py) | the table as functions; refusals equal the command's; a live Store read both ways; `aio` delivery and cancellation; exec output (needs `LAYERFS_DAEMON`) |
+| [`test_values.py`](../../../../api/python/test/native/test_values.py) | refused values never reach the library; 64-bit bounds; bytes and the one-key map; malformed scopes |
+| [`test_flow.py`](../../../../api/python/test/calls/test_flow.py) | a mountless file and history flow through `aio`, read through both packages alike |
+| [`test_progress.py`](../../../../api/python/test/calls/test_progress.py), [`test_project_export.py`](../../../../api/python/test/native/test_project_export.py) | progress delivery and handler failures; export events |
+| [`test_stubs.py`](../../../../api/python/test/stubs/test_stubs.py) | committed stubs equal `gen_stubs.py`'s output; licence; `mypy --strict` on `typed_samples/` (skipped without mypy) |
+| [`test_native_missing.py`](../../../../api/python/test/native/test_native_missing.py), [`test_doctor.py`](../../../../api/python/test/calls/test_doctor.py), [`test_disabled_platforms.py`](../../../../api/python/test/calls/test_disabled_platforms.py) | a clear `ImportError` without `_native`; the doctors as table calls; `home.leftovers` and `home.prune` gone; removed platforms refused |
 
 Build with `cargo +1.85.1 build --locked -p layerfs-python -p layerfs-cli`,
 copy `target/debug/lib_native.dylib` (`.so` on Linux) to

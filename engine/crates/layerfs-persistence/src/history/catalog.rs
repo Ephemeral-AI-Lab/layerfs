@@ -1,11 +1,15 @@
 //! shared backend history catalog contract delegation.
 use super::{
-    allocation, ancestry, branch, commit, hints, layerstack, merge, provider::HistoryProvider,
+    counters::allocation,
+    graph::{branch, commit, layerstack, merge},
+    index::hints,
+    lineage::ancestry,
+    provider::HistoryProvider,
 };
 use layerfs_history::*;
 impl HistoryCatalog for HistoryProvider {
     fn query_authenticator(&self, payload: &[u8]) -> HistoryResult<[u8; 32]> {
-        layerfs_history::query::authenticate_query(
+        layerfs_history::catalog::query::authenticate_query(
             &self.cursor_key,
             self.catalog_id,
             self.incarnation,
@@ -43,10 +47,10 @@ impl HistoryCatalog for HistoryProvider {
         if rows.iter().all(|row| row.length < self.digest_floor) {
             return Ok(());
         }
-        self.write(|tx| super::digests::record(tx, rows, self.digest_floor))
+        self.write(|tx| super::index::digests::record(tx, rows, self.digest_floor))
     }
     fn file_roots(&self, contents: &[([u8; 32], u64)]) -> HistoryResult<Vec<Option<[u8; 32]>>> {
-        super::digests::roots(self, contents)
+        super::index::digests::roots(self, contents)
     }
     fn catalog_id(&self) -> CatalogId {
         self.catalog_id
@@ -172,7 +176,7 @@ impl HistoryCatalog for HistoryProvider {
         low: &[u8; 33],
         high: &[u8; 33],
     ) -> HistoryResult<(Option<NodeId>, u64)> {
-        self.read(|tx| super::identity_range::nodes_between(tx, stack, low, high))
+        self.read(|tx| super::index::identity_range::nodes_between(tx, stack, low, high))
     }
 
     // One statement each (#95): a Commit's `logical.known` reads one row.
@@ -214,7 +218,9 @@ impl HistoryCatalog for HistoryProvider {
         if limit == 0 || limit > layerfs_history::records::MAXIMUM_PAGE_RECORDS {
             return Err(layerfs_history::HistoryError::InvalidInput("page limit"));
         }
-        self.read(|tx| super::lineage::overwritten(tx, layer, position, usize::from(limit)))
+        self.read(|tx| {
+            super::lineage::records::overwritten(tx, layer, position, usize::from(limit))
+        })
     }
 
     fn published_layer(
@@ -260,7 +266,7 @@ impl HistoryCatalog for HistoryProvider {
     }
 
     fn remove_layerstack(&self, stack: LayerStackId) -> HistoryResult<()> {
-        self.write(|tx| super::removal::remove_layerstack(tx, stack))
+        self.write(|tx| super::graph::removal::remove_layerstack(tx, stack))
     }
 
     fn mark_stack_deleted(&self, stack: LayerStackId, deleted_ms: i64) -> HistoryResult<()> {
@@ -329,7 +335,7 @@ impl HistoryCatalog for HistoryProvider {
     }
 
     fn mark_branch_removed(&self, branch: BranchId, removed_ms: i64) -> HistoryResult<()> {
-        self.write(|tx| super::removal::mark_branch_removed(tx, branch, removed_ms))
+        self.write(|tx| super::graph::removal::mark_branch_removed(tx, branch, removed_ms))
     }
 
     fn reserve_inodes(&self, request: &ReserveRequest) -> HistoryResult<Reservation> {
@@ -353,7 +359,7 @@ impl HistoryCatalog for HistoryProvider {
         removed_ms: i64,
     ) -> HistoryResult<()> {
         self.write(|tx| {
-            super::paths::mark(
+            super::index::paths::mark(
                 tx,
                 stack,
                 path,
@@ -365,16 +371,16 @@ impl HistoryCatalog for HistoryProvider {
     }
 
     fn remove_path(&self, request: &PathRemovalRequest) -> HistoryResult<PathRemovalOutcome> {
-        self.write(|tx| super::paths::remove_path(tx, request, &self.trace_salt))
+        self.write(|tx| super::index::paths::remove_path(tx, request, &self.trace_salt))
     }
 
     fn path_removals(&self, stack: LayerStackId) -> HistoryResult<Vec<PathRemovalRecord>> {
         // One statement (#818 R1), as `node_path_removals` below.
-        self.read_statement(|tx| super::paths::markers(tx, stack))
+        self.read_statement(|tx| super::index::paths::markers(tx, stack))
     }
 
     fn node_history_serial(&self, node: NodeId) -> HistoryResult<Option<u64>> {
-        self.read_statement(|tx| super::position::node_serial(tx, node))
+        self.read_statement(|tx| super::counters::position::node_serial(tx, node))
     }
 
     fn first_parent_window(
@@ -385,7 +391,7 @@ impl HistoryCatalog for HistoryProvider {
         match &self.engine {
             // One fenced statement (#818 H4).
             crate::backend::Engine::Postgres(_) => {
-                self.read_statement(|tx| super::lineage::chain_window(tx, head, count))
+                self.read_statement(|tx| super::lineage::records::chain_window(tx, head, count))
             }
             // Today's statements in today's order: the default's body.
             crate::backend::Engine::Sqlite(_) => {
@@ -399,25 +405,25 @@ impl HistoryCatalog for HistoryProvider {
         stack: LayerStackId,
         node: NodeId,
     ) -> HistoryResult<Option<(u64, Vec<PathRemovalRecord>)>> {
-        self.read_statement(|tx| super::paths::node_markers(tx, stack, node))
+        self.read_statement(|tx| super::index::paths::node_markers(tx, stack, node))
     }
 
     fn retained_roots(&self, stack: LayerStackId) -> HistoryResult<Vec<NodeId>> {
-        self.read(|tx| super::kept::retained_roots(tx, stack))
+        self.read(|tx| super::super::gc::mark::history::retained_roots(tx, stack))
     }
 
     fn get_retained_roots(&self, stack: LayerStackId) -> HistoryResult<Vec<NodeId>> {
-        self.read(|tx| super::kept::kept_roots(tx, stack))
+        self.read(|tx| super::super::gc::mark::history::kept_roots(tx, stack))
     }
 
     fn remove_unreachable(&self, stack: LayerStackId, dry_run: bool) -> HistoryResult<u64> {
         // The mark and the prune share one write transaction and one lane:
         // reachability can never be older than the rows it is about to delete.
-        self.write(|tx| super::kept::remove_unreachable(tx, stack, dry_run))
+        self.write(|tx| super::super::gc::mark::history::remove_unreachable(tx, stack, dry_run))
     }
 
     fn gc_register(&self, intent: &GcIntent) -> HistoryResult<()> {
-        super::admission::register(self, intent)
+        super::super::gc::admission::intents::register(self, intent)
     }
 
     fn gc_register_mount(
@@ -426,23 +432,23 @@ impl HistoryCatalog for HistoryProvider {
         stack: LayerStackId,
         node: NodeId,
     ) -> HistoryResult<layerfs_history::MountMarkers> {
-        super::admission::register_mount(self, intent, Some((stack, node)))
+        super::super::gc::admission::intents::register_mount(self, intent, Some((stack, node)))
     }
 
     fn gc_release(&self, op_id: &[u8; 16]) -> HistoryResult<()> {
-        super::admission::release(self, op_id)
+        super::super::gc::admission::intents::release(self, op_id)
     }
 
     fn gc_release_done(&self, op_id: &[u8; 16], evidence: &str) -> HistoryResult<bool> {
-        super::admission::release_done(self, op_id, evidence)
+        super::super::gc::admission::intents::release_done(self, op_id, evidence)
     }
 
     fn gc_mark_uncertain(&self, op_id: &[u8; 16]) -> HistoryResult<bool> {
-        super::admission::mark_uncertain(self, op_id)
+        super::super::gc::admission::intents::mark_uncertain(self, op_id)
     }
 
     fn gc_liveness(&self, intents: &[GcIntent]) -> HistoryResult<Vec<layerfs_history::Liveness>> {
-        super::admission::liveness(self, intents)
+        super::super::gc::admission::intents::liveness(self, intents)
     }
 
     fn gc_remove_branch(
@@ -451,7 +457,7 @@ impl HistoryCatalog for HistoryProvider {
         removed_ms: i64,
         intent: &GcIntent,
     ) -> HistoryResult<()> {
-        super::admission::remove_branch(self, branch, removed_ms, intent)
+        super::super::gc::admission::intents::remove_branch(self, branch, removed_ms, intent)
     }
 
     fn gc_delete_stack(
@@ -460,7 +466,7 @@ impl HistoryCatalog for HistoryProvider {
         deleted_ms: i64,
         intent: &GcIntent,
     ) -> HistoryResult<GcDeletion> {
-        super::admission::delete_stack(self, stack, deleted_ms, intent)
+        super::super::gc::admission::intents::delete_stack(self, stack, deleted_ms, intent)
     }
 
     fn gc_remove_path(
@@ -468,15 +474,15 @@ impl HistoryCatalog for HistoryProvider {
         request: &PathRemovalRequest,
         intent: &GcIntent,
     ) -> HistoryResult<PathRemovalOutcome> {
-        super::admission::remove_path(self, request, intent)
+        super::super::gc::admission::intents::remove_path(self, request, intent)
     }
 
     fn gc_intents(&self, scope_kind: GcScopeKind, scope_id: &[u8]) -> HistoryResult<Vec<GcIntent>> {
-        super::admission::intents(self, scope_kind, scope_id)
+        super::super::gc::admission::intents::intents(self, scope_kind, scope_id)
     }
 
     fn gc_done_intents(&self, page: u32, limit: u32) -> HistoryResult<GcAuditPage> {
-        super::admission::done_intents(self, page, limit)
+        super::super::gc::admission::intents::done_intents(self, page, limit)
     }
 
     fn gc_done_intents_branch(
@@ -486,10 +492,12 @@ impl HistoryCatalog for HistoryProvider {
         after: Option<GcAuditAfter>,
         limit: u32,
     ) -> HistoryResult<GcBranchAuditPage> {
-        super::admission::done_intents_branch(self, project, branch, after, limit)
+        super::super::gc::admission::intents::done_intents_branch(
+            self, project, branch, after, limit,
+        )
     }
 
     fn gc_reconcile_machine(&self, machine: &str, incarnation: &str) -> HistoryResult<GcReconcile> {
-        super::admission::reconcile_machine(self, machine, incarnation)
+        super::super::gc::admission::intents::reconcile_machine(self, machine, incarnation)
     }
 }

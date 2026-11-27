@@ -4,35 +4,32 @@
 //! The SDK's fs, branch and project methods and the operator Store calls run
 //! on this engine in the SDK's own process, against the Store it opened
 //! (`StoreService`); this is their only route (#352 F-020). The engine is
-//! organised by mechanism: `read`, `write` and `history` know no SDK method
-//! names; `methods/` is the SDK facade, one file per public Store method and
-//! their method table, [`methods::call`]. The daemon uses the same `store`
-//! and `overlay` for its Workspace Commits. This crate has no FUSE, socket or
-//! Sandbox. Each Workspace owns one overlay connection behind one lock; a
-//! caller runs its own short typed call under it and keeps exact failure
-//! custody.
+//! organised by mechanism: `filesystem`, `history` and `lookup` know no SDK
+//! method names; `families/` is the SDK facade, one folder per call family,
+//! one file per public Store method and their method table,
+//! [`families::call`]. `store` opens and installs the Store; the daemon uses
+//! `store` and `workspace` for its Workspace Commits. This crate has no FUSE,
+//! socket or Sandbox. Each Workspace owns one overlay connection behind one
+//! lock (`workspace::owner`); a caller runs its own short typed call under it
+//! and keeps exact failure custody.
 #![forbid(unsafe_code)]
 
-pub mod bootstrap;
+pub mod families;
+pub mod filesystem;
 pub mod history;
-pub mod install;
-pub mod kernel_guard;
-pub mod methods;
-pub mod operator;
-pub mod overlay;
-pub mod read;
-pub mod removal;
-pub mod service;
+pub mod lookup;
+mod service;
 pub mod store;
-mod store_service;
 pub mod telemetry;
-pub mod write;
+pub mod workspace;
 
-pub use overlay::hold::{MaintenanceHold, MutationHold};
-pub use overlay::owner;
 pub use owner::{OriginalInput, Owner, OwnerClient, OwnerConfig, OwnerError, WorkspacePanic};
-pub use service::observations::JobWork;
-pub use service::owner_work::OwnerWork;
-pub use service::results::ServiceClass;
-pub use service::startup::OwnerStart;
-pub use store_service::{OpenRefusal, Retained, StoreService, CALLS};
+pub use service::{OpenRefusal, Retained, StoreService, CALLS};
+pub use workspace::owner::class::ServiceClass;
+pub use workspace::owner::jobs as owner;
+pub use workspace::owner::operations::hold::{MaintenanceHold, MutationHold};
+pub use workspace::owner::roster::startup::OwnerStart;
+pub use workspace::owner::work::{JobWork, OwnerWork};
+
+#[doc(hidden)]
+pub use crate::families as methods;

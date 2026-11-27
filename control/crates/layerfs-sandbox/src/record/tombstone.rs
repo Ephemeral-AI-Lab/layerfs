@@ -29,8 +29,8 @@
 //! proves the old placements dead) or the operator repairs it. A missing
 //! tombstone and a missing record are both "no proof", never death.
 use super::sandbox::SandboxRecord;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_home::home::{self, paths, read_record, write_entity};
+use layerfs_home::disk::{self, paths, read_record, write_entity};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -92,7 +92,7 @@ pub fn retire(home: &Path, record: &SandboxRecord) -> Result<()> {
     let Some(generation) = record.generation() else {
         return Ok(());
     };
-    if layerfs_home::home::guest::is_root(home) {
+    if layerfs_home::disk::guest::is_root(home) {
         return Ok(());
     }
     let machine = record.machine();
@@ -103,7 +103,7 @@ pub fn retire(home: &Path, record: &SandboxRecord) -> Result<()> {
         name: record.name().to_owned(),
         machine: machine.to_owned(),
         generation: generation.to_owned(),
-        retired_ms: home::now_ms(),
+        retired_ms: disk::now_ms(),
     }
     .write(home)
 }

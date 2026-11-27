@@ -1,5 +1,5 @@
 {
-  "generated_from": "control/crates/layerfs-platform/src/support.rs",
+  "generated_from": "control/crates/layerfs-machine/src/table/support.rs",
   "hosts": [
     {
       "host": "macos",

@@ -2,7 +2,7 @@
 use crate::parse::{parse_cli, Usage};
 use crate::{help, output, view, worker};
 use layerfs_api::Scope;
-use layerfs_bridge::control::SdkValue;
+use layerfs_protocol::sdk::SdkValue;
 use std::io::{IsTerminal, Write};
 use std::process::ExitCode;
 
@@ -20,7 +20,7 @@ pub fn main(words: Vec<String>) -> ExitCode {
         }
         Some("--version") => match &words[1..] {
             [] => output::print(&format!("layerfs {}\n", env!("CARGO_PKG_VERSION"))),
-            [flag] if flag == "--json" => crate::capabilities::version(),
+            [flag] if flag == "--json" => crate::discovery::version(),
             _ => wrong("use layerfs --version [--json]".to_owned()),
         },
         #[cfg(all(feature = "machine", any(target_os = "macos", target_os = "linux")))]
@@ -137,7 +137,7 @@ fn one(call: &layerfs_api::Call, words: &[String]) -> ExitCode {
     if cancellable {
         let store = parsed.args.get_text("store").unwrap_or("");
         if let Err(error) = crate::signals::cancel_on_signal(store, switches.detail, text) {
-            let refusal = layerfs_api::refusal::public(layerfs_bridge::control::SdkRefusal {
+            let refusal = layerfs_api::refusal::public(layerfs_protocol::sdk::SdkRefusal {
                 code: "Failed".to_owned(),
                 message: format!("the signal handler could not start: {error}"),
                 detail: SdkValue::Null,
@@ -175,7 +175,7 @@ fn one(call: &layerfs_api::Call, words: &[String]) -> ExitCode {
             } else if let Some(progress) = event.get("progress") {
                 // one event, one line: `{"phase","done","total"}` and what
                 // else the call sends beside them
-                let _ = writeln!(err, "{}", layerfs_api::json::print(progress));
+                let _ = writeln!(err, "{}", layerfs_home::json::print(progress));
             }
         } else if stream {
             let bytes = match event.get("bytes") {

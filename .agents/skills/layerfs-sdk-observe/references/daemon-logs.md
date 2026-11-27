@@ -5,7 +5,7 @@
 > `machine.log` outputs were printed by the built `layerfs` command on a
 > throwaway home on 2026-11-18 (macOS, a `native` Sandbox). What the daemon
 > writes is read from source
-> (`control/crates/layerfs-sandbox-backend/src/backend/{native,namespaces}/`), not run.
+> (`control/crates/layerfs-sandbox/src/backend/{native,namespaces}/`), not run.
 > 1.x `logs.sandbox` and `logs.machine` are now `sandbox.log` and
 > `machine.log`, with no alias.
 

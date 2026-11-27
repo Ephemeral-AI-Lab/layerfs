@@ -1,0 +1,147 @@
+api/crates/layerfs-api/src/dispatch/mod.rs		pub use answer::{form, keys, refusal, shape}; // #828 compat
+api/crates/layerfs-api/src/dispatch/mod.rs		pub use guard::scope; // #828 compat
+api/crates/layerfs-api/src/lib.rs		pub use crate::dispatch as calls; // #828 compat
+api/crates/layerfs-cli/src/lib.rs		pub use crate::style as banner; // #828 compat
+control/crates/layerfs-home/src/lib.rs		pub use crate::reply::cursor; // #828 compat
+control/crates/layerfs-home/src/lib.rs		pub use crate::reply::events; // #828 compat
+control/crates/layerfs-home/src/lib.rs	helpers	pub mod helpers {\n    // #828 compat\n    pub use crate::lock::mutex::lock; // #828 compat\n    pub use crate::record::token::{ordered_token, random}; // #828 compat\n    pub use crate::reply::values::*; // #828 compat\n}
+control/crates/layerfs-home/src/lib.rs	home	pub mod home {\n    // #828 compat\n    #[allow(unused_imports)]\n    pub use crate::disk::*; // #828 compat\n    #[doc(hidden)]\n    pub use crate::lock::entity as entity_lock; // #828 compat\n    #[doc(hidden)]\n    pub use crate::lock::flock; // #828 compat\n    #[doc(hidden)]\n    pub use crate::lock::home as lock; // #828 compat\n    #[doc(hidden)]\n    pub use crate::record::fields; // #828 compat\n    #[doc(hidden)]\n    pub mod records {\n        // #828 compat\n        pub use crate::log::lines::{log_line, log_swept, SWEPT, UNCERTAIN}; // #828 compat\n        pub use crate::record::file::*; // #828 compat\n    }\n    #[doc(hidden)]\n    pub use crate::record::generation; // #828 compat\n    #[doc(hidden)]\n    pub use crate::record::observed; // #828 compat\n    #[doc(hidden)]\n    pub use crate::secret::saved as secrets; // #828 compat\n    #[cfg(any(target_os = "macos", target_os = "linux"))]\n    #[doc(hidden)]\n    pub use crate::socket as host_socket; // #828 compat\n}
+control/crates/layerfs-home/src/lib.rs		pub use crate::log::calls as logs; // #828 compat
+control/crates/layerfs-home/src/lib.rs		pub use crate::log::tail; // #828 compat
+control/crates/layerfs-home/src/lib.rs		pub use crate::log::trace; // #828 compat
+control/crates/layerfs-home/src/lib.rs		pub use crate::record::intent as op; // #828 compat
+control/crates/layerfs-home/src/lib.rs		pub use crate::record::process; // #828 compat
+control/crates/layerfs-home/src/lib.rs		pub use crate::reply::outcome; // #828 compat
+control/crates/layerfs-home/src/lib.rs		pub use crate::reply::state; // #828 compat
+control/crates/layerfs-home/src/lib.rs		pub use crate::reply::time; // #828 compat
+control/crates/layerfs-home/src/lib.rs		pub use crate::secret::keys as secrets; // #828 compat
+control/crates/layerfs-home/src/lib.rs		pub use crate::secret::wipe; // #828 compat
+control/crates/layerfs-inspect/src/home/get.rs		pub use super::init::init; // #828 compat
+control/crates/layerfs-machine/src/lib.rs		pub use crate::route as worker; // #828 compat
+control/crates/layerfs-machine/src/lib.rs		pub use crate::setup::bundle; // #828 compat
+control/crates/layerfs-machine/src/lib.rs		pub use crate::status::state; // #828 compat
+control/crates/layerfs-machine/src/record/mod.rs		pub use machine::*; // #828 compat
+control/crates/layerfs-sandbox/src/exec/mod.rs		pub use crate::exec::settle as cancel; // #828 compat
+control/crates/layerfs-sandbox/src/exec/mod.rs		pub use crate::record::exec as record; // #828 compat
+control/crates/layerfs-sandbox/src/lib.rs	daemon	pub mod daemon {\n    //! #828 compat: the old `daemon` module.\n    pub use crate::route::daemon::channel::exchange as channel;\n    pub use crate::route::daemon::channel::{fence, internal, operator, pool};\n    pub use crate::route::daemon::refusal as values;\n    pub use crate::route::daemon::{call, failure, workspace};\n    pub use crate::status::capacity;\n}
+control/crates/layerfs-sandbox/src/lib.rs	images	pub mod images {\n    //! #828 compat: the old `images` module.\n    pub use crate::image::list::*;\n    pub use crate::image::prune::{prune, prune_in_worker};\n}
+control/crates/layerfs-sandbox/src/lib.rs	inspect	pub mod inspect {\n    //! #828 compat: the old `inspect` module.\n    pub use crate::route::inspect as owner;\n    pub use crate::route::inspect as route;\n    pub use crate::status::overlay;\n    pub use crate::status::stats as process;\n}
+control/crates/layerfs-sandbox/src/lib.rs	launch	pub mod launch {\n    //! #828 compat: the old `launch` module.\n    #[cfg(any(target_os = "linux", target_os = "macos"))]\n    pub use crate::lifecycle::boot as local;\n    pub use crate::lifecycle::network;\n    #[cfg(unix)]\n    pub use crate::lifecycle::startup as create;\n    #[cfg(unix)]\n    pub use crate::lifecycle::{\n        ProviderCreate, ProviderFailure, ProviderSandbox, SandboxApi, SandboxCause, SandboxPhase,\n    };\n}
+control/crates/layerfs-sandbox/src/lib.rs		pub use crate::exec::output; // #828 compat
+control/crates/layerfs-sandbox/src/lib.rs		pub use crate::image::cache as image_artifact; // #828 compat
+control/crates/layerfs-sandbox/src/lib.rs		pub use crate::image::copy::docker; // #828 compat
+control/crates/layerfs-sandbox/src/lib.rs		pub use crate::image::copy::load as image_load; // #828 compat
+control/crates/layerfs-sandbox/src/lib.rs		pub use crate::image::copy::lock as image_lock; // #828 compat
+control/crates/layerfs-sandbox/src/lib.rs		pub use crate::image::tar as image_tar; // #828 compat
+control/crates/layerfs-sandbox/src/lib.rs		pub use crate::lifecycle::force_remove as force; // #828 compat
+control/crates/layerfs-sandbox/src/lib.rs		pub use crate::lifecycle::{mount_intents, registry}; // #828 compat
+control/crates/layerfs-sandbox/src/lib.rs		pub use crate::record::discovery as files; // #828 compat
+control/crates/layerfs-sandbox/src/lib.rs		pub use crate::record::{reopen, sweep, unmount_guard}; // #828 compat
+control/crates/layerfs-sandbox/src/lib.rs		pub use crate::route::direct; // #828 compat
+control/crates/layerfs-sandbox/src/lib.rs		pub use crate::route::machine as host; // #828 compat
+control/crates/layerfs-sandbox/src/lib.rs		pub use crate::route::machine::dispatch; // #828 compat
+control/crates/layerfs-sandbox/src/lib.rs		pub use crate::status::{list, run_folder, state}; // #828 compat
+control/crates/layerfs-sandbox/src/lifecycle/mod.rs		pub use serve::*; // #828 compat
+control/crates/layerfs-sandbox/src/route/mod.rs		pub use machine::send::*; // #828 compat
+control/crates/layerfs-store/src/backup/mod.rs		pub use crate::backup::bucket::connect as family; // #828 compat
+control/crates/layerfs-store/src/backup/mod.rs		pub use crate::backup::jobs::create; // #828 compat
+control/crates/layerfs-store/src/backup/mod.rs		pub use crate::backup::jobs::ended; // #828 compat
+control/crates/layerfs-store/src/backup/mod.rs		pub use crate::backup::jobs::list as heads; // #828 compat
+control/crates/layerfs-store/src/backup/mod.rs		pub use crate::backup::jobs::list; // #828 compat
+control/crates/layerfs-store/src/backup/mod.rs		pub use crate::backup::jobs::progress; // #828 compat
+control/crates/layerfs-store/src/backup/mod.rs	record	pub mod record {\n    // #828 compat\n    pub use crate::backup::bucket::record::*;\n    pub use crate::backup::copy::link::StoreLink;\n}
+control/crates/layerfs-store/src/backup/mod.rs		pub use crate::backup::jobs::restore; // #828 compat
+control/crates/layerfs-store/src/backup/mod.rs		pub use crate::data::project::record::restored; // #828 compat // #828 compat
+control/crates/layerfs-store/src/lib.rs		pub use crate::admin::route::call; // #828 compat
+control/crates/layerfs-store/src/lib.rs	calls	pub mod calls {\n    // #828 compat\n    pub use crate::data::*;\n    #[doc(hidden)]\n    pub mod project {\n        // #828 compat\n        pub use crate::data::project::hide_path::*;\n        pub use crate::data::project::status::stats::*;\n    }\n}
+control/crates/layerfs-store/src/lib.rs		pub use crate::admin::maintenance::compact; // #828 compat
+control/crates/layerfs-store/src/lib.rs	diagnostic	pub mod diagnostic {\n    // #828 compat\n    pub use crate::backend::postgresql::diagnostic::*;\n    pub use crate::backend::sqlite::diagnostic::*;\n}
+control/crates/layerfs-store/src/lib.rs		pub use crate::admin::host_worker::handoff as host_maintenance; // #828 compat
+control/crates/layerfs-store/src/lib.rs		pub use crate::admin::host_worker::postgresql as host_postgresql; // #828 compat
+control/crates/layerfs-store/src/lib.rs		pub use crate::admin::host_worker::read as host_read; // #828 compat
+control/crates/layerfs-store/src/lib.rs		pub use crate::admin::status::formats; // #828 compat
+control/crates/layerfs-store/src/lib.rs		pub use crate::admin::status::get; // #828 compat // #828 compat
+control/crates/layerfs-store/src/lib.rs	host_write	pub mod host_write {\n    // #828 compat\n    pub use crate::admin::host_worker::retained::*;\n    pub use crate::admin::host_worker::write::*;\n}
+control/crates/layerfs-store/src/lib.rs		pub use crate::admin::open::lease; // #828 compat
+control/crates/layerfs-store/src/lib.rs		pub use crate::admin::record::identity; // #828 compat
+control/crates/layerfs-store/src/lib.rs		pub use crate::admin::record::intent; // #828 compat
+control/crates/layerfs-store/src/lib.rs		pub use crate::admin::status::list; // #828 compat
+control/crates/layerfs-store/src/lib.rs		pub use crate::admin::status::observed; // #828 compat
+control/crates/layerfs-store/src/lib.rs	open	pub mod open {\n    // #828 compat\n    pub use crate::admin::open::cache::*;\n    pub use crate::admin::open::checkpoint::*;\n    pub use crate::admin::open::close::*;\n    pub use crate::admin::open::host::*;\n}
+control/crates/layerfs-store/src/lib.rs		pub use crate::admin::open::args as open_args; // #828 compat
+control/crates/layerfs-store/src/lib.rs		pub use crate::admin::route::executor as place; // #828 compat
+control/crates/layerfs-store/src/lib.rs		pub use crate::admin::route::place_view; // #828 compat
+control/crates/layerfs-store/src/lib.rs		pub use crate::backend::postgresql; // #828 compat
+control/crates/layerfs-store/src/lib.rs	project	pub mod project {\n    // #828 compat\n    #[doc(hidden)]\n    pub use crate::data::project::init::parts; // #828 compat\n    #[doc(hidden)]\n    pub use crate::data::project::init::postgresql as postgres_init; // #828 compat\n    #[doc(hidden)]\n    pub use crate::data::project::init::run as family; // #828 compat\n    #[doc(hidden)]\n    pub use crate::data::project::init::send; // #828 compat\n    #[doc(hidden)]\n    pub use crate::data::project::init::sqlite as add; // #828 compat\n    #[doc(hidden)]\n    pub use crate::data::project::init::staged; // #828 compat\n    #[doc(hidden)]\n    pub use crate::data::project::init::tree;\n    #[doc(hidden)]\n    pub use crate::data::project::init::worker as init; // #828 compat\n    #[doc(hidden)]\n    pub use crate::data::project::record::discovery; // #828 compat\n    #[doc(hidden)]\n    pub use crate::data::project::record::intent as op; // #828 compat\n    #[doc(hidden)]\n    pub use crate::data::project::record::project as record; // #828 compat\n    #[doc(hidden)]\n    pub use crate::data::project::status::listing; // #828 compat\n    #[doc(hidden)]\n    pub use crate::data::project::status::live; // #828 compat\n    #[doc(hidden)]\n    pub use crate::data::project::status::state; // #828 compat\n    pub use crate::data::project::*; // #828 compat\n    #[doc(hidden)]\n    pub mod delete {\n        // #828 compat\n        pub use crate::data::project::delete::run::*;\n        pub use crate::data::project::delete::worker::*;\n    }\n    #[doc(hidden)]\n    pub mod read {\n        // #828 compat\n        pub use crate::data::project::status::get::*;\n        pub use crate::data::project::status::list::*;\n    }\n}
+control/crates/layerfs-store/src/lib.rs		pub use crate::admin::maintenance::compact_report as report; // #828 compat
+control/crates/layerfs-store/src/lib.rs		pub use crate::admin::maintenance::repair_mount_holders as repair; // #828 compat
+control/crates/layerfs-store/src/lib.rs		pub use crate::admin::record::store as record; // #828 compat
+control/crates/layerfs-store/src/lib.rs		pub use crate::admin::route::resolve; // #828 compat
+control/crates/layerfs-store/src/lib.rs	service	pub mod service {\n    // #828 compat\n    pub use crate::admin::open::service::*;\n    pub use crate::admin::route::mount_intents::{end_mount, reconcile_machine};\n    pub use crate::data::branch::{branch_named, head};\n}
+control/crates/layerfs-store/src/lib.rs	sqlite	pub mod sqlite {\n    // #828 compat\n    pub use crate::backend::sqlite::*;\n    #[doc(hidden)]\n    pub mod transfer {\n        // #828 compat\n        #[doc(hidden)]\n        pub use crate::backend::sqlite::move_leftover as resolve; // #828 compat\n        #[doc(hidden)]\n        pub use crate::backend::sqlite::move_phases as phases; // #828 compat\n        #[doc(hidden)]\n        pub use crate::backend::sqlite::step_request as step; // #828 compat\n        #[doc(hidden)]\n        pub use crate::backend::sqlite::step_run as steps; // #828 compat\n    }\n}
+control/crates/layerfs-store/src/lib.rs		pub use crate::admin::status::state; // #828 compat
+control/crates/layerfs-store/src/lib.rs		pub use crate::data::unknown; // #828 compat // #828 compat
+core/crates/layerfs-content/src/compare/mod.rs		pub use crate::compare::pages as sorted; // #828 compat
+core/crates/layerfs-content/src/filesystem/mod.rs		pub use crate::filesystem::construction::captured_bindings as binding_changes; // #828 compat
+core/crates/layerfs-content/src/filesystem/mod.rs		pub use crate::filesystem::construction::input as rows; // #828 compat
+core/crates/layerfs-content/src/filesystem/mod.rs		pub use crate::filesystem::construction::input::resident as input; // #828 compat
+core/crates/layerfs-content/src/filesystem/mod.rs		pub use crate::filesystem::construction::operation as update; // #828 compat
+core/crates/layerfs-content/src/filesystem/mod.rs		pub use crate::filesystem::construction::reference as references; // #828 compat
+core/crates/layerfs-content/src/filesystem/mod.rs		pub use crate::filesystem::construction::statistics; // #828 compat
+core/crates/layerfs-content/src/filesystem/mod.rs		pub use crate::filesystem::construction::validate::checked as validate; // #828 compat
+core/crates/layerfs-content/src/filesystem/mod.rs		pub use crate::filesystem::name::identity; // #828 compat
+core/crates/layerfs-content/src/filesystem/mod.rs		pub use crate::filesystem::name::path; // #828 compat
+core/crates/layerfs-content/src/filesystem/mod.rs		pub use crate::filesystem::name::symlink; // #828 compat
+core/crates/layerfs-content/src/filesystem/mod.rs		pub use crate::filesystem::topology as qualify; // #828 compat
+core/crates/layerfs-content/src/filesystem/mod.rs		pub use crate::filesystem::tree::attribute as attributes; // #828 compat
+core/crates/layerfs-content/src/filesystem/mod.rs		pub use crate::filesystem::tree::directory; // #828 compat
+core/crates/layerfs-content/src/filesystem/mod.rs		pub use crate::filesystem::tree::inode; // #828 compat
+core/crates/layerfs-content/src/filesystem/mod.rs		pub use crate::filesystem::tree::pages as sorted; // #828 compat
+core/crates/layerfs-content/src/filesystem/mod.rs		pub use crate::filesystem::tree::pages::decoded; // #828 compat
+core/crates/layerfs-content/src/merge/mod.rs		pub use crate::merge::decide::markers; // #828 compat
+core/crates/layerfs-content/src/merge/mod.rs		pub use crate::merge::decide::text; // #828 compat
+core/crates/layerfs-content/src/merge/mod.rs		pub use crate::merge::rule::lww; // #828 compat
+core/crates/layerfs-history/src/lib.rs		pub use catalog::path; // #828 compat
+core/crates/layerfs-history/src/lib.rs		pub use catalog::query; // #828 compat
+core/crates/layerfs-storage/src/encoding/delta/mod.rs		pub use crate::encoding::delta::program_page as branch; // #828 compat
+core/crates/layerfs-storage/src/encoding/pool/mod.rs		pub use crate::encoding::pool::program_page as branch; // #828 compat
+core/crates/layerfs-storage/src/lib.rs		pub use location as source; // #828 compat
+engine/crates/layerfs-daemon/src/lib.rs		pub use crate::install::outcome as install_types; // #828 compat
+engine/crates/layerfs-daemon/src/lib.rs		pub use crate::workspace as control; // #828 compat
+engine/crates/layerfs-fuse/src/lib.rs	coherence	pub mod coherence {\n    // #828 compat\n    #[doc(hidden)]\n    pub use crate::request::coherence as attributes; // #828 compat\n    #[doc(hidden)]\n    pub use crate::request::coherence as pages; // #828 compat\n    #[doc(hidden)]\n    pub use crate::request::coherence as reply_order; // #828 compat\n}
+engine/crates/layerfs-nfs/src/apple_double/mod.rs		pub use companions::{companion, DECODED_ENTRY_BYTES, FILE_BYTES, HELD, RESIDENT_BYTES, SERIALS}; // #828 compat
+engine/crates/layerfs-nfs/src/lib.rs		pub use crate::apple_double::codec as apple_double_codec; // #828 compat
+engine/crates/layerfs-nfs/src/lib.rs		pub use crate::kernel::mutation as change; // #828 compat
+engine/crates/layerfs-nfs/src/lib.rs		pub use crate::kernel::names; // #828 compat
+engine/crates/layerfs-nfs/src/lib.rs		pub use crate::kernel::read; // #828 compat
+engine/crates/layerfs-nfs/src/lib.rs		pub use crate::kernel::refresh; // #828 compat
+engine/crates/layerfs-nfs/src/lib.rs		pub use crate::protocol::attributes; // #828 compat
+engine/crates/layerfs-nfs/src/lib.rs		pub use crate::protocol::handle; // #828 compat
+engine/crates/layerfs-nfs/src/lib.rs		pub use crate::protocol::rpc; // #828 compat
+engine/crates/layerfs-nfs/src/lib.rs		pub use crate::protocol::xdr; // #828 compat
+engine/crates/layerfs-persistence/src/lib.rs		pub use crate::gc::metrics as compact_metrics; // #828 compat
+engine/crates/layerfs-store-service/src/history/mod.rs		pub use crate::history::gc_admission as admission; // #828 compat
+engine/crates/layerfs-store-service/src/history/mod.rs		pub use crate::history::project_delete as deletion; // #828 compat
+engine/crates/layerfs-store-service/src/history/mod.rs		pub use crate::lookup; // #828 compat // #828 compat
+engine/crates/layerfs-store-service/src/lib.rs		pub use crate::store::install; // #828 compat
+engine/crates/layerfs-store-service/src/lib.rs		pub use crate::store::kernel_guard; // #828 compat
+engine/crates/layerfs-store-service/src/lib.rs		pub use crate::store::open as bootstrap; // #828 compat // #828 compat
+engine/crates/layerfs-store-service/src/lib.rs	operator	pub mod operator {\n    // #828 compat\n    #[doc(hidden)]\n    pub use crate::families::args; // #828 compat\n    #[doc(hidden)]\n    pub use crate::families::operator::list_workspaces as inspect; // #828 compat\n    #[doc(hidden)]\n    pub use crate::families::operator::storage as store;\n    #[allow(unused_imports)]\n    pub use crate::families::operator::*; // #828 compat // #828 compat\n}
+engine/crates/layerfs-store-service/src/lib.rs	overlay	pub mod overlay {\n    // #828 compat\n    #[doc(hidden)]\n    pub use crate::workspace::owner::jobs as owner; // #828 compat\n    #[doc(hidden)]\n    pub use crate::workspace::owner::operations::hold; // #828 compat\n    #[doc(hidden)]\n    pub use crate::workspace::owner::operations::kernel as kernel_operations; // #828 compat\n    #[doc(hidden)]\n    pub use crate::workspace::owner::operations::lifetime as lifetime_operations; // #828 compat\n    #[doc(hidden)]\n    pub use crate::workspace::owner::operations::read as read_operations; // #828 compat\n    #[doc(hidden)]\n    pub use crate::workspace::owner::ports::captured_namespace as captured_namespace_port; // #828 compat\n    #[doc(hidden)]\n    pub use crate::workspace::owner::ports::captured_runs as captured_run_port; // #828 compat\n    #[doc(hidden)]\n    pub use crate::workspace::owner::ports::files as file_port; // #828 compat\n    #[doc(hidden)]\n    pub use crate::workspace::owner::ports::operation_record as operation_record_port; // #828 compat\n    #[doc(hidden)]\n    pub use crate::workspace::owner::ports::overlay as read_port; // #828 compat\n    #[doc(hidden)]\n    pub use crate::workspace::owner::roster::backing; // #828 compat\n    #[doc(hidden)]\n    pub use crate::workspace::owner::roster::scopes; // #828 compat\n    #[doc(hidden)]\n    pub use crate::workspace::owner::roster::workspaces;\n    #[allow(unused_imports)]\n    pub use crate::workspace::owner::*; // #828 compat // #828 compat\n}
+engine/crates/layerfs-store-service/src/lib.rs	read	pub mod read {\n    // #828 compat\n    #[doc(hidden)]\n    pub use crate::filesystem::cache as cached; // #828 compat\n    #[doc(hidden)]\n    pub use crate::filesystem::compare::boundaries as comparison_pages; // #828 compat\n    #[doc(hidden)]\n    pub use crate::filesystem::compare::diff as compare; // #828 compat\n    #[doc(hidden)]\n    pub use crate::filesystem::compare::file_rows as file_compare; // #828 compat\n    #[doc(hidden)]\n    pub use crate::filesystem::compare::plans; // #828 compat\n    #[doc(hidden)]\n    pub use crate::filesystem::compare::tree_pages as branch_compare; // #828 compat\n    #[doc(hidden)]\n    pub use crate::filesystem::facts as file_facts; // #828 compat\n    #[doc(hidden)]\n    pub use crate::filesystem::paged::query; // #828 compat\n    #[doc(hidden)]\n    pub use crate::filesystem::paged::results as paged_reads; // #828 compat\n    #[doc(hidden)]\n    pub use crate::filesystem::paged::revision; // #828 compat\n    #[doc(hidden)]\n    pub use crate::filesystem::root as snapshot; // #828 compat\n    #[doc(hidden)]\n    pub use crate::filesystem::text::attribution; // #828 compat\n    #[doc(hidden)]\n    pub use crate::filesystem::text::blame; // #828 compat\n    #[doc(hidden)]\n    pub use crate::filesystem::text::search; // #828 compat\n    #[doc(hidden)]\n    pub use crate::filesystem::text::window;\n    #[doc(hidden)]\n    pub use crate::filesystem::tree::positional as reads; // #828 compat\n    #[doc(hidden)]\n    pub use crate::filesystem::tree::stats as tree_stats; // #828 compat\n    #[doc(hidden)]\n    pub use crate::filesystem::tree::visibility; // #828 compat\n    #[doc(hidden)]\n    pub use crate::filesystem::tree::walk; // #828 compat\n    #[allow(unused_imports)]\n    pub use crate::filesystem::*; // #828 compat // #828 compat\n}
+engine/crates/layerfs-store-service/src/lib.rs		pub use crate::history::whiteout as removal; // #828 compat
+engine/crates/layerfs-store-service/src/lib.rs	write	pub mod write {\n    // #828 compat\n    #[doc(hidden)]\n    pub use crate::filesystem::change::run as files;\n    #[allow(unused_imports)]\n    pub use crate::filesystem::change::*; // #828 compat // #828 compat\n}
+engine/crates/layerfs-store-service/src/store/mod.rs		pub use crate::workspace::bind::operation; // #828 compat
+engine/crates/layerfs-store-service/src/store/mod.rs		pub use crate::workspace::bind::operation as statistics; // #828 compat
+engine/crates/layerfs-store-service/src/store/mod.rs		pub use crate::workspace::bind::reader as read_handle; // #828 compat
+engine/crates/layerfs-store-service/src/store/mod.rs		pub use crate::workspace::bind::readers as read_service; // #828 compat
+engine/crates/layerfs-store-service/src/store/mod.rs		pub use crate::workspace::bind::run as bind; // #828 compat
+engine/crates/layerfs-store-service/src/store/mod.rs		pub use crate::workspace::commit::captured; // #828 compat
+engine/crates/layerfs-store-service/src/store/mod.rs		pub use crate::workspace::commit::digests; // #828 compat
+engine/crates/layerfs-store-service/src/store/mod.rs		pub use crate::workspace::commit::hints; // #828 compat
+engine/crates/layerfs-store-service/src/store/mod.rs		pub use crate::workspace::commit::merge as commit_merge; // #828 compat
+engine/crates/layerfs-store-service/src/store/mod.rs		pub use crate::workspace::commit::outcome as commit_types; // #828 compat
+engine/crates/layerfs-store-service/src/store/mod.rs		pub use crate::workspace::commit::producer; // #828 compat
+engine/crates/layerfs-store-service/src/store/mod.rs		pub use crate::workspace::commit::resolve; // #828 compat
+engine/crates/layerfs-store-service/src/store/mod.rs		pub use crate::workspace::commit::run as commit; // #828 compat
+engine/crates/layerfs-store-service/src/store/mod.rs		pub use crate::workspace::commit::settle; // #828 compat // #828 compat

@@ -36,8 +36,8 @@ cold harness, v2 itself missed the cap by more than double.
 **What "warm" and "cold" mean here.** A Commit touches four caches:
 
 - **Workspace base caches.** `CanonicalCache` in
-  `engine/crates/layerfs-workspace/src/base/cache.rs` holds authenticated base
-  objects, and its `DecodedPages` (`core/crates/layerfs-content/src/filesystem/decoded.rs`)
+  `engine/crates/layerfs-vfs/src/base/cache.rs` holds authenticated base
+  objects, and its `DecodedPages` (`core/crates/layerfs-content/src/filesystem/tree/pages/decoded.rs`)
   holds decoded inode and directory pages. A hit here means no PostgreSQL
   statement is sent. These are client-side, in the Commit's own process.
 - **Overlay file pages.** The Workspace's local Overlay SQLite file, in the

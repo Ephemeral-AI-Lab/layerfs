@@ -1,9 +1,9 @@
 //! Typed saved identities and bounded, branch-qualified history lookups.
-use super::{lookup as args, MAIN};
+use super::{super::lookup as args, MAIN};
 use crate::store::Store;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_content::ObjectId;
 use layerfs_history::{LayerStackRecord, NodeId};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::sync::Arc;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;

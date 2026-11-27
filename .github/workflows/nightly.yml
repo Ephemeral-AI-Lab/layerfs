@@ -3,10 +3,11 @@
 #  - slow:  binaries that take 5 s or more to run, plus the "heavy" ones that
 #           take 5 s or more of build CPU (left out of the push job), on the
 #           runner
-#  - mount: Linux-only daemon and SDK targets that mount FUSE. Each binary runs
-#           in its own fresh container with /dev/fuse and SYS_ADMIN, as the
-#           existing native proofs do: forced_unavailable needs fusectl absent,
-#           and fp2_negotiation_flags needs one test thread.
+#  - mount: Linux-only daemon and SDK targets that mount FUSE. Each binary, and
+#           each module of an area binary (#828), runs in its own fresh
+#           container with /dev/fuse and SYS_ADMIN, as the existing native
+#           proofs do: forced_unavailable needs fusectl absent, and
+#           negotiation_flags needs one test thread.
 name: nightly
 
 on:
@@ -83,7 +84,7 @@ jobs:
         run: |
           targets="$(python3 -B tools/ci_tests.py mount-targets)"
           # shellcheck disable=SC2086 # one --test flag per word
-          cargo +1.85.1 test --manifest-path Cargo.toml --locked -p layerfs-daemon -p layerfs-control \
+          cargo +1.85.1 test --manifest-path Cargo.toml --locked -p layerfs-daemon -p layerfs-sandbox \
             $targets --no-run --message-format json > "$RUNNER_TEMP/build.json"
           python3 -B tools/ci_tests.py executables < "$RUNNER_TEMP/build.json" > "$RUNNER_TEMP/mount.tsv"
           test -s "$RUNNER_TEMP/mount.tsv"
@@ -99,8 +100,10 @@ jobs:
       - name: Run each mount binary in its own container (each capped at 120 s)
         run: |
           status=0
-          while IFS=$'\t' read -r dir exe; do
-            name="$(basename "$exe")"
+          # filter: empty for a one-file binary, else one module of an area
+          # binary (#828), so each former binary keeps its own container and cap
+          while IFS=$'\t' read -r dir exe filter; do
+            name="$(basename "$exe")${filter:+-${filter%::}}"
             echo "::group::$name"
             # A fresh /tmp on the runner's ext4 disk, not the container overlay.
             scratch="$RUNNER_TEMP/tmp-$name"
@@ -109,7 +112,7 @@ jobs:
             if ! docker run --rm --device /dev/fuse --cap-add SYS_ADMIN \
                 --security-opt apparmor=unconfined \
                 -v "$GITHUB_WORKSPACE:$GITHUB_WORKSPACE" -v "$scratch:/tmp" -w "$dir" \
-                layerfs-mount-test timeout 120 "$exe" --test-threads=1; then
+                layerfs-mount-test timeout 120 "$exe" $filter --test-threads=1; then
               echo "::error title=mount test failed::$name"
               status=1
             fi

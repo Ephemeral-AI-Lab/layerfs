@@ -12,12 +12,12 @@
 
 use std::collections::BTreeMap;
 
-use layerfs_content::filesystem::directory::update::apply_bindings;
-use layerfs_content::filesystem::inode::update::apply_inode_values;
+use layerfs_content::filesystem::name::path::PathName;
 use layerfs_content::filesystem::objects::FilesystemObjects;
-use layerfs_content::filesystem::path::PathName;
-use layerfs_content::filesystem::sorted::finish::DirectoryRoot;
-use layerfs_content::filesystem::sorted::MAXIMUM_SCRATCH_BYTES;
+use layerfs_content::filesystem::tree::directory::update::apply_bindings;
+use layerfs_content::filesystem::tree::inode::update::apply_inode_values;
+use layerfs_content::filesystem::tree::pages::finish::DirectoryRoot;
+use layerfs_content::filesystem::tree::pages::MAXIMUM_SCRATCH_BYTES;
 use layerfs_content::filesystem::{profile_id, scope_for_seed, FilesystemRoot, InodeScope};
 use layerfs_content::object::inode_leaf::{InodeKind, InodeValue};
 use layerfs_content::{

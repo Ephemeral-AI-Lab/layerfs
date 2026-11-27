@@ -7,10 +7,10 @@
 //! record of the retired docker backend has no `runtime` (D-8). As the
 //! Sandbox record does, it keeps unknown, null and mistyped fields as read,
 //! in file order.
-use crate::host::Started;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_home::home::fields::{self, Fields};
-use layerfs_home::outcome::refused;
+use crate::route::machine::Started;
+use layerfs_home::record::fields::{self, Fields};
+use layerfs_home::reply::outcome::refused;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::net::SocketAddr;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -475,7 +475,7 @@ impl Forward {
     }
 
     /// Whether the process it names is alive, the same process when its
-    /// start time and boot were recorded (`layerfs_home::process`).
+    /// start time and boot were recorded (`layerfs_home::record::process`).
     pub fn alive(&self) -> bool {
         let Some(pid) = self.pid().and_then(|p| u32::try_from(p).ok()) else {
             return false;
@@ -488,7 +488,7 @@ impl Forward {
             ForwardField::PidBoot(text) => Some(text),
             _ => None,
         });
-        layerfs_home::process::alive_as(
+        layerfs_home::record::process::alive_as(
             pid,
             start.and_then(|s| s.parse().ok()),
             boot.and_then(|b| u128::from_str_radix(b, 16).ok()),

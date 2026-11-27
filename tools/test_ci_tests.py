@@ -1,5 +1,6 @@
 import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -21,8 +22,11 @@ class SelectionAgainstTheTree(unittest.TestCase):
     def test_fast_targets_leave_out_every_nightly_and_mount_target(self):
         fast = set(ci_tests.fast_targets(self.meta))
         self.assertFalse(fast & (ci_tests.NIGHTLY | set(ci_tests.mount_targets(self.meta))))
-        self.assertIn(("layerfs-overlay", "captured_namespace"), fast)
-        self.assertNotIn(("layerfs-workspace", "captured_namespace"), fast)
+        self.assertIn(("layerfs-overlay", "custody"), fast)
+        self.assertNotIn(("layerfs-vfs", "captured_namespace"), fast)
+        # an area binary with only some modules listed is built, its modules filtered
+        self.assertIn(("layerfs-store-service", "history"), fast)
+        self.assertIn(("layerfs-daemon", "unmount"), fast)
         flags = ci_tests.test_flags(ci_tests.lane_targets("fast", self.meta)).split()
         self.assertEqual(flags.count("--test"), len({name for _, name in fast}))
         self.assertNotIn("mount_control", flags)
@@ -36,27 +40,26 @@ class SelectionAgainstTheTree(unittest.TestCase):
             self.assertIn(f'#![cfg(feature = "{feature}")]', sources[(package, name)].read_text().splitlines())
             self.assertNotIn((package, name), ci_tests.NIGHTLY)
         groups = list(ci_tests.featured_groups())
-        targets = "--test worker_fault --test worker_fault_inspect --test worker_fault_store"
-        self.assertIn(("layerfs-control", "worker-fault", targets), groups)
+        self.assertIn(("layerfs-api", "worker-fault", "--test worker_fault"), groups)
         self.assertEqual(len(groups), len({(package, feature) for package, feature, _ in groups}))
 
     def test_mount_group_includes_moved_sdk_targets(self):
         mount = ci_tests.mount_targets(self.meta)
-        names = {name for _, name in mount}
-        self.assertIn("forced_unavailable", names)
-        self.assertIn("kernel_application", names)
-        self.assertNotIn("lane_merge", names)
-        self.assertIn(("layerfs-control", "kernel_application"), mount)
-        self.assertIn(("layerfs-control", "observed_application"), mount)
-        self.assertIn(("layerfs-daemon", "forced_unavailable"), mount)
+        self.assertIn(("layerfs-sandbox", "kernel_application"), mount)
+        self.assertIn(("layerfs-sandbox", "observed_application"), mount)
+        self.assertIn(("layerfs-daemon", "unmount", "forced_unavailable"), mount)
+        self.assertIn(("layerfs-daemon", "unmount_stalled"), mount)
+        # a portable module of a mixed area binary stays out of the mount lane
+        self.assertFalse([key for key in mount if key[-1] in {"lane_merge", "staged_lane_merge"}])
+        self.assertNotIn(("layerfs-daemon", "unmount"), mount)
 
     def test_fast_filter_excludes_the_nightly_groups_and_nightly_selects_them(self):
         fast = ci_tests.filter_for("fast", self.meta)
         nightly = ci_tests.filter_for("nightly", self.meta)
         self.assertTrue(fast.startswith("not ("))
-        self.assertIn("binary_id(layerfs-store-service::scale_lineage_cap)", fast)
-        self.assertIn("binary_id(layerfs-control::mount_control)", fast)
-        self.assertIn("binary_id(layerfs-daemon::forced_unavailable)", fast)
+        self.assertIn("(binary_id(layerfs-store-service::history) & test(/^scale_lineage_cap::/))", fast)
+        self.assertIn("binary_id(layerfs-sandbox::mount_control)", fast)
+        self.assertIn("(binary_id(layerfs-daemon::unmount) & test(/^forced_unavailable::/))", fast)
         self.assertNotIn("forced_unavailable", nightly)
         self.assertEqual(nightly.count("binary_id("), len(ci_tests.NIGHTLY))
 
@@ -87,12 +90,15 @@ class ExecutablesFromCargoJson(unittest.TestCase):
     def test_keeps_only_mount_test_binaries(self):
         meta = {"packages": [{"name": "layerfs-daemon", "manifest_path": "/w/engine/crates/layerfs-daemon/Cargo.toml"}]}
 
-        def artifact(name, kind, exe):
+        def artifact(name, kind, exe, src_path=None):
+            target = {"name": name, "kind": [kind]}
+            if src_path:
+                target["src_path"] = src_path
             return json.dumps(
                 {
                     "reason": "compiler-artifact",
                     "manifest_path": "/w/engine/crates/layerfs-daemon/Cargo.toml",
-                    "target": {"name": name, "kind": [kind]},
+                    "target": target,
                     "executable": exe,
                 }
             )
@@ -100,11 +106,50 @@ class ExecutablesFromCargoJson(unittest.TestCase):
         lines = [
             "not json",
             artifact("mounted_commit", "test", "/t/mounted_commit-1"),
+            artifact("unmount", "test", "/t/unmount-1"),
             artifact("lane_merge", "test", "/t/lane_merge-1"),
             artifact("layerfs-daemon", "bin", "/t/layerfs-daemon"),
         ]
-        found = list(ci_tests.executables(lines, [("layerfs-daemon", "mounted_commit")], meta))
-        self.assertEqual(found, [(Path("/w/engine/crates/layerfs-daemon"), "/t/mounted_commit-1")])
+        mount = [
+            ("layerfs-daemon", "mounted_commit"),
+            ("layerfs-daemon", "unmount", "forced_smoke"),
+            ("layerfs-daemon", "unmount", "detach_stages"),
+        ]
+        found = list(ci_tests.executables(lines, mount, meta))
+        daemon = Path("/w/engine/crates/layerfs-daemon")
+        self.assertEqual(
+            found,
+            [
+                (daemon, "/t/mounted_commit-1", ""),
+                (daemon, "/t/unmount-1", "detach_stages::"),
+                (daemon, "/t/unmount-1", "forced_smoke::"),
+            ],
+        )
+
+    def test_an_area_binary_listed_whole_runs_one_module_per_run(self):
+        meta = {"packages": [{"name": "layerfs-daemon", "manifest_path": "/w/d/Cargo.toml"}]}
+        with tempfile.TemporaryDirectory() as folder:
+            area = Path(folder) / "mounted"
+            area.mkdir()
+            for name in ("main", "store_read", "coherence"):
+                (area / f"{name}.rs").write_text("")
+            line = json.dumps(
+                {
+                    "reason": "compiler-artifact",
+                    "manifest_path": "/w/d/Cargo.toml",
+                    "target": {"name": "mounted", "kind": ["test"], "src_path": str(area / "main.rs")},
+                    "executable": "/t/mounted-1",
+                }
+            )
+            found = list(ci_tests.executables([line], [("layerfs-daemon", "mounted")], meta))
+        self.assertEqual(
+            found,
+            [(Path("/w/d"), "/t/mounted-1", "coherence::"), (Path("/w/d"), "/t/mounted-1", "store_read::")],
+        )
+
+    def test_a_module_filter_that_selects_a_sibling_is_refused(self):
+        with self.assertRaises(SystemExit):
+            ci_tests.module_filter("unmount", ["forced_unmount", "unmount"])
 
 
 if __name__ == "__main__":

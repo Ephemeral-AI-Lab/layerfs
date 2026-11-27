@@ -6,7 +6,7 @@ The `sandbox` calls: start, list, read, remove and check a named Sandbox, one pr
 
 | | |
 | --- | --- |
-| Source | [`api/crates/layerfs-api/src/sandbox`](../../../../api/crates/layerfs-api/src/sandbox) (one file per call), [`layerfs-sandbox/src`](../../../../control/crates/layerfs-sandbox/src) (`family.rs`, `create.rs`, `list.rs`, `get.rs`, `remove.rs`, `state.rs`, `lifecycle.rs`, `force.rs`, `inspect/files.rs`, `inspect/roots.rs`, `inspect/root.rs`, `inspect/log.rs`) |
+| Source | [`crates/layerfs-api/src/families/sandbox`](../../../../api/crates/layerfs-api/src/families/sandbox) (one file per call), [`layerfs-sandbox/src`](../../../../control/crates/layerfs-sandbox/src) (`family.rs`, `create.rs`, `list.rs`, `get.rs`, `remove.rs`, `state.rs`, `lifecycle.rs`, `force.rs`, `inspect/files.rs`, `inspect/roots.rs`, `inspect/root.rs`, `inspect/log.rs`) |
 | Runs by default | `list`: the caller's process, home records only. `create`, `get`, `remove`: records and locks in the caller's process, then the Sandbox's machine: this process for a local machine, else the machine's worker; `get` may dial a forwarded daemon directly. `files`, `log`: where the Sandbox's run folder is, on the [inspection route](../../control/sandboxes/inspect.md), with no lock, lease or daemon. `doctor`: [the doctors](../../control/doctor/README.md) |
 | Design | [Sandboxes](../../control/sandboxes/README.md), [inspection](../../control/sandboxes/inspect.md), [daemon channel and exec](../../control/sandboxes/daemon-channel-and-exec.md), [backends](../../control/sandboxes/backends.md) |
 
@@ -37,7 +37,7 @@ The `sandbox` calls: start, list, read, remove and check a named Sandbox, one pr
 Every call but `create` names the Sandbox by the positional `sandbox`. A
 folder scope refuses every `sandbox` call (`out of scope: sandbox.<call>`).
 
-**A Sandbox's state** ([`state.rs`](../../../../control/crates/layerfs-sandbox/src/state.rs))
+**A Sandbox's state** ([`state.rs`](../../../../control/crates/layerfs-sandbox/src/status/state.rs))
 is derived from its record and its machine's record, with no probe, in this
 order: `busy` with `op { name, phase, started_at }` while a `create` or
 `remove` runs; `broken` `unresolved` once one lost its answer and its process
@@ -99,7 +99,7 @@ refusals. `macos-host` runs no image (`Unsupported` `{reason: "host"}`).
 Without it the root is the machine record's image (not on `docker`), else
 the sealed bundle's archive
 ([`deploy.rs`](../../../../control/crates/layerfs-sandbox/src/deploy.rs),
-[`image_load.rs`](../../../../control/crates/layerfs-sandbox/src/image_load.rs)).
+[`load.rs`](../../../../control/crates/layerfs-sandbox/src/image/copy/load.rs)).
 Progress: with `--image`, the copy's `inspect`, `lock`, `export`, `send`,
 `unpack`; then `start` and, with `--mount`, `mount`.
 
@@ -112,7 +112,7 @@ when it has one (an `Exists` names `--name`); for a Branch that is not there
 `layerfs branch fork <project> <B> && layerfs workspace mount <sandbox> <B>`;
 else `layerfs workspace mount <sandbox> <B>`. `<B>` is one shell word
 (single-quoted when a shell would not take it literally)
-([`sandbox/create.rs`](../../../../api/crates/layerfs-api/src/sandbox/create.rs)).
+([`sandbox/create.rs`](../../../../api/crates/layerfs-api/src/families/sandbox/create.rs)).
 A create whose outcome is not known is `Unknown`; its record keeps the
 `op`, uncertain, until `sandbox remove`.
 
@@ -128,14 +128,14 @@ or `layerfs store connect <store> <url> --machine <machine>`). The
 Sandbox resolves names as its machine does. Its `detail` holds `daemon`
 (the program that was started), `log` (its last lines), `container` and
 `removed`
-([`launch/local.rs`](../../../../control/crates/layerfs-sandbox/src/launch/local.rs) `abandon`).
+([`lifecycle/boot.rs`](../../../../control/crates/layerfs-sandbox/src/lifecycle/boot.rs) `abandon`).
 Its `fix` is `layerfs machine doctor <machine>` unless the refusal names a
 closer one. On the host machine, when `detail.daemon` is the host machine's
 daemon and it is of another build than this one (or names no build), the
 message says so and the `fix` is
 `layerfs machine update macos-host --daemon <this build's daemon>` when one is
 found beside the program or the bundle, else `layerfs home doctor`
-([`home.rs`](../../../../control/crates/layerfs-control/src/home.rs) `native_start`;
+([`get.rs`](../../../../control/crates/layerfs-inspect/src/home/get.rs) `native_start`;
 a refusal with no `detail.daemon` is not looked at). A start whose cleanup
 failed is `Unknown` and says what is left.
 
@@ -248,7 +248,7 @@ adds `sandbox, project, machine, platform, image, backend, route,
 created_at`, `workspace_capacity` (16) and `network`. `platform` is `docker`, `mac` or
 `linux`; `backend` `process` (a macOS host process) or `namespaces`; `route`
 `nfs` for a macOS host process, else `fuse`
-([`runtime.rs`](../../../../control/crates/layerfs-sandbox/src/runtime.rs)).
+([`select.rs`](../../../../control/crates/layerfs-sandbox/src/backend/select.rs)).
 `network` is a `namespaces` Sandbox's own network as its record keeps it
 from the create: its host end on the machine and its commands' address,
 `lfs<id12> <address>/31` (null for a `process` Sandbox;
@@ -301,14 +301,14 @@ the Sandbox is stopped anyway: `unmounted` lists the Workspaces it ended,
 whose uncommitted changes end with it. On the host machine a forced remove works
 from the Sandbox's own records: it calls no daemon, checks the runtime's
 identity and ends its mounts and processes
-([`force.rs`](../../../../control/crates/layerfs-sandbox/src/force.rs)).
+([`force_remove.rs`](../../../../control/crates/layerfs-sandbox/src/lifecycle/force_remove.rs)).
 Once the runtime is confirmed stopped, either forced path ends the mount
 intent each of its Workspaces held in the Store, once each (by the Branch
 name and Workspace id their records keep on the host machine; by the bound ids its
 worker holds on a machine, which hands them back to the caller to end with
 the Store's own URL when it could not dial a PostgreSQL Store's), and each one it could not end is a `left`
 sentence naming why and what ends it there
-([`mount_intents.rs`](../../../../control/crates/layerfs-sandbox/src/mount_intents.rs)).
+([`mount_intents.rs`](../../../../control/crates/layerfs-sandbox/src/lifecycle/mount_intents.rs)).
 Nothing else ends a mount intent: `store compact` and the other GC calls
 settle only an intent the Store's admission proves unowned.
 `outcome` (long form) is `removed`, `already_gone` (its runtime was gone, or
@@ -335,7 +335,7 @@ a provider did not list may come back with its daemon running, and `left`
 names `layerfs store repair-mount-holders <project> <branch> list` for the
 mount intents it held (#787 review). A lost answer keeps the record with the `op` uncertain
 (`broken` `unresolved`) until another `remove`; any other refusal leaves the
-Sandbox as it was ([`remove.rs`](../../../../control/crates/layerfs-sandbox/src/remove.rs)).
+Sandbox as it was ([`remove.rs`](../../../../control/crates/layerfs-sandbox/src/lifecycle/remove.rs)).
 It was `sandbox.close`, removed with no alias.
 
 | Refusal | When |
@@ -410,7 +410,7 @@ the owner's computer, and a path outside its home is `InvalidInput`.
 
 **The root** (a path outside the home, when the roots offer `/`) is read
 through the root of the Sandbox's init process, on the machine that runs it
-([`inspect/root.rs`](../../../../control/crates/layerfs-sandbox/src/inspect/root.rs)):
+([`files/root_view.rs`](../../../../control/crates/layerfs-inspect/src/files/root_view.rs)):
 
 | | In the root |
 | --- | --- |
@@ -495,7 +495,7 @@ U+FFFD.
 
 The file is read where the run folder is: in the caller's process for a
 Sandbox on the host machine, in the machine's worker for every other
-([`inspect/log.rs`](../../../../control/crates/layerfs-sandbox/src/inspect/log.rs)).
+([`files/log.rs`](../../../../control/crates/layerfs-inspect/src/files/log.rs)).
 The daemon is not asked, so the log of a daemon that has ended stays
 readable while its run folder is there. It takes no lock or lease and writes
 nothing; refusals are `sandbox files`'s (`NotFound`, `Unavailable`, `Busy`),
@@ -557,10 +557,10 @@ or Sandbox of that name;
 `Busy` or `Unresolved` (an operation holds the Sandbox or its Store),
 `Unavailable` (the worker is not recorded or does not answer, a PostgreSQL
 server is not reached;
-[`route.rs`](../../../../control/crates/layerfs-sandbox/src/route.rs)), each
+[`send.rs`](../../../../control/crates/layerfs-sandbox/src/route/machine/send.rs)), each
 with the `fix` that clears it where there is one. New work on a removed
 platform is `Unsupported` before the home is touched
-([`calls/platform_policy.rs`](../../../../api/crates/layerfs-api/src/calls/platform_policy.rs)).
+([`guard/platform_policy.rs`](../../../../api/crates/layerfs-api/src/dispatch/guard/platform_policy.rs)).
 After `Unknown` from `create` or `remove`, a line goes to
 `log/uncertain.jsonl` and later calls are `Unresolved`, naming
 `sandbox get` (shows it) and `sandbox remove` (clears it).

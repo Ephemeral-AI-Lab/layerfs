@@ -148,8 +148,8 @@ impl Rig {
             branch,
             entries: initialized.entries,
             lookups_held: layerfs_nfs::kernel::LOOKUPS_HELD,
-            companion_resident_bytes: layerfs_nfs::apple_double::RESIDENT_BYTES,
-            companions_held: layerfs_nfs::apple_double::HELD,
+            companion_resident_bytes: layerfs_nfs::apple_double::companions::RESIDENT_BYTES,
+            companions_held: layerfs_nfs::apple_double::companions::HELD,
             companion_spill_dir: None,
         }
     }
@@ -177,7 +177,7 @@ impl Rig {
     pub fn export_services(
         &self,
         listener: TcpListener,
-        services: Arc<dyn layerfs_mount_ports::ports::MountServices>,
+        services: Arc<dyn layerfs_vfs::ports::mount::MountServices>,
         uid: u32,
         gid: u32,
         read_only: bool,
@@ -204,9 +204,9 @@ impl Rig {
     /// Attach serves NFS (the native route's mount entry).
     pub fn service(
         &self,
-        export: Arc<layerfs_daemon::control::ExportServing>,
-    ) -> Arc<layerfs_daemon::control::Service> {
-        Arc::new(layerfs_daemon::control::Service::with_export(
+        export: Arc<layerfs_daemon::workspace::ExportServing>,
+    ) -> Arc<layerfs_daemon::workspace::Service> {
+        Arc::new(layerfs_daemon::workspace::Service::with_export(
             self.store.clone(),
             &self.owner,
             export,

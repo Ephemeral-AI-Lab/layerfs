@@ -1,0 +1,67 @@
+[package]
+name = "layerfs-inspect"
+description = "The doctors (home, machine, Store, Sandbox, project, backup) and the reads that cross entities, above every other control crate"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+layerfs-protocol = { path = "../../../engine/crates/layerfs-protocol" }
+layerfs-home = { path = "../layerfs-home" }
+layerfs-machine = { path = "../layerfs-machine" }
+layerfs-store = { path = "../layerfs-store" }
+layerfs-sandbox = { path = "../layerfs-sandbox" }
+layerfs-project = { path = "../../../engine/crates/layerfs-project" }
+layerfs-store-service = { path = "../../../engine/crates/layerfs-store-service" }
+# Store backup to a bucket (#535).
+# The Store format `store doctor` reports (#804).
+layerfs-persistence = { path = "../../../engine/crates/layerfs-persistence" }
+# The errno names of the worker's accept loop (constants only).
+libc = "=0.2.189"
+# Safe polling of the host worker’s Unix sockets.
+nix = { version = "=0.31.3", default-features = false, features = ["poll", "socket"], optional = true }
+layerfs-history = { path = "../../../core/crates/layerfs-history" }
+layerfs-os = { path = "../../../engine/crates/layerfs-os" }
+
+[features]
+# https:// remotes: Cloudflare R2, MinIO behind TLS. Off by default; the
+# sealed Linux build the worker runs turns it on.
+tls = ["layerfs-store/tls"]
+# The machine calls (2.0, #533): host builds only. The guest worker is built
+# without it, so no machine adapter runs inside a machine.
+machine = ["layerfs-machine/machine", "layerfs-sandbox/machine", "layerfs-store/machine", "dep:nix"]
+
+[dev-dependencies]
+layerfs-content = { path = "../../../core/crates/layerfs-content" }
+layerfs-history = { path = "../../../core/crates/layerfs-history" }
+layerfs-storage = { path = "../../../core/crates/layerfs-storage" }
+layerfs-telemetry = { path = "../../../core/crates/layerfs-telemetry" }
+nix = { version = "=0.31.3", features = ["fs", "user", "process"] }
+layerfs-daemon = { path = "../../../engine/crates/layerfs-daemon" }
+layerfs-fuse = { path = "../../../engine/crates/layerfs-fuse" }
+# The daemon fixtures bind private Workspaces.
+layerfs-overlay = { path = "../../../engine/crates/layerfs-overlay" }
+[[test]]
+name = "doctor_fixes_host_machine"
+path = "tests/standalone/doctor_fixes_host_machine.rs"
+
+[[test]]
+name = "doctor_machine_target"
+path = "tests/standalone/doctor_machine_target.rs"
+
+[[test]]
+name = "home_get"
+path = "tests/standalone/home_get.rs"
+
+[[test]]
+name = "native_start"
+path = "tests/standalone/native_start.rs"
+
+[[test]]
+name = "machine_stats"
+path = "tests/standalone/machine_stats.rs"
+
+[[test]]
+name = "inspect_admission"
+path = "tests/standalone/inspect_admission.rs"

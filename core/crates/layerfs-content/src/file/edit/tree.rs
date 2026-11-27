@@ -12,11 +12,13 @@
 //! localized edit costs the affected paths and the join boundaries, never the whole
 //! retained mapping.
 
-use super::references::{Child as ChildDescriptor, Node as ExtentNode, Summary as NodeSummary};
 use crate::error::{ContentError, ContentResult};
+use crate::file::draft::node::{
+    Child as ChildDescriptor, Node as ExtentNode, Summary as NodeSummary,
+};
 use crate::file::mapping::{ExtentSlice, MAX_ENTRIES, MAX_LEVEL};
 
-pub(super) use super::engine::{Engine as EditObjects, SharedSink};
+pub(super) use crate::file::draft::engine::{Engine as EditObjects, SharedSink};
 
 /// Summaries of a branch's children, recovering each child's own totals.
 pub fn child_summaries(children: &[ChildDescriptor], level: u8) -> ContentResult<Vec<NodeSummary>> {

@@ -1,0 +1,21 @@
+//! #768: a dropped connection at every server message of one repeated Workspace
+//! mount, and of one unmount (the owner's release, #768 step C), on
+//! PostgreSQL (`support/mount_sweep.rs` states the invariants).
+//! The proxy discards message `N` and everything after it and shuts both
+//! sockets of that connection. Needs `LAYERFS_TEST_POSTGRES_URL`;
+//! NOT_RUN without it.
+use crate::fault_proxy;
+use crate::mount_sweep;
+
+use fault_proxy::Fault;
+use mount_sweep::Flight;
+
+#[test]
+fn a_connection_dropped_at_any_message_of_a_mount() {
+    mount_sweep::sweep("mount_drop", Fault::Drop, Flight::Mount);
+}
+
+#[test]
+fn a_connection_dropped_at_any_message_of_an_unmount() {
+    mount_sweep::sweep("unmount_drop", Fault::Drop, Flight::Unmount);
+}

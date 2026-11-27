@@ -1,6 +1,6 @@
 # Doctor Findings Catalogue & Fault-Injection Receipts
 
-> **Status:** Current architecture guide for LayerFS 2.0.0 (`layerfs_v2_0_0`); maintained with `core/docs/issues/call-surface-2-0/calls.json` and `control/crates/layerfs-control/src/doctor/`.
+> **Status:** Current architecture guide for LayerFS 2.0.0 (`layerfs_v2_0_0`); maintained with `core/docs/issues/call-surface-2-0/calls.json` and `control/crates/layerfs-inspect/src/`.
 
 This catalogue lists every check ID emitted by the six LayerFS 2.0 doctors (`home.doctor`, `machine.doctor`, `store.doctor`, `project.doctor`, `sandbox.doctor`, `backup.doctor`) and the `workspace` child nodes, together with failure causes, `evidence` keys (`--detail`), the `fix` the code emits, safety classifications (`read`, `safe`, `disruptive`, `destructive`), and live fault-injection verification receipts.
 

@@ -1,7 +1,6 @@
 //! Host Init and original handoff/failure custody.
 use crate as layerfs_project;
 use crate::init::init_unknown_state;
-use layerfs_bridge::provision::{check_destination, ProviderKind, StoreManifest, StoreProfile};
 use layerfs_history::{
     error::NameTakenState, BranchId, BranchSnapshot, ForkRequest, ForkSource, HistoryCatalog,
     HistoryCatalogConfig, HistoryError, HistoryName, InitStatistics, LayerStackId,
@@ -11,6 +10,9 @@ use layerfs_persistence::{
     SqlitePersistenceProfile,
 };
 use layerfs_project::{InitCounters, InitStep, Initialized, ProjectError};
+use layerfs_protocol::provision::manifest::{
+    check_destination, ProviderKind, StoreManifest, StoreProfile,
+};
 use layerfs_storage::{port::PersistenceError, Storage, StorageError, StoragePolicy};
 use layerfs_telemetry::timer::{Active, TimingScope};
 use std::{fmt, path::PathBuf, sync::Arc, time::Instant};
@@ -185,9 +187,7 @@ pub(crate) fn initialize(
                 locator: request.locator.clone(),
                 profile: match request.store.sqlite_profile {
                     SqlitePersistenceProfile::Durable => StoreProfile::Durable,
-                    SqlitePersistenceProfile::Normal => {
-                        StoreProfile::Normal
-                    }
+                    SqlitePersistenceProfile::Normal => StoreProfile::Normal,
                 },
                 binding: request.catalog.binding_key.clone(),
                 cursor_key: request.catalog.cursor_key,

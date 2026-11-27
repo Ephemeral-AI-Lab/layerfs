@@ -6,20 +6,20 @@
 //! bounded by count and bytes and resumes from the last delivered name.
 
 use crate::error::{ContentError, ContentResult};
-use crate::filesystem::attributes::keys::AttributeKey;
-use crate::filesystem::attributes::portable::PortableMetadata;
-use crate::filesystem::attributes::read::{read_portable, AttributeReadWork};
-use crate::filesystem::directory::read::{
+use crate::filesystem::limits::MAXIMUM_ATTRIBUTE_KEYS;
+use crate::filesystem::name::path::{LogicalPath, PathName};
+use crate::filesystem::name::symlink::SymlinkTarget;
+use crate::filesystem::root::{FilesystemRoot, FilesystemRootId};
+use crate::filesystem::tree::attribute::keys::AttributeKey;
+use crate::filesystem::tree::attribute::portable::PortableMetadata;
+use crate::filesystem::tree::attribute::read::{read_portable, AttributeReadWork};
+use crate::filesystem::tree::directory::read::{
     list_after, lookup_counted as directory_lookup_counted, lookup_many as directory_lookup_many,
     DirectoryReadWork, ListingPage,
 };
-use crate::filesystem::inode::read::{
+use crate::filesystem::tree::inode::read::{
     lookup as inode_lookup, lookup_many, InodeReadWork, InodeTable,
 };
-use crate::filesystem::limits::MAXIMUM_ATTRIBUTE_KEYS;
-use crate::filesystem::path::{LogicalPath, PathName};
-use crate::filesystem::root::{FilesystemRoot, FilesystemRootId};
-use crate::filesystem::symlink::SymlinkTarget;
 use crate::object::inode_leaf::{InodeKind, InodeValue};
 use crate::object::{AuthenticatedObjects, ObjectId};
 
@@ -68,7 +68,7 @@ impl From<InodeValue> for Stat {
 }
 
 /// One bounded listing page.
-pub use crate::filesystem::directory::read::ListingPage as DirectoryListing;
+pub use crate::filesystem::tree::directory::read::ListingPage as DirectoryListing;
 
 /// A checked filesystem root bound to its reader for one operation.
 pub struct FilesystemRead<'a> {
@@ -124,7 +124,7 @@ impl<'a> FilesystemRead<'a> {
             // `error::MissingObject` all say they must not be.
             serial = directory_lookup_counted(
                 self.reader,
-                crate::filesystem::sorted::finish::DirectoryRoot(value.content_root),
+                crate::filesystem::tree::pages::finish::DirectoryRoot(value.content_root),
                 &name,
                 &mut self.work.directory,
             )?
@@ -144,7 +144,7 @@ impl<'a> FilesystemRead<'a> {
         }
         let serial = directory_lookup_counted(
             self.reader,
-            crate::filesystem::sorted::finish::DirectoryRoot(directory.content_root),
+            crate::filesystem::tree::pages::finish::DirectoryRoot(directory.content_root),
             name,
             &mut self.work.directory,
         )?
@@ -183,7 +183,7 @@ impl<'a> FilesystemRead<'a> {
         }
         let page = list_after(
             self.reader,
-            crate::filesystem::sorted::finish::DirectoryRoot(resolved.value.content_root),
+            crate::filesystem::tree::pages::finish::DirectoryRoot(resolved.value.content_root),
             after,
             max_entries,
             max_bytes,
@@ -206,7 +206,7 @@ impl<'a> FilesystemRead<'a> {
         }
         list_after(
             self.reader,
-            crate::filesystem::sorted::finish::DirectoryRoot(directory.content_root),
+            crate::filesystem::tree::pages::finish::DirectoryRoot(directory.content_root),
             after,
             max_entries,
             max_bytes,
@@ -226,7 +226,7 @@ impl<'a> FilesystemRead<'a> {
         }
         Ok(directory_lookup_many(
             self.reader,
-            crate::filesystem::sorted::finish::DirectoryRoot(resolved.value.content_root),
+            crate::filesystem::tree::pages::finish::DirectoryRoot(resolved.value.content_root),
             names,
             &mut self.work.directory,
         )?
@@ -295,7 +295,7 @@ impl<'a> FilesystemRead<'a> {
                 .metadata_root
                 .inline_value(key, resolved.value.kind);
         };
-        crate::filesystem::attributes::read::read_opaque(
+        crate::filesystem::tree::attribute::read::read_opaque(
             self.reader,
             root,
             key,
@@ -317,8 +317,8 @@ impl<'a> FilesystemRead<'a> {
             return resolved.value.metadata_root.inline_keys();
         };
         let mut keys = Vec::new();
-        let mut work = crate::filesystem::attributes::patch::AttributePatchWork::default();
-        crate::filesystem::attributes::patch::visit_keys_counted(
+        let mut work = crate::filesystem::tree::attribute::patch::AttributePatchWork::default();
+        crate::filesystem::tree::attribute::patch::visit_keys_counted(
             self.reader,
             root,
             &mut work,
@@ -357,7 +357,7 @@ impl<'a> FilesystemRead<'a> {
     ///
     /// A serial the table does not hold is a **logical** absence, not provider
     /// absence: the lookup miss is `Ok(None)` from
-    /// [`inode_lookup`](crate::filesystem::inode::read::lookup), whose own contract
+    /// [`inode_lookup`](crate::filesystem::tree::inode::read::lookup), whose own contract
     /// is that *"an absent serial is reported as absent rather than as a missing
     /// object"*. `MissingObject` is the provider's answer and for nothing else —
     /// `object::access`, `cas::provider` and `error.rs` all say so — and a provider

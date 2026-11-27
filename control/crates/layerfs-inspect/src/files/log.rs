@@ -1,0 +1,143 @@
+//! `machine.log` and `sandbox.log` (`logs.machine` and `logs.sandbox`
+//! before the call surface 2.0): a machine's worker log and a Sandbox's
+//! daemon log, one window per call (layerfs-project#178), read
+//! with `layerfs_home::log::tail` on the side that holds the file. They read
+//! `worker.log` with `worker.1.log`, and `daemon.log`, and nothing else:
+//! never `log/uncertain.jsonl` (#179 D8) or any other file.
+use layerfs_home::disk::paths;
+use layerfs_home::log::tail::{self, Pair};
+use layerfs_home::names::MachineName;
+use layerfs_home::reply::outcome::{refused, Outcome};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
+use layerfs_sandbox::deploy::Side;
+use layerfs_store::admin::route::executor::Executor;
+use std::path::Path;
+
+/// The file a Sandbox's daemon writes in its run folder (the backends'
+/// `LOG`): made when the daemon starts, never rotated, removed with the
+/// folder when the Sandbox closes.
+const DAEMON_LOG: &str = "daemon.log";
+
+/// Which window of a log a call asks for.
+#[derive(Clone, Debug, Default)]
+pub struct Window {
+    /// An answer's `cursor`: the lines after it.
+    pub cursor: Option<String>,
+    /// An answer's `before`: the lines before it.
+    pub before: Option<String>,
+    /// At most this many lines.
+    pub limit: Option<i64>,
+}
+
+impl Window {
+    /// The window `args` name.
+    pub fn of(args: &SdkValue) -> Self {
+        Self {
+            cursor: args.get_text("cursor").map(str::to_owned),
+            before: args.get_text("before").map(str::to_owned),
+            limit: args.get_int("limit"),
+        }
+    }
+
+    /// The request of inspect `kind` for this window, with `more` fields.
+    fn request(&self, more: Option<(&str, &str)>) -> SdkValue {
+        let mut fields = Vec::new();
+        fields.extend(more.map(|(name, value)| (name.to_owned(), SdkValue::text(value))));
+        let text = |value: &Option<String>| value.clone().map(SdkValue::Text);
+        fields.extend(text(&self.cursor).map(|value| ("cursor".to_owned(), value)));
+        fields.extend(text(&self.before).map(|value| ("before".to_owned(), value)));
+        fields.extend(
+            self.limit
+                .map(|limit| ("limit".to_owned(), SdkValue::Int(limit))),
+        );
+        SdkValue::Map(fields)
+    }
+
+    fn read(&self, pair: &Pair, call: &str) -> Outcome {
+        tail::read(
+            pair,
+            call,
+            self.cursor.as_deref(),
+            self.before.as_deref(),
+            self.limit,
+        )
+    }
+}
+
+/// `Unsupported` `{reason: 'no_worker'}`: the host machine runs its machine
+/// and Sandbox calls in the caller's process, so no machine worker keeps a
+/// log for this call. Its host worker serves the CLI's Store calls only and
+/// writes the home's `log/worker.log`, which this call does not read.
+/// `machine` is the one asked, when known.
+fn no_worker(machine: Option<&str>) -> SdkRefusal {
+    let machine = machine.map_or("the machine".to_owned(), |m| format!("machine {m}"));
+    SdkRefusal {
+        detail: SdkValue::map([("reason", SdkValue::text("no_worker"))]),
+        ..refused(
+            "Unsupported",
+            format!(
+                "{machine} runs its calls in the caller's process, so it has no machine worker log; its host worker's log is the home's log/worker.log"
+            ),
+        )
+    }
+}
+
+/// `machine.log(machine, { cursor, before, limit })`: one window of the
+/// machine's worker log, `{ lines: [{ text, continued? }], cursor,
+/// before?, has_more }` (`layerfs_home::log::tail::read`). A machine whose calls
+/// run in this process (the host machine, `macos-host` or `linux-host`) is
+/// `Unsupported`; one whose worker does not
+/// answer is `Unavailable`; nothing is started.
+pub fn machine_log(home: &Path, machine: &MachineName, window: &Window) -> Outcome {
+    let machine = machine.as_str();
+    tail::check(
+        "machine.log",
+        window.cursor.is_some(),
+        window.before.is_some(),
+        window.limit,
+    )?;
+    if let Executor::Local = layerfs_sandbox::route::inspect::on_owner(home, machine)? {
+        return Err(no_worker(Some(machine)));
+    }
+    crate::ask(home, machine, MACHINE_LOG, window.request(None))
+}
+
+/// `sandbox.log(sandbox, { before, limit })`: one window of the
+/// log of Sandbox `name`'s daemon, shaped as [`machine_log`]'s. A name
+/// with no record is `NoSuchSandbox`, and so is a Sandbox whose machine
+/// holds no run folder for it; a machine whose worker does not answer is
+/// `Unavailable`. A daemon that has ended leaves its log readable while
+/// its run folder is there.
+pub fn sandbox_log(home: &Path, name: &str, window: &Window) -> Outcome {
+    tail::check(
+        "sandbox.log",
+        window.cursor.is_some(),
+        window.before.is_some(),
+        window.limit,
+    )?;
+    let record = layerfs_sandbox::family::sandbox_of(home, name)?;
+    let request = window.request(Some(("sandbox", name)));
+    crate::ask(home, record.machine(), SANDBOX_LOG, request)
+}
+
+/// The inspect kind of [`machine_log`].
+pub(crate) const MACHINE_LOG: &str = "machine_log";
+/// The inspect kind of [`sandbox_log`].
+pub(crate) const SANDBOX_LOG: &str = "sandbox_log";
+
+/// [`machine_log`] on the side that holds the file: a worker's root. A
+/// worker started by a build that wrote no `log/worker.log` answers an
+/// empty log.
+pub(crate) fn machine(side: &Side<'_>, args: &SdkValue) -> Outcome {
+    let Side::Worker(root) = side else {
+        return Err(no_worker(None));
+    };
+    Window::of(args).read(&Pair::of(paths::worker_log(root)), "machine.log")
+}
+
+/// [`sandbox_log`] on the side that holds the Sandbox's run folder.
+pub(crate) fn sandbox(side: &Side<'_>, args: &SdkValue) -> Outcome {
+    let folder =
+        layerfs_sandbox::route::inspect::run_folder(side, args.get_text("sandbox").unwrap_or(""))?;
+    Window::of(args).read(&Pair::of(folder.join(DAEMON_LOG)), "sandbox.log")
+}

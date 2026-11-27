@@ -1,0 +1,318 @@
+//! Depth-first namespace traversal at immutable roots, in name order, with
+//! one memo per walk and, for a glob, only the folders it can match.
+use super::super::root;
+use crate::lookup as args;
+use crate::store::StorePorts;
+use layerfs_content::{
+    compare::{memo::Memo, EntryFacts},
+    filesystem::{
+        name::path::PathName,
+        tree::{
+            directory::read::{list_after, DirectoryReadWork},
+            pages::DirectoryRoot,
+        },
+    },
+    object::inode_leaf::{InodeKind, InodeValue},
+    AuthenticatedObjects,
+};
+use layerfs_protocol::sdk::SdkRefusal;
+
+/// Names and inode demands acquired together, bounded independently of the tree.
+const DIRECTORY_WINDOW: usize = 64;
+const DIRECTORY_BYTES: usize = 8192;
+/// A wide walk's names a page (#818 R6): where the Store pays a round trip
+/// per demand (PostgreSQL), `fs.grep` and `fs.glob` let the page's byte
+/// bound decide, up to this many names; `DIRECTORY_BYTES` is unchanged.
+pub const WIDE_DIRECTORY_WINDOW: usize = 256;
+type Child = (PathName, u64, Option<InodeValue>);
+
+/// One directory frame retains one bounded window and its next-name boundary.
+struct Frame {
+    path: String,
+    entry: EntryFacts,
+    after: Option<PathName>,
+    pending: std::vec::IntoIter<Child>,
+    exhausted: bool,
+}
+impl Frame {
+    fn new(path: String, entry: EntryFacts) -> Self {
+        Self {
+            path,
+            entry,
+            after: None,
+            pending: Vec::new().into_iter(),
+            exhausted: false,
+        }
+    }
+}
+
+/// The literal leading folders of an anchored glob, such as `a/b/` for
+/// `a/b/**/*.js`: every path it matches starts with them. `None` when the
+/// pattern is unanchored or starts with a wildcard. Follows the rule syntax
+/// of `merge::Rule::glob`: a leading `!` and a trailing `/` are dropped, a
+/// `/` anywhere else anchors, and only `*` and `?` are wildcards.
+pub fn leading(pattern: &str) -> Option<String> {
+    let body = pattern.strip_prefix('!').unwrap_or(pattern);
+    let body = body.strip_suffix('/').unwrap_or(body);
+    if !body.contains('/') {
+        return None;
+    }
+    let body = body.strip_prefix('/').unwrap_or(body);
+    let literal = &body[..body.find(['*', '?']).unwrap_or(body.len())];
+    Some(literal[..literal.rfind('/')? + 1].to_owned())
+}
+
+/// True when some path below the folder `path` can start with `folders`.
+fn agrees(folders: &str, path: &str) -> bool {
+    let path = path.trim_start_matches('/');
+    let below = if path.is_empty() {
+        String::new()
+    } else {
+        format!("{path}/")
+    };
+    folders.starts_with(&below) || below.starts_with(folders)
+}
+
+pub struct Walker<'a> {
+    /// Directory pages and the inode table's upper pages, read once per walk.
+    memo: Memo<'a>,
+    snap: &'a root::Snap,
+    stack: Vec<Frame>,
+    top: Option<(String, EntryFacts)>,
+    /// Folders every descended folder agrees with, from [`leading`].
+    within: Option<String>,
+    /// Names a directory page takes at most.
+    window: usize,
+}
+impl<'a> Walker<'a> {
+    pub fn new(
+        reader: &'a StorePorts,
+        snap: &'a root::Snap,
+        path: &str,
+    ) -> Result<Self, SdkRefusal> {
+        Self::within(reader, snap, path, None)
+    }
+
+    /// Resume in component order after a saved path. Ancestor directory frames
+    /// start after their cursor component, while the cursor directory itself is
+    /// entered before its children. Missing components on one side of a diff do
+    /// not require walking that side's earlier siblings.
+    pub fn after(
+        reader: &'a StorePorts,
+        snap: &'a root::Snap,
+        path: &str,
+        after: Option<&str>,
+    ) -> Result<Self, SdkRefusal> {
+        let mut walker = Self::new(reader, snap, path)?;
+        let Some(after) = after else {
+            return Ok(walker);
+        };
+        let rest = if path == "/" {
+            after.strip_prefix('/')
+        } else if after == path {
+            Some("")
+        } else {
+            after.strip_prefix(path).and_then(|s| s.strip_prefix('/'))
+        }
+        .ok_or_else(|| args::invalid("resume path is outside the query path"))?;
+        if walker.top.is_some() {
+            walker.top = None;
+            return Ok(walker);
+        }
+        let mut current = path.to_owned();
+        for component in rest.split('/').filter(|s| !s.is_empty()) {
+            let name =
+                PathName::new(component).map_err(|_| args::invalid("invalid resume component"))?;
+            let Some(frame) = walker.stack.last_mut() else {
+                break;
+            };
+            frame.after = Some(name.clone());
+            current = layerfs_content::compare::tree::join(&current, &name);
+            let entry = root::find(&walker.memo, &snap.tree, &current)?;
+            match entry {
+                Some(entry) if entry.value.kind == InodeKind::Directory => {
+                    walker.stack.push(Frame::new(current.clone(), entry));
+                }
+                _ => break,
+            }
+        }
+        Ok(walker)
+    }
+
+    /// A walk that descends only into folders that agree with `within`. Its
+    /// entries are the full walk's, less those no path starting with
+    /// `within` can be, in the same order. A walk from above `within` starts
+    /// at `within` itself: the folders on the way are shorter than it.
+    /// Lookups, directory pages and inode values are read through `pages`.
+    pub fn within(
+        pages: &'a dyn AuthenticatedObjects,
+        snap: &'a root::Snap,
+        path: &str,
+        within: Option<String>,
+    ) -> Result<Self, SdkRefusal> {
+        let memo = Memo::new(pages);
+        let entry = root::existing(&memo, snap, path)?;
+        Ok(Self::from_entry(memo, snap, path, entry, within))
+    }
+
+    /// [`Self::within`] from `path`'s entry, already looked up through
+    /// `memo` (#818 R3): the call's one path walk is not repeated, and the
+    /// walk reads its pages through the same memo.
+    pub fn from_entry(
+        memo: Memo<'a>,
+        snap: &'a root::Snap,
+        path: &str,
+        entry: EntryFacts,
+        within: Option<String>,
+    ) -> Self {
+        let (mut stack, mut top) = (Vec::new(), None);
+        if entry.value.kind != InodeKind::Directory {
+            top = Some((path.to_owned(), entry));
+        } else {
+            match within.as_deref() {
+                None => stack.push(Frame::new(path.to_owned(), entry)),
+                Some(folders) if !agrees(folders, path) => {}
+                Some(folders) => {
+                    let deeper = format!("/{}", folders.trim_end_matches('/'));
+                    let start = if deeper.len() > path.len() {
+                        // A name the lookup refuses cannot be walked into.
+                        root::find(&memo, &snap.tree, &deeper)
+                            .ok()
+                            .flatten()
+                            .filter(|entry| entry.value.kind == InodeKind::Directory)
+                            .map(|entry| (deeper, entry))
+                    } else {
+                        Some((path.to_owned(), entry))
+                    };
+                    stack.extend(start.map(|(path, entry)| Frame::new(path, entry)));
+                }
+            }
+        }
+        Self {
+            memo,
+            snap,
+            stack,
+            top,
+            within,
+            window: DIRECTORY_WINDOW,
+        }
+    }
+
+    /// Does not descend into the folder `path`, the entry [`Self::next`]
+    /// just answered: a folder a search leaves out is not read.
+    pub fn skip(&mut self, path: &str) {
+        if self.stack.last().is_some_and(|frame| frame.path == path) {
+            self.stack.pop();
+        }
+    }
+
+    #[allow(clippy::should_implement_trait)]
+    pub fn next(&mut self) -> Result<Option<(String, EntryFacts)>, SdkRefusal> {
+        if let Some(top) = self.top.take() {
+            return Ok(Some(top));
+        }
+        while let Some(frame) = self.stack.last_mut() {
+            if frame.pending.len() == 0 && !frame.exhausted {
+                let page = list_after(
+                    &self.memo,
+                    DirectoryRoot(frame.entry.value.content_root),
+                    frame.after.as_ref(),
+                    self.window,
+                    DIRECTORY_BYTES,
+                    &mut DirectoryReadWork::default(),
+                )
+                .map_err(args::content)?;
+                frame.exhausted = page.continuation.is_none();
+                frame.after = page.continuation;
+                let serials = page
+                    .entries
+                    .iter()
+                    .map(|(_, serial)| *serial)
+                    .collect::<Vec<_>>();
+                let values = self
+                    .snap
+                    .tree
+                    .values(&self.memo, &serials)
+                    .map_err(args::content)?;
+                frame.pending = page
+                    .entries
+                    .into_iter()
+                    .zip(values)
+                    .map(|((name, serial), value)| (name, serial, value))
+                    .collect::<Vec<_>>()
+                    .into_iter();
+            }
+            let Some((name, serial, value)) = frame.pending.next() else {
+                self.stack.pop();
+                continue;
+            };
+            let path = layerfs_content::compare::tree::join(&frame.path, &name);
+            let value = value.ok_or_else(|| args::failed("missing bound inode"))?;
+            let entry = EntryFacts { serial, value };
+            if value.kind == InodeKind::Directory
+                && self.within.as_deref().is_none_or(|w| agrees(w, &path))
+            {
+                self.stack.push(Frame::new(path.clone(), entry));
+            }
+            return Ok(Some((path, entry)));
+        }
+        Ok(None)
+    }
+}
+
+pub fn walk(
+    reader: &StorePorts,
+    snap: &root::Snap,
+    path: &str,
+    visit: impl FnMut(&str, EntryFacts) -> Result<bool, SdkRefusal>,
+) -> Result<(), SdkRefusal> {
+    walk_within(reader, snap, path, None, visit)
+}
+
+/// [`walk_within`] from `path`'s entry, looked up through `memo`
+/// ([`Walker::from_entry`]), leaving out every path `excluded` says, and
+/// not descending into an excluded folder; its directory pages take at most
+/// [`WIDE_DIRECTORY_WINDOW`] names when `wide` (#818 R6).
+#[allow(clippy::too_many_arguments)]
+pub fn walk_excluding<'a>(
+    memo: Memo<'a>,
+    snap: &'a root::Snap,
+    path: &str,
+    entry: EntryFacts,
+    within: Option<String>,
+    wide: bool,
+    excluded: impl Fn(&str) -> bool,
+    mut visit: impl FnMut(&str, EntryFacts) -> Result<bool, SdkRefusal>,
+) -> Result<(), SdkRefusal> {
+    let mut walker = Walker::from_entry(memo, snap, path, entry, within);
+    if wide {
+        walker.window = WIDE_DIRECTORY_WINDOW;
+    }
+    while let Some((path, entry)) = walker.next()? {
+        if excluded(&path) {
+            walker.skip(&path);
+            continue;
+        }
+        if !visit(&path, entry)? {
+            break;
+        }
+    }
+    Ok(())
+}
+
+/// [`walk`] through a [`Walker::within`].
+pub fn walk_within(
+    pages: &dyn AuthenticatedObjects,
+    snap: &root::Snap,
+    path: &str,
+    within: Option<String>,
+    mut visit: impl FnMut(&str, EntryFacts) -> Result<bool, SdkRefusal>,
+) -> Result<(), SdkRefusal> {
+    let mut walker = Walker::within(pages, snap, path, within)?;
+    while let Some((path, entry)) = walker.next()? {
+        if !visit(&path, entry)? {
+            break;
+        }
+    }
+    Ok(())
+}

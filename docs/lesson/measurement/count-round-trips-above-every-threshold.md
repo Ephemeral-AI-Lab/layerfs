@@ -41,7 +41,7 @@ shows at 1k files in small directories:
   `layerfs-persistence`) sends one insert and one update per child. The server showed
   exactly 1,000 of each at 1k flat and 10,000 at 10k flat.
 - **Logical size.** Init's `logical_size`
-  (`core/crates/layerfs-content/src/filesystem/statistics.rs`) opens each file's root
+  (`core/crates/layerfs-content/src/filesystem/construction/statistics.rs`) opens each file's root
   with a single-object read. Past the 4,096-entry locator cache, as #818 traced it,
   that is one locate per file: 10,142 at 10k files, none at 1k.
 
@@ -71,7 +71,7 @@ files, so larger changes reread pages in every phase. See
 - Trips do not scale linearly between two sizes. A jump means a threshold was crossed.
 - Counts with no route, cache state or role. `fs.blame` at 100 versions counted 2,233
   trips through `StoreService::open_postgres` and 2,325 through `open_store_observed`
-  (`engine/crates/layerfs-store-service/src/bootstrap.rs`), split across processes.
+  (`engine/crates/layerfs-store-service/src/store/open.rs`), split across processes.
 - `pg_stat_statements` totals used as round trips. A pipelined flight is many
   statements in one trip. With `pg_stat_statements.track = all`, nested foreign-key
   trigger checks count too: about 30k at Init 10k in #818.

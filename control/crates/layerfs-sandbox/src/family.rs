@@ -18,13 +18,13 @@
 //! (`create`, `list`, `get`, `remove`), the state of a Sandbox in
 //! `state.rs`, the route of a host operation in `route.rs`, and the
 //! `workspace` calls in `workspace/calls.rs`.
-pub use super::create::{create, create_on, CreateRequest, Created};
-pub use super::get::{get, Down, GetRequest, Got, ListedWorkspace};
-pub use super::list::{list, ListRequest, Listed, ListedSandbox};
+pub use super::lifecycle::create::{create, create_on, CreateRequest, Created};
+pub use super::lifecycle::remove::{remove, RemoveRequest, Removed};
 use super::record::SandboxRecord;
-pub use super::remove::{remove, RemoveRequest, Removed};
-use layerfs_bridge::control::SdkRefusal;
-use layerfs_home::outcome::refused;
+pub use super::status::get::{get, Down, GetRequest, Got, ListedWorkspace};
+pub use super::status::list::{list, ListRequest, Listed, ListedSandbox};
+use layerfs_home::reply::outcome::refused;
+use layerfs_protocol::sdk::SdkRefusal;
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -36,7 +36,7 @@ type Result<T> = std::result::Result<T, SdkRefusal>;
 pub fn sandbox_of(home: &Path, name: &str) -> Result<SandboxRecord> {
     let record = named(home, name)?;
     match record.retired_container() {
-        Some(container) => Err(super::reopen::retired(name, container.as_deref())),
+        Some(container) => Err(super::record::reopen::retired(name, container.as_deref())),
         None => Ok(record),
     }
 }

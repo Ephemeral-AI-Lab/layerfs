@@ -7,21 +7,13 @@
 #![deny(missing_docs)]
 
 pub mod cancel;
-pub mod cursor;
-pub mod events;
-pub mod helpers;
-pub mod home;
+pub mod disk;
 pub mod json;
-pub mod logs;
+pub mod lock;
+pub mod log;
 pub mod names;
-pub mod op;
-#[doc(hidden)]
-pub mod outcome;
-pub mod process;
-pub mod secrets;
-pub mod state;
-pub mod tail;
-pub mod time;
-#[doc(hidden)]
-pub mod trace;
-pub mod wipe;
+pub mod record;
+pub mod reply;
+pub mod secret;
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+pub mod socket;

@@ -20,7 +20,7 @@ use layerfs_telemetry::timer::{Active, TimingScope};
 
 use crate::error::{ContentError, ContentResult};
 use crate::file::mapping::extents::Walk;
-use crate::file::mapping::types::ExtentSlice;
+use crate::file::mapping::node::ExtentSlice;
 use crate::object::{AuthenticatedObjects, ObjectId};
 
 /// Extent descriptors one cursor walks before it stops offering hints.

@@ -1,7 +1,7 @@
 //! A provider that answers chain locates and group reads (#758) over the
 //! memory engine, with switches that make its answers wrong on purpose.
 #![allow(dead_code)]
-use crate::metadata::MemoryMetadata;
+use super::metadata::MemoryMetadata;
 use layerfs_content::{
     construct_bytes_with_predecessor, ConstructionPolicy, ContentResult, FinalizedConsumer,
     FinalizedObject, ObjectId, PredecessorBase,

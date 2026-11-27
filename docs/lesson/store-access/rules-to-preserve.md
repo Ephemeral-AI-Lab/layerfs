@@ -129,8 +129,8 @@ and §4 ("memory hints are not evidence of resident bounds"); the +10% is #810's
   pack inserts into statements of at most `STATEMENT_PACK_BYTES`, inside the
   same flight and transaction (`pack_statements`, `.../postgresql/history/fused.rs`).
 - **The named limits.** `PACK_LIMIT` 256 KiB, `TRANSACTION_ROW_LIMIT` 8,191
-  (`core/crates/layerfs-storage/src/store/policy.rs`); `HINT_BATCH_ROWS` 4,096,
-  `ARRAY_ROWS` 1,024 (`engine/crates/layerfs-persistence/src/history/hints.rs`).
+  (`core/crates/layerfs-storage/src/policy.rs`); `HINT_BATCH_ROWS` 4,096,
+  `ARRAY_ROWS` 1,024 (`engine/crates/layerfs-persistence/src/history/index/hints.rs`).
   A new statement needs a named bound of its own.
 - **Check.** Peak RSS at most +10% per cell against the control arm. #816's
   handback reported B1 at +10.36% instead of rounding it away; after #822's split it

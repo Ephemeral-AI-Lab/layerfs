@@ -9,3 +9,15 @@ license.workspace = true
 [dependencies]
 blake3 = { version = "=1.8.5", default-features = false }
 layerfs-telemetry = { path = "../layerfs-telemetry" }
+
+[[test]]
+name = "filesystem_ordering_scan"
+path = "tests/standalone/filesystem_ordering_scan.rs"
+
+[[test]]
+name = "filesystem_pages_localized"
+path = "tests/standalone/filesystem_pages_localized.rs"
+
+[[test]]
+name = "inode_decode_cost"
+path = "tests/standalone/inode_decode_cost.rs"

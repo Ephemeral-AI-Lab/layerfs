@@ -98,7 +98,7 @@ class LinuxBundleTests(unittest.TestCase):
         }
         self.source = {"head": "abc", "dirty": False, "sha256": "src1", "files": {}}
         self.commands = []
-        protocol = self.worktree / "control/crates/layerfs-machine/src/worker/hello.rs"
+        protocol = self.worktree / "control/crates/layerfs-machine/src/route/guest/hello.rs"
         protocol.parent.mkdir(parents=True)
         protocol.write_text("pub const PROTOCOL: i64 = 3;\n")
         patches = [
@@ -163,9 +163,7 @@ class LinuxBundleTests(unittest.TestCase):
         for step in ("daemon", "worker", "helper"):
             bundle.build(self.record, step, "debug", 120)
         cargo = [c for c, _ in self.commands]
-        self.assertEqual(
-            [c[c.index("-p") + 1] for c in cargo], ["layerfs-daemon", "layerfs-cli", "layerfs-sandbox-backend"]
-        )
+        self.assertEqual([c[c.index("-p") + 1] for c in cargo], ["layerfs-daemon", "layerfs-cli", "layerfs-sandbox"])
         self.assertNotIn("--features", cargo[0])
         self.assertIn("--no-default-features", cargo[1])
         self.assertTrue(all(t == 120 for _, t in self.commands))

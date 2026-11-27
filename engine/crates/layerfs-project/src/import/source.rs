@@ -1,6 +1,6 @@
 //! Host source observations; symbolic links are stored without traversal.
 use crate::{ProjectError, SourceRefusal};
-use layerfs_content::filesystem::symlink::SymlinkTarget;
+use layerfs_content::filesystem::name::symlink::SymlinkTarget;
 use std::{
     fs::{self, Metadata},
     os::unix::{ffi::OsStrExt, fs::MetadataExt},

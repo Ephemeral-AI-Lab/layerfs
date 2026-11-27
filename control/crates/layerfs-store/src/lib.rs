@@ -1,64 +1,32 @@
 //! Stores in the 2.0 home (#533; cut from `layerfs-control` by
-//! layerfs-project#105): their records, the route each Store call takes,
-//! chosen from records, the Stores this process holds open, placement and
-//! leases, and the steps a push, pull or remove takes on the file. The
-//! kind-neutral root chooses by `StoreKind`; `sqlite/` and `postgresql/`
-//! never import each other. Backups (`backup/`) and projects (`project/`)
+//! layerfs-project#105). `admin/` is the Store itself: its records, the
+//! route each Store call takes, chosen from records, the Stores this process
+//! holds open with their leases, maintenance, status and the host worker's
+//! Store side. `backend/` is where a Store lives: `sqlite/` and
+//! `postgresql/` never import each other; the kind-neutral `admin/` chooses
+//! by `StoreKind`. `data/` is what a Store holds: its projects and the
+//! `branch`, `commit` and `file` families. Backups to buckets (`backup/`)
 //! are Store records too. What uses a Store from outside (a Sandbox of one
 //! of its projects) comes from the caller ([`Related`]).
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
+pub mod admin;
+pub mod backend;
 #[doc(hidden)]
 pub mod backup;
-pub mod call;
-#[doc(hidden)]
-pub mod calls;
-pub mod compact;
-pub mod diagnostic;
-pub mod formats;
-pub mod get;
-pub mod host_maintenance;
-pub mod host_postgresql;
-pub mod host_read;
-pub mod host_stream;
-pub mod host_write;
-#[doc(hidden)]
-pub mod identity;
-pub mod intent;
-#[doc(hidden)]
-pub mod lease;
-pub mod list;
-mod live;
-pub mod observed;
-#[doc(hidden)]
-pub mod open;
-pub mod open_args;
-#[doc(hidden)]
-pub mod place;
-pub mod place_view;
-pub mod postgresql;
-#[doc(hidden)]
-pub mod project;
-#[doc(hidden)]
-pub mod record;
-mod related;
-pub mod repair;
-pub mod report;
-#[doc(hidden)]
-pub mod resolve;
-#[doc(hidden)]
-pub mod service;
-pub mod sqlite;
-pub mod state;
-mod stats;
-#[doc(hidden)]
-pub mod unknown;
-pub mod upgrade;
+pub mod data;
+pub(crate) mod users;
 pub mod words;
 
 /// The Store connection reaper (not lifecycle, #535 D11), for its test.
 #[doc(hidden)]
-pub use open::close_idle;
-pub use record::stores;
-pub use related::Related;
+pub use admin::open::close::close_idle;
+pub use admin::record::store::stores;
+pub use users::{Related, StoreUsers};
+
+// below re-exports an old path; wave 3 rewrites its callers and deletes it.
+#[doc(hidden)]
+pub use crate::admin::host_worker::stream as host_stream;
+#[doc(hidden)]
+pub use crate::admin::maintenance::upgrade;

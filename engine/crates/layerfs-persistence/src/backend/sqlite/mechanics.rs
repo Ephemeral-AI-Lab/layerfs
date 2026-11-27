@@ -1,9 +1,8 @@
 //! The SQLite engine behind the shared Metadata, Objects and history seams.
 use super::session::transaction::Transaction;
-use crate::backend::{
-    records::{BackendError, Param, Record},
-    HistoryStatements, Mechanics,
-};
+use crate::backend::error::BackendError;
+use crate::backend::seam::{Param, Record};
+use crate::backend::{HistoryStatements, Mechanics};
 use layerfs_content::ObjectId;
 use layerfs_storage::{
     location::{InodeValueRow, LocatedObject, ObjectLocation, SignatureRow},

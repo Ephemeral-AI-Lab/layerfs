@@ -1,0 +1,31 @@
+//! `backup.doctor`: one bucket's checks (its record, key, address and one
+//! listing page); `--full` also writes one small object, reads it back and
+//! deletes it.
+use crate::dispatch::table::Kind::{Bool, Name};
+use crate::dispatch::table::{a, call, opt, Call};
+use crate::dispatch::Context;
+use crate::doctor::{self, FORM};
+use layerfs_home::reply::outcome::Outcome;
+use layerfs_inspect::{Kind, Options};
+use layerfs_protocol::sdk::SdkValue;
+
+/// Its table entry.
+pub(crate) const CALL: Call = call(
+    "backup",
+    "doctor",
+    &[a("bucket", Name)],
+    &[opt("full", Bool)],
+    "check a bucket; --full also tests a write",
+    run,
+)
+.unopened()
+.form(&FORM);
+
+fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
+    let bucket = args.get_text("bucket").unwrap_or("");
+    let options = Options {
+        full: args.get("full") == Some(&SdkValue::Bool(true)),
+        ..Options::default()
+    };
+    doctor::run(context, Kind::Bucket, bucket, options)
+}

@@ -7,7 +7,7 @@ and logical size, within [Filesystem trees](README.md).
 
 | | |
 | --- | --- |
-| Source | [`update.rs`](../../../../core/crates/layerfs-content/src/filesystem/update.rs), [`input.rs`](../../../../core/crates/layerfs-content/src/filesystem/input.rs), [`rows/`](../../../../core/crates/layerfs-content/src/filesystem/rows), [`state/`](../../../../core/crates/layerfs-content/src/filesystem/state), [`references/`](../../../../core/crates/layerfs-content/src/filesystem/references), [`statistics.rs`](../../../../core/crates/layerfs-content/src/filesystem/statistics.rs) |
+| Source | [`operation.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/operation.rs), [`resident.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/input/resident.rs), [`input/`](../../../../core/crates/layerfs-content/src/filesystem/construction/input), [`serial_state/`](../../../../core/crates/layerfs-content/src/filesystem/construction/serial_state), [`construction/`](../../../../core/crates/layerfs-content/src/filesystem/construction), [`statistics.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/statistics.rs) |
 
 ## update.rs
 
@@ -42,8 +42,8 @@ when timing is on; disabled timing runs the same code.
 
 | Caller | Entry | Source |
 | --- | --- | --- |
-| Workspace Commit construction | `update_filesystem_streamed_backed` | [`construction/driver.rs`](../../../../engine/crates/layerfs-workspace/src/construction/driver.rs) |
-| Branch merge | `update_filesystem_streamed_backed` | [`merge/build.rs`](../../../../core/crates/layerfs-content/src/merge/build.rs) |
+| Workspace Commit construction | `update_filesystem_streamed_backed` | [`construction/driver.rs`](../../../../engine/crates/layerfs-vfs/src/construction/driver.rs) |
+| Branch merge | `update_filesystem_streamed_backed` | [`plan/build.rs`](../../../../core/crates/layerfs-content/src/merge/plan/build.rs) |
 | Project Init | the primitives `build_directory`, `build_table`, `FilesystemRoot::new` | [`import/namespace.rs`](../../../../engine/crates/layerfs-project/src/import/namespace.rs) |
 
 A directory with no changes keeps its stored root. A content-only file change
@@ -69,18 +69,18 @@ They count work; they are not a persistence claim.
 
 | Field | Meaning | Source |
 | --- | --- | --- |
-| `DirectoryUpdate.changes` | final binding of each changed name, strictly sorted and unique; `None` = absent | [`input.rs`](../../../../core/crates/layerfs-content/src/filesystem/input.rs) |
+| `DirectoryUpdate.changes` | final binding of each changed name, strictly sorted and unique; `None` = absent | [`resident.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/input/resident.rs) |
 | `InodeUpdate.value` | typed final value; its count is replaced by the derived count | same |
-| `new_inodes` | serials the caller's allocator just created; checked absent from the base | same, [`validate.rs`](../../../../core/crates/layerfs-content/src/filesystem/validate.rs) |
-| `scratch_bytes` | sorted-engine scratch; default 4 MiB, at least 1,024 | [`input.rs`](../../../../core/crates/layerfs-content/src/filesystem/input.rs) |
-| `maximum_pending_records`, `merge_buffer_bytes`, `ordering_bytes` | reducer memory (default 4,096 rows), merge buffer (16 KiB), the one ordering ceiling (64 MiB) | [`references/reduce.rs`](../../../../core/crates/layerfs-content/src/filesystem/references/reduce.rs), [`references/runs.rs`](../../../../core/crates/layerfs-content/src/filesystem/references/runs.rs) |
-| `base_read_batch` | base records per read wave, capped at 4,096 | [`input.rs`](../../../../core/crates/layerfs-content/src/filesystem/input.rs), [`objects.rs`](../../../../core/crates/layerfs-content/src/filesystem/objects.rs) |
+| `new_inodes` | serials the caller's allocator just created; checked absent from the base | same, [`checked.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/validate/checked.rs) |
+| `scratch_bytes` | sorted-engine scratch; default 4 MiB, at least 1,024 | [`resident.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/input/resident.rs) |
+| `maximum_pending_records`, `merge_buffer_bytes`, `ordering_bytes` | reducer memory (default 4,096 rows), merge buffer (16 KiB), the one ordering ceiling (64 MiB) | [`reference/reduce.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/reference/reduce.rs), [`reference/runs.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/reference/runs.rs) |
+| `base_read_batch` | base records per read wave, capped at 4,096 | [`resident.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/input/resident.rs), [`objects.rs`](../../../../core/crates/layerfs-content/src/filesystem/objects.rs) |
 
 Declared row totals are checked against what the cursors return; an
 under-declared source is refused
-([`rows/check.rs`](../../../../core/crates/layerfs-content/src/filesystem/rows/check.rs)).
+([`input/check.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/input/check.rs)).
 A receive path can hold rows in a charged file spool of fixed 32-byte slots
-([`rows/spool.rs`](../../../../core/crates/layerfs-content/src/filesystem/rows/spool.rs)).
+([`input/spool.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/input/spool.rs)).
 On the resident route more than `ordering_bytes / 16` rows is
 `ObjectLimitExceeded`.
 
@@ -88,8 +88,8 @@ On the resident route more than `ordering_bytes / 16` rows is
 
 With backed serial state the operation keeps counts, dropped parents and
 rebuilt directory roots in the caller's records instead of memory
-([`state/store.rs`](../../../../core/crates/layerfs-content/src/filesystem/state/store.rs),
-[`state/roots.rs`](../../../../core/crates/layerfs-content/src/filesystem/state/roots.rs)).
+([`serial_state/points.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/serial_state/points.rs),
+[`serial_state/roots.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/serial_state/roots.rs)).
 No resident container grows with the change, and no total is refused against
 the ordering budget.
 
@@ -110,11 +110,11 @@ references belong to [Objects](../objects/README.md).
 
 | Part | What it holds | Source |
 | --- | --- | --- |
-| Ordering record | fixed 96 bytes: serial, version, tag (1 new-inode count, 2 effect total), length, value flag, tally, optional 73-byte value, reserved zeros | [`record.rs`](../../../../core/crates/layerfs-content/src/filesystem/references/record.rs) |
-| Pending map | at most `maximum_pending_records` rows in memory | [`runs.rs`](../../../../core/crates/layerfs-content/src/filesystem/references/runs.rs) |
-| Runs | sorted spilled batches merged into tiers; the newer row wins on equal keys; at most 32 tiers | [`runs.rs`](../../../../core/crates/layerfs-content/src/filesystem/references/runs.rs), [`merge.rs`](../../../../core/crates/layerfs-content/src/filesystem/references/merge.rs) |
-| Ordering backing | caller-supplied run storage with one byte account, released exactly once; `FileBacking` is the local implementation | [`backing.rs`](../../../../core/crates/layerfs-content/src/filesystem/references/backing.rs) |
-| Indexed state | with backed serial state, the same meanings in caller records instead of runs | [`indexed.rs`](../../../../core/crates/layerfs-content/src/filesystem/references/indexed.rs), [`operation.rs`](../../../../core/crates/layerfs-content/src/filesystem/references/operation.rs) |
+| Ordering record | fixed 96 bytes: serial, version, tag (1 new-inode count, 2 effect total), length, value flag, tally, optional 73-byte value, reserved zeros | [`record.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/reference/record.rs) |
+| Pending map | at most `maximum_pending_records` rows in memory | [`runs.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/reference/runs.rs) |
+| Runs | sorted spilled batches merged into tiers; the newer row wins on equal keys; at most 32 tiers | [`runs.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/reference/runs.rs), [`merge.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/reference/merge.rs) |
+| Ordering backing | caller-supplied run storage with one byte account, released exactly once; `FileBacking` is the local implementation | [`backing.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/reference/backing.rs) |
+| Indexed state | with backed serial state, the same meanings in caller records instead of runs | [`reduce.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/reference_index/reduce.rs), [`operation.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/reference/operation.rs) |
 
 ## statistics.rs
 
@@ -130,7 +130,7 @@ references belong to [Objects](../objects/README.md).
 | Function | Reads | Used by |
 | --- | --- | --- |
 | `logical_size` | every inode leaf, one window at a time, and each file's state | tests, as the oracle for Project Init's logical bytes, which Init sums from its scan instead ([`import/files.rs`](../../../../engine/crates/layerfs-project/src/import/files.rs), #818 I1) |
-| `logical_size_after_with` | only inode pages that differ between the two tables | Commit and Branch history ([`store/commit.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit.rs), [`history/branch.rs`](../../../../engine/crates/layerfs-store-service/src/history/branch.rs)) |
+| `logical_size_after_with` | only inode pages that differ between the two tables | Commit and Branch history ([`commit/run.rs`](../../../../engine/crates/layerfs-store-service/src/workspace/commit/run.rs), [`history/branch.rs`](../../../../engine/crates/layerfs-store-service/src/history/branch.rs)) |
 
 A hard-linked file counts once per binding; directories and symlinks count
 zero. These are logical bytes, independent of encoding and storage.

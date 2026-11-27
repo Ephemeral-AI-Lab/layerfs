@@ -9,20 +9,18 @@
 //! command launch and supervision stay with the Sandbox or external executor.
 #![forbid(unsafe_code)]
 
-pub mod install;
-mod install_file;
-pub mod install_types;
 mod operator;
-mod service;
-pub use service::{request as mount_request, Mounted};
+mod ports;
+pub use ports::{request as mount_request, Mounted};
 pub mod telemetry;
-pub use layerfs_store_service::{bootstrap, install as shared_install, store};
+pub use layerfs_store_service::store::{self, install as shared_install, open as bootstrap};
 
 pub use layerfs_store_service::{
     JobWork, OriginalInput, Owner, OwnerClient, OwnerConfig, OwnerError, OwnerStart, OwnerWork,
     ServiceClass, WorkspacePanic,
 };
 
-pub mod control;
+pub mod workspace;
 
 pub mod application;
+pub mod install;

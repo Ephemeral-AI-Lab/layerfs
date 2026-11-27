@@ -7,8 +7,8 @@ use crate::{
     RequestFuture, RequestOwner,
 };
 use fuser::{Errno, INodeNo};
-use layerfs_mount_ports::ports::{Fence, MountServices};
-use layerfs_workspace::KernelReadOperation;
+use layerfs_vfs::ports::mount::{Fence, MountServices};
+use layerfs_vfs::KernelReadOperation;
 use std::{
     sync::{Arc, OnceLock},
     time::Instant,

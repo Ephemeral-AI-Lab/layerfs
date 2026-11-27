@@ -12,8 +12,8 @@ use crate::error::ProjectError as Failure;
 use crate::error::SourceRefusal;
 
 use crate::namespace::ImportProgress;
-use layerfs_content::filesystem::attributes::PortableMetadata;
-use layerfs_content::filesystem::symlink::{emit_symlink, SymlinkTarget};
+use layerfs_content::filesystem::name::symlink::{emit_symlink, SymlinkTarget};
+use layerfs_content::filesystem::tree::attribute::PortableMetadata;
 use layerfs_content::filesystem::FilesystemObjects;
 use layerfs_content::{inode_leaf::InodeKind, PathName};
 use layerfs_storage::port::acquisition::{EntryKey, NewEntry, Placed};

@@ -8,14 +8,14 @@ whichever side runs that Store's calls, within
 
 | | |
 | --- | --- |
-| Source | [`layerfs-store/src/project/`](../../../../control/crates/layerfs-store/src/project), [`layerfs-control/src/project.rs`](../../../../control/crates/layerfs-control/src/project.rs) |
+| Source | [`src/data/project/`](../../../../control/crates/layerfs-store/src/data/project), [`data/project/with_users.rs`](../../../../control/crates/layerfs-store/src/data/project/with_users.rs) |
 
 A project is always `<store>/<project>`. Its record is
 `store/<store>/project/<project>/record.json`: name, creation time, a
 PostgreSQL project's LayerStack and a sqlite project's manifest
-([`record.rs`](../../../../control/crates/layerfs-store/src/project/record.rs)).
+([`project.rs`](../../../../control/crates/layerfs-store/src/data/project/record/project.rs)).
 `project.list` and `get` read these records, by Store then name
-([`family.rs`](../../../../control/crates/layerfs-store/src/project/family.rs)).
+([`run.rs`](../../../../control/crates/layerfs-store/src/data/project/init/run.rs)).
 Canonical construction is the engine's
 [Project Init](../../engine/project-init/README.md); this page is where it
 runs and how the folder gets there.
@@ -41,13 +41,13 @@ runs and how the folder gets there.
 
 | Rule | Detail | Source |
 | --- | --- | --- |
-| Live add | Init adds a folder as a new project to an existing Store through its writer; it does not seal | [`family.rs`](../../../../control/crates/layerfs-store/src/project/family.rs), [`add.rs`](../../../../control/crates/layerfs-store/src/project/add.rs) |
+| Live add | Init adds a folder as a new project to an existing Store through its writer; it does not seal | [`run.rs`](../../../../control/crates/layerfs-store/src/data/project/init/run.rs), [`sqlite.rs`](../../../../control/crates/layerfs-store/src/data/project/init/sqlite.rs) |
 | Where | where the Store's calls run: this process for PostgreSQL and a `Local` sqlite machine, else the machine's worker; the folder is always on the caller's host, and a worker Init returns `manifest` and `installed` so the caller's project record is complete; a pair that is not a complete Normal one is left out and logged in `log/repair.jsonl`, for a move or Sandbox create to complete | same |
 | Time limit | default 1 hour (`timeout` in ms) | same, `INIT_TIMEOUT_MS` |
 | Progress | `{phase, done, total}`: `check`, `send` (bytes, worker route only), `install`, `record` | same |
 | Lease | this process holds the Store's lease for the whole Init, on every route | same |
 | Lost answer | `Unknown`; the home gains no record (`project list` does not show it; the Store may hold it) | same |
-| PostgreSQL | the schema's URL is the call's and never stored | [`postgres_init.rs`](../../../../control/crates/layerfs-store/src/project/postgres_init.rs) |
+| PostgreSQL | the schema's URL is the call's and never stored | [`postgresql.rs`](../../../../control/crates/layerfs-store/src/data/project/init/postgresql.rs) |
 
 ## Folder copy to a worker (`send.rs`, `parts.rs`, `tree.rs`, `staged.rs`)
 
@@ -65,20 +65,20 @@ runs and how the folder gets there.
 
 | Rule | Source |
 | --- | --- |
-| The walk refuses before anything is sent what Init would refuse: an entry that is not a file, directory or link; a name or target LayerFS cannot hold; set-user-ID, set-group-ID or sticky bits; a file that changes while read | [`send.rs`](../../../../control/crates/layerfs-store/src/project/send.rs) |
+| The walk refuses before anything is sent what Init would refuse: an entry that is not a file, directory or link; a name or target LayerFS cannot hold; set-user-ID, set-group-ID or sticky bits; a file that changes while read | [`send.rs`](../../../../control/crates/layerfs-store/src/data/project/init/send.rs) |
 | Room: the machine needs the copy's bytes plus `max(1 GiB, total/10)` free, else `Capacity` naming both | same, `room` |
 | A request holds at most 8 MiB of records | same, `CHUNK` |
-| One attempt per part; after the first failure no new part is sent, parts in flight are waited for, and that failure is the copy's. A certain failure discards the copy with one more request; a lost part answer leaves the copy and names it | [`parts.rs`](../../../../control/crates/layerfs-store/src/project/parts.rs) |
-| A copy that may remain (a lost part answer, or a lost answer of the Init itself) is named in the home's `log/uncertain.jsonl`: `{ at, call: "project.init", store, project, machine, copy, phase: "send" \| "install", deadline, message }`, `deadline` being when the lost request went out plus the Init's `timeoutMs`. The Init records `{copy, machine}` in its op; `project delete` of the project, once the Init's owner is gone, sends the worker a `project.stage` discard of that copy, which removes it unless a running Init holds its folder lock ([Leftovers](../doctor/checks.md#leftovers)) | [`send.rs`](../../../../control/crates/layerfs-store/src/project/send.rs) `log_left`, [`parts.rs`](../../../../control/crates/layerfs-store/src/project/parts.rs), [`family.rs`](../../../../control/crates/layerfs-store/src/project/family.rs) |
-| The worker writes into `<root>/incoming/init-<id>`, takes no lease and opens no Store; paths stay inside the staging folder and go through no link; the folder is removed on every outcome it knows | [`staged.rs`](../../../../control/crates/layerfs-store/src/project/staged.rs) |
-| Carried: kind, permission bits, mtime, link target, file bytes. Not carried: owners, access times, extended attributes, hard links | [`tree.rs`](../../../../control/crates/layerfs-store/src/project/tree.rs) |
+| One attempt per part; after the first failure no new part is sent, parts in flight are waited for, and that failure is the copy's. A certain failure discards the copy with one more request; a lost part answer leaves the copy and names it | [`parts.rs`](../../../../control/crates/layerfs-store/src/data/project/init/parts.rs) |
+| A copy that may remain (a lost part answer, or a lost answer of the Init itself) is named in the home's `log/uncertain.jsonl`: `{ at, call: "project.init", store, project, machine, copy, phase: "send" \| "install", deadline, message }`, `deadline` being when the lost request went out plus the Init's `timeoutMs`. The Init records `{copy, machine}` in its op; `project delete` of the project, once the Init's owner is gone, sends the worker a `project.stage` discard of that copy, which removes it unless a running Init holds its folder lock ([Leftovers](../doctor/checks.md#leftovers)) | [`send.rs`](../../../../control/crates/layerfs-store/src/data/project/init/send.rs) `log_left`, [`parts.rs`](../../../../control/crates/layerfs-store/src/data/project/init/parts.rs), [`run.rs`](../../../../control/crates/layerfs-store/src/data/project/init/run.rs) |
+| The worker writes into `<root>/incoming/init-<id>`, takes no lease and opens no Store; paths stay inside the staging folder and go through no link; the folder is removed on every outcome it knows | [`staged.rs`](../../../../control/crates/layerfs-store/src/data/project/init/staged.rs) |
+| Carried: kind, permission bits, mtime, link target, file bytes. Not carried: owners, access times, extended attributes, hard links | [`tree.rs`](../../../../control/crates/layerfs-store/src/data/project/init/tree.rs) |
 
 Each worker frame (`project.stage`, `project.init`, `project.export`,
 `project.delete`, `project.delete.admit`, `project.delete.entry`,
 `project.delete.release`) is
 decoded once into its typed request; the worker sets the home to its own
 root
-([`frame.rs`](../../../../control/crates/layerfs-store/src/project/frame.rs)).
+([`frame.rs`](../../../../control/crates/layerfs-store/src/data/project/frame.rs)).
 
 ## Export (`export/`)
 
@@ -86,7 +86,7 @@ root
 committed Branch snapshot (default `main`) to a local folder on the
 caller's host, on all three routes: host-machine SQLite and PostgreSQL in this
 process, SQLite behind a worker
-([`export/route.rs`](../../../../control/crates/layerfs-store/src/project/export/route.rs)).
+([`export/run.rs`](../../../../control/crates/layerfs-store/src/data/project/export/run.rs)).
 
 ```text
  check destination (before any Store or staging)
@@ -99,12 +99,12 @@ process, SQLite behind a worker
 
 | Rule | Value | Source |
 | --- | --- | --- |
-| Destination | absolute; no `.` or `..` components; absent with a real parent directory, or an existing empty real directory | [`export/destination.rs`](../../../../control/crates/layerfs-store/src/project/export/destination.rs) |
+| Destination | absolute; no `.` or `..` components; absent with a real parent directory, or an existing empty real directory | [`export/destination.rs`](../../../../control/crates/layerfs-store/src/data/project/export/destination.rs) |
 | Destination refusals | `InvalidInput`, `Exists`, `NotEmpty`, `NotFound` (parent), `NotDirectory` | same |
 | Staging | hidden sibling `.layerfs-export-<id>`, removed (including 0555 folders) unless committed by the one rename | same |
-| Strict apply | a folder or file already there is `Conflict` (including `A` and `a` on a case-insensitive host), never merged; every folder on a record's way must already be a real directory | [`staged.rs`](../../../../control/crates/layerfs-store/src/project/staged.rs) `write_exported` |
-| Bounds | part at most 2 MiB; file piece at most 256 KiB; directory entries read 64 at a time | [`export/walk.rs`](../../../../control/crates/layerfs-store/src/project/export/walk.rs) |
-| Progress | `prepare`, `export`, `finalize`, at most every 200 ms | [`export/writer.rs`](../../../../control/crates/layerfs-store/src/project/export/writer.rs) |
+| Strict apply | a folder or file already there is `Conflict` (including `A` and `a` on a case-insensitive host), never merged; every folder on a record's way must already be a real directory | [`staged.rs`](../../../../control/crates/layerfs-store/src/data/project/init/staged.rs) `write_exported` |
+| Bounds | part at most 2 MiB; file piece at most 256 KiB; directory entries read 64 at a time | [`export/walk.rs`](../../../../control/crates/layerfs-store/src/data/project/export/walk.rs) |
+| Progress | `prepare`, `export`, `finalize`, at most every 200 ms | [`export/writer.rs`](../../../../control/crates/layerfs-store/src/data/project/export/writer.rs) |
 
 ## Delete (`delete/`)
 
@@ -114,11 +114,11 @@ stay. The Stack's marker (`mark_stack_deleted`) is the commit point, so a
 lost reply is finished by a same-home retry of the durable intent, whose
 Store side classifies the marker as `Marked`, `Retired` or `Absent`. It is
 refused `Busy` while a Sandbox of the project is recorded
-(`layerfs-control` passes that check in), and `MountsActive`/`Busy`/
+(`layerfs-sandbox` passes that check in, through `StoreUsers`), and `MountsActive`/`Busy`/
 `Unresolved` while a live mount or operation holds the project scope
-([`family.rs`](../../../../control/crates/layerfs-store/src/project/family.rs),
-[`delete.rs`](../../../../control/crates/layerfs-store/src/project/delete.rs),
-[`layerfs-control/src/project.rs`](../../../../control/crates/layerfs-control/src/project.rs)).
+([`run.rs`](../../../../control/crates/layerfs-store/src/data/project/init/run.rs),
+[`run.rs`](../../../../control/crates/layerfs-store/src/data/project/delete/run.rs),
+[`data/project/with_users.rs`](../../../../control/crates/layerfs-store/src/data/project/with_users.rs)).
 
 A record the Store does not list is cleared by the same call: when the
 Store answers `NoSuchProject` and its own list, read once more, does not
@@ -129,7 +129,7 @@ worker whose outcome is not known leaves a record with no stack id: the
 delete reads the Store's list once in that worker, retires the Stack it
 names there, then removes the entry; a project the list does not hold only
 loses its entry, and a lost answer is `Unknown` with the entry kept
-([`delete/remote.rs`](../../../../control/crates/layerfs-store/src/project/delete/remote.rs)
+([`delete/remote.rs`](../../../../control/crates/layerfs-store/src/data/project/delete/remote.rs)
 `listed_on_worker`).
 
 ## Discovery (`discovery.rs`)
@@ -140,7 +140,7 @@ folder and record, and the record file format. Calls on one folder take
 turns on `serve.lock` (this process first, then the file lock), held
 across a Sandbox start, a mount or a close; past 60 s the call is `Busy`,
 not retried
-([`discovery.rs`](../../../../control/crates/layerfs-store/src/project/discovery.rs)).
+([`discovery.rs`](../../../../control/crates/layerfs-store/src/data/project/record/discovery.rs)).
 
 ## Related
 

@@ -18,7 +18,7 @@
 #
 # Measured consequence of losing them (same source, same machine, same protocol):
 # 214 MiB/s against 802 MiB/s on one stream, 425 against 1556 MiB/s on two.
-# `engine/crates/layerfs-bridge` now refuses to compile for aarch64 without this
+# `engine/crates/layerfs-protocol` now refuses to compile for aarch64 without this
 # profile instead of silently negotiating the ChaCha20-Poly1305 fallback.
 #
 # These are the crates' own documented cfg knobs plus the ARMv8 target features,

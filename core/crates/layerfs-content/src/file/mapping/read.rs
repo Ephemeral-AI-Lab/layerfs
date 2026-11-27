@@ -24,7 +24,7 @@ use layerfs_telemetry::timer::{Active, TimingScope};
 use crate::error::{ContentError, ContentResult};
 use crate::file::cdc;
 use crate::file::mapping::codec::{decode_chunk_payload, decode_node_with_context};
-use crate::file::mapping::types::{ExtentNode, ExtentSlice, FileState};
+use crate::file::mapping::node::{ExtentNode, ExtentSlice, FileState};
 use crate::object::{AuthenticatedObjects, ObjectId};
 
 /// Distinct payloads a single wave may hold.
@@ -469,7 +469,7 @@ fn traverse(
     }];
     let mut depth = 0_u8;
     while !level.is_empty() {
-        if depth > crate::file::mapping::types::MAX_LEVEL {
+        if depth > crate::file::mapping::node::MAX_LEVEL {
             return Err(ContentError::MappingDepthExceeded);
         }
         depth = depth.saturating_add(1);

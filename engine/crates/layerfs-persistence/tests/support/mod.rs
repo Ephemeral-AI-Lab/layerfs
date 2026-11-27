@@ -139,10 +139,6 @@ pub mod sqlite {
 
 pub mod doctor;
 pub mod marks;
-
-pub mod fault_proxy;
 pub mod metrics;
 pub mod pg;
-pub mod pg_fixture;
 pub mod upgrade;
-pub mod wire_tap;

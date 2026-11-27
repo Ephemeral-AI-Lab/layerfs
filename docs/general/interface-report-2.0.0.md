@@ -154,7 +154,7 @@ Linux x64 under WSL2, on the merge head with the three artifacts built from it.
 
 | Check | Result |
 | --- | --- |
-| `node api/scripts/gen-coverage.mjs --check` | exit 0 |
+| `node api/scripts/coverage-doc.mjs --check` | exit 0 |
 | `node --test test/coverage.mjs test/contract.mjs` in `api/node` (release addon, release command, the installed wheel's Python) | 14 tests: 13 pass, 0 fail, 1 skipped (`Unknown`/`Unresolved`, NOT RUN) |
 | example flows from installed artifacts (Node, Python sync, Python async, command) | each exit 0; output in [examples](../versioned/2.0.0/examples/README.md) |
 | `cargo +1.85.1 clippy --locked --offline -p layerfs-persistence -- -D warnings` | **fails**: `unused import: ORDINAL_END`, `backend/mod.rs:10`, exit 101. The base fails, not this report |

@@ -1,0 +1,2917 @@
+{
+ "layer": "core",
+ "exceptions": [
+  {
+   "folder": "core/crates/layerfs-content/tests/fixtures",
+   "reason": "pending owner (Q8): sealed fixture data beside support/ in the tests root; not an area binary"
+  },
+  {
+   "folder": "core/crates/layerfs-content/tests/fixtures/edit-reference/stages-3-4-oracle-20260917T034500Z",
+   "reason": "leaf with 1 file; sealed evidence, left unchanged"
+  },
+  {
+   "folder": "core/crates/layerfs-telemetry/tests/compile_fail",
+   "reason": "pending owner (Q8): compile-fail fixture data read by path; not an area binary"
+  },
+  {
+   "folder": "core/crates/layerfs-content/examples",
+   "reason": "Cargo examples/ left alone: 5 loose example targets beside support/ (branch over 4 loose)"
+  },
+  {
+   "folder": "core/crates/layerfs-content/examples/support",
+   "reason": "Cargo examples/ helper; holds only mod.rs so Cargo does not build it as an example"
+  },
+  {
+   "folder": "core/crates/layerfs-telemetry/examples",
+   "reason": "Cargo examples/ left alone: 2 example targets (leaf under 3)"
+  }
+ ],
+ "rows": [
+  {
+   "old": "core/crates/layerfs-content/Cargo.toml",
+   "new": "core/crates/layerfs-content/Cargo.toml",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/README.md",
+   "new": "core/crates/layerfs-content/README.md",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/examples/edit_memory_probe.rs",
+   "new": "core/crates/layerfs-content/examples/edit_memory_probe.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/examples/edit_timing_c1.rs",
+   "new": "core/crates/layerfs-content/examples/edit_timing_c1.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/examples/filesystem_primitives_candidate.rs",
+   "new": "core/crates/layerfs-content/examples/filesystem_primitives_candidate.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/examples/filesystem_timing_c1.rs",
+   "new": "core/crates/layerfs-content/examples/filesystem_timing_c1.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/examples/fingerprint_collision_search.rs",
+   "new": "core/crates/layerfs-content/examples/fingerprint_collision_search.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/examples/support/mod.rs",
+   "new": "core/crates/layerfs-content/examples/support/mod.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/src/lib.rs",
+   "new": "core/crates/layerfs-content/src/lib.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/src/compare/bytes.rs",
+   "new": "core/crates/layerfs-content/src/compare/bytes.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/src/compare/changes.rs",
+   "new": "core/crates/layerfs-content/src/compare/changes.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/src/compare/memo.rs",
+   "new": "core/crates/layerfs-content/src/compare/memo.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/src/compare/mod.rs",
+   "new": "core/crates/layerfs-content/src/compare/mod.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/src/compare/named.rs",
+   "new": "core/crates/layerfs-content/src/compare/named.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/src/compare/sorted.rs",
+   "new": "core/crates/layerfs-content/src/compare/pages.rs",
+   "change": "rename",
+   "note": "ordered difference of two sorted trees that skips shared pages; matches tree/pages/"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/compare/text.rs",
+   "new": "core/crates/layerfs-content/src/compare/text.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/src/compare/tree.rs",
+   "new": "core/crates/layerfs-content/src/compare/tree.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/src/contract/error.rs",
+   "new": "core/crates/layerfs-content/src/error.rs",
+   "change": "move",
+   "note": "contract/ was a 2-file wrapper; crate-wide errors are a root loose file"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/contract/mod.rs",
+   "new": null,
+   "change": "remove",
+   "note": "contract/ wrapper removed; lib.rs declares error and policy"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/contract/policy.rs",
+   "new": "core/crates/layerfs-content/src/policy.rs",
+   "change": "move",
+   "note": "contract/ was a 2-file wrapper; crate-wide policy is a root loose file"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/file/mod.rs",
+   "new": "core/crates/layerfs-content/src/file/mod.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/src/file/read.rs",
+   "new": "core/crates/layerfs-content/src/file/read.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/src/file/view.rs",
+   "new": "core/crates/layerfs-content/src/file/view.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/src/file/cdc/gear.rs",
+   "new": "core/crates/layerfs-content/src/file/cdc.rs",
+   "change": "rename",
+   "note": "cdc/ held 2 files (below leaf minimum); becomes file/cdc.rs"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/file/cdc/mod.rs",
+   "new": "core/crates/layerfs-content/src/file/cdc.rs",
+   "change": "merge",
+   "note": "cdc/ declarations merge into file/cdc.rs; path file::cdc kept"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/file/cdc/zeros.rs",
+   "new": "core/crates/layerfs-content/src/file/cdc.rs",
+   "change": "merge",
+   "note": "cdc/ held 2 files; zero periods merge into file/cdc.rs"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/file/construction/bytes.rs",
+   "new": "core/crates/layerfs-content/src/file/construction/bytes.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/src/file/construction/chunk_runs.rs",
+   "new": "core/crates/layerfs-content/src/file/construction/chunk_runs.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/src/file/construction/mod.rs",
+   "new": "core/crates/layerfs-content/src/file/construction/mod.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/src/file/construction/runs.rs",
+   "new": "core/crates/layerfs-content/src/file/construction/runs.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/src/file/edit/apply.rs",
+   "new": "core/crates/layerfs-content/src/file/edit/apply.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/src/file/edit/backing.rs",
+   "new": "core/crates/layerfs-content/src/file/edit/backing.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/src/file/edit/compare.rs",
+   "new": "core/crates/layerfs-content/src/file/edit/noop.rs",
+   "change": "rename",
+   "note": "name clashed with crate::compare; owns NoOpVerdict"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/file/edit/concat.rs",
+   "new": "core/crates/layerfs-content/src/file/edit/coalesce.rs",
+   "change": "rename",
+   "note": "its only item is coalesce_adjacent"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/file/edit/draft_codec.rs",
+   "new": "core/crates/layerfs-content/src/file/draft/codec.rs",
+   "change": "rename",
+   "note": "edit/ had 17 files; draft-node store split wider beside edit/"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/file/edit/engine.rs",
+   "new": "core/crates/layerfs-content/src/file/draft/engine.rs",
+   "change": "move",
+   "note": "edit/ had 17 files; draft-node store split wider beside edit/"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/file/edit/finish.rs",
+   "new": "core/crates/layerfs-content/src/file/edit/finish.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/src/file/edit/input.rs",
+   "new": "core/crates/layerfs-content/src/file/edit/input.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/src/file/edit/mod.rs",
+   "new": "core/crates/layerfs-content/src/file/edit/mod.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/src/file/edit/objects.rs",
+   "new": "core/crates/layerfs-content/src/file/edit/objects.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/src/file/edit/references.rs",
+   "new": "core/crates/layerfs-content/src/file/draft/node.rs",
+   "change": "rename",
+   "note": "EditRef/Node are draft nodes, not filesystem references"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/file/edit/resolution.rs",
+   "new": "core/crates/layerfs-content/src/file/draft/resolution.rs",
+   "change": "move",
+   "note": "edit/ had 17 files; draft-node store split wider beside edit/"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/file/edit/runs.rs",
+   "new": "core/crates/layerfs-content/src/file/edit/runs.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/src/file/edit/source.rs",
+   "new": "core/crates/layerfs-content/src/file/edit/source.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/src/file/edit/split.rs",
+   "new": null,
+   "change": "remove",
+   "note": "doc-only stub with 0 prod LOC, still declared"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/file/edit/state.rs",
+   "new": "core/crates/layerfs-content/src/file/draft/state.rs",
+   "change": "move",
+   "note": "edit/ had 17 files; draft-node store split wider beside edit/"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/file/edit/tree.rs",
+   "new": "core/crates/layerfs-content/src/file/edit/tree.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/src/file/edit/zero.rs",
+   "new": "core/crates/layerfs-content/src/file/edit/zero.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/src/file/mapping/align.rs",
+   "new": "core/crates/layerfs-content/src/file/mapping/align.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/src/file/mapping/build.rs",
+   "new": "core/crates/layerfs-content/src/file/mapping/build.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/src/file/mapping/codec.rs",
+   "new": "core/crates/layerfs-content/src/file/mapping/codec.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/src/file/mapping/extents.rs",
+   "new": "core/crates/layerfs-content/src/file/mapping/extents.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/src/file/mapping/hints.rs",
+   "new": "core/crates/layerfs-content/src/file/mapping/hints.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/src/file/mapping/mod.rs",
+   "new": "core/crates/layerfs-content/src/file/mapping/mod.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/src/file/mapping/predecessor.rs",
+   "new": "core/crates/layerfs-content/src/file/mapping/predecessor.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/src/file/mapping/read.rs",
+   "new": "core/crates/layerfs-content/src/file/mapping/read.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/src/file/mapping/repeated.rs",
+   "new": "core/crates/layerfs-content/src/file/mapping/repeated.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/src/file/mapping/types.rs",
+   "new": "core/crates/layerfs-content/src/file/mapping/node.rs",
+   "change": "rename",
+   "note": "vague name; holds ExtentNode, NodeSummary and node limits"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/binding_changes.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/construction/captured_bindings.rs",
+   "change": "rename",
+   "note": "name clashed with compare::tree::binding_changes; used by update"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/decoded.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/tree/pages/decoded.rs",
+   "change": "move",
+   "note": "btree/ (owner 2026-11-27): one bounded B+tree mutation engine over the directory and inode page formats"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/identity.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/name/identity.rs",
+   "change": "move",
+   "note": "filesystem/ had 13 loose files; name grammar grouped in name/"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/input.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/construction/input/resident.rs",
+   "change": "rename",
+   "note": "resident FilesystemInput beside the streamed sources; not input/input.rs (rule 14)"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/limits.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/limits.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/mod.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/mod.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/objects.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/objects.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/path.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/name/path.rs",
+   "change": "move",
+   "note": "filesystem/ had 13 loose files; name grammar grouped in name/"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/read.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/read.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/root.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/root.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/statistics.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/construction/statistics.rs",
+   "change": "move",
+   "note": "used only by the update operation; moves into update/"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/symlink.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/name/symlink.rs",
+   "change": "move",
+   "note": "filesystem/ had 13 loose files; name grammar grouped in name/"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/update.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/construction/operation.rs",
+   "change": "rename",
+   "note": "the update operation gets its own leaf; avoids update/update.rs"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/validate.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/construction/validate/checked.rs",
+   "change": "rename",
+   "note": "file-named module beside validate/; one mod.rs convention"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/attributes/build.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/tree/attribute/build.rs",
+   "change": "move",
+   "note": "tree kinds grouped: attribute, directory and inode pages are one group (rules 8, 21)"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/attributes/codec.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/tree/attribute/codec.rs",
+   "change": "move",
+   "note": "tree kinds grouped: attribute, directory and inode pages are one group (rules 8, 21)"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/attributes/keys.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/tree/attribute/keys.rs",
+   "change": "move",
+   "note": "tree kinds grouped: attribute, directory and inode pages are one group (rules 8, 21)"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/attributes/mod.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/tree/attribute/mod.rs",
+   "change": "move",
+   "note": "tree kinds grouped: attribute, directory and inode pages are one group (rules 8, 21)"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/attributes/patch.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/tree/attribute/patch.rs",
+   "change": "move",
+   "note": "tree kinds grouped: attribute, directory and inode pages are one group (rules 8, 21)"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/attributes/portable.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/tree/attribute/portable.rs",
+   "change": "move",
+   "note": "tree kinds grouped: attribute, directory and inode pages are one group (rules 8, 21)"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/attributes/read.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/tree/attribute/read.rs",
+   "change": "move",
+   "note": "tree kinds grouped: attribute, directory and inode pages are one group (rules 8, 21)"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/attributes/value.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/tree/attribute/value.rs",
+   "change": "move",
+   "note": "tree kinds grouped: attribute, directory and inode pages are one group (rules 8, 21)"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/directory/ahead.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/tree/directory/read_ahead.rs",
+   "change": "rename",
+   "note": "tree kind; same lookahead job as sorted/read_ahead.rs, same word (rules 9, 19)"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/directory/codec.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/tree/directory/codec.rs",
+   "change": "move",
+   "note": "tree kinds grouped: attribute, directory and inode pages are one group (rules 8, 21)"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/directory/mod.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/tree/directory/mod.rs",
+   "change": "move",
+   "note": "tree kinds grouped: attribute, directory and inode pages are one group (rules 8, 21)"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/directory/read.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/tree/directory/read.rs",
+   "change": "move",
+   "note": "tree kinds grouped: attribute, directory and inode pages are one group (rules 8, 21)"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/directory/update.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/tree/directory/update.rs",
+   "change": "move",
+   "note": "tree kinds grouped: attribute, directory and inode pages are one group (rules 8, 21)"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/inode/codec.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/tree/inode/codec.rs",
+   "change": "move",
+   "note": "tree kinds grouped: attribute, directory and inode pages are one group (rules 8, 21)"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/inode/mod.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/tree/inode/mod.rs",
+   "change": "move",
+   "note": "tree kinds grouped: attribute, directory and inode pages are one group (rules 8, 21)"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/inode/read.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/tree/inode/read.rs",
+   "change": "move",
+   "note": "tree kinds grouped: attribute, directory and inode pages are one group (rules 8, 21)"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/inode/update.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/tree/inode/update.rs",
+   "change": "move",
+   "note": "tree kinds grouped: attribute, directory and inode pages are one group (rules 8, 21)"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/qualify/mod.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/topology/mod.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/qualify/proof.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/topology/proof.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/qualify/records.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/topology/records.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/qualify/walk.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/topology/walk.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/references/backing.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/construction/reference/backing.rs",
+   "change": "move",
+   "note": "reference reducer is one stage of the update operation (rules 8, 21)"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/references/indexed.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/construction/reference_index/reduce.rs",
+   "change": "rename",
+   "note": "holds IndexedReducer; same job and name as reference/reduce.rs (rule 9)"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/references/indexed_release.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/construction/reference_index/release.rs",
+   "change": "rename",
+   "note": "indexed_* prefix group becomes a sibling leaf; prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/references/indexed_rows.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/construction/reference_index/rows.rs",
+   "change": "rename",
+   "note": "indexed_* prefix group becomes a sibling leaf; prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/references/indexed_window.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/construction/reference_index/window.rs",
+   "change": "rename",
+   "note": "indexed_* prefix group becomes a sibling leaf; prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/references/indexed_wire.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/construction/reference_index/wire.rs",
+   "change": "rename",
+   "note": "indexed_* prefix group becomes a sibling leaf; prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/references/meaning.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/construction/reference/meaning.rs",
+   "change": "move",
+   "note": "reference reducer is one stage of the update operation (rules 8, 21)"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/references/merge.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/construction/reference/merge.rs",
+   "change": "move",
+   "note": "reference reducer is one stage of the update operation (rules 8, 21)"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/references/mod.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/construction/reference/mod.rs",
+   "change": "move",
+   "note": "reference reducer is one stage of the update operation (rules 8, 21)"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/references/operation.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/construction/reference/operation.rs",
+   "change": "move",
+   "note": "reference reducer is one stage of the update operation (rules 8, 21)"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/references/record.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/construction/reference/record.rs",
+   "change": "move",
+   "note": "reference reducer is one stage of the update operation (rules 8, 21)"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/references/reduce.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/construction/reference/reduce.rs",
+   "change": "move",
+   "note": "reference reducer is one stage of the update operation (rules 8, 21)"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/references/release.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/construction/reference/release.rs",
+   "change": "move",
+   "note": "reference reducer is one stage of the update operation (rules 8, 21)"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/references/runs.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/construction/reference/runs.rs",
+   "change": "move",
+   "note": "reference reducer is one stage of the update operation (rules 8, 21)"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/rows/check.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/construction/input/check.rs",
+   "change": "move",
+   "note": "prepared rows are the update's input (check_input); row/ is vague (rules 11, 12)"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/rows/mod.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/construction/input/mod.rs",
+   "change": "move",
+   "note": "prepared rows are the update's input (check_input); row/ is vague (rules 11, 12)"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/rows/source.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/construction/input/source.rs",
+   "change": "move",
+   "note": "prepared rows are the update's input (check_input); row/ is vague (rules 11, 12)"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/rows/spool.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/construction/input/spool.rs",
+   "change": "move",
+   "note": "prepared rows are the update's input (check_input); row/ is vague (rules 11, 12)"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/rows/stream.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/construction/input/stream.rs",
+   "change": "move",
+   "note": "prepared rows are the update's input (check_input); row/ is vague (rules 11, 12)"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/rows/stream_update.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/construction/input/stream_update.rs",
+   "change": "move",
+   "note": "prepared rows are the update's input (check_input); row/ is vague (rules 11, 12)"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/rows/update.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/construction/input/prepared.rs",
+   "change": "rename",
+   "note": "PreparedUpdate; update/input/update.rs would echo the update/ folder (rules 14, 16)"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/rows/view.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/construction/input/view.rs",
+   "change": "move",
+   "note": "prepared rows are the update's input (check_input); row/ is vague (rules 11, 12)"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/sorted/budget.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/tree/pages/budget.rs",
+   "change": "move",
+   "note": "btree/ (owner 2026-11-27): one bounded B+tree mutation engine over the directory and inode page formats"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/sorted/finish.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/tree/pages/finish.rs",
+   "change": "move",
+   "note": "btree/ (owner 2026-11-27): one bounded B+tree mutation engine over the directory and inode page formats"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/sorted/format.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/tree/pages/format.rs",
+   "change": "move",
+   "note": "btree/ (owner 2026-11-27): one bounded B+tree mutation engine over the directory and inode page formats"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/sorted/merge.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/tree/pages/merge.rs",
+   "change": "move",
+   "note": "btree/ (owner 2026-11-27): one bounded B+tree mutation engine over the directory and inode page formats"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/sorted/mod.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/tree/pages/mod.rs",
+   "change": "move",
+   "note": "btree/ (owner 2026-11-27): one bounded B+tree mutation engine over the directory and inode page formats"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/sorted/page.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/tree/pages/page.rs",
+   "change": "move",
+   "note": "btree/ (owner 2026-11-27): one bounded B+tree mutation engine over the directory and inode page formats"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/sorted/read_ahead.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/tree/pages/read_ahead.rs",
+   "change": "move",
+   "note": "btree/ (owner 2026-11-27): one bounded B+tree mutation engine over the directory and inode page formats"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/state/codec.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/construction/serial_state/codec.rs",
+   "change": "move",
+   "note": "state/ is vague: SerialState over the caller's construction records (rules 11, 12)"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/state/initial.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/construction/serial_state/initial.rs",
+   "change": "move",
+   "note": "state/ is vague: SerialState over the caller's construction records (rules 11, 12)"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/state/mod.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/construction/serial_state/mod.rs",
+   "change": "move",
+   "note": "state/ is vague: SerialState over the caller's construction records (rules 11, 12)"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/state/roots.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/construction/serial_state/roots.rs",
+   "change": "move",
+   "note": "state/ is vague: SerialState over the caller's construction records (rules 11, 12)"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/state/store.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/construction/serial_state/points.rs",
+   "change": "rename",
+   "note": "SerialState point reads/transitions; serial_state/serial.rs repeats (rules 14, 16)"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/state/types.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/construction/serial_state/dropped.rs",
+   "change": "rename",
+   "note": "vague name; holds DroppedParents only"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/validate/backed.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/construction/validate/backed.rs",
+   "change": "move",
+   "note": "input validation is one stage of the update operation (rules 8, 21)"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/validate/cycles.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/construction/validate/cycles.rs",
+   "change": "move",
+   "note": "input validation is one stage of the update operation (rules 8, 21)"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/validate/entries.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/construction/validate/entries.rs",
+   "change": "move",
+   "note": "input validation is one stage of the update operation (rules 8, 21)"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/validate/in_place.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/construction/validate/in_place.rs",
+   "change": "move",
+   "note": "input validation is one stage of the update operation (rules 8, 21)"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/filesystem/validate/incremental.rs",
+   "new": "core/crates/layerfs-content/src/filesystem/construction/validate/incremental.rs",
+   "change": "move",
+   "note": "input validation is one stage of the update operation (rules 8, 21)"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/merge/build.rs",
+   "new": "core/crates/layerfs-content/src/merge/plan/build.rs",
+   "change": "move",
+   "note": "merge/ had 16 files; the plan and its spilled records"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/merge/codec.rs",
+   "new": "core/crates/layerfs-content/src/merge/plan/codec.rs",
+   "change": "move",
+   "note": "merge/ had 16 files; the plan and its spilled records"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/merge/decide.rs",
+   "new": "core/crates/layerfs-content/src/merge/decide/entries.rs",
+   "change": "rename",
+   "note": "merge/ had 16 files; how one path is resolved"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/merge/entry.rs",
+   "new": "core/crates/layerfs-content/src/merge/roots.rs",
+   "change": "rename",
+   "note": "entry point merge_roots; \"entry\" means a merged entry here"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/merge/lww.rs",
+   "new": "core/crates/layerfs-content/src/merge/rule/lww.rs",
+   "change": "move",
+   "note": "merge/ had 16 files; /.lww rules and merge units"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/merge/markers.rs",
+   "new": "core/crates/layerfs-content/src/merge/decide/markers.rs",
+   "change": "move",
+   "note": "merge/ had 16 files; per-path resolution group"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/merge/metadata.rs",
+   "new": "core/crates/layerfs-content/src/merge/decide/metadata.rs",
+   "change": "move",
+   "note": "merge/ had 16 files; per-path resolution group"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/merge/mod.rs",
+   "new": "core/crates/layerfs-content/src/merge/mod.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/src/merge/names.rs",
+   "new": "core/crates/layerfs-content/src/merge/serial/names.rs",
+   "change": "move",
+   "note": "merge/ had 16 files; merge-by-serial group"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/merge/places.rs",
+   "new": "core/crates/layerfs-content/src/merge/serial/places.rs",
+   "change": "move",
+   "note": "merge/ had 16 files; merge-by-serial group"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/merge/revert.rs",
+   "new": "core/crates/layerfs-content/src/merge/rule/revert.rs",
+   "change": "move",
+   "note": "merge/ had 16 files; /.lww rules and merge units"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/merge/rows.rs",
+   "new": "core/crates/layerfs-content/src/merge/plan/rows.rs",
+   "change": "move",
+   "note": "merge/ had 16 files; the plan and its spilled records"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/merge/serial.rs",
+   "new": "core/crates/layerfs-content/src/merge/serial/walk.rs",
+   "change": "rename",
+   "note": "merge/ had 16 files; merge-by-serial group (#355 M1)"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/merge/spill.rs",
+   "new": "core/crates/layerfs-content/src/merge/plan/spill.rs",
+   "change": "move",
+   "note": "merge/ had 16 files; the plan and its spilled records"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/merge/text.rs",
+   "new": "core/crates/layerfs-content/src/merge/decide/text.rs",
+   "change": "move",
+   "note": "merge/ had 16 files; per-path resolution group"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/merge/types.rs",
+   "new": "core/crates/layerfs-content/src/merge/outcome.rs",
+   "change": "rename",
+   "note": "vague name; MergeInput, MergeOutcome, Conflict"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/merge/units.rs",
+   "new": "core/crates/layerfs-content/src/merge/rule/units.rs",
+   "change": "move",
+   "note": "merge/ had 16 files; /.lww rules and merge units"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/object/access.rs",
+   "new": "core/crates/layerfs-content/src/object/access.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/src/object/admission.rs",
+   "new": "core/crates/layerfs-content/src/verify/decode.rs",
+   "change": "rename",
+   "note": "pending owner: folder name (Q6); admission split out so object/ is a leaf"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/object/codec.rs",
+   "new": "core/crates/layerfs-content/src/object/codec.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/src/object/id.rs",
+   "new": "core/crates/layerfs-content/src/object/id.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/src/object/inode_leaf.rs",
+   "new": "core/crates/layerfs-content/src/object/inode_leaf.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/src/object/mod.rs",
+   "new": "core/crates/layerfs-content/src/object/mod.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/src/object/output.rs",
+   "new": "core/crates/layerfs-content/src/object/output.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/src/object/predecessor.rs",
+   "new": "core/crates/layerfs-content/src/object/predecessor.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/src/object/context/dispatch.rs",
+   "new": "core/crates/layerfs-content/src/verify/children.rs",
+   "change": "rename",
+   "note": "role-directed child validation; dispatch/ is api call routing (rule 13)"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/object/context/inode.rs",
+   "new": "core/crates/layerfs-content/src/verify/inode.rs",
+   "change": "move",
+   "note": "object checks, not GC admission (history admission/, persistence gc/admission/) (13)"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/object/context/mapping.rs",
+   "new": "core/crates/layerfs-content/src/verify/mapping.rs",
+   "change": "move",
+   "note": "object checks, not GC admission (history admission/, persistence gc/admission/) (13)"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/object/context/mod.rs",
+   "new": null,
+   "change": "remove",
+   "note": "context/ folds into src/admission/; its declarations move to admission/mod.rs"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/object/context/namespace.rs",
+   "new": "core/crates/layerfs-content/src/verify/namespace.rs",
+   "change": "move",
+   "note": "object checks, not GC admission (history admission/, persistence gc/admission/) (13)"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/object/context/read.rs",
+   "new": "core/crates/layerfs-content/src/verify/window.rs",
+   "change": "rename",
+   "note": "one-ID provider windows; read.rs says nothing here (rules 11, 12)"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/backing_custody.rs",
+   "new": "core/crates/layerfs-content/tests/filesystem_state/backing_custody.rs",
+   "change": "move",
+   "note": "flat test binary becomes a topic of the filesystem_state area binary"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/chunk_predecessor.rs",
+   "new": "core/crates/layerfs-content/tests/file/chunk_predecessor.rs",
+   "change": "move",
+   "note": "flat test binary becomes a topic of the file area binary"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/compare_full_resume.rs",
+   "new": "core/crates/layerfs-content/tests/compare/full_resume.rs",
+   "change": "rename",
+   "note": "topic of the compare area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/compare_large_text.rs",
+   "new": "core/crates/layerfs-content/tests/compare/large_text.rs",
+   "change": "rename",
+   "note": "topic of the compare area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/compare_memo.rs",
+   "new": "core/crates/layerfs-content/tests/compare/memo.rs",
+   "change": "rename",
+   "note": "topic of the compare area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/compare_read_ahead.rs",
+   "new": "core/crates/layerfs-content/tests/compare/read_ahead.rs",
+   "change": "rename",
+   "note": "topic of the compare area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/edit_backed.rs",
+   "new": "core/crates/layerfs-content/tests/edit/backed.rs",
+   "change": "rename",
+   "note": "topic of the edit area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/edit_batch.rs",
+   "new": "core/crates/layerfs-content/tests/edit/batch.rs",
+   "change": "rename",
+   "note": "topic of the edit area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/edit_bounds.rs",
+   "new": "core/crates/layerfs-content/tests/edit_cost/bounds.rs",
+   "change": "rename",
+   "note": "topic of the edit_cost area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/edit_cache.rs",
+   "new": "core/crates/layerfs-content/tests/edit_cost/cache.rs",
+   "change": "rename",
+   "note": "topic of the edit_cost area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/edit_indexed_view.rs",
+   "new": "core/crates/layerfs-content/tests/edit/indexed_view.rs",
+   "change": "rename",
+   "note": "topic of the edit area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/edit_lazy_plan.rs",
+   "new": "core/crates/layerfs-content/tests/edit_cost/lazy_plan.rs",
+   "change": "rename",
+   "note": "topic of the edit_cost area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/edit_localized.rs",
+   "new": "core/crates/layerfs-content/tests/edit/localized.rs",
+   "change": "rename",
+   "note": "topic of the edit area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/edit_model.rs",
+   "new": "core/crates/layerfs-content/tests/edit/model.rs",
+   "change": "rename",
+   "note": "topic of the edit area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/edit_noop.rs",
+   "new": "core/crates/layerfs-content/tests/edit/noop.rs",
+   "change": "rename",
+   "note": "topic of the edit area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/edit_reference.rs",
+   "new": "core/crates/layerfs-content/tests/edit/reference.rs",
+   "change": "rename",
+   "note": "topic of the edit area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/edit_runs.rs",
+   "new": "core/crates/layerfs-content/tests/edit/runs.rs",
+   "change": "rename",
+   "note": "topic of the edit area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/edit_scaling.rs",
+   "new": "core/crates/layerfs-content/tests/edit_cost/scaling.rs",
+   "change": "rename",
+   "note": "topic of the edit_cost area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/edit_shift_scaling.rs",
+   "new": "core/crates/layerfs-content/tests/edit_cost/shift_scaling.rs",
+   "change": "rename",
+   "note": "topic of the edit_cost area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/edit_single.rs",
+   "new": "core/crates/layerfs-content/tests/edit/single.rs",
+   "change": "rename",
+   "note": "topic of the edit area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/edit_timing.rs",
+   "new": "core/crates/layerfs-content/tests/edit_cost/timing.rs",
+   "change": "rename",
+   "note": "topic of the edit_cost area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/edit_transitions.rs",
+   "new": "core/crates/layerfs-content/tests/edit/transitions.rs",
+   "change": "rename",
+   "note": "topic of the edit area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/extent_cursor.rs",
+   "new": "core/crates/layerfs-content/tests/file/extent_cursor.rs",
+   "change": "move",
+   "note": "flat test binary becomes a topic of the file area binary"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/file_complete.rs",
+   "new": "core/crates/layerfs-content/tests/file/complete.rs",
+   "change": "rename",
+   "note": "topic of the file area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/file_read.rs",
+   "new": "core/crates/layerfs-content/tests/file/read.rs",
+   "change": "rename",
+   "note": "topic of the file area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/filesystem_attributes.rs",
+   "new": "core/crates/layerfs-content/tests/filesystem/attributes.rs",
+   "change": "rename",
+   "note": "topic of the filesystem area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/filesystem_bounds.rs",
+   "new": "core/crates/layerfs-content/tests/filesystem/bounds.rs",
+   "change": "rename",
+   "note": "topic of the filesystem area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/filesystem_codec.rs",
+   "new": "core/crates/layerfs-content/tests/filesystem/codec.rs",
+   "change": "rename",
+   "note": "topic of the filesystem area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/filesystem_failure.rs",
+   "new": "core/crates/layerfs-content/tests/filesystem/failure.rs",
+   "change": "rename",
+   "note": "topic of the filesystem area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/filesystem_hardlinks.rs",
+   "new": "core/crates/layerfs-content/tests/filesystem/hardlinks.rs",
+   "change": "rename",
+   "note": "topic of the filesystem area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/filesystem_limits.rs",
+   "new": "core/crates/layerfs-content/tests/filesystem/limits.rs",
+   "change": "rename",
+   "note": "topic of the filesystem area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/filesystem_ordering.rs",
+   "new": "core/crates/layerfs-content/tests/filesystem_topology/ordering.rs",
+   "change": "rename",
+   "note": "topic of the filesystem_topology area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/filesystem_ordering_consolidate.rs",
+   "new": "core/crates/layerfs-content/tests/filesystem_topology/ordering_consolidate.rs",
+   "change": "rename",
+   "note": "topic of the filesystem_topology area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/filesystem_ordering_scan.rs",
+   "new": "core/crates/layerfs-content/tests/standalone/filesystem_ordering_scan.rs",
+   "change": "move",
+   "note": "must stay a separate binary: own #[global_allocator]"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/filesystem_parent_lookup.rs",
+   "new": "core/crates/layerfs-content/tests/filesystem_topology/parent_lookup.rs",
+   "change": "rename",
+   "note": "topic of the filesystem_topology area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/filesystem_profile.rs",
+   "new": "core/crates/layerfs-content/tests/filesystem/profile.rs",
+   "change": "rename",
+   "note": "topic of the filesystem area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/filesystem_qualify.rs",
+   "new": "core/crates/layerfs-content/tests/filesystem_topology/qualify.rs",
+   "change": "rename",
+   "note": "topic of the filesystem_topology area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/filesystem_read.rs",
+   "new": "core/crates/layerfs-content/tests/filesystem/read.rs",
+   "change": "rename",
+   "note": "topic of the filesystem area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/filesystem_reference.rs",
+   "new": "core/crates/layerfs-content/tests/filesystem_state/reference.rs",
+   "change": "rename",
+   "note": "topic of the filesystem_state area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/filesystem_references_backed.rs",
+   "new": "core/crates/layerfs-content/tests/filesystem_state/references_backed.rs",
+   "change": "rename",
+   "note": "topic of the filesystem_state area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/filesystem_rows.rs",
+   "new": "core/crates/layerfs-content/tests/filesystem_state/rows.rs",
+   "change": "rename",
+   "note": "topic of the filesystem_state area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/filesystem_sorted.rs",
+   "new": "core/crates/layerfs-content/tests/filesystem_state/pages.rs",
+   "change": "rename",
+   "note": "tests tree/pages/ (was btree/, before that sorted/)"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/filesystem_sorted_localized.rs",
+   "new": "core/crates/layerfs-content/tests/standalone/filesystem_pages_localized.rs",
+   "change": "rename",
+   "note": "tests tree/pages/"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/filesystem_state_backed.rs",
+   "new": "core/crates/layerfs-content/tests/filesystem_state/state_backed.rs",
+   "change": "rename",
+   "note": "topic of the filesystem_state area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/filesystem_streamed.rs",
+   "new": "core/crates/layerfs-content/tests/filesystem_state/streamed.rs",
+   "change": "rename",
+   "note": "topic of the filesystem_state area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/filesystem_timing.rs",
+   "new": "core/crates/layerfs-content/tests/filesystem/timing.rs",
+   "change": "rename",
+   "note": "topic of the filesystem area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/filesystem_topology.rs",
+   "new": "core/crates/layerfs-content/tests/filesystem_topology/basic.rs",
+   "change": "rename",
+   "note": "topic of the filesystem_topology area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/filesystem_topology_backed.rs",
+   "new": "core/crates/layerfs-content/tests/filesystem_topology/backed.rs",
+   "change": "rename",
+   "note": "topic of the filesystem_topology area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/filesystem_topology_counts.rs",
+   "new": "core/crates/layerfs-content/tests/filesystem_topology/counts.rs",
+   "change": "rename",
+   "note": "topic of the filesystem_topology area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/filesystem_topology_model.rs",
+   "new": "core/crates/layerfs-content/tests/filesystem_topology/model.rs",
+   "change": "rename",
+   "note": "topic of the filesystem_topology area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/filesystem_updates.rs",
+   "new": "core/crates/layerfs-content/tests/filesystem/construction.rs",
+   "change": "rename",
+   "note": "tests filesystem/construction/ (was update/)"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/fixture_seal.rs",
+   "new": "core/crates/layerfs-content/tests/fixture_seal.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/glob_directories.rs",
+   "new": "core/crates/layerfs-content/tests/merge_lww_glob.rs",
+   "change": "rename",
+   "note": "tests merge::lww globs; module-prefixed name (root keeps 3 files)"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/inode_decode_cost.rs",
+   "new": "core/crates/layerfs-content/tests/standalone/inode_decode_cost.rs",
+   "change": "move",
+   "note": "must stay a separate binary: own #[global_allocator]"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/inode_leaf.rs",
+   "new": "core/crates/layerfs-content/tests/object/inode_leaf.rs",
+   "change": "move",
+   "note": "flat test binary becomes a topic of the object area binary"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/merge_units.rs",
+   "new": "core/crates/layerfs-content/tests/merge_units.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/object_admission.rs",
+   "new": "core/crates/layerfs-content/tests/object/admission.rs",
+   "change": "rename",
+   "note": "topic of the object area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/object_context.rs",
+   "new": "core/crates/layerfs-content/tests/object/context.rs",
+   "change": "rename",
+   "note": "topic of the object area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/object_identity.rs",
+   "new": "core/crates/layerfs-content/tests/object/identity.rs",
+   "change": "rename",
+   "note": "topic of the object area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/runs.rs",
+   "new": "core/crates/layerfs-content/tests/file/runs.rs",
+   "change": "move",
+   "note": "flat test binary becomes a topic of the file area binary"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/streaming.rs",
+   "new": "core/crates/layerfs-content/tests/file/streaming.rs",
+   "change": "move",
+   "note": "flat test binary becomes a topic of the file area binary"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/timing.rs",
+   "new": "core/crates/layerfs-content/tests/file/timing.rs",
+   "change": "move",
+   "note": "flat test binary becomes a topic of the file area binary"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/zero_cdc.rs",
+   "new": "core/crates/layerfs-content/tests/file/cdc_zeros.rs",
+   "change": "rename",
+   "note": "topic of the file area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/fixtures/filesystem.generator",
+   "new": "core/crates/layerfs-content/tests/fixtures/filesystem.generator",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/fixtures/filesystem.seal",
+   "new": "core/crates/layerfs-content/tests/fixtures/filesystem.seal",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/fixtures/edit-reference/stages-3-4-oracle-20260916T222738Z-corrected/batch-normalized.json",
+   "new": "core/crates/layerfs-content/tests/fixtures/edit-reference/stages-3-4-oracle-20260916T222738Z-corrected/batch-normalized.json",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/fixtures/edit-reference/stages-3-4-oracle-20260916T222738Z-corrected/half-partition-90-90.json",
+   "new": "core/crates/layerfs-content/tests/fixtures/edit-reference/stages-3-4-oracle-20260916T222738Z-corrected/half-partition-90-90.json",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/fixtures/edit-reference/stages-3-4-oracle-20260916T222738Z-corrected/height-growth.json",
+   "new": "core/crates/layerfs-content/tests/fixtures/edit-reference/stages-3-4-oracle-20260916T222738Z-corrected/height-growth.json",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/fixtures/edit-reference/stages-3-4-oracle-20260916T222738Z-corrected/interior-multi-level.json",
+   "new": "core/crates/layerfs-content/tests/fixtures/edit-reference/stages-3-4-oracle-20260916T222738Z-corrected/interior-multi-level.json",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/fixtures/edit-reference/stages-3-4-oracle-20260916T222738Z-corrected/join-80-100.json",
+   "new": "core/crates/layerfs-content/tests/fixtures/edit-reference/stages-3-4-oracle-20260916T222738Z-corrected/join-80-100.json",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/fixtures/edit-reference/stages-3-4-oracle-20260916T222738Z-corrected/root-collapse.json",
+   "new": "core/crates/layerfs-content/tests/fixtures/edit-reference/stages-3-4-oracle-20260916T222738Z-corrected/root-collapse.json",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/fixtures/edit-reference/stages-3-4-oracle-20260916T222738Z-corrected/unequal-height-join.json",
+   "new": "core/crates/layerfs-content/tests/fixtures/edit-reference/stages-3-4-oracle-20260916T222738Z-corrected/unequal-height-join.json",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/fixtures/edit-reference/stages-3-4-oracle-20260916T222738Z-corrected/untouched-sibling.json",
+   "new": "core/crates/layerfs-content/tests/fixtures/edit-reference/stages-3-4-oracle-20260916T222738Z-corrected/untouched-sibling.json",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/fixtures/edit-reference/stages-3-4-oracle-20260917T034500Z/repartition-80-100.json",
+   "new": "core/crates/layerfs-content/tests/fixtures/edit-reference/stages-3-4-oracle-20260917T034500Z/repartition-80-100.json",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/fixtures/filesystem/attr-pair.bin",
+   "new": "core/crates/layerfs-content/tests/fixtures/filesystem/attr-pair.bin",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/fixtures/filesystem/attr-single.bin",
+   "new": "core/crates/layerfs-content/tests/fixtures/filesystem/attr-single.bin",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/fixtures/filesystem/attr-wide.bin",
+   "new": "core/crates/layerfs-content/tests/fixtures/filesystem/attr-wide.bin",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/fixtures/filesystem/codec-directory-branch.bin",
+   "new": "core/crates/layerfs-content/tests/fixtures/filesystem/codec-directory-branch.bin",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/fixtures/filesystem/codec-directory-leaf.bin",
+   "new": "core/crates/layerfs-content/tests/fixtures/filesystem/codec-directory-leaf.bin",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/fixtures/filesystem/codec-inode-branch.bin",
+   "new": "core/crates/layerfs-content/tests/fixtures/filesystem/codec-inode-branch.bin",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/fixtures/filesystem/codec-inode-leaf.bin",
+   "new": "core/crates/layerfs-content/tests/fixtures/filesystem/codec-inode-leaf.bin",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/fixtures/filesystem/codec-metadata-leaf.bin",
+   "new": "core/crates/layerfs-content/tests/fixtures/filesystem/codec-metadata-leaf.bin",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/fixtures/filesystem/codec-root.bin",
+   "new": "core/crates/layerfs-content/tests/fixtures/filesystem/codec-root.bin",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/fixtures/filesystem/codec-symlink.bin",
+   "new": "core/crates/layerfs-content/tests/fixtures/filesystem/codec-symlink.bin",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/fixtures/filesystem/manifest.rs",
+   "new": "core/crates/layerfs-content/tests/fixtures/filesystem/manifest.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/support/context.rs",
+   "new": "core/crates/layerfs-content/tests/support/context.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/support/edit_runs.rs",
+   "new": "core/crates/layerfs-content/tests/support/edit_runs.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/support/edits.rs",
+   "new": "core/crates/layerfs-content/tests/support/edits.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/support/filesystem.rs",
+   "new": "core/crates/layerfs-content/tests/support/filesystem.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/support/mod.rs",
+   "new": "core/crates/layerfs-content/tests/support/mod.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/support/reference_records.rs",
+   "new": "core/crates/layerfs-content/tests/support/reference_records.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/support/reference_rows.rs",
+   "new": "core/crates/layerfs-content/tests/support/reference_rows.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/support/topology.rs",
+   "new": "core/crates/layerfs-content/tests/support/topology.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-history/Cargo.toml",
+   "new": "core/crates/layerfs-history/Cargo.toml",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-history/src/lib.rs",
+   "new": "core/crates/layerfs-history/src/lib.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-history/src/contract/authority.rs",
+   "new": "core/crates/layerfs-history/src/admission/authority.rs",
+   "change": "move",
+   "note": "root may keep 4 loose files; admission vocabulary leaf"
+  },
+  {
+   "old": "core/crates/layerfs-history/src/contract/catalog.rs",
+   "new": "core/crates/layerfs-history/src/catalog/contract.rs",
+   "change": "rename",
+   "note": "catalog contract leaf; avoids catalog/catalog.rs"
+  },
+  {
+   "old": "core/crates/layerfs-history/src/contract/error.rs",
+   "new": "core/crates/layerfs-history/src/error.rs",
+   "change": "move",
+   "note": "contract/ wrapper removed; shared vocabulary stays a root loose file"
+  },
+  {
+   "old": "core/crates/layerfs-history/src/contract/gc.rs",
+   "new": "core/crates/layerfs-history/src/admission/intent.rs",
+   "change": "rename",
+   "note": "holds GcIntent and its kinds; gc.rs names the concern, not the content (16)"
+  },
+  {
+   "old": "core/crates/layerfs-history/src/contract/holder.rs",
+   "new": "core/crates/layerfs-history/src/admission/holder.rs",
+   "change": "move",
+   "note": "root may keep 4 loose files; admission vocabulary leaf"
+  },
+  {
+   "old": "core/crates/layerfs-history/src/contract/identity.rs",
+   "new": "core/crates/layerfs-history/src/identity.rs",
+   "change": "move",
+   "note": "contract/ wrapper removed; shared vocabulary stays a root loose file"
+  },
+  {
+   "old": "core/crates/layerfs-history/src/contract/mod.rs",
+   "new": null,
+   "change": "remove",
+   "note": "contract/ wrapper removed"
+  },
+  {
+   "old": "core/crates/layerfs-history/src/contract/path.rs",
+   "new": "core/crates/layerfs-history/src/catalog/path.rs",
+   "change": "move",
+   "note": "catalog leaf: cursors and path keys the catalog stores"
+  },
+  {
+   "old": "core/crates/layerfs-history/src/contract/query.rs",
+   "new": "core/crates/layerfs-history/src/catalog/query.rs",
+   "change": "move",
+   "note": "catalog leaf: cursors and path keys the catalog stores"
+  },
+  {
+   "old": "core/crates/layerfs-history/src/contract/records.rs",
+   "new": "core/crates/layerfs-history/src/records.rs",
+   "change": "move",
+   "note": "contract/ wrapper removed; shared vocabulary stays a root loose file"
+  },
+  {
+   "old": "core/crates/layerfs-history/tests/authority.rs",
+   "new": "core/crates/layerfs-history/tests/history/authority.rs",
+   "change": "move",
+   "note": "flat test binary becomes a topic of the history area binary"
+  },
+  {
+   "old": "core/crates/layerfs-history/tests/contract_constructors.rs",
+   "new": "core/crates/layerfs-history/tests/history/error_constructors.rs",
+   "change": "rename",
+   "note": "topic of the history area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-history/tests/contract_paths.rs",
+   "new": "core/crates/layerfs-history/tests/history/path_grammar.rs",
+   "change": "rename",
+   "note": "topic of the history area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-history/tests/query_authenticator.rs",
+   "new": "core/crates/layerfs-history/tests/history/query_authenticator.rs",
+   "change": "move",
+   "note": "flat test binary becomes a topic of the history area binary"
+  },
+  {
+   "old": "core/crates/layerfs-storage/Cargo.toml",
+   "new": "core/crates/layerfs-storage/Cargo.toml",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-storage/README.md",
+   "new": "core/crates/layerfs-storage/README.md",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/lib.rs",
+   "new": "core/crates/layerfs-storage/src/lib.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/encoding/codec.rs",
+   "new": "core/crates/layerfs-storage/src/encoding/codec.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/encoding/decode.rs",
+   "new": "core/crates/layerfs-storage/src/encoding/decode.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/encoding/full.rs",
+   "new": "core/crates/layerfs-storage/src/encoding/delta/full.rs",
+   "change": "move",
+   "note": "only delta/ uses it; encoding/ keeps 2 shared loose files"
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/encoding/mod.rs",
+   "new": "core/crates/layerfs-storage/src/encoding/mod.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/encoding/pack_cache.rs",
+   "new": "core/crates/layerfs-storage/src/pack/cache.rs",
+   "change": "rename",
+   "note": "pack infrastructure used by read, save and encoding"
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/encoding/pack_units.rs",
+   "new": "core/crates/layerfs-storage/src/pack/units.rs",
+   "change": "rename",
+   "note": "pack infrastructure used by read, save and encoding"
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/encoding/delta/branch.rs",
+   "new": "core/crates/layerfs-storage/src/encoding/delta/program_page.rs",
+   "change": "rename",
+   "note": "program pages incl. leaves; \"branch\" means a history Branch"
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/encoding/delta/candidates.rs",
+   "new": "core/crates/layerfs-storage/src/encoding/delta/candidates.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/encoding/delta/edge.rs",
+   "new": "core/crates/layerfs-storage/src/encoding/delta/edge.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/encoding/delta/mod.rs",
+   "new": "core/crates/layerfs-storage/src/encoding/delta/mod.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/encoding/delta/read.rs",
+   "new": "core/crates/layerfs-storage/src/encoding/delta/read.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/encoding/delta/record.rs",
+   "new": "core/crates/layerfs-storage/src/encoding/delta/record.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/encoding/delta/select.rs",
+   "new": "core/crates/layerfs-storage/src/encoding/delta/select.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/encoding/pool/branch.rs",
+   "new": "core/crates/layerfs-storage/src/encoding/pool/program_page.rs",
+   "change": "rename",
+   "note": "program pages incl. leaves; \"branch\" means a history Branch"
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/encoding/pool/counters.rs",
+   "new": "core/crates/layerfs-storage/src/encoding/pool/counters.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/encoding/pool/delta.rs",
+   "new": "core/crates/layerfs-storage/src/encoding/pool/delta.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/encoding/pool/leaf.rs",
+   "new": "core/crates/layerfs-storage/src/encoding/pool/leaf.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/encoding/pool/memo.rs",
+   "new": "core/crates/layerfs-storage/src/encoding/pool/memo.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/encoding/pool/mod.rs",
+   "new": "core/crates/layerfs-storage/src/encoding/pool/mod.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/encoding/pool/read.rs",
+   "new": "core/crates/layerfs-storage/src/encoding/pool/read.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/pack/assemble.rs",
+   "new": "core/crates/layerfs-storage/src/pack/assemble.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/pack/audit.rs",
+   "new": "core/crates/layerfs-storage/src/pack/audit.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/pack/layout.rs",
+   "new": "core/crates/layerfs-storage/src/pack/layout.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/pack/mod.rs",
+   "new": "core/crates/layerfs-storage/src/pack/mod.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/pack/repack.rs",
+   "new": "core/crates/layerfs-storage/src/pack/repack.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/port/mod.rs",
+   "new": "core/crates/layerfs-storage/src/port/mod.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/port/pack.rs",
+   "new": "core/crates/layerfs-storage/src/port/object_key.rs",
+   "change": "rename",
+   "note": "holds only ObjectKey"
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/port/persistence.rs",
+   "new": "core/crates/layerfs-storage/src/port/persistence.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/port/read_pack.rs",
+   "new": "core/crates/layerfs-storage/src/port/pack_read/persisted.rs",
+   "change": "rename",
+   "note": "holds PersistedPack; pack_read/pack.rs would repeat (rules 14, 16)"
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/port/read_scoped.rs",
+   "new": "core/crates/layerfs-storage/src/port/pack_read/scoped.rs",
+   "change": "rename",
+   "note": "read_* prefix group becomes port/read/; prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/port/read_selection.rs",
+   "new": "core/crates/layerfs-storage/src/port/pack_read/selection.rs",
+   "change": "rename",
+   "note": "read_* prefix group becomes port/read/; prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/port/acquisition/contract.rs",
+   "new": "core/crates/layerfs-storage/src/port/acquisition/contract.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/port/acquisition/mod.rs",
+   "new": "core/crates/layerfs-storage/src/port/acquisition/mod.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/port/acquisition/rows.rs",
+   "new": "core/crates/layerfs-storage/src/port/acquisition/rows.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/port/acquisition/work.rs",
+   "new": "core/crates/layerfs-storage/src/port/acquisition/work.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/read/captured.rs",
+   "new": "core/crates/layerfs-storage/src/read/source/captured.rs",
+   "change": "move",
+   "note": "impl Fetch over pub(super) captured_locators"
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/read/counters.rs",
+   "new": "core/crates/layerfs-storage/src/read/source/counters.rs",
+   "change": "move",
+   "note": "Diagnostics is Fetch's counters field"
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/read/fetch.rs",
+   "new": "core/crates/layerfs-storage/src/read/source/fetch.rs",
+   "change": "move",
+   "note": "struct Fetch (Storage.source); read/ had 14 files"
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/read/held.rs",
+   "new": "core/crates/layerfs-storage/src/read/source/held.rs",
+   "change": "move",
+   "note": "impl Fetch over pub(super) held"
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/read/hints.rs",
+   "new": "core/crates/layerfs-storage/src/read/source/hints.rs",
+   "change": "move",
+   "note": "impl Fetch over pub(super) hints"
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/read/joined.rs",
+   "new": "core/crates/layerfs-storage/src/read/source/joined.rs",
+   "change": "move",
+   "note": "impl Fetch"
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/read/length.rs",
+   "new": "core/crates/layerfs-storage/src/read/length.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/read/locator_cache.rs",
+   "new": "core/crates/layerfs-storage/src/read/source/locator_cache.rs",
+   "change": "move",
+   "note": "Fetch's locators field"
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/read/mod.rs",
+   "new": "core/crates/layerfs-storage/src/read/mod.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/read/objects.rs",
+   "new": "core/crates/layerfs-storage/src/read/objects.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/read/prefetch.rs",
+   "new": "core/crates/layerfs-storage/src/read/prefetch.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/read/provider.rs",
+   "new": "core/crates/layerfs-storage/src/read/provider.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/read/units.rs",
+   "new": "core/crates/layerfs-storage/src/read/source/units.rs",
+   "change": "move",
+   "note": "GroupPlan used only by fetch.rs and hints.rs"
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/save/batch.rs",
+   "new": "core/crates/layerfs-storage/src/save/prepare/batch.rs",
+   "change": "move",
+   "note": "Save phases named alike in order: prepare, select, publish (rule 9)"
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/save/deferred.rs",
+   "new": "core/crates/layerfs-storage/src/save/prepare/deferred.rs",
+   "change": "move",
+   "note": "Save phases named alike in order: prepare, select, publish (rule 9)"
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/save/mod.rs",
+   "new": "core/crates/layerfs-storage/src/save/mod.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/save/operation.rs",
+   "new": "core/crates/layerfs-storage/src/save/operation.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/save/pooled.rs",
+   "new": "core/crates/layerfs-storage/src/save/select/pooled.rs",
+   "change": "move",
+   "note": "save/ had 15 files; selection group"
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/save/profile.rs",
+   "new": "core/crates/layerfs-storage/src/save/select/counters.rs",
+   "change": "rename",
+   "note": "selection counters; \"profile\" means the codec/format profile"
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/save/provider.rs",
+   "new": "core/crates/layerfs-storage/src/save/provider.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/save/publication.rs",
+   "new": "core/crates/layerfs-storage/src/save/publish/register.rs",
+   "change": "rename",
+   "note": "save/ had 15 files; closure and registration in publish/"
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/save/reservation.rs",
+   "new": "core/crates/layerfs-storage/src/save/publish/reservation.rs",
+   "change": "move",
+   "note": "save/ had 15 files; publication group"
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/save/resolved.rs",
+   "new": "core/crates/layerfs-storage/src/save/prepare/resolved.rs",
+   "change": "move",
+   "note": "Save phases named alike in order: prepare, select, publish (rule 9)"
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/save/seal.rs",
+   "new": "core/crates/layerfs-storage/src/save/publish/seal.rs",
+   "change": "move",
+   "note": "save/ had 15 files; publication group"
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/save/select.rs",
+   "new": "core/crates/layerfs-storage/src/save/select/representation.rs",
+   "change": "rename",
+   "note": "save/ had 15 files; representation choice in select/"
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/save/source.rs",
+   "new": "core/crates/layerfs-storage/src/save/prepare/source.rs",
+   "change": "move",
+   "note": "Save phases named alike in order: prepare, select, publish (rule 9)"
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/save/state.rs",
+   "new": "core/crates/layerfs-storage/src/save/state.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/save/wave.rs",
+   "new": "core/crates/layerfs-storage/src/save/prepare/wave.rs",
+   "change": "move",
+   "note": "keeps its old name: one preparation wave; prepare/prepare.rs would repeat (14)"
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/save/work.rs",
+   "new": "core/crates/layerfs-storage/src/save/work.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/store/error.rs",
+   "new": "core/crates/layerfs-storage/src/error.rs",
+   "change": "move",
+   "note": "store/ was a private wrapper shadowing the engine Store; root loose file"
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/store/handle.rs",
+   "new": "core/crates/layerfs-storage/src/handle.rs",
+   "change": "move",
+   "note": "store/ was a private wrapper shadowing the engine Store; root loose file"
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/store/location.rs",
+   "new": "core/crates/layerfs-storage/src/location.rs",
+   "change": "move",
+   "note": "store/ was a private wrapper shadowing the engine Store; root loose file"
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/store/mod.rs",
+   "new": null,
+   "change": "remove",
+   "note": "store/ wrapper removed; lib.rs declares the modules"
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/store/policy.rs",
+   "new": "core/crates/layerfs-storage/src/policy.rs",
+   "change": "move",
+   "note": "store/ was a private wrapper shadowing the engine Store; root loose file"
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/store/reservations.rs",
+   "new": "core/crates/layerfs-storage/src/save/publish/reservation.rs",
+   "change": "merge",
+   "note": "ReservationBlocks joins its other half, IdBlock refills"
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/store/source.rs",
+   "new": "core/crates/layerfs-storage/src/location.rs",
+   "change": "merge",
+   "note": "root would have 5 loose files; Source trait joins the physical vocabulary"
+  },
+  {
+   "old": "core/crates/layerfs-storage/tests/candidate_ring_recency.rs",
+   "new": "core/crates/layerfs-storage/tests/encoding/candidate_ring_recency.rs",
+   "change": "move",
+   "note": "flat test binary becomes a topic of the encoding area binary"
+  },
+  {
+   "old": "core/crates/layerfs-storage/tests/capacity_refusal.rs",
+   "new": "core/crates/layerfs-storage/tests/port/capacity_refusal.rs",
+   "change": "move",
+   "note": "flat test binary becomes a topic of the port area binary"
+  },
+  {
+   "old": "core/crates/layerfs-storage/tests/captured_payload_retention.rs",
+   "new": "core/crates/layerfs-storage/tests/save/captured_payload_retention.rs",
+   "change": "move",
+   "note": "flat test binary becomes a topic of the save area binary"
+  },
+  {
+   "old": "core/crates/layerfs-storage/tests/chain_budget_scaling.rs",
+   "new": "core/crates/layerfs-storage/tests/encoding/chain_budget_scaling.rs",
+   "change": "move",
+   "note": "flat test binary becomes a topic of the encoding area binary"
+  },
+  {
+   "old": "core/crates/layerfs-storage/tests/chain_hints.rs",
+   "new": "core/crates/layerfs-storage/tests/read/chain_hints.rs",
+   "change": "move",
+   "note": "flat test binary becomes a topic of the read area binary"
+  },
+  {
+   "old": "core/crates/layerfs-storage/tests/chain_memo_reads.rs",
+   "new": "core/crates/layerfs-storage/tests/pool/chain_memo_reads.rs",
+   "change": "move",
+   "note": "flat test binary becomes a topic of the pool area binary"
+  },
+  {
+   "old": "core/crates/layerfs-storage/tests/codec_frames.rs",
+   "new": "core/crates/layerfs-storage/tests/encoding/codec_frames.rs",
+   "change": "move",
+   "note": "flat test binary becomes a topic of the encoding area binary"
+  },
+  {
+   "old": "core/crates/layerfs-storage/tests/concurrent_winner_chain.rs",
+   "new": "core/crates/layerfs-storage/tests/save/concurrent_winner_chain.rs",
+   "change": "move",
+   "note": "flat test binary becomes a topic of the save area binary"
+  },
+  {
+   "old": "core/crates/layerfs-storage/tests/decoded_group_retention.rs",
+   "new": "core/crates/layerfs-storage/tests/read/decoded_group_retention.rs",
+   "change": "move",
+   "note": "flat test binary becomes a topic of the read area binary"
+  },
+  {
+   "old": "core/crates/layerfs-storage/tests/delta_base_budget.rs",
+   "new": "core/crates/layerfs-storage/tests/encoding/base_budget.rs",
+   "change": "rename",
+   "note": "topic of the encoding area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-storage/tests/delta_depth_counts.rs",
+   "new": "core/crates/layerfs-storage/tests/encoding/depth_counts.rs",
+   "change": "rename",
+   "note": "topic of the encoding area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-storage/tests/encode_region_reuse.rs",
+   "new": "core/crates/layerfs-storage/tests/encoding/codec_region_reuse.rs",
+   "change": "rename",
+   "note": "topic of the encoding area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-storage/tests/exact_reuse_trust.rs",
+   "new": "core/crates/layerfs-storage/tests/save/exact_reuse_trust.rs",
+   "change": "move",
+   "note": "flat test binary becomes a topic of the save area binary"
+  },
+  {
+   "old": "core/crates/layerfs-storage/tests/group_reads.rs",
+   "new": "core/crates/layerfs-storage/tests/read/groups.rs",
+   "change": "rename",
+   "note": "topic of the read area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-storage/tests/inode_branch_deltas.rs",
+   "new": "core/crates/layerfs-storage/tests/encoding/inode_pages.rs",
+   "change": "rename",
+   "note": "topic of the encoding area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-storage/tests/inode_branch_merge_reads.rs",
+   "new": "core/crates/layerfs-storage/tests/pool/inode_page_reads.rs",
+   "change": "rename",
+   "note": "topic of the pool area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-storage/tests/kept_ids_pooled_chains.rs",
+   "new": "core/crates/layerfs-storage/tests/save/kept_ids_pooled_chains.rs",
+   "change": "move",
+   "note": "flat test binary becomes a topic of the save area binary"
+  },
+  {
+   "old": "core/crates/layerfs-storage/tests/lazy_candidate_ring.rs",
+   "new": "core/crates/layerfs-storage/tests/encoding/lazy_candidate_ring.rs",
+   "change": "move",
+   "note": "flat test binary becomes a topic of the encoding area binary"
+  },
+  {
+   "old": "core/crates/layerfs-storage/tests/locator_pressure.rs",
+   "new": "core/crates/layerfs-storage/tests/read/locator_pressure.rs",
+   "change": "move",
+   "note": "flat test binary becomes a topic of the read area binary"
+  },
+  {
+   "old": "core/crates/layerfs-storage/tests/logical_size_lengths.rs",
+   "new": "core/crates/layerfs-storage/tests/read/logical_size_lengths.rs",
+   "change": "move",
+   "note": "flat test binary becomes a topic of the read area binary"
+  },
+  {
+   "old": "core/crates/layerfs-storage/tests/losing_chunk_bases.rs",
+   "new": "core/crates/layerfs-storage/tests/encoding/losing_chunk_bases.rs",
+   "change": "move",
+   "note": "flat test binary becomes a topic of the encoding area binary"
+  },
+  {
+   "old": "core/crates/layerfs-storage/tests/object_key.rs",
+   "new": "core/crates/layerfs-storage/tests/port/object_key.rs",
+   "change": "move",
+   "note": "flat test binary becomes a topic of the port area binary"
+  },
+  {
+   "old": "core/crates/layerfs-storage/tests/pack_cache_contract.rs",
+   "new": "core/crates/layerfs-storage/tests/pack/cache_contract.rs",
+   "change": "rename",
+   "note": "topic of the pack area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-storage/tests/pack_range_contract.rs",
+   "new": "core/crates/layerfs-storage/tests/port/pack_range_contract.rs",
+   "change": "move",
+   "note": "flat test binary becomes a topic of the port area binary"
+  },
+  {
+   "old": "core/crates/layerfs-storage/tests/pack_repack.rs",
+   "new": "core/crates/layerfs-storage/tests/pack/repack.rs",
+   "change": "rename",
+   "note": "topic of the pack area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-storage/tests/page_program_deltas.rs",
+   "new": "core/crates/layerfs-storage/tests/encoding/program_pages.rs",
+   "change": "rename",
+   "note": "topic of the encoding area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-storage/tests/physical_formats.rs",
+   "new": "core/crates/layerfs-storage/tests/pack/physical_formats.rs",
+   "change": "move",
+   "note": "flat test binary becomes a topic of the pack area binary"
+  },
+  {
+   "old": "core/crates/layerfs-storage/tests/pooled_demand_work.rs",
+   "new": "core/crates/layerfs-storage/tests/pool/demand_work.rs",
+   "change": "rename",
+   "note": "topic of the pool area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-storage/tests/pooled_dependency_integrity.rs",
+   "new": "core/crates/layerfs-storage/tests/pool/dependency_integrity.rs",
+   "change": "rename",
+   "note": "topic of the pool area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-storage/tests/read_demand_custody.rs",
+   "new": "core/crates/layerfs-storage/tests/read/demand_custody.rs",
+   "change": "rename",
+   "note": "topic of the read area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-storage/tests/read_pack_locality.rs",
+   "new": "core/crates/layerfs-storage/tests/read/pack_locality.rs",
+   "change": "rename",
+   "note": "topic of the read area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-storage/tests/rebased_delta_fraction.rs",
+   "new": "core/crates/layerfs-storage/tests/encoding/rebased_fraction.rs",
+   "change": "rename",
+   "note": "topic of the encoding area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-storage/tests/ring_prefix_admission.rs",
+   "new": "core/crates/layerfs-storage/tests/save/ring_prefix_admission.rs",
+   "change": "move",
+   "note": "flat test binary becomes a topic of the save area binary"
+  },
+  {
+   "old": "core/crates/layerfs-storage/tests/save_demand_locality.rs",
+   "new": "core/crates/layerfs-storage/tests/save/demand_locality.rs",
+   "change": "rename",
+   "note": "topic of the save area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-storage/tests/save_encoder_reuse.rs",
+   "new": "core/crates/layerfs-storage/tests/save/encoder_reuse.rs",
+   "change": "rename",
+   "note": "topic of the save area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-storage/tests/save_resolved_reads.rs",
+   "new": "core/crates/layerfs-storage/tests/save/resolved_reads.rs",
+   "change": "rename",
+   "note": "topic of the save area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-storage/tests/selected_cache_bounds.rs",
+   "new": "core/crates/layerfs-storage/tests/read/selected_cache_bounds.rs",
+   "change": "move",
+   "note": "flat test binary becomes a topic of the read area binary"
+  },
+  {
+   "old": "core/crates/layerfs-storage/tests/selected_group_reads.rs",
+   "new": "core/crates/layerfs-storage/tests/read/selected_group_reads.rs",
+   "change": "move",
+   "note": "flat test binary becomes a topic of the read area binary"
+  },
+  {
+   "old": "core/crates/layerfs-storage/tests/sparse_edges.rs",
+   "new": "core/crates/layerfs-storage/tests/encoding/sparse_edges.rs",
+   "change": "move",
+   "note": "flat test binary becomes a topic of the encoding area binary"
+  },
+  {
+   "old": "core/crates/layerfs-storage/tests/stored_value_reads.rs",
+   "new": "core/crates/layerfs-storage/tests/pool/stored_value_reads.rs",
+   "change": "move",
+   "note": "flat test binary becomes a topic of the pool area binary"
+  },
+  {
+   "old": "core/crates/layerfs-storage/tests/verified_pack_read.rs",
+   "new": "core/crates/layerfs-storage/tests/port/verified_pack_read.rs",
+   "change": "move",
+   "note": "flat test binary becomes a topic of the port area binary"
+  },
+  {
+   "old": "core/crates/layerfs-storage/tests/wave_reference_locates.rs",
+   "new": "core/crates/layerfs-storage/tests/save/wave_reference_locates.rs",
+   "change": "move",
+   "note": "flat test binary becomes a topic of the save area binary"
+  },
+  {
+   "old": "core/crates/layerfs-storage/tests/support/chain_provider.rs",
+   "new": "core/crates/layerfs-storage/tests/support/chain_provider.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-storage/tests/support/edits.rs",
+   "new": "core/crates/layerfs-storage/tests/support/edits.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-storage/tests/support/filesystem.rs",
+   "new": "core/crates/layerfs-storage/tests/support/filesystem.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-storage/tests/support/memory_metadata.rs",
+   "new": "core/crates/layerfs-storage/tests/support/memory_metadata.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-storage/tests/support/mod.rs",
+   "new": "core/crates/layerfs-storage/tests/support/mod.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-telemetry/Cargo.toml",
+   "new": "core/crates/layerfs-telemetry/Cargo.toml",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-telemetry/README.md",
+   "new": "core/crates/layerfs-telemetry/README.md",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-telemetry/USAGE.md",
+   "new": "core/crates/layerfs-telemetry/USAGE.md",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-telemetry/examples/timer_composition.rs",
+   "new": "core/crates/layerfs-telemetry/examples/timer_composition.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-telemetry/examples/timer_nested.rs",
+   "new": "core/crates/layerfs-telemetry/examples/timer_nested.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-telemetry/src/lib.rs",
+   "new": "core/crates/layerfs-telemetry/src/lib.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-telemetry/src/output/collector.rs",
+   "new": "core/crates/layerfs-telemetry/src/output/collector.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-telemetry/src/output/encode.rs",
+   "new": "core/crates/layerfs-telemetry/src/output/encode.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-telemetry/src/output/health.rs",
+   "new": "core/crates/layerfs-telemetry/src/output/health.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-telemetry/src/output/mod.rs",
+   "new": "core/crates/layerfs-telemetry/src/output/mod.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-telemetry/src/output/queue.rs",
+   "new": "core/crates/layerfs-telemetry/src/output/queue.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-telemetry/src/output/retention.rs",
+   "new": "core/crates/layerfs-telemetry/src/output/retention.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-telemetry/src/platform/linux.rs",
+   "new": "core/crates/layerfs-telemetry/src/runtime/linux.rs",
+   "change": "move",
+   "note": "platform/ held 2 files; its only user is runtime/monitor.rs"
+  },
+  {
+   "old": "core/crates/layerfs-telemetry/src/platform/macos.rs",
+   "new": "core/crates/layerfs-telemetry/src/runtime/macos.rs",
+   "change": "move",
+   "note": "platform/ held 2 files; its only user is runtime/monitor.rs"
+  },
+  {
+   "old": "core/crates/layerfs-telemetry/src/platform/mod.rs",
+   "new": null,
+   "change": "remove",
+   "note": "platform/ removed; OS cfg selection moves into runtime/mod.rs"
+  },
+  {
+   "old": "core/crates/layerfs-telemetry/src/runtime/mod.rs",
+   "new": "core/crates/layerfs-telemetry/src/runtime/mod.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-telemetry/src/runtime/monitor.rs",
+   "new": "core/crates/layerfs-telemetry/src/runtime/monitor.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-telemetry/src/runtime/observation.rs",
+   "new": "core/crates/layerfs-telemetry/src/observation.rs",
+   "change": "move",
+   "note": "always compiled and shared by output/ and runtime/; root loose file"
+  },
+  {
+   "old": "core/crates/layerfs-telemetry/src/runtime/operation.rs",
+   "new": "core/crates/layerfs-telemetry/src/operation.rs",
+   "change": "move",
+   "note": "always compiled and shared by output/ and runtime/; root loose file"
+  },
+  {
+   "old": "core/crates/layerfs-telemetry/src/runtime/session.rs",
+   "new": "core/crates/layerfs-telemetry/src/runtime/session.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-telemetry/src/timer/bounded_json.rs",
+   "new": "core/crates/layerfs-telemetry/src/timer/bounded_json.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-telemetry/src/timer/format.rs",
+   "new": "core/crates/layerfs-telemetry/src/timer/text.rs",
+   "change": "rename",
+   "note": "it renders text; pairs with json.rs"
+  },
+  {
+   "old": "core/crates/layerfs-telemetry/src/timer/json.rs",
+   "new": "core/crates/layerfs-telemetry/src/timer/json.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-telemetry/src/timer/limits.rs",
+   "new": "core/crates/layerfs-telemetry/src/timer/limits.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-telemetry/src/timer/mod.rs",
+   "new": "core/crates/layerfs-telemetry/src/timer/mod.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-telemetry/src/timer/recording.rs",
+   "new": "core/crates/layerfs-telemetry/src/timer/recording.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-telemetry/src/timer/report.rs",
+   "new": "core/crates/layerfs-telemetry/src/timer/report.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-telemetry/src/timer/scope.rs",
+   "new": "core/crates/layerfs-telemetry/src/timer/scope.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-telemetry/src/timer/waits.rs",
+   "new": "core/crates/layerfs-telemetry/src/timer/waits.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-telemetry/tests/full_disk.rs",
+   "new": "core/crates/layerfs-telemetry/tests/runtime/full_disk.rs",
+   "change": "move",
+   "note": "flat test binary becomes a topic of the runtime area binary"
+  },
+  {
+   "old": "core/crates/layerfs-telemetry/tests/observations.rs",
+   "new": "core/crates/layerfs-telemetry/tests/runtime/observations.rs",
+   "change": "move",
+   "note": "flat test binary becomes a topic of the runtime area binary"
+  },
+  {
+   "old": "core/crates/layerfs-telemetry/tests/off_allocations.rs",
+   "new": "core/crates/layerfs-telemetry/tests/standalone/off_allocations.rs",
+   "change": "move",
+   "note": "must stay a separate binary: own #[global_allocator]"
+  },
+  {
+   "old": "core/crates/layerfs-telemetry/tests/owned_allocations.rs",
+   "new": "core/crates/layerfs-telemetry/tests/standalone/owned_allocations.rs",
+   "change": "move",
+   "note": "must stay a separate binary: own #[global_allocator]"
+  },
+  {
+   "old": "core/crates/layerfs-telemetry/tests/platform.rs",
+   "new": "core/crates/layerfs-telemetry/tests/standalone/platform.rs",
+   "change": "move",
+   "note": "must stay a separate binary: samples its own process CPU and RSS"
+  },
+  {
+   "old": "core/crates/layerfs-telemetry/tests/stalled_output.rs",
+   "new": "core/crates/layerfs-telemetry/tests/runtime/stalled_output.rs",
+   "change": "move",
+   "note": "flat test binary becomes a topic of the runtime area binary"
+  },
+  {
+   "old": "core/crates/layerfs-telemetry/tests/timer.rs",
+   "new": "core/crates/layerfs-telemetry/tests/timer/basic.rs",
+   "change": "rename",
+   "note": "topic of the timer area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-telemetry/tests/timer_bounds.rs",
+   "new": "core/crates/layerfs-telemetry/tests/timer/bounds.rs",
+   "change": "rename",
+   "note": "topic of the timer area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-telemetry/tests/timer_compile_fail.rs",
+   "new": "core/crates/layerfs-telemetry/tests/timer/compile_fail.rs",
+   "change": "rename",
+   "note": "topic of the timer area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-telemetry/tests/timer_format.rs",
+   "new": "core/crates/layerfs-telemetry/tests/timer/text.rs",
+   "change": "rename",
+   "note": "topic of the timer area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-telemetry/tests/timer_json.rs",
+   "new": "core/crates/layerfs-telemetry/tests/timer/json.rs",
+   "change": "rename",
+   "note": "topic of the timer area binary; area prefix dropped"
+  },
+  {
+   "old": "core/crates/layerfs-telemetry/tests/compile_fail/attach_on_pending_scope.rs",
+   "new": "core/crates/layerfs-telemetry/tests/compile_fail/attach_on_pending_scope.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-telemetry/tests/compile_fail/child_on_pending_scope.rs",
+   "new": "core/crates/layerfs-telemetry/tests/compile_fail/child_on_pending_scope.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-telemetry/tests/compile_fail/control_injected_scopes.rs",
+   "new": "core/crates/layerfs-telemetry/tests/compile_fail/control_injected_scopes.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-telemetry/tests/compile_fail/escape_child_scope.rs",
+   "new": "core/crates/layerfs-telemetry/tests/compile_fail/escape_child_scope.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-telemetry/tests/compile_fail/run_active_handle.rs",
+   "new": "core/crates/layerfs-telemetry/tests/compile_fail/run_active_handle.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-telemetry/tests/compile_fail/run_scope_twice.rs",
+   "new": "core/crates/layerfs-telemetry/tests/compile_fail/run_scope_twice.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "core/crates/layerfs-telemetry/tests/compile_fail/send_scope_across_threads.rs",
+   "new": "core/crates/layerfs-telemetry/tests/compile_fail/send_scope_across_threads.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": null,
+   "new": "core/crates/layerfs-content/src/verify/mod.rs",
+   "change": "new",
+   "note": "declarations and re-exports for the new folder"
+  },
+  {
+   "old": null,
+   "new": "core/crates/layerfs-content/src/file/draft/mod.rs",
+   "change": "new",
+   "note": "declarations and re-exports for the new folder"
+  },
+  {
+   "old": null,
+   "new": "core/crates/layerfs-content/src/filesystem/name/mod.rs",
+   "change": "new",
+   "note": "declarations and re-exports for the new folder"
+  },
+  {
+   "old": null,
+   "new": "core/crates/layerfs-content/src/filesystem/construction/mod.rs",
+   "change": "new",
+   "note": "declarations and re-exports for the new folder"
+  },
+  {
+   "old": null,
+   "new": "core/crates/layerfs-content/src/filesystem/construction/validate/mod.rs",
+   "change": "new",
+   "note": "declarations; replaces validate.rs as the module entry"
+  },
+  {
+   "old": null,
+   "new": "core/crates/layerfs-content/src/filesystem/construction/reference_index/mod.rs",
+   "change": "new",
+   "note": "declarations and re-exports for the new folder"
+  },
+  {
+   "old": null,
+   "new": "core/crates/layerfs-content/src/merge/decide/mod.rs",
+   "change": "new",
+   "note": "declarations and re-exports for the new folder"
+  },
+  {
+   "old": null,
+   "new": "core/crates/layerfs-content/src/merge/plan/mod.rs",
+   "change": "new",
+   "note": "declarations and re-exports for the new folder"
+  },
+  {
+   "old": null,
+   "new": "core/crates/layerfs-content/src/merge/rule/mod.rs",
+   "change": "new",
+   "note": "declarations and re-exports for the new folder"
+  },
+  {
+   "old": null,
+   "new": "core/crates/layerfs-content/src/merge/serial/mod.rs",
+   "change": "new",
+   "note": "declarations and re-exports for the new folder"
+  },
+  {
+   "old": null,
+   "new": "core/crates/layerfs-content/tests/edit/main.rs",
+   "change": "new",
+   "note": "edit area test binary: declares its topic modules and support"
+  },
+  {
+   "old": null,
+   "new": "core/crates/layerfs-content/tests/edit_cost/main.rs",
+   "change": "new",
+   "note": "edit_cost area test binary: declares its topic modules and support"
+  },
+  {
+   "old": null,
+   "new": "core/crates/layerfs-content/tests/file/main.rs",
+   "change": "new",
+   "note": "file area test binary: declares its topic modules and support"
+  },
+  {
+   "old": null,
+   "new": "core/crates/layerfs-content/tests/filesystem/main.rs",
+   "change": "new",
+   "note": "filesystem area test binary: declares its topic modules and support"
+  },
+  {
+   "old": null,
+   "new": "core/crates/layerfs-content/tests/filesystem_state/main.rs",
+   "change": "new",
+   "note": "filesystem_state area test binary: declares its topic modules and support"
+  },
+  {
+   "old": null,
+   "new": "core/crates/layerfs-content/tests/filesystem_topology/main.rs",
+   "change": "new",
+   "note": "filesystem_topology area test binary: declares its topic modules and support"
+  },
+  {
+   "old": null,
+   "new": "core/crates/layerfs-content/tests/compare/main.rs",
+   "change": "new",
+   "note": "compare area test binary: declares its topic modules and support"
+  },
+  {
+   "old": null,
+   "new": "core/crates/layerfs-content/tests/object/main.rs",
+   "change": "new",
+   "note": "object area test binary: declares its topic modules and support"
+  },
+  {
+   "old": null,
+   "new": "core/crates/layerfs-storage/src/port/pack_read/mod.rs",
+   "change": "new",
+   "note": "port/ kept (owner 2026-11-27: not worth 57 importers); declarations and re-exports for the new folder"
+  },
+  {
+   "old": null,
+   "new": "core/crates/layerfs-storage/src/save/publish/mod.rs",
+   "change": "new",
+   "note": "declarations and re-exports for the new folder"
+  },
+  {
+   "old": null,
+   "new": "core/crates/layerfs-storage/src/save/select/mod.rs",
+   "change": "new",
+   "note": "declarations and re-exports for the new folder"
+  },
+  {
+   "old": null,
+   "new": "core/crates/layerfs-storage/src/save/prepare/mod.rs",
+   "change": "new",
+   "note": "declarations and re-exports for the new folder"
+  },
+  {
+   "old": null,
+   "new": "core/crates/layerfs-storage/tests/encoding/main.rs",
+   "change": "new",
+   "note": "encoding area test binary: declares its topic modules and support"
+  },
+  {
+   "old": null,
+   "new": "core/crates/layerfs-storage/tests/pool/main.rs",
+   "change": "new",
+   "note": "pool area test binary: declares its topic modules and support"
+  },
+  {
+   "old": null,
+   "new": "core/crates/layerfs-storage/tests/read/main.rs",
+   "change": "new",
+   "note": "read area test binary: declares its topic modules and support"
+  },
+  {
+   "old": null,
+   "new": "core/crates/layerfs-storage/tests/save/main.rs",
+   "change": "new",
+   "note": "save area test binary: declares its topic modules and support"
+  },
+  {
+   "old": null,
+   "new": "core/crates/layerfs-storage/tests/port/main.rs",
+   "change": "new",
+   "note": "port area test binary: declares its topic modules and support"
+  },
+  {
+   "old": null,
+   "new": "core/crates/layerfs-storage/tests/pack/main.rs",
+   "change": "new",
+   "note": "pack area test binary: declares its topic modules and support"
+  },
+  {
+   "old": null,
+   "new": "core/crates/layerfs-history/src/admission/mod.rs",
+   "change": "new",
+   "note": "declarations and re-exports for the new folder"
+  },
+  {
+   "old": null,
+   "new": "core/crates/layerfs-history/src/catalog/mod.rs",
+   "change": "new",
+   "note": "declarations and re-exports for the new folder"
+  },
+  {
+   "old": null,
+   "new": "core/crates/layerfs-history/tests/history/main.rs",
+   "change": "new",
+   "note": "history area test binary: declares its topic modules and support"
+  },
+  {
+   "old": null,
+   "new": "core/crates/layerfs-telemetry/tests/timer/main.rs",
+   "change": "new",
+   "note": "timer area test binary: declares its topic modules and support"
+  },
+  {
+   "old": null,
+   "new": "core/crates/layerfs-telemetry/tests/runtime/main.rs",
+   "change": "new",
+   "note": "runtime area test binary: declares its topic modules and support"
+  },
+  {
+   "old": null,
+   "new": "core/crates/layerfs-content/src/filesystem/tree/mod.rs",
+   "change": "new",
+   "note": "declarations for the three tree kinds"
+  },
+  {
+   "old": "core/crates/layerfs-content/src/compare/across.rs",
+   "new": "core/crates/layerfs-content/src/compare/across.rs",
+   "change": "keep",
+   "note": "new at #818; keeps its name (owner 2026-11-27: \"versions\" stays store-service's word)"
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/read/per_object.rs",
+   "new": "core/crates/layerfs-storage/src/read/source/per_object.rs",
+   "change": "move",
+   "note": "impl Fetch over pub(super) refused"
+  },
+  {
+   "old": "core/crates/layerfs-storage/src/read/values.rs",
+   "new": "core/crates/layerfs-storage/src/read/source/values.rs",
+   "change": "move",
+   "note": "impl Fetch"
+  },
+  {
+   "old": null,
+   "new": "core/crates/layerfs-storage/src/read/source/mod.rs",
+   "change": "new",
+   "note": "declarations for the Fetch group"
+  },
+  {
+   "old": "core/crates/layerfs-content/tests/compare_across.rs",
+   "new": "core/crates/layerfs-content/tests/compare/across.rs",
+   "change": "rename",
+   "note": "test added at #818/#835"
+  },
+  {
+   "old": "core/crates/layerfs-storage/tests/per_object_reads.rs",
+   "new": "core/crates/layerfs-storage/tests/read/per_object.rs",
+   "change": "rename",
+   "note": "test added at #818/#835"
+  }
+ ]
+}

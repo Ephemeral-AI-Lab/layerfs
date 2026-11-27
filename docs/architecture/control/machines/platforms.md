@@ -7,9 +7,9 @@ may run, and how to add one, within [Machines](README.md).
 
 | | |
 | --- | --- |
-| Source | [`platforms/`](../../../../control/crates/layerfs-platform/src/platforms), [`support.rs`](../../../../control/crates/layerfs-platform/src/support.rs), [`control/SUPPORT.json`](../../../../control/SUPPORT.json), [`removed_platforms.rs`](../../../../control/crates/layerfs-sandbox-backend/src/support/removed_platforms.rs), [`docker_socket.rs`](../../../../control/crates/layerfs-platform/src/docker_socket.rs) |
+| Source | [`platform/`](../../../../control/crates/layerfs-machine/src/platform), [`support.rs`](../../../../control/crates/layerfs-machine/src/table/support.rs), [`control/SUPPORT.json`](../../../../control/SUPPORT.json), [`removed.rs`](../../../../control/crates/layerfs-machine/src/table/removed.rs), [`socket.rs`](../../../../control/crates/layerfs-machine/src/platform/docker/socket.rs) |
 
-## Profiles (`platforms/<p>/profile.rs`)
+## Profiles (`platform/<p>/profile.rs`)
 
 | Platform | How | Tool | Hosts | Backend | Kernel | sqlite calls | Worker binds | Options |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -24,10 +24,10 @@ may run, and how to add one, within [Machines](README.md).
 maps the bundle's Sandbox image to one (an incompatible or unsanitized
 mapping is `Unavailable`; a missing prepared Lima file `Unsupported`, both
 naming `tools/machine_image.py`), else the provider's stock image
-([`bundle.rs`](../../../../control/crates/layerfs-machine/src/bundle.rs)
+([`bundle.rs`](../../../../control/crates/layerfs-machine/src/setup/bundle.rs)
 `prepared_os_image`). `os_image: "stock"` takes the stock image even when a
 prepared one exists and records none
-([`create.rs`](../../../../control/crates/layerfs-machine/src/create.rs) `STOCK`).
+([`create.rs`](../../../../control/crates/layerfs-machine/src/lifecycle/create.rs) `STOCK`).
 `home.get --with platforms` gives each size option its `default` (`DEFAULT_CPUS`,
 `DEFAULT_MEMORY`, `DEFAULT_DISK` in `layerfs-machine` `spec.rs`).
 
@@ -35,13 +35,13 @@ prepared one exists and records none
 
 | What | Rule | Source |
 | --- | --- | --- |
-| Tool lookup | `Tools.path` is this process's `PATH`, then the fallback folders not already on it: on macOS `/opt/homebrew/bin`, `/usr/local/bin`, `/Applications/Docker.app/Contents/Resources/bin` (an app started from the Dock has a short `PATH`), none elsewhere; `LAYERFS_TOOL_FALLBACKS` (a `PATH`-style list, empty for none) replaces them, which tests use. Every provider command runs with `Tools.path` as its `PATH`. The Sandbox code's own Docker reads find `docker` the same way (`find_tool`) | [`spec.rs`](../../../../control/crates/layerfs-platform/src/spec.rs) `Tools::from_env`, `tool_fallbacks`; [`setup/tool.rs`](../../../../control/crates/layerfs-platform/src/setup/tool.rs) `command`, `find_tool` |
-| Socket candidates | read from files and variables only: `DOCKER_HOST`, the current context (`DOCKER_CONTEXT`, else `currentContext` in `config.json` under `DOCKER_CONFIG` or `~/.docker`) and the other contexts' `contexts/meta/*/meta.json`, Docker Desktop's `~/.docker/run/docker.sock`, colima's `~/.colima/default/docker.sock` and OrbStack's `~/.orbstack/run/docker.sock` when they exist, and `/var/run/docker.sock`; deduplicated by path; a non-`unix://` endpoint is listed `usable: false`, never followed | [`docker_socket.rs`](../../../../control/crates/layerfs-platform/src/docker_socket.rs) `docker_candidates` |
+| Tool lookup | `Tools.path` is this process's `PATH`, then the fallback folders not already on it: on macOS `/opt/homebrew/bin`, `/usr/local/bin`, `/Applications/Docker.app/Contents/Resources/bin` (an app started from the Dock has a short `PATH`), none elsewhere; `LAYERFS_TOOL_FALLBACKS` (a `PATH`-style list, empty for none) replaces them, which tests use. Every provider command runs with `Tools.path` as its `PATH`. The Sandbox code's own Docker reads find `docker` the same way (`find_tool`) | [`spec.rs`](../../../../control/crates/layerfs-machine/src/setup/spec.rs) `Tools::from_env`, `tool_fallbacks`; [`setup/tool.rs`](../../../../control/crates/layerfs-machine/src/setup/tool.rs) `command`, `find_tool` |
+| Socket candidates | read from files and variables only: `DOCKER_HOST`, the current context (`DOCKER_CONTEXT`, else `currentContext` in `config.json` under `DOCKER_CONFIG` or `~/.docker`) and the other contexts' `contexts/meta/*/meta.json`, Docker Desktop's `~/.docker/run/docker.sock`, colima's `~/.colima/default/docker.sock` and OrbStack's `~/.orbstack/run/docker.sock` when they exist, and `/var/run/docker.sock`; deduplicated by path; a non-`unix://` endpoint is listed `usable: false`, never followed | [`socket.rs`](../../../../control/crates/layerfs-machine/src/platform/docker/socket.rs) `docker_candidates` |
 | Automatic choice | `DOCKER_HOST` when `unix://`, else the current context's endpoint when `unix://`, else the first of Docker Desktop's, colima's and OrbStack's sockets that exists, else `/var/run/docker.sock` | same, `docker_automatic` |
-| The docker machine's socket | its record's `docker` (`machine update docker --docker`, or written by its first start: under the home lock once the socket answers a ping, before an image is loaded or anything is made in that Engine, and again once the provider started, so it never moves to another Engine, where its data volume and loaded image are not; a start whose Engine does not answer pins nothing); else the automatic choice (`env:DOCKER_HOST`, `context:<name>`, `desktop`, `colima`, `orbstack` or `default`); no older record is given a fixed socket. `--docker ""` writes `docker: null`: automatic again until the next start records one. Changing it is refused `InUse` while the machine's worker is recorded running. The machine's adapter and the Sandbox code's Docker reads (`machine.images`, image copies) use this one choice | [`spec.rs`](../../../../control/crates/layerfs-machine/src/spec.rs) `docker_socket`, [`endpoint.rs`](../../../../control/crates/layerfs-machine/src/endpoint.rs) `record_socket`, [`docker.rs`](../../../../control/crates/layerfs-sandbox/src/docker.rs) `Docker::of` |
-| Socket state | one connect (non-blocking on Linux, where a full backlog would hold a blocking one) and `GET /_ping` (2 s per read and write): `answering`, `absent` (no such file), `denied` (`EACCES`) or `silent`. The docker probe runs `docker version` only for an answering socket; `home.get --with platforms` pings again for `socket.state` only when the probe found no version. The automatic choice is named as the candidates name its socket | `docker_socket.rs` `socket_state`, [`docker/adapter.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/adapter.rs) |
+| The docker machine's socket | its record's `docker` (`machine update docker --docker`, or written by its first start: under the home lock once the socket answers a ping, before an image is loaded or anything is made in that Engine, and again once the provider started, so it never moves to another Engine, where its data volume and loaded image are not; a start whose Engine does not answer pins nothing); else the automatic choice (`env:DOCKER_HOST`, `context:<name>`, `desktop`, `colima`, `orbstack` or `default`); no older record is given a fixed socket. `--docker ""` writes `docker: null`: automatic again until the next start records one. Changing it is refused `InUse` while the machine's worker is recorded running. The machine's adapter and the Sandbox code's Docker reads (`machine.images`, image copies) use this one choice | [`adapter_spec.rs`](../../../../control/crates/layerfs-machine/src/record/adapter_spec.rs) `docker_socket`, [`boot.rs`](../../../../control/crates/layerfs-machine/src/lifecycle/boot.rs) `record_socket`, [`docker.rs`](../../../../control/crates/layerfs-sandbox/src/image/copy/docker.rs) `Docker::of` |
+| Socket state | one connect (non-blocking on Linux, where a full backlog would hold a blocking one) and `GET /_ping` (2 s per read and write): `answering`, `absent` (no such file), `denied` (`EACCES`) or `silent`. The docker probe runs `docker version` only for an answering socket; `home.get --with platforms` pings again for `socket.state` only when the probe found no version. The automatic choice is named as the candidates name its socket | `docker_socket.rs` `socket_state`, [`docker/adapter.rs`](../../../../control/crates/layerfs-machine/src/platform/docker/adapter.rs) |
 
-## host (`platforms/host/`)
+## host (`platform/host/`)
 
 Sandboxes on the host's own OS, with no VM: one per home, never created or
 removed. The host machine (`macos-host` or `linux-host`) is a machine, not the host: this computer is the control
@@ -57,7 +57,7 @@ is `docker` alone there), so nothing uses it; its loopback is shared (`Loopback:
 provider holds it (`Platform::provided` is false: no tool, no `vm_name`,
 never stopped or missing, always `ready`). Behaviour asks those facts
 (`layerfs_machine::runs_here`, `in_process`, `provided`); the name maps to
-the platform only in [`local.rs`](../../../../control/crates/layerfs-machine/src/local.rs)
+the platform only in [`runs_here.rs`](../../../../control/crates/layerfs-machine/src/route/runs_here.rs)
 and the built-in names. On a host where no machine's calls run in this
 process (Windows), the rules that need one (a sqlite Store's default
 machine, `store move`, `backup restore`) refuse `Unsupported` and choose no
@@ -73,7 +73,7 @@ other machine.
 | `reach` | the URL as given (`Loopback::Shared`) |
 | `forward` | `127.0.0.1:<guest port>`, no pid |
 
-## docker (`platforms/docker/`)
+## docker (`platform/docker/`)
 
 Docker's kernel (Docker Desktop's VM or the Linux host). The machine is one
 privileged worker container, `spec.vm_name`, that `start` runs; its worker
@@ -130,7 +130,7 @@ namespace so its worker has root, `/dev/fuse` and a writable cgroup v2 tree
 with `cgroup.kill`. Its cgroup root holds processes, and a cgroup that
 holds processes cannot give its children controllers (only the real root is
 exempt), so the entry moves them to a leaf first and the root then gives
-Sandbox groups memory and pids ([`setup/worker.rs`](../../../../control/crates/layerfs-platform/src/setup/worker.rs)
+Sandbox groups memory and pids ([`setup/worker.rs`](../../../../control/crates/layerfs-machine/src/setup/worker.rs)
 `CGROUP_LEAF`, layerfs-project#182 L4); `docker exec` then joins the leaf.
 The VM launcher runs the same lines, which act only at a namespace root (an
 Apple Container guest), never at a VM's real root (Lima). It never writes `user.max_user_namespaces` (that would
@@ -141,7 +141,7 @@ socket is chosen: [Tools and the docker socket](#tools-and-the-docker-socket)). 
 recorded under the retired docker backend is refused, asking to recreate
 it ([Sandboxes: backends](../sandboxes/backends.md)).
 
-## apple-container (`platforms/apple_container/`)
+## apple-container (`platform/apple_container/`)
 
 One container of Apple's `container` CLI (macOS, Apple silicon). Its main
 process is a shell that sleeps and ends on SIGTERM; its data disk is a
@@ -175,7 +175,7 @@ setting `user.max_user_namespaces=0`. A host PostgreSQL server is reached
 through the gateway only when it listens on that bridge (`0.0.0.0`), not
 on `127.0.0.1` alone.
 
-## lima (`platforms/lima/`)
+## lima (`platform/lima/`)
 
 One Lima instance (`vmType: vz`, macOS), made from a template written to
 `limactl create`'s stdin.
@@ -213,23 +213,23 @@ One Lima instance (`vmType: vz`, macOS), made from a template written to
 
 | Symptom | Cause | Source |
 | --- | --- | --- |
-| `missing: host:root`, `host:/dev/fuse`, `host:cgroup2` | `host` on Linux without root, FUSE or cgroup v2 | [`probe.rs`](../../../../control/crates/layerfs-platform/src/probe.rs) `native_missing` |
+| `missing: host:root`, `host:/dev/fuse`, `host:cgroup2` | `host` on Linux without root, FUSE or cgroup v2 | [`probe.rs`](../../../../control/crates/layerfs-machine/src/setup/probe.rs) `native_missing` |
 | `missing: host:macos-or-linux` | `host` on Windows or another host | same |
-| `Unsupported` from a `host` machine's `status`, with `missing` | the host lacks what its Sandboxes need (same facts as above) | [`host/observe.rs`](../../../../control/crates/layerfs-platform/src/platforms/host/observe.rs) |
-| `missing: tool:docker`, `host:<socket>`, `host:wsl2` | no `docker` CLI on `PATH` or in the fallback folders; the socket does not answer a ping (its `state` says why); a Windows host | [`docker/adapter.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/adapter.rs) |
-| `missing: bundle:<dir>` | a platform that runs a worker, and this build's sealed Linux bundle is absent there or of another worker protocol | [`platforms.rs`](../../../../control/crates/layerfs-machine/src/platforms.rs) |
-| docker `start`, `stop` or provider check `Exists`: "… is not a LayerFS worker; it is left alone" | a container of that name without the worker label | [`docker/unix.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/unix.rs) `not_ours` |
+| `Unsupported` from a `host` machine's `status`, with `missing` | the host lacks what its Sandboxes need (same facts as above) | [`host/status.rs`](../../../../control/crates/layerfs-machine/src/platform/host/status.rs) |
+| `missing: tool:docker`, `host:<socket>`, `host:wsl2` | no `docker` CLI on `PATH` or in the fallback folders; the socket does not answer a ping (its `state` says why); a Windows host | [`docker/adapter.rs`](../../../../control/crates/layerfs-machine/src/platform/docker/adapter.rs) |
+| `missing: bundle:<dir>` | a platform that runs a worker, and this build's sealed Linux bundle is absent there or of another worker protocol | [`available.rs`](../../../../control/crates/layerfs-machine/src/platform/available.rs) |
+| docker `start`, `stop` or provider check `Exists`: "… is not a LayerFS worker; it is left alone" | a container of that name without the worker label | [`docker/status.rs`](../../../../control/crates/layerfs-machine/src/platform/docker/status.rs) `not_ours` |
 | docker `start` `Failed` | image not in the Engine (`--pull never`), or no published port (macOS) | same |
-| `missing: host:macos`, `host:apple-silicon`, `tool:container` | not a Mac, not `aarch64`, no `container` CLI | [`apple_container/adapter.rs`](../../../../control/crates/layerfs-platform/src/platforms/apple_container/adapter.rs) |
-| apple-container `Failed`: "… inspect answer is not the shape this adapter knows" | another CLI version's JSON | [`apple_container/observe.rs`](../../../../control/crates/layerfs-platform/src/platforms/apple_container/observe.rs) |
-| `reach` `Unsupported`: "… its URL names this host's loopback (…), which the machine does not share; connect the Store again with an address the machine reaches (…): `layerfs store connect <store> <url>`" (or "… names no host (a Unix socket of the caller) …") | a loopback or Unix-socket PostgreSQL URL on docker (Docker Desktop), lima or apple-container | [`reach.rs`](../../../../control/crates/layerfs-platform/src/reach.rs) |
-| apple-container `Unavailable`: "… a transitional or unrecognized state" | the container is `stopping` (or `unknown`); ask again once it settles, or force the stop | same; [`apple_container/power.rs`](../../../../control/crates/layerfs-platform/src/platforms/apple_container/power.rs) |
-| `missing: host:macos`, `tool:limactl` | not a Mac, no `limactl` | [`lima/observe.rs`](../../../../control/crates/layerfs-platform/src/platforms/lima/observe.rs) |
-| lima "… is not an ext4 mount" | the data disk did not attach as ext4 | [`lima/power.rs`](../../../../control/crates/layerfs-platform/src/platforms/lima/power.rs) |
+| `missing: host:macos`, `host:apple-silicon`, `tool:container` | not a Mac, not `aarch64`, no `container` CLI | [`apple_container/adapter.rs`](../../../../control/crates/layerfs-machine/src/platform/apple_container/adapter.rs) |
+| apple-container `Failed`: "… inspect answer is not the shape this adapter knows" | another CLI version's JSON | [`apple_container/status.rs`](../../../../control/crates/layerfs-machine/src/platform/apple_container/status.rs) |
+| `reach` `Unsupported`: "… its URL names this host's loopback (…), which the machine does not share; connect the Store again with an address the machine reaches (…): `layerfs store connect <store> <url>`" (or "… names no host (a Unix socket of the caller) …") | a loopback or Unix-socket PostgreSQL URL on docker (Docker Desktop), lima or apple-container | [`reach.rs`](../../../../control/crates/layerfs-machine/src/table/reach.rs) |
+| apple-container `Unavailable`: "… a transitional or unrecognized state" | the container is `stopping` (or `unknown`); ask again once it settles, or force the stop | same; [`apple_container/lifecycle.rs`](../../../../control/crates/layerfs-machine/src/platform/apple_container/lifecycle.rs) |
+| `missing: host:macos`, `tool:limactl` | not a Mac, no `limactl` | [`lima/status.rs`](../../../../control/crates/layerfs-machine/src/platform/lima/status.rs) |
+| lima "… is not an ext4 mount" | the data disk did not attach as ext4 | [`lima/lifecycle.rs`](../../../../control/crates/layerfs-machine/src/platform/lima/lifecycle.rs) |
 | lima `start` `Failed`: "… is broken: Lima cannot read its files" | Lima reports the instance `Broken`; `limactl list <vm>` says why; a start cannot repair it | same |
 | `Exists`: a disk or volume "already exists; it is left alone" | left by an earlier machine of that name | `create.rs` of the platform |
-| `Unsupported`: "the guest of … still allows user namespaces" | the guest refused the sysctl | [`setup/worker.rs`](../../../../control/crates/layerfs-platform/src/setup/worker.rs) |
-| `Unknown`: "… did not end within N s and was stopped", or "… ended, but its output was still held open when its time ran out" | a provider command passed its bound (30 s call, 120 s create, 300 s boot), or left a process holding its output past it; its whole process group was killed, the outcome is not known and nothing is retried | [`setup/tool.rs`](../../../../control/crates/layerfs-platform/src/setup/tool.rs) `run` |
+| `Unsupported`: "the guest of … still allows user namespaces" | the guest refused the sysctl | [`setup/worker.rs`](../../../../control/crates/layerfs-machine/src/setup/worker.rs) |
+| `Unknown`: "… did not end within N s and was stopped", or "… ended, but its output was still held open when its time ran out" | a provider command passed its bound (30 s call, 120 s create, 300 s boot), or left a process holding its output past it; its whole process group was killed, the outcome is not known and nothing is retried | [`setup/tool.rs`](../../../../control/crates/layerfs-machine/src/setup/tool.rs) `run` |
 
 ## Support table (`support.rs`)
 
@@ -284,7 +284,7 @@ Generated by `support_json()`; never edited by hand. One block per host
 | `description` | profile description, then `; ` and the backend's description |
 
 After changing the table, write the file and review its diff:
-`LAYERFS_BLESS_SUPPORT=1 cargo +1.85.1 test --locked -p layerfs-platform --test support`.
+`LAYERFS_BLESS_SUPPORT=1 cargo +1.85.1 test --locked -p layerfs-machine --features machine --test table support_table`.
 
 ## Removed platforms (`removed_platforms.rs`)
 
@@ -300,8 +300,8 @@ profile or row, and no setting brings one back. The refusal is
 
 A Lima machine that an old Firecracker record names as its host is refused
 `machine remove` (`InUse`) until that record is removed
-([`record.rs`](../../../../control/crates/layerfs-machine/src/record.rs),
-[`remove.rs`](../../../../control/crates/layerfs-machine/src/remove.rs)).
+([`machine.rs`](../../../../control/crates/layerfs-machine/src/record/machine.rs),
+[`remove.rs`](../../../../control/crates/layerfs-machine/src/lifecycle/remove.rs)).
 
 ## Adding a platform
 
@@ -309,7 +309,7 @@ A Lima machine that an old Firecracker record names as its host is refused
  platform.rs       + Platform variant, in ALL, profile() arm
  adapter.rs        + adapter() arm
  support.rs        + host_refusal() arm (and postgresql_refusal if needed)
- platforms/<p>/    mod.rs (declarations only), profile.rs PROFILE,
+ platform/<p>/    mod.rs (declarations only), profile.rs PROFILE,
                    adapter.rs ADAPTER (every method), observe.rs,
                    create.rs, power.rs
  setup/guest.rs    + Guest variant only for a new shell transport
@@ -321,7 +321,7 @@ A created platform's `create` follows the shared shape: host check, refuse
 `Exists`, make the disk then the VM (a failure with nothing under the name
 removes the disk; one with the VM kept is `vm_exists`), boot, attach
 `/layerfs/data`, `worker::bring_up`. A new option also needs its `Spec`
-mapping in [`layerfs-machine/src/spec.rs`](../../../../control/crates/layerfs-machine/src/spec.rs).
+mapping in [`src/record/adapter_spec.rs`](../../../../control/crates/layerfs-machine/src/record/adapter_spec.rs).
 The conformance kit covers a new variant once it compiles; a new Store
 kind or kernel route is an engine change, not a platform.
 

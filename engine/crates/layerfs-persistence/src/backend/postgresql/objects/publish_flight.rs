@@ -1,15 +1,18 @@
 //! One fenced PostgreSQL flight for an eligible captured Save registration.
-use super::super::{
-    history::fused::{nonce, pack_statements, row_values, PACK, ROWS},
-    session::{
-        connection::Session,
-        pipeline::{Refusal, Reply, Request},
-        profile::{barrier_leftover, Settings},
-    },
+use super::super::session::{
+    attempt::nonce,
+    connection::Session,
+    pipeline::{Refusal, Reply, Request},
+    profile::{barrier_leftover, Settings},
 };
-use crate::backend::records::BackendError;
+use crate::backend::error::BackendError;
+use crate::history::Fused;
 use layerfs_content::ObjectId;
-use layerfs_storage::port::{Publication, Published};
+use layerfs_history::error::HistoryError;
+use layerfs_storage::{
+    location::PackDomain,
+    port::{Publication, Published, PublishedPack},
+};
 use postgres::{error::SqlState, types::ToSql};
 use std::{collections::BTreeSet, sync::atomic::Ordering};
 
@@ -159,4 +162,190 @@ fn decide(
         return Err(BackendError::Unknown);
     }
     Ok(Published { lost })
+}
+
+pub(crate) const PACK: &str = include_str!("../../../../sql/postgresql/fused/pack.sql");
+pub(crate) const ROWS: &str = include_str!("../../../../sql/postgresql/fused/rows.sql");
+
+/// One value bound in binary.
+pub(crate) type Value<'a> = Box<dyn ToSql + Sync + 'a>;
+
+pub(crate) fn bytes(value: &[u8]) -> Value<'static> {
+    Box::new(value.to_vec())
+}
+
+pub(crate) fn optional(value: Option<&[u8]>) -> Value<'static> {
+    Box::new(value.map(<[u8]>::to_vec))
+}
+
+/// Pack bytes bound by one pack insert statement. The driver encodes each
+/// statement into a buffer and copies it into the connection's write
+/// buffer, and both keep their grown capacity for the connection's life.
+/// Splitting keeps the pack statements' share of that capacity near one
+/// ordinary pack, however many packs the batch holds; they stay in the same
+/// message and transaction. A singleton pack, up to `SINGLETON_PACK_LIMIT`,
+/// cannot be split and is sent alone. The retained capacity is therefore
+/// the largest single statement: a singleton pack, or the rows or hint
+/// statement at their limits (`TRANSACTION_ROW_LIMIT` rows, `ARRAY_ROWS`
+/// hint blocks).
+const STATEMENT_PACK_BYTES: usize = layerfs_storage::policy::PACK_LIMIT;
+
+/// The pack insert parameters of `packs`, one entry per statement: the
+/// contiguous runs of at most [`STATEMENT_PACK_BYTES`] body bytes, each
+/// holding at least one pack, in order. None for no packs.
+pub(crate) fn pack_statements(
+    packs: &[PublishedPack],
+) -> Result<Vec<(Vec<Value<'_>>, u64)>, Fused> {
+    let mut statements = Vec::new();
+    let (mut start, mut bytes) = (0, 0);
+    for (index, pack) in packs.iter().enumerate() {
+        let length = pack.body().len();
+        if index > start && bytes + length > STATEMENT_PACK_BYTES {
+            statements.push(pack_values(&packs[start..index])?);
+            (start, bytes) = (index, 0);
+        }
+        bytes += length;
+    }
+    if start < packs.len() {
+        statements.push(pack_values(&packs[start..])?);
+    }
+    Ok(statements)
+}
+
+/// The pack rows of `packs`, as `objects::publish::packs` writes them.
+fn pack_values(packs: &[PublishedPack]) -> Result<(Vec<Value<'_>>, u64), Fused> {
+    let mut columns = (
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+    );
+    let mut bound = 0;
+    for pack in packs {
+        let info = pack.info();
+        let body = pack.body();
+        let header = layerfs_storage::pack::layout::parse_header(body)
+            .map_err(|_| HistoryError::Integrity("pack header"))?;
+        let directory = body
+            .get(..header.body_offset)
+            .ok_or(HistoryError::Integrity("pack directory"))?;
+        columns.0.push(info.pack_id);
+        columns
+            .1
+            .push(i64::from(info.domain == PackDomain::Payload));
+        columns.2.push(info.key.as_bytes().to_vec());
+        columns.3.push(info.length as i64);
+        columns.4.push(body.as_slice());
+        columns.5.push(directory);
+        bound += 56 + body.len() as u64 + directory.len() as u64;
+    }
+    Ok((
+        vec![
+            Box::new(columns.0),
+            Box::new(columns.1),
+            Box::new(columns.2),
+            Box::new(columns.3),
+            Box::new(columns.4),
+            Box::new(columns.5),
+        ],
+        bound,
+    ))
+}
+
+/// The 22 columns of `publish_rows`, as `objects::publish::rows` binds them.
+pub(crate) fn row_values(batch: &Publication) -> Result<(Vec<Value<'static>>, u64), Fused> {
+    use crate::backend::postgresql::objects::publish::prefix;
+    let objects = &batch.objects;
+    let column = |f: fn(&layerfs_storage::location::ObjectLocation) -> i64| -> Vec<i64> {
+        objects.iter().map(f).collect()
+    };
+    let ids: Vec<Vec<u8>> = objects
+        .iter()
+        .map(|o| o.object_id.as_bytes().to_vec())
+        .collect();
+    let metadata: i64 = batch
+        .packs
+        .iter()
+        .filter(|pack| pack.info().domain == PackDomain::Metadata)
+        .map(|pack| pack.info().length as i64)
+        .sum();
+    let stored: i64 = batch.packs.iter().map(|p| p.info().length as i64).sum();
+    let values = crate::storage::blocks::values::encode(&batch.inode_values)
+        .map_err(|_| HistoryError::Integrity("inode value block"))?;
+    let (release, first, count) = match batch.release_ordinals {
+        Some((first, count)) => (true, i64::from(first), count as i64),
+        None => (false, 0, 0),
+    };
+    let signatures = &batch.signatures;
+    let bound = objects.len() as u64 * 112
+        + values.iter().map(|b| b.body.len() as u64 + 16).sum::<u64>()
+        + signatures.len() as u64 * 80
+        + 48;
+    let out: Vec<Value<'static>> = vec![
+        Box::new(ids),
+        Box::new(column(|o| i64::from(o.role.code()))),
+        Box::new(column(|o| o.canonical_length as i64)),
+        Box::new(column(|o| o.pack_id)),
+        Box::new(column(|o| o.group_number as i64)),
+        Box::new(column(|o| o.record_number as i64)),
+        Box::new(stored),
+        Box::new(metadata),
+        Box::new(
+            values
+                .iter()
+                .map(|b| i64::from(b.first))
+                .collect::<Vec<_>>(),
+        ),
+        Box::new(values.iter().map(|b| b.body.clone()).collect::<Vec<_>>()),
+        Box::new(first),
+        Box::new(count),
+        Box::new(release),
+        Box::new(signatures.iter().map(|r| r.slot as i64).collect::<Vec<_>>()),
+        Box::new(
+            signatures
+                .iter()
+                .map(|r| r.stamp as i64)
+                .collect::<Vec<_>>(),
+        ),
+        Box::new(
+            signatures
+                .iter()
+                .map(|r| r.object_id.as_bytes().to_vec())
+                .collect::<Vec<_>>(),
+        ),
+        Box::new(
+            signatures
+                .iter()
+                .map(|r| r.signature.to_vec())
+                .collect::<Vec<_>>(),
+        ),
+        Box::new(values.iter().map(|b| i64::from(b.last)).collect::<Vec<_>>()),
+        Box::new(
+            objects
+                .iter()
+                .map(|o| prefix(&o.object_id))
+                .collect::<Vec<_>>(),
+        ),
+        Box::new(
+            signatures
+                .iter()
+                .map(|r| prefix(&r.object_id))
+                .collect::<Vec<_>>(),
+        ),
+        Box::new(
+            objects
+                .iter()
+                .map(|o| o.base.as_ref().map(|b| b.as_bytes().to_vec()))
+                .collect::<Vec<_>>(),
+        ),
+        Box::new(
+            objects
+                .iter()
+                .map(|o| o.base.as_ref().map(prefix))
+                .collect::<Vec<_>>(),
+        ),
+    ];
+    Ok((out, bound))
 }

@@ -172,7 +172,7 @@ pub fn explain(client: &mut Client, schema: &str, sql: &str, ids: &[Vec<u8>]) ->
 }
 
 /// The product's chain statement 1 (#758 phase 2).
-const CHAIN_ROOTS: &str = include_str!("../../sql/postgresql/chain_roots.sql");
+const CHAIN_ROOTS: &str = include_str!("../../sql/postgresql/metadata/chain/roots.sql");
 
 /// The packs the ancestor lists of `ids` name that are not the roots' own:
 /// chain statement 2's `$1`. Lists use the D1 entry form

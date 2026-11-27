@@ -3,9 +3,9 @@
 //! namespace, created }`, written once after its mount succeeded and
 //! removed by its unmount. As the Sandbox record does, it keeps unknown,
 //! null and mistyped fields as read, in file order.
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_home::home::fields::{self, Fields};
-use layerfs_home::home::{read_record, write_entity};
+use layerfs_home::disk::{read_record, write_entity};
+use layerfs_home::record::fields::{self, Fields};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -89,7 +89,7 @@ impl WorkspaceRecord {
             Field::Branch(branch.to_owned()),
             Field::Path(path.to_owned()),
             Field::Namespace(namespace),
-            Field::Created(layerfs_home::home::now_ms()),
+            Field::Created(layerfs_home::disk::now_ms()),
         ]);
         Self {
             fields: Fields::of(known),

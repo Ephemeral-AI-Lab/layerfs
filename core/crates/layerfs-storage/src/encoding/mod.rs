@@ -15,15 +15,12 @@ pub mod delta;
 pub mod pool;
 
 mod decode;
-mod full;
-mod pack_cache;
-mod pack_units;
 
+pub use super::pack::cache::{PackCache, PackCacheWork};
+pub use super::pack::units::{GroupSlice, PackAcquisition, PackUnit};
 pub use codec::{
     CodecProfile, CompressionWorkspace, DecompressionWorkspace, DECODE_WORKSPACE_BYTES,
     ENCODE_WORKSPACE_BYTES, GROUP_LIMIT,
 };
 pub use decode::{framed_record, framed_record_count, GroupCache};
-pub use full::{encode_full, encode_prefix, lane_body_limit, raw_payload, EncodedRecord};
-pub use pack_cache::{PackCache, PackCacheWork};
-pub use pack_units::{GroupSlice, PackAcquisition, PackUnit};
+pub use delta::full::{encode_full, encode_prefix, lane_body_limit, raw_payload, EncodedRecord};

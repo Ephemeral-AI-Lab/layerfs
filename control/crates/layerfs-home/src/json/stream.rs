@@ -5,8 +5,8 @@
 //! With [`Limits`] it also refuses a value past a decoded-size estimate, an
 //! object width or a depth, as the host frame budget does, before it holds
 //! more than that estimate.
-use super::{base64_object, JsonError, MAX_DEPTH};
-use layerfs_bridge::control::SdkValue;
+use super::value::{base64_object, JsonError, MAX_DEPTH};
+use layerfs_protocol::sdk::SdkValue;
 use std::io::BufRead;
 
 /// Bounds on one value read from an untrusted stream. `decoded` bounds the

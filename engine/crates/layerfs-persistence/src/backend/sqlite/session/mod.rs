@@ -1,8 +1,8 @@
 //! One SQLite connection: profile, transactions, statements, rows and counters.
-pub(crate) mod background;
 pub(crate) mod checkpoint;
+pub(crate) mod checkpointer;
+pub(crate) mod close;
 pub(crate) mod connection;
-pub(crate) mod lifecycle;
 pub(crate) mod prepared;
 pub(crate) mod profile;
 pub(crate) mod query;

@@ -1,0 +1,751 @@
+//! The route of a Sandbox host operation (#535 §6.4): run in this process, or
+//! sent to its machine's worker with the records it needs, and run there
+//! (`in_worker`); the typed host request both sides build ([`Host`],
+//! layerfs-project#108), and spooled output streamed back as events.
+use crate::deploy::{self, Side};
+use crate::record::SandboxRecord;
+use crate::route::machine::{Call, Deploy, Host, Message, Op, Sent, StoreUrl};
+use layerfs_home::disk;
+use layerfs_home::disk::paths;
+use layerfs_home::reply::events::Events;
+use layerfs_home::reply::outcome::{failed, refused, Outcome};
+use layerfs_machine::route::Unreached;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
+use layerfs_store::admin::open::args::PgSelection;
+use layerfs_store::admin::record::store::{StoreKind, StoreRecord};
+use layerfs_store::admin::route::executor::{self, Executor};
+use layerfs_store::admin::route::resolve;
+use layerfs_store::backend::postgresql::connect::dialled;
+use layerfs_store::data::project::record::project::ProjectRecord;
+use std::path::{Path, PathBuf};
+
+type Result<T> = std::result::Result<T, SdkRefusal>;
+
+/// The host Sandbox operations' request for project `<store>/<project>`,
+/// naming Sandbox `sandbox` with `message`, run with the deploy `settings`
+/// [`deploy::resolve`] gave; a PostgreSQL Store's `postgresql` is the one
+/// the caller resolved and reached ([`reached`]). `root` says whether the
+/// request makes its side's run root: one that only asks the daemon
+/// ([`Op::asks_daemon_only`]) names it and changes nothing.
+fn host_args(
+    home: &Path,
+    (store, project, record): (&str, &str, &StoreRecord),
+    (kind, postgresql): (StoreKind, Option<PgSelection>),
+    settings: Deploy,
+    (sandbox, message): (Option<String>, Message),
+    root: RunRoot,
+) -> Result<Host> {
+    let id = layerfs_home::disk::opened(home)?.id;
+    let backend = if cfg!(target_os = "macos") {
+        "process"
+    } else {
+        "namespaces"
+    };
+    // the local runtime's root: this user's, traversable (0755), as
+    // the runtime requires; one directory per Sandbox beside the
+    // image cache it shares
+    let local = paths::run_root(home);
+    if root == RunRoot::Made {
+        use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+        std::fs::DirBuilder::new()
+            .recursive(true)
+            .mode(0o755)
+            .create(&local)
+            .map_err(failed)?;
+        std::fs::set_permissions(&local, std::fs::Permissions::from_mode(0o755)).map_err(failed)?;
+        // namespaces commands run as another identity: the home's folders
+        // above the root must let them pass (a macOS native command does not)
+        if backend == "namespaces" {
+            disk::traversable(home, &local)?;
+        }
+    }
+    let deploy = Deploy {
+        sandbox: Some(backend.to_owned()),
+        local_dir: Some(local.display().to_string()),
+        container_prefix: Some(layerfs_home::names::provider_prefix(&id)),
+        ..settings
+    };
+    Ok(Host {
+        home: home.to_path_buf(),
+        store: store.to_owned(),
+        project: project.to_owned(),
+        sandbox,
+        store_record: Some(record.clone()),
+        store_path: Some(store_path(home, store, record, kind).display().to_string()),
+        deploy: Some(deploy),
+        // a PostgreSQL Store's URL with its password, never written (H §7.4)
+        postgresql,
+        message,
+        started: None,
+        reach_hint: None,
+    })
+}
+
+/// Whether a host request makes its side's run root ([`host_args`]).
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum RunRoot {
+    /// Made, with its modes set, before the operation runs.
+    Made,
+    /// Named as it is found: nothing is created or changed.
+    AsFound,
+}
+
+/// A PostgreSQL Store's `postgresql` argument for a Sandbox on `machine`
+/// (#535 §7.4): the record's URL with its login, resolved here in the
+/// caller and dialled as it is: a
+/// loopback host the machine does not share is refused, nothing is
+/// rewritten and no machine is asked (`layerfs_machine::platform::reach`).
+/// It travels only in the one request that runs the call and is never
+/// written to a record.
+/// With it, what a dial from that machine that made no connection adds
+/// when the machine does not share this host's loopback and the URL names
+/// a host by name (`layerfs_machine::platform::loopback_hint`): a name
+/// resolving to a loopback address there fails its one dial, never
+/// resolved here to be refused up front. `store.attach` and
+/// `store.doctor` build their check's argument here too.
+pub fn reached(
+    home: &Path,
+    machine: &str,
+    record: &StoreRecord,
+) -> Result<(PgSelection, Option<String>)> {
+    dialled(
+        home,
+        machine,
+        record,
+        layerfs_store::admin::record::store::url(record)?,
+    )?
+}
+
+/// The reach check of a PostgreSQL Sandbox's create (#535 §7.4 step 4), on
+/// the side that launches it: one session to the server it will dial (this
+/// process's held host session for the Store at `key`, #65) reads the
+/// LayerFS schema's binding, which must be the Store record's, and finds
+/// `project` there. It proves the server is reached and is the same Store;
+/// a failure names the machine and the hosts it tried, never the URL, and
+/// adds `hint` when no connection was made (not when the server answered,
+/// a refused login say). A build without the PostgreSQL engine says so,
+/// not that it cannot reach. A project the schema does not hold is
+/// `NoSuchProject`.
+fn reach_check(
+    who: &str,
+    (store, key, project): (&StoreRecord, &Path, &str),
+    postgresql: &PgSelection,
+    hint: Option<&str>,
+) -> Result<()> {
+    let url = postgresql.url.as_deref().unwrap_or("");
+    let host = layerfs_machine::table::postgresql_url::url_hosts(url)
+        .map(|hosts| hosts.join(","))
+        .unwrap_or_default();
+    let reached =
+        layerfs_store::backend::postgresql::reader::reach(key, store, postgresql, project)
+            .map_err(|refusal| {
+                let name = store.name();
+                let message = match (refusal.code.as_str(), hint) {
+                    ("Unsupported", _) => {
+                        return refused(
+                            "Unsupported",
+                            format!(
+                                "{who} cannot check PostgreSQL Store {name}'s server: {}",
+                                refusal.message
+                            ),
+                        )
+                    }
+                    (_, Some(hint))
+                        if layerfs_store::backend::postgresql::open::not_connected(
+                            &refusal.message,
+                        ) =>
+                    {
+                        format!("{}; {hint}", refusal.message)
+                    }
+                    _ => refusal.message,
+                };
+                refused(
+                    "Unavailable",
+                    format!(
+                        "{who} cannot reach PostgreSQL Store {name}'s server at {host}: {message}"
+                    ),
+                )
+            })?;
+    match reached {
+        Ok(true) => Ok(()),
+        Ok(false) => Err(refused(
+            "NoSuchProject",
+            format!(
+                "no project {project} in the PostgreSQL Store's schema {}",
+                postgresql.schema.as_deref().unwrap_or("")
+            ),
+        )),
+        Err(layerfs_store::backend::postgresql::reader::OtherStore) => Err(refused(
+            "Unavailable",
+            format!(
+                "the PostgreSQL server {who} reaches at {host} holds another Store than {}",
+                store.name()
+            ),
+        )),
+    }
+}
+
+/// The path the open-Store cache keys `store` by: its file, or for a
+/// PostgreSQL Store the path [`route`] keys it by, which no file has.
+fn store_path(home: &Path, store: &str, record: &StoreRecord, kind: StoreKind) -> PathBuf {
+    match kind {
+        StoreKind::Postgresql => record.postgresql_key(home, store),
+        StoreKind::Sqlite => paths::store_file(home, store),
+    }
+}
+
+/// How the side that runs a host operation runs it in its own process:
+/// `sandbox::dispatch::call` for the Sandbox calls, `workspace::dispatch::call`
+/// for the Workspace calls and a worker's requests (layerfs-project#106).
+pub type Local = fn(Host, Call) -> Outcome;
+
+/// One host operation as its caller asks it: the operation with its
+/// fields, its Commit message, and the image a `sandbox.create` names.
+pub struct Asked {
+    /// The operation and its fields.
+    pub call: Call,
+    /// Its Commit message (exec and Commit send one).
+    pub message: Message,
+    /// The image `sandbox.create` names (a digest, Docker Id or Docker
+    /// reference); every other call runs the Sandbox's own.
+    pub image: Option<String>,
+    /// `sandbox.create`'s `start` progress event, `(done, total)`: sent once
+    /// the image is on the machine, just before the Sandbox starts, so the
+    /// image phases come first (V19-8).
+    pub start: Option<(i64, i64)>,
+}
+
+impl From<Call> for Asked {
+    fn from(call: Call) -> Self {
+        Self {
+            call,
+            message: Message::Absent,
+            image: None,
+            start: None,
+        }
+    }
+}
+
+/// Runs host Sandbox operation `asked` for Sandbox `record` on its machine,
+/// refused `Unavailable` naming `layerfs machine start` when it is down.
+pub fn on_machine(
+    home: &Path,
+    events: &mut Events<'_>,
+    record: &SandboxRecord,
+    asked: impl Into<Asked>,
+    local: Local,
+) -> Outcome {
+    reach(home, events, record, asked, local).unwrap_or_else(|Unreached(refusal)| Err(refusal))
+}
+
+/// [`on_machine`], answering [`Unreached`] when the machine's worker was
+/// not reached and nothing was sent (nothing starts it, #535 D11).
+pub fn reach(
+    home: &Path,
+    events: &mut Events<'_>,
+    record: &SandboxRecord,
+    asked: impl Into<Asked>,
+    local: Local,
+) -> std::result::Result<Outcome, Unreached> {
+    let mut unreached = None;
+    let asked = asked.into();
+    let op = asked.call.op();
+    let create = op == Op::SandboxCreate;
+    let outcome = host_op(home, events, record, asked, local, &mut unreached);
+    // the mount intents a close's side could not end for want of a
+    // PostgreSQL Store URL it can dial are ended here, where PostgreSQL
+    // Store calls run, with this process's own URL
+    let outcome = match (op, outcome) {
+        (Op::SandboxClose, Ok(answer)) => Ok(crate::lifecycle::mount_intents::end_handed(
+            home, record, answer,
+        )),
+        (_, outcome) => outcome,
+    };
+    // a PostgreSQL Sandbox made on a machine proves the machine reached its
+    // Store (spec v23 V23-2): recorded here, after the reply, best effort;
+    // a sqlite Store's record is left alone
+    if let (true, Ok(_), Some((store, _))) = (
+        create,
+        &outcome,
+        record.project().and_then(|p| p.split_once('/')),
+    ) {
+        let reached = layerfs_store::admin::status::observed::Reach::reached();
+        layerfs_store::admin::status::observed::record(
+            home,
+            store,
+            Some(record.machine()),
+            &reached,
+        );
+    }
+    match unreached {
+        Some(unreached) => Err(unreached),
+        None => Ok(outcome),
+    }
+}
+
+/// [`reach`]'s operation; a request that was not sent leaves its
+/// [`Unreached`] in `unreached`.
+fn host_op(
+    home: &Path,
+    events: &mut Events<'_>,
+    record: &SandboxRecord,
+    asked: Asked,
+    local: Local,
+    unreached: &mut Option<Unreached>,
+) -> Outcome {
+    let home = home.to_path_buf();
+    let machine = record.machine();
+    if let Some(machine) = layerfs_machine::record::machine::MachineRecord::read(&home, machine)? {
+        machine.not_held()?;
+    }
+    let project = record.project().unwrap_or("");
+    let target = resolve::target(&home, project)?;
+    let Asked {
+        call,
+        message,
+        image,
+        start,
+    } = asked;
+    let op = call.op();
+    // the Sandbox's name is its identity on every machine
+    let sandbox = Some(record.name().to_owned());
+    // the call's image (sandbox.create) else the Sandbox's own travels in
+    // the deploy settings, never as a top-level argument. A native host
+    // Sandbox records `local`, which is a runtime marker, not an image.
+    let image = match image {
+        Some(text) => Some(text),
+        _ => record
+            .image()
+            .filter(|image| op != Op::SandboxCreate && crate::image::cache::digest(image))
+            .map(str::to_owned),
+    };
+    let kind = target.store_ref.kind();
+    // a PostgreSQL Store's URL is resolved (and a URL the machine cannot
+    // dial refused) only for an operation that dials it. A close runs
+    // without a URL the machine cannot dial, so such a Sandbox can still
+    // be read and removed: its side hands back the mount intents it then
+    // cannot end, and `reach` ends them here. Any other reason the URL
+    // cannot be made (a missing saved login, say) refuses the close, a
+    // forced one too
+    let (postgresql, hint) = match (kind, op.store_url()) {
+        (StoreKind::Postgresql, StoreUrl::Dialled) => {
+            let (value, hint) = reached(&home, machine, &target.record)?;
+            (Some(value), hint)
+        }
+        (StoreKind::Postgresql, StoreUrl::Cleanup) => {
+            let url = layerfs_store::admin::record::store::url(&target.record)?;
+            match dialled(&home, machine, &target.record, url)? {
+                Ok((value, hint)) => (Some(value), hint),
+                Err(_cannot_dial) => (None, None),
+            }
+        }
+        _ => (None, None),
+    };
+    // a Sandbox's host operations run where its machine runs them, for
+    // either Store kind (#535 §7.4)
+    let mut executor = executor::on_machine(&home, machine)?;
+    // the image a create names: none on macOS native (R0), else resolved
+    // and copied to the machine when it does not hold it yet (R1). A copy's
+    // lock is held until this call returns, by when the Sandbox is built on
+    // the image (its recorded lower layer), so a `machine prune --unused`
+    // in between leaves the image it just copied
+    let (image, _copied) = match (op, image) {
+        (Op::SandboxCreate, Some(_)) if crate::image::list::host_mode(&executor) => {
+            return Err(crate::image::list::host_only(machine))
+        }
+        (Op::SandboxCreate, Some(named)) => {
+            let archive = deploy::choose(&home, machine, None)?.archive;
+            let docker = crate::image::copy::docker::Docker::of(&home)?;
+            let mut target = match &mut executor {
+                Executor::Local => crate::image::copy::load::Target::local(&home, machine),
+                Executor::Worker(worker) => {
+                    crate::image::copy::load::Target::worker(&home, machine, worker)
+                }
+            };
+            let (loaded, lock) = crate::image::copy::load::load_held(
+                &docker,
+                events,
+                &mut target,
+                archive.as_deref(),
+                &named,
+            )?;
+            (Some(loaded.id), lock)
+        }
+        (_, image) => (image, None),
+    };
+    if let Some((done, total)) = start {
+        events.phase("start", Some(done), Some(total), Vec::new());
+    }
+    // what the machine's record chooses; the side that runs the call
+    // resolves the rest
+    let choice = deploy::choose(&home, machine, image.as_deref())?;
+    match executor {
+        Executor::Local => {
+            // before a daemon starts on `native`, what earlier starts and
+            // removals left in its run root goes (spec v20)
+            if op == Op::SandboxCreate {
+                crate::record::sweep::run_root(&home);
+            }
+            let key = store_path(&home, &target.store, &target.record, kind);
+            if let (Some(postgresql), Op::SandboxCreate) = (&postgresql, op) {
+                reach_check(
+                    &format!("machine {machine}"),
+                    (&target.record, &key, &target.project),
+                    postgresql,
+                    hint.as_deref(),
+                )?;
+            }
+            let held = kind == StoreKind::Postgresql;
+            let how = deploy::resolve(&Side::Home(&home), &choice)?;
+            // `sandbox.get`'s reads ask only the Sandbox's daemon
+            // (layerfs-project#181): no run root is made, no Store lease
+            // taken and no Store opened, so a polled get never holds the
+            // Store; the daemon needs no PostgreSQL selection for them
+            if op.asks_daemon_only() {
+                let host = host_args(
+                    &home,
+                    (&target.store, &target.project, &target.record),
+                    (kind, None),
+                    how,
+                    (sandbox, message),
+                    RunRoot::AsFound,
+                )?;
+                return local(host, call);
+            }
+            let host = Host {
+                reach_hint: hint,
+                ..host_args(
+                    &home,
+                    (&target.store, &target.project, &target.record),
+                    (kind, postgresql),
+                    how,
+                    (sandbox, message),
+                    RunRoot::Made,
+                )?
+            };
+            // the host code reads the project's Branches through its open
+            // Store, which this process leases. A PostgreSQL Store opens no
+            // Store service (#65): the lease covers this call, and a read
+            // (a create's reach check, a status's head) runs on the
+            // process's one held read session, opened when one is needed;
+            // mount, exec, Commit, unmount and close open nothing.
+            let lease = layerfs_store::admin::open::lease::hold(&home, &target.store)?;
+            let (_lease, opened) = match held {
+                true => (Some(lease), None),
+                false => (
+                    None,
+                    Some(layerfs_store::admin::open::cache::hold(
+                        &host.open_args(),
+                        Some(lease),
+                    )?),
+                ),
+            };
+            if op == Op::Status {
+                return local(host, call);
+            }
+            let out = local(host, call)?;
+            let out = drain(out, &mut |event| events.event(event));
+            closed(op, opened.as_deref(), &out);
+            if let (Op::SandboxCreate, Ok(out)) = (op, &out) {
+                touched(&Side::Home(&home), &choice, out);
+            }
+            out
+        }
+        Executor::Worker(mut worker) => {
+            // the guest runs the same call on its own native machine, with
+            // the records it needs sent along
+            let project_record = ProjectRecord::read(&home, &target.store, &target.project)?
+                .unwrap_or_else(|| {
+                    ProjectRecord::from_record(&target.store, &target.project, SdkValue::Null)
+                });
+            let sent = Sent {
+                call,
+                message,
+                sandbox,
+                store: target.store.clone(),
+                project: target.project.clone(),
+                store_record: target.record.clone(),
+                project_record,
+                choice,
+                machine: postgresql.as_ref().map(|_| machine.to_owned()),
+                reach_hint: postgresql.as_ref().and(hint),
+                postgresql,
+            };
+            let request = crate::route::machine::encode(&sent)?;
+            match worker.attempt("sandbox.host", request, &mut |event| events.event(event)) {
+                Ok(outcome) => outcome,
+                Err(Unreached(refusal)) => {
+                    *unreached = Some(Unreached(refusal.clone()));
+                    Err(refusal)
+                }
+            }
+        }
+    }
+}
+
+/// Runs a Sandbox host operation in a worker for its caller (`sandbox.host`,
+/// decoded by [`crate::route::machine::decode`]): the caller sends the Store's and
+/// project's records; the worker keeps a thin record of the Store (#536 §6)
+/// and the project's record under its root, with the Store on this
+/// machine's own `native`. An operation that only asks the daemon
+/// ([`Op::asks_daemon_only`]) returns before the records and the Store open.
+pub fn in_worker(
+    root: &Path,
+    sent: Sent,
+    events: &mut dyn FnMut(SdkValue),
+    runner: Local,
+) -> Outcome {
+    let Sent {
+        call,
+        message,
+        sandbox,
+        store,
+        project,
+        store_record,
+        project_record,
+        choice,
+        postgresql,
+        machine,
+        reach_hint,
+    } = sent;
+    let op = call.op();
+    let (store, project) = (store.as_str(), project.as_str());
+    layerfs_home::names::StoreName::parse(store)?;
+    layerfs_home::names::ProjectName::parse(project)?;
+    let record = store_record.with("machine", SdkValue::text(layerfs_home::names::HOST_MACHINE));
+    let kind = record.kind()?;
+    // `sandbox.get`'s reads ask only the Sandbox's daemon
+    // (layerfs-project#181): this side writes neither record, makes no run
+    // root and opens no Store for them; the records a create wrote stay as
+    // they are
+    if op.asks_daemon_only() {
+        let how = deploy::resolve(&Side::Worker(root), &choice)?;
+        let host = host_args(
+            root,
+            (store, project, &record),
+            (kind, None),
+            how,
+            (sandbox, message),
+            RunRoot::AsFound,
+        )?;
+        layerfs_home::log::trace::step("host_args");
+        return runner(host, call);
+    }
+    // before a daemon starts on this machine, what earlier starts and
+    // removals left in its run root goes (spec v20)
+    if op == Op::SandboxCreate {
+        crate::record::sweep::run_root(root);
+    }
+    // written only when it changed (#535 R5): most calls find it as it is
+    let thin = StoreRecord::from_record(
+        store,
+        SdkValue::map([
+            ("v", SdkValue::Int(1)),
+            ("name", SdkValue::text(store)),
+            ("kind", SdkValue::text(kind.as_str())),
+        ]),
+    );
+    let local = StoreRecord::read(root, store)?;
+    if local.as_ref().map(StoreRecord::to_record) != Some(thin.to_record()) {
+        thin.write(root)?;
+    }
+    // the caller's record replaces one left by a project of the same name
+    // that was removed and made again (its `created` differs); one this
+    // side's own Init wrote (its manifest, no `created`: Init through the
+    // worker, H11a) takes the caller's fields and keeps its manifest
+    let sent = project_record;
+    match ProjectRecord::read(root, store, project)? {
+        None => sent.write(root)?,
+        Some(local) if sent.created().is_none() || local.created() == sent.created() => {}
+        Some(local) if local.created().is_none() => local.with_fields_of(&sent).write(root)?,
+        Some(_) => sent.write(root)?,
+    }
+    layerfs_home::log::trace::step("records");
+    let how = deploy::resolve(&Side::Worker(root), &choice)?;
+    // the operations that dial a PostgreSQL Store's URL carry it; the
+    // others carry none, or one for a close's cleanup ([`Op::store_url`])
+    if kind == StoreKind::Postgresql && op.store_url() == StoreUrl::Dialled && postgresql.is_none()
+    {
+        return Err(refused(
+            "InvalidInput",
+            "a PostgreSQL Sandbox call carries its server's resolved postgresql value",
+        ));
+    }
+    let postgresql = postgresql.filter(|_| kind == StoreKind::Postgresql);
+    let key = store_path(root, store, &record, kind);
+    if let (Some(postgresql), Op::SandboxCreate) = (&postgresql, op) {
+        let who = match &machine {
+            Some(machine) => format!("machine {machine}"),
+            None => "the worker's machine".to_owned(),
+        };
+        reach_check(
+            &who,
+            (&record, &key, project),
+            postgresql,
+            reach_hint.as_deref(),
+        )?;
+    }
+    let held = kind == StoreKind::Postgresql;
+    let host = Host {
+        reach_hint,
+        ..host_args(
+            root,
+            (store, project, &record),
+            (kind, postgresql),
+            how,
+            (sandbox, message),
+            RunRoot::Made,
+        )?
+    };
+    layerfs_home::log::trace::step("host_args");
+    // a PostgreSQL Store opens no Store service here (#65); its reads run
+    // on the held read session
+    let opened = match held {
+        true => None,
+        false => opened_for(
+            op,
+            layerfs_store::admin::open::cache::hold(&host.open_args(), None),
+        )?,
+    };
+    layerfs_home::log::trace::step("store_open");
+    if op == Op::Status {
+        return runner(host, call);
+    }
+    let name = host.sandbox.clone().unwrap_or_default();
+    let out = match &call {
+        // a command whose record its caller keeps: its start goes back to
+        // that caller as an event while it runs
+        Call::Exec {
+            workspace: Some(_), ..
+        } => reporting(host, call, runner, events),
+        _ => runner(host, call),
+    };
+    let out = drain(out?, events);
+    closed(op, opened.as_deref(), &out);
+    let out = out?;
+    // the caller reaches the new Sandbox's daemon directly where its
+    // machine forwards the port (#535 G4): the answer carries its keys
+    match op {
+        Op::SandboxCreate => {
+            touched(&Side::Worker(root), &choice, &out);
+            crate::route::direct::with_keys(root, &name, out)
+        }
+        _ => Ok(out),
+    }
+}
+
+/// Marks the image a Sandbox was just created from as used (its sidecar's
+/// `last_used`). A sidecar that cannot be written does not fail the create.
+fn touched(side: &Side<'_>, choice: &deploy::Choice, out: &SdkValue) {
+    if let Some(image) = out.get_text("image") {
+        let _ = crate::image::cache::touch(side, choice.archive.as_deref(), image);
+    }
+}
+
+/// Runs `call` (an exec whose record its caller keeps) with `runner` on a
+/// thread of its own, passing each event its exec sends through `started`
+/// to `events` as it comes, until it returns. The wait for events ends when
+/// the runner does: nothing here times it.
+fn reporting(
+    mut host: Host,
+    call: Call,
+    runner: Local,
+    events: &mut dyn FnMut(SdkValue),
+) -> Outcome {
+    let (sender, received) = std::sync::mpsc::channel();
+    host.started = Some(sender.clone());
+    std::thread::scope(|scope| {
+        let ran = scope.spawn(move || {
+            // its end is told even when the runner panics
+            let _ended = Ended(sender);
+            runner(host, call)
+        });
+        while let Ok(event) = received.recv() {
+            if event == SdkValue::Null {
+                break;
+            }
+            events(event);
+        }
+        ran.join()
+            .unwrap_or_else(|_| Err(refused("Failed", "the exec stopped before it answered")))
+    })
+}
+
+/// Tells [`reporting`] that its runner ended, when dropped.
+struct Ended(std::sync::mpsc::Sender<SdkValue>);
+
+impl Drop for Ended {
+    fn drop(&mut self) {
+        let _ = self.0.send(SdkValue::Null);
+    }
+}
+
+/// A closed Sandbox's sqlite Store, held open here at `opened`: its log is
+/// checkpointed and truncated before the close is answered (#86).
+/// The Store a call on this side holds open while it runs, from its
+/// attempted open `held`. A close needs none: a Store of an older schema
+/// version (#776), which this build does not open, does not stop it, and
+/// each mount intent it cannot end there is named in its `left`. Every
+/// other call keeps the refusal.
+pub fn opened_for(op: Op, held: Result<PathBuf>) -> Result<Option<PathBuf>> {
+    match held {
+        Ok(path) => Ok(Some(path)),
+        Err(refusal)
+            if op == Op::SandboxClose
+                && layerfs_store::admin::status::state::outdated_status(&refusal).is_some() =>
+        {
+            Ok(None)
+        }
+        Err(refusal) => Err(refusal),
+    }
+}
+
+fn closed(op: Op, opened: Option<&Path>, out: &Outcome) {
+    if let (Some(path), Op::SandboxClose, true) = (opened, op, out.is_ok()) {
+        let _ = layerfs_store::admin::open::checkpoint::released(path);
+    }
+}
+
+/// An exec result whose output the host spooled (a stream over 1 MiB):
+/// each spooled stream goes to the caller as output events (`{ stream,
+/// bytes }`), one page at a time and in order, then the spool is closed.
+/// The reply keeps the stream null with its byte count and says
+/// `streamed`; the CLI's `--stream` and the front ends' sinks receive it.
+/// Any other result passes through.
+fn drain(out: SdkValue, emit: &mut dyn FnMut(SdkValue)) -> Outcome {
+    let Some(id) = out.get_text("output").map(str::to_owned) else {
+        return Ok(out);
+    };
+    let mut buffer = vec![0u8; crate::exec::output::INLINE];
+    let sent = (|| {
+        for (stream, size) in [("stdout", "stdoutBytes"), ("stderr", "stderrBytes")] {
+            if !matches!(out.get(stream), Some(SdkValue::Null)) || out.get_int(size) == Some(0) {
+                continue;
+            }
+            let mut offset = 0u64;
+            loop {
+                let (length, end) = crate::exec::output::page(&id, stream, offset, &mut buffer)?;
+                if length > 0 {
+                    emit(SdkValue::map([
+                        ("stream", SdkValue::text(stream)),
+                        ("bytes", SdkValue::Bytes(buffer[..length].to_vec())),
+                    ]));
+                }
+                offset += length as u64;
+                if end || length == 0 {
+                    break;
+                }
+            }
+        }
+        Ok::<(), SdkRefusal>(())
+    })();
+    crate::exec::output::release(&id)?;
+    sent?;
+    let out = match out {
+        SdkValue::Map(fields) => {
+            SdkValue::Map(fields.into_iter().filter(|(n, _)| n != "output").collect())
+        }
+        other => other,
+    };
+    Ok(disk::with_field(out, "streamed", SdkValue::Bool(true)))
+}

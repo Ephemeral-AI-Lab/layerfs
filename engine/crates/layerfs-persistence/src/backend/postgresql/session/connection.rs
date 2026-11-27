@@ -1,7 +1,7 @@
 //! One PostgreSQL connection per session, with TLS and counted work.
 use super::{profile::Settings, rows};
-use crate::backend::postgresql::status::PostgresStatusError;
-use crate::backend::{admission::Admission, records::BackendError};
+use crate::backend::postgresql::server::status::PostgresStatusError;
+use crate::backend::{admission::Admission, error::BackendError};
 use crate::{PostgresSelection, SqlWork};
 use layerfs_storage::StoragePolicy;
 use postgres::{Client, NoTls, SimpleQueryMessage, SimpleQueryRow, Statement};
@@ -365,7 +365,7 @@ pub(crate) struct Session {
     pub(crate) admission: Admission,
     pub(crate) state: Mutex<State>,
     /// The connection that holds the publication lane, opened on first use.
-    pub(crate) lane: Mutex<Option<crate::backend::postgresql::lane::lane::LaneConnection>>,
+    pub(crate) lane: Mutex<Option<crate::backend::postgresql::lane::LaneConnection>>,
     pub(crate) writable: bool,
     /// An ordinary session can send paired immutable requests on its one
     /// connection. The diagnostic client uses a separate execution driver.

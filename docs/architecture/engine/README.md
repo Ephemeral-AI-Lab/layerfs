@@ -38,7 +38,7 @@ call table.
 
 Arrows follow the `[dependencies]` of each crate's `Cargo.toml` (test-only
 dependencies left out). Store calls also reach the Overlay for the Workspace
-roster. Commit spans two crates: construction in `layerfs-workspace`,
+roster. Commit spans two crates: construction in `layerfs-vfs`,
 publication in `layerfs-store-service`. The daemon depends on every engine
 crate except `layerfs-project`.
 
@@ -50,10 +50,10 @@ crate except `layerfs-project`.
 | [Store calls](store-calls/README.md) | `layerfs-store-service` | Typed reads, file changes and Branch history over the Store, run once in the process that opened it, and the SDK facade that names them. | [Reads](store-calls/reads.md) |
 | [Project Init](project-init/README.md) | `layerfs-project` | Turning one native directory into a project's first LayerStack and Branch: import, construction, then seal and install or a live add. | — |
 | [Overlay](overlay/README.md) | `layerfs-overlay`, `layerfs-store-service` `overlay/` | Each Workspace's own disposable SQLite file and in-memory open state, the Workspace roster and its one lock. | [Payload](overlay/payload.md), [Lifetimes](overlay/lifetimes.md) |
-| [Workspace](workspace/README.md) | `layerfs-workspace` | Filesystem semantics of a mounted Workspace: one immutable committed root plus the Workspace's overlay rows. | [Operations](workspace/operations.md) |
-| [Commit](commit/README.md) | `layerfs-workspace` `construction/`, `layerfs-store-service` `store/` | Capturing a Workspace's published frontier, constructing and publishing a Commit, merging with a moved head, and installing the new base. | [Construction](commit/construction.md) |
-| [Kernel routes](kernel-routes/README.md) | `layerfs-mount-ports`, `layerfs-fuse`, `layerfs-nfs` | How the kernel reaches a Workspace: route-neutral mount ports, then FUSE or a loopback NFSv3 export, and the coherence both keep. | [FUSE](kernel-routes/fuse.md), [NFS](kernel-routes/nfs.md) |
-| [Bridge](bridge/README.md) | `layerfs-bridge` | The wire contract between a controller and a Workspace daemon: the authenticated channel, every record, daemon setup and Store install records. The one home of the wire; control and API pages link here. | — |
+| [Workspace](workspace/README.md) | `layerfs-vfs` | Filesystem semantics of a mounted Workspace: one immutable committed root plus the Workspace's overlay rows. | [Operations](workspace/operations.md) |
+| [Commit](commit/README.md) | `layerfs-vfs` `construction/`, `layerfs-store-service` `store/` | Capturing a Workspace's published frontier, constructing and publishing a Commit, merging with a moved head, and installing the new base. | [Construction](commit/construction.md) |
+| [Kernel routes](kernel-routes/README.md) | `layerfs-vfs` `ports/`, `layerfs-fuse`, `layerfs-nfs` | How the kernel reaches a Workspace: route-neutral mount ports, then FUSE or a loopback NFSv3 export, and the coherence both keep. | [FUSE](kernel-routes/fuse.md), [NFS](kernel-routes/nfs.md) |
+| [Bridge](bridge/README.md) | `layerfs-protocol`, `layerfs-os` | The wire contract between a controller and a Workspace daemon: the authenticated channel, every record, daemon setup and Store install records. The one home of the wire; control and API pages link here. | — |
 | [Daemon](daemon/README.md) | `layerfs-daemon` | The Workspace daemon process: startup, the operator methods, control calls, Workspace lifetime and forced teardown. | [Control calls](daemon/control-calls.md) |
 
 ## Rules for this layer

@@ -59,17 +59,17 @@ enforces it.
 |  | [Store calls](engine/store-calls/README.md) | `layerfs-store-service` | Typed reads, file changes and Branch history over the Store, run in the caller's process. |
 |  | [Project Init](engine/project-init/README.md) | `layerfs-project` | Turning a native directory into a project's first Commit: import, construction, seal and install. |
 |  | [Overlay](engine/overlay/README.md) | `layerfs-overlay` | Each Workspace's own disposable SQLite file: metadata, payload, operation records, roster and reclamation. |
-|  | [Workspace](engine/workspace/README.md) | `layerfs-workspace` | Filesystem semantics of a mounted Workspace: the committed base, overlay changes and the effective view. |
-|  | [Commit](engine/commit/README.md) | `layerfs-workspace`, `layerfs-store-service` | Capturing a Workspace's frontier, constructing and publishing a Commit, then installing the new base. |
-|  | [Kernel routes](engine/kernel-routes/README.md) | `layerfs-mount-ports`, `layerfs-fuse`, `layerfs-nfs` | How the kernel reaches a Workspace: route-neutral mount ports, FUSE and loopback NFSv3. |
-|  | [Bridge](engine/bridge/README.md) | `layerfs-bridge` | The wire between callers, workers and daemons: framing, handshake, control and SDK records, process identity. |
+|  | [Workspace](engine/workspace/README.md) | `layerfs-vfs` | Filesystem semantics of a mounted Workspace: the committed base, overlay changes and the effective view. |
+|  | [Commit](engine/commit/README.md) | `layerfs-vfs`, `layerfs-store-service` | Capturing a Workspace's frontier, constructing and publishing a Commit, then installing the new base. |
+|  | [Kernel routes](engine/kernel-routes/README.md) | `layerfs-vfs` (mount ports), `layerfs-fuse`, `layerfs-nfs` | How the kernel reaches a Workspace: route-neutral mount ports, FUSE and loopback NFSv3. |
+|  | [Bridge](engine/bridge/README.md) | `layerfs-protocol`, `layerfs-os` | The wire between callers, workers and daemons: framing, handshake, control and SDK records, process identity. |
 |  | [Daemon](engine/daemon/README.md) | `layerfs-daemon` | The Workspace daemon process: startup, control calls, install, Workspace lifetime and forced teardown. |
 | [Control](control/README.md) | [Home](control/home/README.md) | `layerfs-home` | The home folder: records, locks, operation intent, names, secrets, traces, call logs, and opening (or refusing) a home. |
-|  | [Machines](control/machines/README.md) | `layerfs-machine`, `layerfs-platform` | Where Sandboxes run: platform adapters, the support matrix, workers and how they are reached. |
+|  | [Machines](control/machines/README.md) | `layerfs-machine` | Where Sandboxes run: platform adapters, the support matrix, workers and how they are reached. |
 |  | [Stores and projects](control/stores-and-projects/README.md) | `layerfs-store` | Which Stores and projects exist and where: records, placement, leases, SQLite and PostgreSQL, transfer. |
-|  | [Sandboxes](control/sandboxes/README.md) | `layerfs-sandbox`, `layerfs-sandbox-backend` | How a Sandbox runs on a machine's kernel: launch, the daemon channel, exec and the backends. |
-|  | [Backups](control/backups/README.md) | `layerfs-store` (backup), `layerfs-bucket` | Whole-Store backup to a bucket and restore, over bucket drivers that know nothing about Stores. |
-|  | [Doctor](control/doctor/README.md) | `layerfs-control` (doctor) | Checking a home, its machines, Sandboxes and backups, and reporting what is wrong. |
+|  | [Sandboxes](control/sandboxes/README.md) | `layerfs-sandbox`, `layerfs-workspace` | How a Sandbox runs on a machine's kernel: launch, the daemon channel, exec and the backends. |
+|  | [Backups](control/backups/README.md) | `layerfs-store` (`backup/`) | Whole-Store backup to a bucket and restore, over bucket drivers that know nothing about Stores. |
+|  | [Doctor](control/doctor/README.md) | `layerfs-inspect` (doctor) | Checking a home, its machines, Sandboxes and backups, and reporting what is wrong. |
 | [API](api/README.md) | [Calls](api/calls/README.md) | `layerfs-api` | The call table, its checks and the one dispatcher every front end goes through. |
 |  | [SDK](api/sdk/README.md) | `layerfs-api` | Every call a program can make, one page per call family. |
 |  | [Front ends](api/front-ends/README.md) | `layerfs-cli`, `layerfs-node`, `layerfs-python` | The `layerfs` command, the Node addon, the Python module and the MCP server, over the call table. |

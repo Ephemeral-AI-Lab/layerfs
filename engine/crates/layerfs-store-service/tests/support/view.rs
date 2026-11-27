@@ -6,7 +6,7 @@
 use layerfs_content::compare::tree::{inode_changes, join, list_directory, TreeTable};
 use layerfs_content::compare::DifferenceWork;
 use layerfs_content::file::read_all_bounded;
-use layerfs_content::filesystem::attributes::{read_portable, AttributeReadWork};
+use layerfs_content::filesystem::tree::attribute::{read_portable, AttributeReadWork};
 use layerfs_content::filesystem::{FilesystemRead, FilesystemRootId, LogicalPath, Resolved};
 use layerfs_content::object::inode_leaf::InodeKind;
 use layerfs_content::object::{AuthenticatedObjects, ObjectId};
@@ -37,8 +37,8 @@ pub struct Viewer {
 
 impl Viewer {
     pub fn open(store: &Path, binding: &[u8], cursor: [u8; 32]) -> Self {
-        let config = PersistenceConfig::sqlite(store)
-            .with_sqlite_profile(SqlitePersistenceProfile::Normal);
+        let config =
+            PersistenceConfig::sqlite(store).with_sqlite_profile(SqlitePersistenceProfile::Normal);
         let handles = SqliteHandles::open_read_only(config, binding, cursor).unwrap();
         Self {
             storage: Storage::new(handles.storage).unwrap(),

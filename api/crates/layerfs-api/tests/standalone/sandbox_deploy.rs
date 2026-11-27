@@ -1,0 +1,125 @@
+//! Where a Sandbox's daemon and the sealed Linux bundle are looked for
+//! (#533 review P0-4, O16): `<cache>/layerfs/bundle/<version>/<os>-<arch>/`,
+//! the cache `XDG_CACHE_HOME` or `~/.cache`. A `native` Sandbox with no
+//! daemon recorded names this host's bundle folder; a machine that needs
+//! the Linux bundle names `linux-<arch>` and the tool that places it. One
+//! test, because it sets the process's environment.
+#![cfg(feature = "machine")]
+use layerfs_api::home;
+use layerfs_protocol::sdk::SdkValue;
+use std::path::{Path, PathBuf};
+
+fn tempdir(tag: &str) -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("lfs-deploy-{tag}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).unwrap();
+    dir
+}
+
+fn t(s: &str) -> SdkValue {
+    SdkValue::text(s)
+}
+
+fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, (String, String)> {
+    let args = SdkValue::Map(
+        args.iter()
+            .map(|(n, v)| ((*n).to_owned(), v.clone()))
+            .collect(),
+    );
+    layerfs_api::call(Some(home), name, args, &mut |_| {}).map_err(|r| (r.code, r.message))
+}
+
+#[test]
+fn the_daemon_and_the_linux_bundle_come_from_the_versioned_cache() {
+    let cache = tempdir("cache");
+    std::env::set_var("XDG_CACHE_HOME", &cache);
+    std::env::remove_var("LAYERFS_BUNDLE");
+    let version = env!("CARGO_PKG_VERSION");
+    let arch = std::env::consts::ARCH;
+
+    // a native Sandbox with no daemon recorded: this host's bundle folder
+    let home = tempdir("home");
+    let folder = tempdir("src");
+    home::open(&home).unwrap();
+    call(&home, "store.create", &[("name", t("shop"))]).unwrap();
+    call(
+        &home,
+        "project.init",
+        &[
+            ("project", t("shop/app")),
+            ("folder", t(&folder.display().to_string())),
+        ],
+    )
+    .unwrap();
+    // its progress has no `claim`: `start` first, as the create's one
+    // phase (V19-8; no image named, so no copy phases come before it)
+    let mut events = Vec::new();
+    let args = SdkValue::map([
+        ("project", t("shop/app")),
+        ("name", t("t")),
+        ("machine", t(layerfs_home::names::HOST_MACHINE)),
+    ]);
+    let refusal = layerfs_api::call(Some(&home), "sandbox.create", args, &mut |event| {
+        events.push(event)
+    })
+    .unwrap_err();
+    let (code, message) = (refusal.code, refusal.message);
+    let phases: Vec<_> = (events.iter())
+        .filter_map(|event| {
+            let event = event.get("progress")?;
+            let phase = event.get_text("phase")?.to_owned();
+            Some((phase, event.get_int("done"), event.get_int("total")))
+        })
+        .collect();
+    assert_eq!(
+        phases,
+        [("start".to_owned(), Some(0), Some(1))],
+        "{events:?}"
+    );
+    let expected = cache
+        .join("layerfs/bundle")
+        .join(version)
+        .join(format!("{}-{arch}", std::env::consts::OS))
+        .join("layerfs-daemon");
+    assert_eq!(code, "Unavailable", "{message}");
+    assert!(
+        message.contains(&expected.display().to_string()),
+        "{message}"
+    );
+    // nothing was claimed
+    assert_eq!(
+        call(&home, "sandbox.list", &[]).unwrap().get("items"),
+        Some(&SdkValue::List(Vec::new()))
+    );
+
+    // a VM needs the Linux bundle: refused naming linux-<arch> (or, on a
+    // host without the VM's tool, refused for the tool first; on a host
+    // lima is not on, in the support table's words)
+    let (code, message) = call(
+        &home,
+        "machine.create",
+        &[("name", t("dev")), ("platform", t("lima"))],
+    )
+    .unwrap_err();
+    assert_eq!(code, "Unsupported", "{message}");
+    if message.contains("bundle") {
+        let linux = cache
+            .join("layerfs/bundle")
+            .join(version)
+            .join(format!("linux-{arch}"));
+        assert!(message.contains(&linux.display().to_string()), "{message}");
+        assert!(message.contains("tools/linux_bundle.py"), "{message}");
+    } else if cfg!(target_os = "macos") {
+        assert!(
+            message.contains("cannot be created on this host"),
+            "{message}"
+        );
+    } else {
+        assert_eq!(message, "lima runs on macOS hosts only");
+    }
+    for dir in [home, folder, cache] {
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+}

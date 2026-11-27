@@ -1,8 +1,8 @@
 //! Kernel connection ownership: attach evidence, serving facts and drain.
+mod attach;
 mod drain;
-mod force;
+mod forced;
 mod invalidate;
-mod startup;
 mod state;
 
 pub use drain::Detach;

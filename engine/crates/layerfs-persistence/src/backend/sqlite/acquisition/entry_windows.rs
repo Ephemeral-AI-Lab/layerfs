@@ -1,12 +1,14 @@
 //! Fixed independent-entry SQL inputs; dependency boundaries keep ordered execution.
 use super::{
-    accounting::{charge, entry_bytes, host_bytes},
-    statements::{
-        signed, Failure, BIND_HOST_FILE, ENTRY_DEPENDENCIES, PUT_ENTRIES, PUT_ENTRY, PUT_HOST_FILE,
-    },
-    writes::{packed, put_one, well_formed},
+    accounting::charge,
+    statements::{BIND_HOST_FILE, ENTRY_DEPENDENCIES, PUT_ENTRIES, PUT_ENTRY, PUT_HOST_FILE},
+    writes::put_one,
 };
-use crate::backend::{records::BackendError, sqlite::session::rows, Transaction};
+use crate::acquisition::{
+    failure::{signed, Failure},
+    payload::{entry_bytes, host_bytes, packed, well_formed},
+};
+use crate::backend::{error::BackendError, sqlite::session::rows, Transaction};
 use layerfs_content::inode_leaf::InodeKind;
 use layerfs_storage::port::acquisition::{NewEntry, Owner};
 use std::collections::BTreeSet;
@@ -48,7 +50,7 @@ impl<'a> Input<'a> {
             name: Some(&entry.key.name),
             position,
             kind: Some(i64::from(entry.kind.code())),
-            metadata: Some(super::metadata_blob(&entry.metadata).to_vec()),
+            metadata: Some(crate::acquisition::payload::metadata_blob(&entry.metadata).to_vec()),
             target: entry
                 .target_root
                 .as_ref()

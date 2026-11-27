@@ -1,8 +1,8 @@
 //! Current public Store/Storage observations, kept separate from engine families.
 use super::{engine_records, json::Json};
-use layerfs_daemon::{bootstrap::StoreDiagnostics, store::CommitSuccess};
 use layerfs_overlay::DatabaseWork;
 use layerfs_persistence::SqlWork;
+use layerfs_store_service::store::{open::StoreDiagnostics, CommitSuccess};
 use std::{fs::File, io::Write};
 fn sql(out: &mut Json, from: SqlWork, to: SqlWork) {
     out.raw("{").unwrap();
@@ -72,7 +72,10 @@ pub fn commit(
     before: StoreDiagnostics,
     after: StoreDiagnostics,
     owner: DatabaseWork,
-    local: (layerfs_daemon::OwnerWork, layerfs_daemon::OwnerWork),
+    local: (
+        layerfs_store_service::OwnerWork,
+        layerfs_store_service::OwnerWork,
+    ),
 ) {
     let (local_before, local_after) = local;
     let mut out = Json::new();

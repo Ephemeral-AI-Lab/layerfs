@@ -44,6 +44,7 @@ mod staged;
 mod types;
 mod values;
 pub(crate) mod verify;
+pub(crate) mod visit;
 mod window;
 
 pub use build::{peak_temp_bytes, source_mmap, SRC_MMAP_BYTES};
@@ -54,10 +55,5 @@ pub use repack::Rewritten;
 pub use space::{reserve, trim};
 pub use staged::{PackScan, StagedLocators};
 pub use types::io_error;
-pub use types::{cap_delta_references, DELTA_BASE_REFERENCES_CAP};
-pub use types::{
-    CompactFailpoint, CompactKeptWaste, CompactPath, CompactReceipt, CompactRequest,
-    CompactResidue, CompactZeroReason, OwnerLiveness,
-};
 pub use values::verify as verify_inode_blocks;
 pub use window::{staged_windows, windows, Window, GAP_BYTES, WINDOW_BYTES};

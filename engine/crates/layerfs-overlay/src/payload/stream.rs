@@ -3,7 +3,7 @@ use crate::{
     cells::{Stored, Window},
     db::integer,
     layers::Layer,
-    payload::runs::{slot, Shape},
+    payload::cells::runs::{slot, Shape},
     sql, BaseSource, Capture, InodeKind, LocalRead, Overlay, OverlayError, OverlayResult,
     StatementKind, CELL_BYTES, READ_WINDOW, RUN_BYTES,
 };

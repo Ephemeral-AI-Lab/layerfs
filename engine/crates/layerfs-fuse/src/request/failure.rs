@@ -1,11 +1,11 @@
 //! Original kernel inputs retained even when request service creation fails.
 use crate::RequestDisposition;
-use layerfs_mount_ports::{
-    operations::{MutationInput, ReadDataInput},
-    ports::ServiceError,
-};
 use layerfs_overlay::KernelMount;
-use layerfs_workspace::KernelReadOperation;
+use layerfs_vfs::KernelReadOperation;
+use layerfs_vfs::{
+    ports::mount::ServiceError,
+    requests::{MutationInput, ReadDataInput},
+};
 use std::fmt;
 
 #[derive(Debug)]

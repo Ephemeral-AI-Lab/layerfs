@@ -13,13 +13,13 @@ pub struct Options<'a> {
 }
 
 impl Options<'_> {
-    pub(crate) fn check(&self) -> Result<(), crate::backend::records::BackendError> {
+    pub(crate) fn check(&self) -> Result<(), crate::backend::error::BackendError> {
         if self.deadline.is_some_and(|d| Instant::now() >= d)
             || self
                 .cancelled
                 .is_some_and(|c| c.load(std::sync::atomic::Ordering::Relaxed))
         {
-            Err(crate::backend::records::BackendError::Cancelled)
+            Err(crate::backend::error::BackendError::Cancelled)
         } else {
             Ok(())
         }

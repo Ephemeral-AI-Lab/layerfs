@@ -1,9 +1,9 @@
 //! One operation's original failures over batched public Store demands.
-use super::{read_handle::ReadSession, ReadAdmissionError, Store};
+use super::{super::workspace::bind::reader::ReadSession, ReadAdmissionError, Store};
 use layerfs_content::{AuthenticatedObjects, ContentError, ContentResult, ObjectId};
 use layerfs_history::{HistoryError, ReserveRequest, WorkspaceId};
 use layerfs_storage::{read::CapturedLocators, StorageError};
-use layerfs_workspace::{
+use layerfs_vfs::{
     CanonicalClient, FileLengths, InodeSerials, Workspace, WorkspaceError, WorkspaceResult,
 };
 use std::{
@@ -105,7 +105,7 @@ impl Store {
     pub fn ports_for(self: &Arc<Self>, scope: ObjectId, workspace: WorkspaceId) -> Arc<StorePorts> {
         self.ports_in(scope, Some(workspace), None)
     }
-    pub(super) fn captured_ports_for(
+    pub(crate) fn captured_ports_for(
         self: &Arc<Self>,
         scope: ObjectId,
         workspace: WorkspaceId,

@@ -7,30 +7,40 @@ rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
-layerfs-bridge = { path = "../../../engine/crates/layerfs-bridge" }
+layerfs-protocol = { path = "../../../engine/crates/layerfs-protocol" }
 # The management library every call runs in (#536).
-layerfs-control = { path = "../../../control/crates/layerfs-control" }
+layerfs-inspect = { path = "../../../control/crates/layerfs-inspect" }
 layerfs-home = { path = "../../../control/crates/layerfs-home" }
 layerfs-machine = { path = "../../../control/crates/layerfs-machine" }
 layerfs-store = { path = "../../../control/crates/layerfs-store" }
+# Also the permanent platform restrictions the call machinery checks before
+# any effect (`calls/platform_policy.rs`), in every build (layerfs-project#107).
 layerfs-sandbox = { path = "../../../control/crates/layerfs-sandbox" }
-# The permanent platform restrictions the call machinery checks before any
-# effect (`calls/platform_policy.rs`), in every build (layerfs-project#107).
-layerfs-sandbox-backend = { path = "../../../control/crates/layerfs-sandbox-backend" }
+# The Workspace calls (#828).
+layerfs-workspace = { path = "../../../control/crates/layerfs-workspace" }
+# The guest worker's server (`worker/`, #828): its Store operations run under
+# the caller's place view (the Store service's admission).
+layerfs-store-service = { path = "../../../engine/crates/layerfs-store-service" }
+# The guest worker's fault switches name a failed thread start by its errno
+# (`worker/fault.rs`); layerfs-control had it before #828.
+libc = "=0.2.189"
 
 [features]
+# The worker's fault switches and shorter waits, for its tests only
+# (layerfs-project#177, #179 E): `worker::fault` and the host worker's write
+# faults in layerfs-store. Never a default feature; the boundary guard checks.
+worker-fault = ["layerfs-store/worker-fault"]
 # https:// remotes: Cloudflare R2, MinIO behind TLS. Off by default; the
 # sealed Linux build the worker runs turns it on.
-tls = ["layerfs-control/tls"]
+tls = ["layerfs-inspect/tls"]
 # The machine calls (2.0, #533): host builds only. The guest worker is built
 # without it, so no machine adapter runs inside a machine.
-machine = ["layerfs-control/machine", "layerfs-machine/machine", "layerfs-sandbox/machine"]
+machine = ["layerfs-inspect/machine", "layerfs-machine/machine", "layerfs-sandbox/machine", "layerfs-store/machine", "layerfs-workspace/machine"]
 
 [dev-dependencies]
 nix = { version = "=0.31.3", features = ["fs", "user", "process"] }
 # store-service's SDK support (remote_store) binds private Workspaces.
 layerfs-overlay = { path = "../../../engine/crates/layerfs-overlay" }
-layerfs-workspace = { path = "../../../engine/crates/layerfs-workspace" }
 # The tests drive these crates directly beside the call surface.
 layerfs-content = { path = "../../../core/crates/layerfs-content" }
 layerfs-history = { path = "../../../core/crates/layerfs-history" }
@@ -38,9 +48,7 @@ layerfs-persistence = { path = "../../../engine/crates/layerfs-persistence" }
 layerfs-storage = { path = "../../../core/crates/layerfs-storage" }
 layerfs-telemetry = { path = "../../../core/crates/layerfs-telemetry" }
 layerfs-project = { path = "../../../engine/crates/layerfs-project" }
-layerfs-platform = { path = "../../../control/crates/layerfs-platform" }
 layerfs-store-service = { path = "../../../engine/crates/layerfs-store-service" }
-layerfs-bucket = { path = "../../../control/crates/layerfs-bucket" }
 # project_doctor_full damages a throwaway Store's object table to check the
 # data walk's finding.
 rusqlite = { version = "=0.40.2", features = ["cache", "limits", "blob"] }
@@ -49,3 +57,80 @@ postgres = "=0.19.14"
 # the store upgrade tests (#804) compare file contents with a fixture
 # manifest's sha256
 sha2 = "=0.11.0"
+layerfs-os = { path = "../../../engine/crates/layerfs-os" }
+
+[[test]]
+name = "worker_upgrade"
+path = "tests/standalone/worker_upgrade.rs"
+
+[[test]]
+name = "worker_upgrade_cancel"
+path = "tests/standalone/worker_upgrade_cancel.rs"
+
+[[test]]
+name = "worker_upgrade_engine"
+path = "tests/standalone/worker_upgrade_engine.rs"
+
+[[test]]
+name = "worker_hello"
+path = "tests/standalone/worker_hello.rs"
+
+[[test]]
+name = "worker_trace"
+path = "tests/standalone/worker_trace.rs"
+
+[[test]]
+name = "store_call_steps"
+path = "tests/standalone/store_call_steps.rs"
+
+[[test]]
+name = "sandbox_deploy"
+path = "tests/standalone/sandbox_deploy.rs"
+
+[[test]]
+name = "sandbox_direct"
+path = "tests/standalone/sandbox_direct.rs"
+
+[[test]]
+name = "machine_built_ins_once"
+path = "tests/standalone/machine_built_ins_once.rs"
+
+[[test]]
+name = "commit_get_pages"
+path = "tests/standalone/commit_get_pages.rs"
+
+[[test]]
+name = "file_family"
+path = "tests/standalone/file_family.rs"
+
+[[test]]
+name = "home_family"
+path = "tests/standalone/home_family.rs"
+
+[[test]]
+name = "home_records"
+path = "tests/standalone/home_records.rs"
+
+[[test]]
+name = "branch_list_pages"
+path = "tests/standalone/branch_list_pages.rs"
+
+[[test]]
+name = "idle_checkpoint"
+path = "tests/standalone/idle_checkpoint.rs"
+
+[[test]]
+name = "oneshot_close"
+path = "tests/standalone/oneshot_close.rs"
+
+[[test]]
+name = "open_cache"
+path = "tests/standalone/open_cache.rs"
+
+[[test]]
+name = "reaper"
+path = "tests/standalone/reaper.rs"
+
+[[test]]
+name = "upgrade_cancel"
+path = "tests/standalone/upgrade_cancel.rs"

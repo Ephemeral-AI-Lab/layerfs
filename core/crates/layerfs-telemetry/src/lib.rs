@@ -17,9 +17,8 @@ pub mod timer;
 
 #[cfg(feature = "platform")]
 pub(crate) use output::health;
-pub use runtime::{observation, operation};
+pub mod observation;
+pub mod operation;
 #[cfg(feature = "platform")]
 pub mod output;
-#[cfg(feature = "platform")]
-mod platform;
 pub mod runtime;

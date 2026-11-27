@@ -70,7 +70,7 @@ impl KernelFilesystem {
                     let forgotten = services.forget(mount, serial, count).await;
                     crate::request::charge(crate::request::Phase::Forget, started);
                     drop(forgotten?);
-                    Ok::<_, layerfs_mount_ports::ports::ServiceError>(())
+                    Ok::<_, layerfs_vfs::ports::mount::ServiceError>(())
                 }
                 .await;
                 match outcome {

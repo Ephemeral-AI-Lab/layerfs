@@ -47,11 +47,11 @@ Both modules work on checked immutable roots and open no database
 
 | Engine call | Content functions | Answer | Source |
 | --- | --- | --- | --- |
-| `branch.diff_commits`, `branch.diff_branches` | `Plan::make`, `ChangeWalk`, `Memo`, `same_file_bytes` | one page of path pairs, resumable by cursor | [`read/compare.rs`](../../../../engine/crates/layerfs-store-service/src/read/compare.rs) |
+| `branch.diff_commits`, `branch.diff_branches` | `Plan::make`, `ChangeWalk`, `Memo`, `same_file_bytes` | one page of path pairs, resumable by cursor | [`compare/diff.rs`](../../../../engine/crates/layerfs-store-service/src/filesystem/compare/diff.rs) |
 | `fs.diff_files` | `line_diff`, `same_file_bytes` | `Equal`, `Text` lines or a binary verdict | same |
-| `fs.blame` | `match_lines` | line origins | [`read/blame.rs`](../../../../engine/crates/layerfs-store-service/src/read/blame.rs) |
-| `branch.merge` | `unit_changes`, `decide_units`, `revert_units`, `merge_roots` | merged root, or `Conflict` and nothing created | [`history/branch.rs`](../../../../engine/crates/layerfs-store-service/src/history/branch.rs), [`history/units.rs`](../../../../engine/crates/layerfs-store-service/src/history/units.rs) |
-| Commit onto a moved head | `merge_roots`, `paths_with_markers`, `root_changes` | merged root; a conflicted root is installed with markers | [`store/commit_merge.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit_merge.rs) |
+| `fs.blame` | `match_lines` | line origins | [`text/blame.rs`](../../../../engine/crates/layerfs-store-service/src/filesystem/text/blame.rs) |
+| `branch.merge` | `unit_changes`, `decide_units`, `revert_units`, `merge_roots` | merged root, or `Conflict` and nothing created | [`history/branch.rs`](../../../../engine/crates/layerfs-store-service/src/history/branch.rs), [`history/merge_units.rs`](../../../../engine/crates/layerfs-store-service/src/history/merge_units.rs) |
+| Commit onto a moved head | `merge_roots`, `paths_with_markers`, `root_changes` | merged root; a conflicted root is installed with markers | [`commit/merge.rs`](../../../../engine/crates/layerfs-store-service/src/workspace/commit/merge.rs) |
 
 A conflict is decided, not left open: text files get marker blocks, binary or
 type conflicts keep one side, and each path is listed with a `ConflictKind`.
@@ -74,7 +74,7 @@ cover is not installed at all, clean or conflicted (`LiveConflict`,
 
 | Function | Answers | Source |
 | --- | --- | --- |
-| `difference::<F>` | every differing key in key order; counts `pages_read`, `pages_shared`, `rows_compared` | [`sorted.rs`](../../../../core/crates/layerfs-content/src/compare/sorted.rs) |
+| `difference::<F>` | every differing key in key order; counts `pages_read`, `pages_shared`, `rows_compared` | [`pages.rs`](../../../../core/crates/layerfs-content/src/compare/pages.rs) |
 | `TreeTable::open` | one root decoded once: its `FilesystemRoot` and inode table | [`tree.rs`](../../../../core/crates/layerfs-content/src/compare/tree.rs) |
 | `inode_changes` / `inode_differences` | inodes whose value differs, ignoring / including reference count and metadata form | same |
 | `binding_changes`, `new_bindings` | names whose binding differs; bindings only `right` holds | same |
@@ -121,7 +121,7 @@ intermediate without an inode record is `Unbound`.
 | --- | --- | --- |
 | `PathAcross::resolve` | one `PathAnswer` per root: `Entry`, `Absent`, `Symlink`, `Unbound`; with `batched = false` (no round-trip cost, `batched_chain_reads()` false) each root is opened and walked alone with today's reads | [`across.rs`](../../../../core/crates/layerfs-content/src/compare/across.rs) |
 | `DirectoryMemo` | a call's `(directory root, name) -> serial` bindings, absence included, at most the caller's capacity; directory contents are immutable, so an equal root gives an equal binding | same |
-| `lookup_tables` | inode values from several tables in one descent, one demand per level, each page checked where each table found it, answers as `lookup_many` per table | [`inode/read.rs`](../../../../core/crates/layerfs-content/src/filesystem/inode/read.rs) |
+| `lookup_tables` | inode values from several tables in one descent, one demand per level, each page checked where each table found it, answers as `lookup_many` per table | [`inode/read.rs`](../../../../core/crates/layerfs-content/src/filesystem/tree/inode/read.rs) |
 
 A prediction never answers: a version's answer comes from its own bindings
 and values, and a wrong prediction only costs the extra wave. Values and
@@ -160,7 +160,7 @@ hint can make naming give up, never give a wrong path.
 | `enter_from(pair, from)` | a resumed page: names at or after `from` | same |
 
 A plan depends only on the two immutable roots, so the engine keeps plans by
-root pair ([`read/plans.rs`](../../../../engine/crates/layerfs-store-service/src/read/plans.rs)).
+root pair ([`compare/plans.rs`](../../../../engine/crates/layerfs-store-service/src/filesystem/compare/plans.rs)).
 
 ### Bytes, text and memo
 
@@ -182,15 +182,15 @@ lines to the newer version.
 
 | Rule | Enforced by |
 | --- | --- |
-| Comparing two sorted trees reads only pages whose IDs differ | `difference` in [`sorted.rs`](../../../../core/crates/layerfs-content/src/compare/sorted.rs) |
+| Comparing two sorted trees reads only pages whose IDs differ | `difference` in [`pages.rs`](../../../../core/crates/layerfs-content/src/compare/pages.rs) |
 | A planned walk's work follows changed inodes times depth, not the tree | `Plan::make` in [`changes.rs`](../../../../core/crates/layerfs-content/src/compare/changes.rs) |
 | A stale or absent hint never changes an answer | [`changes.rs`](../../../../core/crates/layerfs-content/src/compare/changes.rs), [`named.rs`](../../../../core/crates/layerfs-content/src/compare/named.rs) |
 | A bounded listing reports truncation, never a smaller complete answer | `RootChanges::truncated` in [`tree.rs`](../../../../core/crates/layerfs-content/src/compare/tree.rs) |
 | Unequal file roots prove nothing; equality is decided by bytes | [`bytes.rs`](../../../../core/crates/layerfs-content/src/compare/bytes.rs) |
-| A merge walks only the deciding side's changes from the base | [`merge/serial.rs`](../../../../core/crates/layerfs-content/src/merge/serial.rs) |
-| A merge result is an ordinary tree, built by the same backed update as a Commit | `finish` in [`merge/build.rs`](../../../../core/crates/layerfs-content/src/merge/build.rs) |
-| Conflicts and `.lww` decisions are reported in path order | [`merge/entry.rs`](../../../../core/crates/layerfs-content/src/merge/entry.rs) |
-| Merge state beyond its memory hold spills to the caller's records | [`merge/spill.rs`](../../../../core/crates/layerfs-content/src/merge/spill.rs) |
+| A merge walks only the deciding side's changes from the base | [`serial/walk.rs`](../../../../core/crates/layerfs-content/src/merge/serial/walk.rs) |
+| A merge result is an ordinary tree, built by the same backed update as a Commit | `finish` in [`plan/build.rs`](../../../../core/crates/layerfs-content/src/merge/plan/build.rs) |
+| Conflicts and `.lww` decisions are reported in path order | [`merge/roots.rs`](../../../../core/crates/layerfs-content/src/merge/roots.rs) |
+| Merge state beyond its memory hold spills to the caller's records | [`plan/spill.rs`](../../../../core/crates/layerfs-content/src/merge/plan/spill.rs) |
 
 ## Limits and failures
 
@@ -201,11 +201,11 @@ lines to the newer version.
 | Changed inodes a plan accepts | `MAXIMUM_CHANGED` 65,536; past it `Plan::make` is `None` and the caller walks fully | [`changes.rs`](../../../../core/crates/layerfs-content/src/compare/changes.rs) |
 | Comparison memo | `MEMO_PAGES` 256; a batch size mismatch is `BatchCardinality` | [`memo.rs`](../../../../core/crates/layerfs-content/src/compare/memo.rs) |
 | Objects one cross-version demand carries | 128 (the directory window; 1 MiB of pages, one storage `PREPARED_LEAVES` window); a wider wave takes more demands | [`across.rs`](../../../../core/crates/layerfs-content/src/compare/across.rs) |
-| `/.lww` files per load | `MAXIMUM_RULE_FILES` 16, includes counted | [`merge/lww.rs`](../../../../core/crates/layerfs-content/src/merge/lww.rs) |
-| Changed serials a bounded merge decides | the caller's `bound`, else `BoundedCapacityExceeded { what: "merge.bound" }`; the publication lane passes `LANE_MERGE_PATHS` = 1,024 | [`merge/serial.rs`](../../../../core/crates/layerfs-content/src/merge/serial.rs), [`commit_merge.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit_merge.rs) |
-| Merge state in memory | `HELD_BYTES` 8 MiB, then the caller's records | [`merge/spill.rs`](../../../../core/crates/layerfs-content/src/merge/spill.rs) |
-| Ours and theirs in different scopes | `InvalidRecord("merge scope")` | [`merge/entry.rs`](../../../../core/crates/layerfs-content/src/merge/entry.rs) |
-| Malformed merge unit | `Units::new` error naming the unit or pattern | [`merge/units.rs`](../../../../core/crates/layerfs-content/src/merge/units.rs) |
+| `/.lww` files per load | `MAXIMUM_RULE_FILES` 16, includes counted | [`rule/lww.rs`](../../../../core/crates/layerfs-content/src/merge/rule/lww.rs) |
+| Changed serials a bounded merge decides | the caller's `bound`, else `BoundedCapacityExceeded { what: "merge.bound" }`; the publication lane passes `LANE_MERGE_PATHS` = 1,024 | [`serial/walk.rs`](../../../../core/crates/layerfs-content/src/merge/serial/walk.rs), [`merge.rs`](../../../../engine/crates/layerfs-store-service/src/workspace/commit/merge.rs) |
+| Merge state in memory | `HELD_BYTES` 8 MiB, then the caller's records | [`plan/spill.rs`](../../../../core/crates/layerfs-content/src/merge/plan/spill.rs) |
+| Ours and theirs in different scopes | `InvalidRecord("merge scope")` | [`merge/roots.rs`](../../../../core/crates/layerfs-content/src/merge/roots.rs) |
+| Malformed merge unit | `Units::new` error naming the unit or pattern | [`rule/units.rs`](../../../../core/crates/layerfs-content/src/merge/rule/units.rs) |
 
 Only `merge.bound` refuses a decision; every other disagreement becomes a
 listed conflict with a defined result.
@@ -219,12 +219,12 @@ Each command gets a wall timeout of at most 120 s.
 
 | Test or example | Command | Platform | Shows |
 | --- | --- | --- | --- |
-| [`compare_full_resume.rs`](../../../../core/crates/layerfs-content/tests/compare_full_resume.rs) | `cargo +1.85.1 test --locked -p layerfs-content --test compare_full_resume` | any | A resumed full walk lists the same pairs as an uninterrupted one; reads before the first pair do not grow with the cursor |
-| [`compare_memo.rs`](../../../../core/crates/layerfs-content/tests/compare_memo.rs) | `cargo +1.85.1 test --locked -p layerfs-content --test compare_memo` | any | Past 256 objects, shared upper pages are still read once |
-| [`compare_across.rs`](../../../../core/crates/layerfs-content/tests/compare_across.rs) | `cargo +1.85.1 test --locked -p layerfs-content --test compare_across` | any | Each version's answer equals walking it alone on seeded random histories; per-window demands on depth-12, 10k-entry, symlink, hardlink, created-path and kind-change histories |
+| [`full_resume.rs`](../../../../core/crates/layerfs-content/tests/compare/full_resume.rs) | `cargo +1.85.1 test --locked -p layerfs-content --test compare full_resume` | any | A resumed full walk lists the same pairs as an uninterrupted one; reads before the first pair do not grow with the cursor |
+| [`memo.rs`](../../../../core/crates/layerfs-content/tests/compare/memo.rs) | `cargo +1.85.1 test --locked -p layerfs-content --test compare memo` | any | Past 256 objects, shared upper pages are still read once |
+| [`across.rs`](../../../../core/crates/layerfs-content/tests/compare/across.rs) | `cargo +1.85.1 test --locked -p layerfs-content --test compare across` | any | Each version's answer equals walking it alone on seeded random histories; per-window demands on depth-12, 10k-entry, symlink, hardlink, created-path and kind-change histories |
 | [`merge_units.rs`](../../../../core/crates/layerfs-content/tests/merge_units.rs) | `cargo +1.85.1 test --locked -p layerfs-content --test merge_units` | any | Unit admission and coverage; a relink is no change; ours wins a tie |
-| [`merge_units.rs`](../../../../engine/crates/layerfs-store-service/tests/merge_units.rs) | `cargo +1.85.1 test --locked -p layerfs-store-service --test merge_units` | any | `branch.merge` with `units`: a unit both sides changed comes whole from the later side |
-| [`merge_by_serial.rs`](../../../../engine/crates/layerfs-store-service/tests/merge_by_serial.rs) | `cargo +1.85.1 test --locked -p layerfs-store-service --test merge_by_serial` | any | Moves follow their serial; crossed directory moves and delete-against-edit conflict |
+| [`units.rs`](../../../../engine/crates/layerfs-store-service/tests/merge/units.rs) | `cargo +1.85.1 test --locked -p layerfs-store-service --test merge units` | any | `branch.merge` with `units`: a unit both sides changed comes whole from the later side |
+| [`by_serial.rs`](../../../../engine/crates/layerfs-store-service/tests/merge/by_serial.rs) | `cargo +1.85.1 test --locked -p layerfs-store-service --test merge by_serial` | any | Moves follow their serial; crossed directory moves and delete-against-edit conflict |
 
 ## Pages
 

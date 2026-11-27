@@ -6,7 +6,7 @@ Read-only audits of a [Store](README.md): one pinned snapshot, streamed observat
 
 | | |
 | --- | --- |
-| Source | [`diagnostic/`](../../../../engine/crates/layerfs-persistence/src/diagnostic), [`sqlite/schema_diagnostic.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/schema_diagnostic.rs), [`postgresql/schema_diagnostic.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/schema_diagnostic.rs), [`diagnostic_objects.sql`](../../../../engine/crates/layerfs-persistence/sql/postgresql/diagnostic_objects.sql) |
+| Source | [`diagnostic/`](../../../../engine/crates/layerfs-persistence/src/diagnostic), [`diagnostic/schema.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/diagnostic/schema.rs), [`diagnostic/schema.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/diagnostic/schema.rs), [`live_objects.sql`](../../../../engine/crates/layerfs-persistence/sql/postgresql/schema/live_objects.sql) |
 
 ## Observations
 
@@ -34,7 +34,7 @@ Read-only audits of a [Store](README.md): one pinned snapshot, streamed observat
 Control resolves the saved Store and its placement. A SQLite audit runs only
 in the kernel that holds the file; elsewhere control sends the worker
 operation `store.diagnose`
-([`worker_server.rs`](../../../../control/crates/layerfs-control/src/worker_server.rs);
+([`serve.rs`](../../../../api/crates/layerfs-api/src/worker/serve.rs);
 [Control: Doctor](../../control/doctor/README.md)).
 
 ## SQLite audit
@@ -54,10 +54,10 @@ operation `store.diagnose`
 
 | Rule | Source |
 | --- | --- |
-| The pinned transaction includes committed WAL frames; a long audit keeps them in the log. | [`sqlite.rs`](../../../../engine/crates/layerfs-persistence/src/diagnostic/sqlite.rs) |
-| `open_diagnostic` never changes journal or checkpoint settings and never migrates. | [`open.rs`](../../../../engine/crates/layerfs-persistence/src/store/open.rs) |
-| Saved schema text and every actual schema object are compared with the shipped format in the same transaction, so rewriting the saved definition after dropping a trigger does not pass. | [`sqlite/schema_diagnostic.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/schema_diagnostic.rs) |
-| `quick_check` excludes uniqueness and index/table equivalence; engine output is capped at 100 messages, and reaching the cap is `Unknown` coverage. | [`sqlite.rs`](../../../../engine/crates/layerfs-persistence/src/diagnostic/sqlite.rs) |
+| The pinned transaction includes committed WAL frames; a long audit keeps them in the log. | [`run.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/diagnostic/run.rs) |
+| `open_diagnostic` never changes journal or checkpoint settings and never migrates. | [`sqlite.rs`](../../../../engine/crates/layerfs-persistence/src/config/sqlite.rs) |
+| Saved schema text and every actual schema object are compared with the shipped format in the same transaction, so rewriting the saved definition after dropping a trigger does not pass. | [`diagnostic/schema.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/diagnostic/schema.rs) |
+| `quick_check` excludes uniqueness and index/table equivalence; engine output is capped at 100 messages, and reaching the cap is `Unknown` coverage. | [`run.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/diagnostic/run.rs) |
 
 Beside the audit, the doctor reads two bounded admission views on the same
 diagnostic open, each in its own read transaction: `diagnostic_mounts` (the
@@ -78,7 +78,7 @@ nothing. Only `SQLITE_CORRUPT`, `SQLITE_NOTADB` or non-`ok` check rows
 confirm a structural failure; busy, permission, I/O, a missing file or an
 unknown application schema do not. A clean result says nothing about schema,
 authority, objects or history
-([`sqlite_structure.rs`](../../../../engine/crates/layerfs-persistence/src/diagnostic/sqlite_structure.rs)).
+([`structure.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/diagnostic/structure.rs)).
 
 ## PostgreSQL audit
 
@@ -98,13 +98,13 @@ authority, objects or history
 
 | Rule | Source |
 | --- | --- |
-| Authentication, database or schema access and a wrong saved binding are access or authority failures; dependent coverage is blocked and no corruption is inferred. The second open validates the saved identity again. | [`postgresql.rs`](../../../../engine/crates/layerfs-persistence/src/diagnostic/postgresql.rs) |
-| Admission compares the saved schema source and column definition with shipped constants on the server, from permission-independent catalogs; nothing unbounded is returned to the client to compare. | [`postgresql/schema_diagnostic.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/schema_diagnostic.rs) |
-| Required constraints, indexes, triggers, the trigger function and the ancestor-list functions are compared on the server with 215 normalized signatures from the shipped DDL; extra indexes are allowed; a different deparse on another server major is `Unknown`, not corruption. Nothing is created to do this. | [`postgresql_contract.rs`](../../../../engine/crates/layerfs-persistence/src/diagnostic/postgresql_contract.rs), [`postgresql_contract_expected.rs`](../../../../engine/crates/layerfs-persistence/src/diagnostic/postgresql_contract_expected.rs) |
-| Heap tables, materialized views and sequences get `verify_heapam(check_toast, skip=none)`; ready, valid B-tree indexes get `bt_index_check(heapallindexed)`. Other relations are `Unknown` without a call. | [`postgresql.rs`](../../../../engine/crates/layerfs-persistence/src/diagnostic/postgresql.rs) |
+| Authentication, database or schema access and a wrong saved binding are access or authority failures; dependent coverage is blocked and no corruption is inferred. The second open validates the saved identity again. | [`run.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/diagnostic/run.rs) |
+| Admission compares the saved schema source and column definition with shipped constants on the server, from permission-independent catalogs; nothing unbounded is returned to the client to compare. | [`diagnostic/schema.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/diagnostic/schema.rs) |
+| Required constraints, indexes, triggers, the trigger function and the ancestor-list functions are compared on the server with 215 normalized signatures from the shipped DDL; extra indexes are allowed; a different deparse on another server major is `Unknown`, not corruption. Nothing is created to do this. | [`contract.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/diagnostic/contract.rs), [`expected.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/diagnostic/expected.rs) |
+| Heap tables, materialized views and sequences get `verify_heapam(check_toast, skip=none)`; ready, valid B-tree indexes get `bt_index_check(heapallindexed)`. Other relations are `Unknown` without a call. | [`run.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/diagnostic/run.rs) |
 | Missing amcheck, a missing signature or denied execution is `Unknown`; SQLSTATE `XX001`/`XX002` or returned heap rows are a `Fail` for that relation. amcheck is never installed, `bt_index_parent_check` never called, offline checksums never claimed. Heap output is capped at 100 rows. | same |
 | Randomized multi-host admission is refused rather than changing the saved selection's meaning. | [`driver.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/driver.rs) |
-| Cancellation is carried by a scoped, joined watcher; server cancel and `ROLLBACK` get up to one more second, and an unacknowledged release is reported. Nothing is replayed. | [`driver.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/driver.rs), [`postgresql.rs`](../../../../engine/crates/layerfs-persistence/src/diagnostic/postgresql.rs) |
+| Cancellation is carried by a scoped, joined watcher; server cancel and `ROLLBACK` get up to one more second, and an unacknowledged release is reported. Nothing is replayed. | [`driver.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/driver.rs), [`run.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/diagnostic/run.rs) |
 
 Reads already admitted in the pinned transaction can stay valid after access
 is revoked; a later denied read leaves coverage incomplete. Losing the backend
@@ -117,7 +117,7 @@ passwords, credential-bearing URLs and raw driver parameters.
 (`project doctor --full`) check one project in one read view (a SQLite
 read transaction; a PostgreSQL REPEATABLE READ READ ONLY view after the
 same admission), writing nothing to the Store
-([`project.rs`](../../../../engine/crates/layerfs-persistence/src/diagnostic/project.rs)).
+([`project.rs`](../../../../engine/crates/layerfs-persistence/src/diagnostic/check/project.rs)).
 
 ```text
  the live layer_stack row by id (not retired)     missing -> Fail
@@ -133,9 +133,9 @@ same admission), writing nothing to the Store
 
 | Rule | Source |
 | --- | --- |
-| The object checks are the whole-Store scan's; only the set differs: the closure of the project's heads instead of every `object_location` row. | [`project.rs`](../../../../engine/crates/layerfs-persistence/src/diagnostic/project.rs), [`scan.rs`](../../../../engine/crates/layerfs-persistence/src/diagnostic/scan.rs) |
+| The object checks are the whole-Store scan's; only the set differs: the closure of the project's heads instead of every `object_location` row. | [`project.rs`](../../../../engine/crates/layerfs-persistence/src/diagnostic/check/project.rs), [`store.rs`](../../../../engine/crates/layerfs-persistence/src/diagnostic/check/store.rs) |
 | Heads, the visited set and the queue live in the scratch temporary database outside the Store, removed when its connection closes; resident state is one batch of 64 identities and the Reader's caches. | [`scratch.rs`](../../../../engine/crates/layerfs-persistence/src/diagnostic/scratch.rs) |
-| An object two trees of the project share is read once; each project's audit has its own visited set. | [`project.rs`](../../../../engine/crates/layerfs-persistence/src/diagnostic/project.rs) |
+| An object two trees of the project share is read once; each project's audit has its own visited set. | [`project.rs`](../../../../engine/crates/layerfs-persistence/src/diagnostic/check/project.rs) |
 | An object whose own check failed still has its children visited; a context failure a missing child explains is left to that child's `missing` finding. | same |
 | Every observation has id `project.data`; storage outcomes are classified as in the scan (`Unknown` for an unavailable read, never a corruption verdict). | [`observation.rs`](../../../../engine/crates/layerfs-persistence/src/diagnostic/observation.rs) |
 
@@ -143,16 +143,16 @@ same admission), writing nothing to the Store
 
 | Category | Validator | Quick | Source |
 | --- | --- | --- | --- |
-| `history_meta`, `store_policy`, `scope_allocator`, `store_totals` | Catalog identity and incarnation, frozen policy, allocation bounds, totals = sums of retained Layers, Commits, winning locations and pack descriptors | yes | [`catalog.rs`](../../../../engine/crates/layerfs-persistence/src/diagnostic/catalog.rs) |
-| `layer_stack`, `branch`, `layer`, `"commit"` | Typed rows, identity derivation, heads, bases, parents, acyclic graph; namespace qualification once per root, scope and profile context | rows and graph yes; namespace no | [`history.rs`](../../../../engine/crates/layerfs-persistence/src/diagnostic/history.rs) |
-| Commit facts | LWW and merge-unit grammar streamed in bounded windows | yes | [`facts.rs`](../../../../engine/crates/layerfs-persistence/src/diagnostic/facts.rs) |
-| `layer_lineage`, `commit_lineage`, `absorbed`, `reach` | Rebuilt independently from first parents; saved run labels validated, never invented; exact overwrite counts | yes | [`lineage.rs`](../../../../engine/crates/layerfs-persistence/src/diagnostic/lineage.rs) |
-| `pack`, `pack_unit`, `object_location` | Descriptors, framing of every record, canonical identity and every pooled or delta dependency through the existing readers | shape only | [`scan.rs`](../../../../engine/crates/layerfs-persistence/src/diagnostic/scan.rs), [`reader.rs`](../../../../engine/crates/layerfs-persistence/src/diagnostic/reader.rs) |
-| `inode_value_block`, `binding_hint_block`, `content_signature`, `file_digest` | 4,000-byte bound before extraction, CRC and framing including unused blocks; ring arithmetic; file bytes hashed through a bounded sink | yes, except file bytes | [`auxiliary.rs`](../../../../engine/crates/layerfs-persistence/src/diagnostic/auxiliary.rs) |
-| `init_*`, `merge_operation`, `merge_record` | Row shapes, charges and owner relations; owners are never expired or deleted | yes | [`acquisition.rs`](../../../../engine/crates/layerfs-persistence/src/diagnostic/acquisition.rs) |
+| `history_meta`, `store_policy`, `scope_allocator`, `store_totals` | Catalog identity and incarnation, frozen policy, allocation bounds, totals = sums of retained Layers, Commits, winning locations and pack descriptors | yes | [`catalog.rs`](../../../../engine/crates/layerfs-persistence/src/diagnostic/check/catalog.rs) |
+| `layer_stack`, `branch`, `layer`, `"commit"` | Typed rows, identity derivation, heads, bases, parents, acyclic graph; namespace qualification once per root, scope and profile context | rows and graph yes; namespace no | [`history.rs`](../../../../engine/crates/layerfs-persistence/src/diagnostic/check/history.rs) |
+| Commit facts | LWW and merge-unit grammar streamed in bounded windows | yes | [`facts.rs`](../../../../engine/crates/layerfs-persistence/src/diagnostic/check/facts.rs) |
+| `layer_lineage`, `commit_lineage`, `absorbed`, `reach` | Rebuilt independently from first parents; saved run labels validated, never invented; exact overwrite counts | yes | [`lineage.rs`](../../../../engine/crates/layerfs-persistence/src/diagnostic/check/lineage.rs) |
+| `pack`, `pack_unit`, `object_location` | Descriptors, framing of every record, canonical identity and every pooled or delta dependency through the existing readers | shape only | [`store.rs`](../../../../engine/crates/layerfs-persistence/src/diagnostic/check/store.rs), [`reader.rs`](../../../../engine/crates/layerfs-persistence/src/diagnostic/reader.rs) |
+| `inode_value_block`, `binding_hint_block`, `content_signature`, `file_digest` | 4,000-byte bound before extraction, CRC and framing including unused blocks; ring arithmetic; file bytes hashed through a bounded sink | yes, except file bytes | [`auxiliary.rs`](../../../../engine/crates/layerfs-persistence/src/diagnostic/check/auxiliary.rs) |
+| `init_*`, `merge_operation`, `merge_record` | Row shapes, charges and owner relations; owners are never expired or deleted | yes | [`acquisition.rs`](../../../../engine/crates/layerfs-persistence/src/diagnostic/check/acquisition.rs) |
 
 Scans use actual row keys, not contiguous ids, and include retained rows
-outside current heads ([`scan.rs`](../../../../engine/crates/layerfs-persistence/src/diagnostic/scan.rs)).
+outside current heads ([`store.rs`](../../../../engine/crates/layerfs-persistence/src/diagnostic/check/store.rs)).
 Duplicate physical copies, first-wins forward locators, allocator gaps,
 removed projects and retained unreachable data are legitimate. Advisory
 blocks, signatures and digests are reported apart from authenticated content
@@ -173,22 +173,22 @@ Quick checks can still take time that grows with the Store.
 ```
 
 This is the graph equation behind `covered` in
-[`history/lineage.rs`](../../../../engine/crates/layerfs-persistence/src/history/lineage.rs)
+[`lineage/records.rs`](../../../../engine/crates/layerfs-persistence/src/history/lineage/records.rs)
 and `add_layer` in
-[`history/layerstack.rs`](../../../../engine/crates/layerfs-persistence/src/history/layerstack.rs),
+[`graph/layerstack.rs`](../../../../engine/crates/layerfs-persistence/src/history/graph/layerstack.rs),
 evaluated before the publication joins the rebuilt absorption map. It reads
 neither saved reach answers nor saved run labels, and invalid authoritative
 graphs block it explicitly
-([`lineage.rs`](../../../../engine/crates/layerfs-persistence/src/diagnostic/lineage.rs)).
+([`lineage.rs`](../../../../engine/crates/layerfs-persistence/src/diagnostic/check/lineage.rs)).
 
 ## Tests
 
 | Test | Command | Shows |
 | --- | --- | --- |
-| [`store_diagnostic.rs`](../../../../engine/crates/layerfs-persistence/tests/store_diagnostic.rs) | `cargo +1.85.1 test --locked -p layerfs-persistence --test store_diagnostic` | Audits of real Normal Stores with live WAL; damage found in full mode and named as excluded in quick mode |
-| [`diagnostic_overwrite.rs`](../../../../engine/crates/layerfs-persistence/tests/diagnostic_overwrite.rs) | `cargo +1.85.1 test --locked -p layerfs-persistence --test diagnostic_overwrite` | Exact overwrite reconstruction, including late publication and retained forks |
-| [`sqlite_structure_diagnostic.rs`](../../../../engine/crates/layerfs-persistence/tests/sqlite_structure_diagnostic.rs) | `cargo +1.85.1 test --locked -p layerfs-persistence --test sqlite_structure_diagnostic` | Raw structural errors stay distinct from unsupported schemas |
-| [`postgresql_doctor_physical.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_doctor_physical.rs) | `LAYERFS_TEST_POSTGRES_URL=… cargo +1.85.1 test --locked -p layerfs-persistence --test postgresql_doctor_physical` | Per-relation amcheck coverage; a missing extension is `Unknown` |
+| [`store.rs`](../../../../engine/crates/layerfs-persistence/tests/diagnostic/store.rs) | `cargo +1.85.1 test --locked -p layerfs-persistence --test diagnostic store` | Audits of real Normal Stores with live WAL; damage found in full mode and named as excluded in quick mode |
+| [`overwrite.rs`](../../../../engine/crates/layerfs-persistence/tests/diagnostic/overwrite.rs) | `cargo +1.85.1 test --locked -p layerfs-persistence --test diagnostic overwrite` | Exact overwrite reconstruction, including late publication and retained forks |
+| [`sqlite_structure.rs`](../../../../engine/crates/layerfs-persistence/tests/diagnostic/sqlite_structure.rs) | `cargo +1.85.1 test --locked -p layerfs-persistence --test diagnostic sqlite_structure` | Raw structural errors stay distinct from unsupported schemas |
+| [`doctor_physical.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_diagnostic/doctor_physical.rs) | `LAYERFS_TEST_POSTGRES_URL=… cargo +1.85.1 test --locked -p layerfs-persistence --test postgresql_diagnostic doctor_physical` | Per-relation amcheck coverage; a missing extension is `Unknown` |
 
 The `diagnostic_*.rs` tests beside them damage one table family each
 (framing, dependencies, content, namespace, history, facts, inventory) and

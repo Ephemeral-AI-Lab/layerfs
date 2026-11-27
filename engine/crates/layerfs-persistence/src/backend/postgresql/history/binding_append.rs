@@ -1,15 +1,16 @@
 //! One overflow binding batch under the ordinary standalone write lane.
-use super::fused::{nonce, HINTS};
+use super::super::session::attempt::nonce;
+use super::fused::HINTS;
 use crate::{
     backend::{
+        error::BackendError,
         postgresql::session::{
             connection::Session,
             pipeline::{Refusal, Reply, Request},
             profile::barrier_leftover,
         },
-        records::BackendError,
     },
-    blocks::hints::Block,
+    storage::blocks::hints::Block,
 };
 use postgres::{error::SqlState, SimpleQueryMessage};
 use std::sync::atomic::Ordering;

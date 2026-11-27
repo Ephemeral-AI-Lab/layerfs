@@ -246,7 +246,7 @@ impl AuthenticatedObjects for BasePageReader<'_> {
         Ok(result)
     }
 
-    fn decoded_pages(&self) -> Option<&super::decoded::DecodedPages> {
+    fn decoded_pages(&self) -> Option<&super::tree::pages::decoded::DecodedPages> {
         self.cache.decoded_pages()
     }
 }

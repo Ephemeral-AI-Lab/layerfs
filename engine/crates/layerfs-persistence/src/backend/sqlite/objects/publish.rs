@@ -1,5 +1,7 @@
 //! Immutable bodies and bounded multi-row locator statements in one transaction.
-use crate::backend::records::{BackendError, Param};
+use super::layout;
+use crate::backend::error::BackendError;
+use crate::backend::seam::Param;
 use crate::backend::sqlite::session::transaction::Transaction;
 use layerfs_content::ObjectId;
 use layerfs_storage::{location::PackDomain, port::*};
@@ -8,7 +10,7 @@ pub(crate) fn run(tx: &Transaction<'_>, batch: &Publication) -> Result<Published
     match tx.layout() {
         crate::SqlitePackLayout::Monolithic => write_packs(tx, &batch.packs)?,
         crate::SqlitePackLayout::GroupRows | crate::SqlitePackLayout::GroupRowsIndexed => {
-            super::units_publish::write(tx, &batch.packs)?
+            self::write(tx, &batch.packs)?
         }
     }
     let mut inserted = BTreeSet::new();
@@ -142,6 +144,39 @@ fn write_packs(tx: &Transaction<'_>, packs: &[PublishedPack]) -> Result<(), Back
         let mut w = tx.work.borrow_mut();
         w.sealed_inserts += page.len() as u64;
         w.sealed_body_bytes += page.iter().map(|p| p.body().len() as u64).sum::<u64>();
+    }
+    Ok(())
+}
+
+// Immutable control/unit INSERTs in the existing publication transaction.
+pub(crate) fn write(tx: &Transaction<'_>, packs: &[PublishedPack]) -> Result<(), BackendError> {
+    for pack in packs {
+        let (header, views) = layout::views(pack).map_err(|_| BackendError::Integrity)?;
+        let info = pack.info();
+        let id = info.pack_id;
+        let domain = i64::from(info.domain == PackDomain::Payload);
+        let length = info.length as i64;
+        let digest = info.key.as_bytes().as_slice();
+        let control = &pack.body()[..header.body_offset];
+        tx.borrowed(
+            "INSERT INTO pack(pack_id,domain,digest,length,control) VALUES(?,?,?,?,?)",
+            &[&id, &domain, &digest, &length, &control],
+            56 + control.len() as u64,
+        )?;
+        for (number, view) in views.iter().enumerate() {
+            let number = number as i64;
+            let offset = view.start as i64;
+            let length = (view.end - view.start) as i64;
+            let body = &pack.body()[view.start..view.end];
+            tx.borrowed(
+                "INSERT INTO pack_unit(pack_id,group_number,offset,length,body) VALUES(?,?,?,?,?)",
+                &[&id, &number, &offset, &length, &body],
+                32 + body.len() as u64,
+            )?;
+        }
+        let mut work = tx.work.borrow_mut();
+        work.sealed_inserts += 1 + views.len() as u64;
+        work.sealed_body_bytes += pack.body().len() as u64;
     }
     Ok(())
 }

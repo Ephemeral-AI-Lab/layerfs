@@ -4,7 +4,7 @@
 //! flow is exercised without an engine. Its byte charges are its own simple
 //! estimate, not the SQLite provider's, and it has exactly one session.
 #![allow(dead_code)]
-use layerfs_content::filesystem::attributes::PortableMetadata;
+use layerfs_content::filesystem::tree::attribute::PortableMetadata;
 use layerfs_content::{inode_leaf::InodeKind, ObjectId};
 use layerfs_storage::port::{
     acquisition::{

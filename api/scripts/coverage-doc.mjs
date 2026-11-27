@@ -1,0 +1,240 @@
+// Generates the call-by-front-end matrix of docs/architecture/api/calls/coverage.md
+// from the four front ends' own call lists:
+//   Node    the package's `table` and its bound functions
+//   Python  `layerfs.TABLE`, the sync functions and the `layerfs.aio` coroutines
+//   CLI     `layerfs help <family> <call>`, whose first line is the call's usage
+//   MCP     the generated tool list of api/mcp, and the profile that lists it
+//   node api/scripts/coverage-doc.mjs          rewrite the generated block
+//   node api/scripts/coverage-doc.mjs --check  exit 1 when the block is not what the front ends give,
+//                                              or when a front end disagrees with the Node table
+// It needs the built addon, the Python module (`LAYERFS_PYTHON`, default `python3`, with
+// api/python/src on its path) and the built command (`LAYERFS_CLI`, default target/debug/layerfs,
+// or under CARGO_TARGET_DIR). A missing one is an error, never an empty column.
+import { spawnSync } from "node:child_process";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { join, resolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { bucketOf, tools as toolsOfProfile } from "../mcp/src/profiles.js";
+import { toolFor, toolsOf } from "../mcp/src/tools.js";
+
+const root = fileURLToPath(new URL("../../", import.meta.url));
+export const document = join(root, "docs/architecture/api/calls/coverage.md");
+const BEGIN = "<!-- BEGIN GENERATED: api/scripts/coverage-doc.mjs -->";
+const END = "<!-- END GENERATED -->";
+
+const FUNCTION = "function";
+const piped = (arg) => arg.kind === "content" || arg.kind === "json";
+const nameOf = (spec) => `${spec.family}.${spec.call}`;
+const shape = (list) => list.map((arg) => `${arg.optional ? "?" : ""}${arg.name}`).join(", ");
+
+/** Where the Python interpreter and the command are: an error naming what to set when one is not. */
+export function locate(env = process.env) {
+  const python = env.LAYERFS_PYTHON || "python3";
+  const target = env.CARGO_TARGET_DIR ? resolve(root, env.CARGO_TARGET_DIR) : join(root, "target");
+  const cli = env.LAYERFS_CLI || join(target, "debug", "layerfs");
+  if (!existsSync(cli)) throw new Error(`the layerfs command is not built: ${cli} (cargo build -p layerfs-cli, or set LAYERFS_CLI)`);
+  return { python, cli };
+}
+
+const PYTHON_VIEW = `
+import json, keyword, inspect
+import layerfs
+from layerfs import aio
+names = lambda spec: spec["family"] + "." + spec["call"]
+fn = lambda module, spec: getattr(getattr(module, spec["family"], None), spec["call"], None)
+print(json.dumps({
+  "table": layerfs.TABLE,
+  "sync": [names(s) for s in layerfs.TABLE if callable(fn(layerfs, s))],
+  "aio": [names(s) for s in layerfs.TABLE if inspect.iscoroutinefunction(fn(aio, s))],
+  "keywords": sorted({a["name"] for s in layerfs.TABLE for a in s["args"] + s["options"] if keyword.iskeyword(a["name"])}),
+}))
+`;
+
+/** Each front end's own view of the calls: `{ node, python, cli, mcp }`. */
+export async function collect({ python, cli }) {
+  const node = await import("../node/src/index.js");
+  const toolName = (spec) => `${spec.family}_${spec.call}`;
+  const view = {
+    node: { table: node.table, bound: node.table.filter((s) => typeof node.default[s.family]?.[s.call] === "function").map(nameOf) },
+    mcp: {
+      tools: Object.fromEntries(toolsOf(node.table).map((tool) => [tool.name, tool])),
+      work: toolsOfProfile(node.table, "work").map(toolName),
+      admin: toolsOfProfile(node.table, "admin").map(toolName),
+    },
+  };
+  const run = spawnSync(python, ["-B", "-c", PYTHON_VIEW], {
+    cwd: join(root, "api/python"),
+    env: { ...process.env, PYTHONPATH: join(root, "api/python/src") },
+    encoding: "utf8",
+    timeout: 60_000,
+  });
+  if (run.error || run.status !== 0) {
+    throw new Error(`the Python view failed (${python}; build the module with maturin develop in api/python): ${run.error ?? run.stderr}`);
+  }
+  view.python = JSON.parse(run.stdout);
+  view.cli = {};
+  for (const family of node.families) {
+    // the family's help lists its calls (`  <call>  <what it does>`); each
+    // call's own help starts with its usage line (V22)
+    const help = spawnSync(cli, ["help", family], { encoding: "utf8", timeout: 60_000 });
+    if (help.error || help.status !== 0) throw new Error(`layerfs help ${family} failed: ${help.error ?? help.stderr}`);
+    const calls = help.stdout.split("\n").flatMap((line) => line.match(/^  (\S+)  /)?.[1] ?? []);
+    for (const call of calls) {
+      const one = spawnSync(cli, ["help", family, call], { encoding: "utf8", timeout: 60_000 });
+      if (one.error || one.status !== 0) throw new Error(`layerfs help ${family} ${call} failed: ${one.error ?? one.stderr}`);
+      const found = one.stdout.split("\n")[0].match(/^layerfs (\S+) (\S+)(.*)$/);
+      if (!found) continue;
+      // a call's shell name has `-` for its `_` (`machine load-image`)
+      const name = `${found[1]}.${found[2].replaceAll("-", "_")}`;
+      view.cli[name] = usage(found[3]);
+    }
+  }
+  return view;
+}
+
+/** A usage line's words as `{ positionals, options, from }`; names in snake_case. */
+function usage(words) {
+  const out = { positionals: [], options: [], from: false };
+  // an option is `[--name]` or `[--name WORD]` (the row's value word, a
+  // default, or `<name>`), a required one the same without brackets, a
+  // repeated object option `[--name K=V]...`; a Commit message shows as
+  // `[-m msg]`; `[--with a,b]` lists the sections, no option. A positional
+  // is `<name>`, an optional one `[name]` (a word, never a `-`, in brackets)
+  const pattern =
+    /\[(\w[\w-]*)\]|\[--([\w-]+) K=V\]\.\.\.|\[(--[\w-]+|-m)(?: (<[\w-]+>|[^\s\][<]+))?\]|(?<=\s)(--[\w-]+)(?: (<[\w-]+>|[^\s\][<-][^\s\][]*))?(?=\s|$)|<([\w-]+)>/g;
+  const flagName = (word) => (word === "-m" ? "message" : word?.replace(/^--/, ""));
+  for (const [, optionalPositional, repeated, bracketed, bracketedValue, bare, bareValue, positional] of words.matchAll(pattern)) {
+    const flag = repeated ?? flagName(bracketed ?? bare);
+    const value = (bracketedValue ?? bareValue)?.replace(/^<(.*)>$/, "$1");
+    if (flag === "with") continue;
+    const snake = (text) => text.replaceAll("-", "_");
+    if (optionalPositional) out.positionals.push({ name: snake(optionalPositional), optional: true });
+    else if (positional) out.positionals.push({ name: snake(positional), optional: false });
+    // the piped positional's flag is exactly `[--from <file>]`; a call's own
+    // `from` option (commit.diff's `--from <ref>`) is an ordinary option
+    else if (flag === "from" && value === "file") out.from = true;
+    else out.options.push(snake(flag));
+  }
+  return out;
+}
+
+/** What the command line of `spec` must be, by the table: a content or JSON positional is read from
+ * stdin or `--from`, `on_progress` is `--progress`, the output functions are no flag of their own
+ * (the `stream` option is `--stream`). */
+function expectedCli(spec) {
+  // a secret option is its own flag, read from stdin (`--password-stdin`)
+  const flagOf = (o) => (o.name === "on_progress" ? "progress" : o.shell ? o.shell.replace(/^--/, "").replaceAll("-", "_") : o.name);
+  const options = spec.options.filter((o) => o.kind !== FUNCTION || o.name === "on_progress").map(flagOf);
+  return {
+    positionals: spec.args.filter((a) => !piped(a)).map((a) => ({ name: a.name, optional: a.optional })),
+    options,
+    from: spec.args.some(piped),
+  };
+}
+
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const describeCli = (v) => `${shape(v.positionals)} | ${v.options.map((o) => `--${o}`).join(" ")}${v.from ? " | --from" : ""}`;
+
+/** The generated block for `view` (from `collect`) and the problems it found. */
+export function render(view) {
+  const problems = [];
+  const table = view.node.table;
+  const python = new Map(view.python.table.map((s) => [nameOf(s), s]));
+  const bound = new Set(view.node.bound);
+  const sync = new Set(view.python.sync);
+  const aio = new Set(view.python.aio);
+  const names = new Set(table.map(nameOf));
+  for (const name of [...python.keys(), ...Object.keys(view.cli)]) {
+    if (!names.has(name)) problems.push(`${name}: a call of a front end that the Node table does not have`);
+  }
+  const counts = { node: 0, python: 0, aio: 0, cli: 0, mcp: 0 };
+  const work = new Set(view.mcp.work);
+  const admin = new Set(view.mcp.admin);
+  const rows = table.map((spec) => {
+    const name = nameOf(spec);
+    const cell = (ok, why) => (ok ? "yes" : (problems.push(`${name}: ${why}`), "NO"));
+    counts.node += bound.has(name);
+    const node = cell(bound.has(name), "no Node function");
+    const other = python.get(name);
+    const pythonOk = other !== undefined && same(other, spec) && sync.has(name);
+    counts.python += pythonOk;
+    const py = cell(pythonOk, other === undefined ? "not in the Python table" : !same(other, spec) ? "the Python table differs from the Node table" : "no Python function");
+    counts.aio += aio.has(name);
+    const coroutine = cell(aio.has(name), "no aio coroutine");
+    const given = view.cli[name];
+    const want = expectedCli(spec);
+    const cliOk = given !== undefined && same(given, want);
+    counts.cli += cliOk;
+    const cli = cell(cliOk, given === undefined ? "no command" : `the command line differs: ${describeCli(given)} is not ${describeCli(want)}`);
+    const built = toolFor(spec);
+    const mcpTool = view.mcp.tools[built.name];
+    const bucket = bucketOf(spec);
+    const listed = { work: work.has(built.name), admin: admin.has(built.name) };
+    const mcpProblem = mcpTool === undefined
+      ? "no MCP tool"
+      : !same(mcpTool.inputSchema, built.inputSchema) || mcpTool.description !== built.description
+        ? "the MCP tool's schema or description differs from the table"
+        : bucket === null
+          ? "no MCP profile bucket"
+          : bucket === "work" && !(listed.work && listed.admin)
+              ? "the MCP work profile does not list it"
+              : bucket === "admin" && (listed.work || !listed.admin)
+                ? (listed.work ? "the MCP work profile lists an admin call" : "the MCP admin profile does not list it")
+                : null;
+    if (mcpProblem !== null) problems.push(`${name}: ${mcpProblem}`);
+    else counts.mcp += 1;
+    const mcp = mcpProblem !== null ? "NO" : bucket === "work" ? "yes" : "admin";
+    const notes = [
+      spec.args.some(piped) ? "stdin/--from" : "",
+      spec.options.some((o) => o.name === "on_progress") ? "--progress" : "",
+      spec.options.some((o) => o.name === "stream") ? "--stream" : "",
+    ].filter(Boolean);
+    const options = spec.options.map((o) => (o.kind === FUNCTION ? `${o.name}()` : o.name)).join(", ");
+    return `| \`${name}\` | ${shape(spec.args) || "-"} | ${options || "-"} | ${node} | ${py} | ${coroutine} | ${cli}${cli === "yes" && notes.length ? ` (${notes.join(", ")})` : ""} | ${mcp} |`;
+  });
+  const families = [...new Set(table.map((s) => s.family))];
+  const lines = [
+    BEGIN,
+    "",
+    `${table.length} calls in ${families.length} families, counted from the Node table. Calls present: Node ${counts.node}, Python ${counts.python}, Python \`aio\` ${counts.aio}, CLI ${counts.cli}, MCP ${counts.mcp} (${work.size} in \`work\`, ${admin.size - work.size} admin only).`,
+    "",
+    `Argument names that are Python keywords: ${view.python.keywords.length === 0 ? "none" : view.python.keywords.join(", ")}.`,
+    "",
+    `Front-end problems: ${problems.length === 0 ? "none" : problems.length}.`,
+    ...problems.map((p) => `- ${p}`),
+    "",
+    "| Call | Positionals (`?` optional) | Options (`()` a function) | Node | Python | Python `aio` | CLI | MCP |",
+    "| --- | --- | --- | --- | --- | --- | --- | --- |",
+    ...rows,
+    "",
+    END,
+  ];
+  return { block: lines.join("\n"), problems };
+}
+
+/** `text` (the document) with its generated block replaced by `block`. */
+export function splice(text, block) {
+  const start = text.indexOf(BEGIN);
+  const end = text.indexOf(END);
+  if (start < 0 || end < start) throw new Error(`${document} has no "${BEGIN}" ... "${END}" block`);
+  return text.slice(0, start) + block + text.slice(end + END.length);
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const { block, problems } = render(await collect(locate()));
+  const current = readFileSync(document, "utf8");
+  const next = splice(current, block);
+  if (process.argv.includes("--check")) {
+    if (next !== current) {
+      console.error("coverage.md differs from the front ends' call lists; run node api/scripts/coverage-doc.mjs");
+      process.exit(1);
+    }
+  } else {
+    writeFileSync(document, next);
+    console.log(`Wrote ${document}`);
+  }
+  if (problems.length > 0) {
+    console.error(`${problems.length} front-end problem(s):\n${problems.join("\n")}`);
+    process.exit(1);
+  }
+}

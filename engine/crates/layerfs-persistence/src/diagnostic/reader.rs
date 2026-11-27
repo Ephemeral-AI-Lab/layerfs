@@ -1,5 +1,5 @@
 //! Existing Storage reconstruction over borrowed snapshot mechanics.
-use super::{transaction::View, Options};
+use super::{view::View, Options};
 use layerfs_content::{AuthenticatedObjects, ContentError, ContentResult, ObjectId};
 use layerfs_storage::{
     encoding::{
@@ -7,8 +7,7 @@ use layerfs_storage::{
         pool::PoolReader,
         DecompressionWorkspace, GroupCache, PackCache,
     },
-    location::{ObjectLocation, SignatureRow},
-    source::Source,
+    location::{ObjectLocation, SignatureRow, Source},
     StorageCapacities, StorageError, StorageResult,
 };
 use std::cell::RefCell;

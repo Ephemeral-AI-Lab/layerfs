@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 use layerfs_content::{
-    filesystem::attributes::read::{read_portable, AttributeReadWork},
+    filesystem::tree::attribute::read::{read_portable, AttributeReadWork},
     read_all, FilesystemRead, LogicalPath,
 };
 use layerfs_history::{HistoryCatalog, HistoryName, LayerStackId};

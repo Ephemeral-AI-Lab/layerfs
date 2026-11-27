@@ -34,10 +34,10 @@
 //! Only the Normal (WAL/synchronous=NORMAL) profile is built and measured:
 //! owner direction 2026-10-07 disabled Durable execution indefinitely.
 
-use layerfs_content::filesystem::attributes::PortableMetadata;
-use layerfs_content::filesystem::directory::{encode_directory_page, DirectoryPage};
-use layerfs_content::filesystem::inode::{encode_inode_page, InodePage};
 use layerfs_content::filesystem::root::profile_id;
+use layerfs_content::filesystem::tree::attribute::PortableMetadata;
+use layerfs_content::filesystem::tree::directory::{encode_directory_page, DirectoryPage};
+use layerfs_content::filesystem::tree::inode::{encode_inode_page, InodePage};
 use layerfs_content::filesystem::{scope_for_seed, FilesystemRoot, InodeScope};
 use layerfs_content::inode_leaf::{InodeKind, InodeMetadata, InodeValue};
 use layerfs_content::{encode_whole_file_payload, FinalizedObject, ObjectId, ObjectRole};

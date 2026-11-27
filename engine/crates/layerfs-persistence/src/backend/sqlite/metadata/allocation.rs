@@ -1,8 +1,7 @@
 //! Acknowledged pack/ordinal blocks in one bounded transaction.
-use crate::backend::{
-    records::{BackendError, Param},
-    Transaction,
-};
+use crate::backend::error::BackendError;
+use crate::backend::seam::Param;
+use crate::backend::Transaction;
 pub(crate) fn cursor(tx: &Transaction<'_>) -> Result<(i64, i64), BackendError> {
     let rows = tx.query(
         "SELECT next_pack_id,next_ordinal FROM store_policy WHERE id=1",

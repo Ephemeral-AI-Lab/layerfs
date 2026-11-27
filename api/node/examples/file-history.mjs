@@ -2,7 +2,7 @@
 // machine, nothing mounted): a Store, a project from a folder, a
 // Branch, three writes (text, bytes, a batch), the history and a diff, then
 // the Branch published to `main`. From the repository, after building the
-// addon (`node api/scripts/build-native.mjs`):
+// addon (`node api/scripts/native-addon.mjs`):
 //   node api/node/examples/file-history.mjs
 // The temporary directory must be on a local filesystem (ext4, xfs or btrfs
 // on Linux; apfs on macOS); set TMPDIR to such a directory if it is not. Installed, import

@@ -11,13 +11,10 @@ pub(crate) use import::batch;
 pub(crate) use import::error;
 #[cfg(unix)]
 pub(crate) use import::files;
-pub(crate) use import::init;
 #[cfg(unix)]
 pub(crate) use import::namespace;
-pub use import::observe::{InitCounters, InitCounts, InitStep};
+pub use import::observe::{InitCounters, InitCounts, InitStep, NamespaceWork};
+pub(crate) use import::run as init;
 #[cfg(unix)]
 pub(crate) use import::scan;
 pub use init::{init, init_observed, InitRequest, Initialized};
-
-pub(crate) use import::work as namespace_work;
-pub use namespace_work::NamespaceWork;

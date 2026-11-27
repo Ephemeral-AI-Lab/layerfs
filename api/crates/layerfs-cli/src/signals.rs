@@ -28,7 +28,7 @@
 //! the call's return and that mark still exits `Unknown`; the outcome was
 //! settled, so the next `store upgrade` answers `current` or does the work.
 use crate::output;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use nix::sys::signal::{SigSet, Signal};
 use std::io::Write;
 use std::os::fd::AsFd;

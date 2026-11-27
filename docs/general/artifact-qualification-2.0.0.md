@@ -170,11 +170,11 @@ Cargo target), `PATH` with the venv's `maturin`.
 | `cd api/python && maturin build --locked` (README, sdk, quickstart) | OK, exit 0 (debug wheel; docs now say `--release` for the wheel to install) |
 | `cargo +1.85.1 build -p layerfs-cli` (quickstart); `… build --locked -p layerfs-cli` (node.md); `… build -p layerfs-python -p layerfs-cli` (python.md) | OK, exit 0 |
 | `cp target/debug/lib_native.so api/python/src/layerfs/_native.abi3.so` (python README) | OK; `liblayerfs_python.so` is not the file name |
-| `npm --prefix api run gen:types`; `python3 api/python/tools/gen_stubs.py --check` | OK, no diff |
-| `node --test api/node/test/calls.mjs` | 3 pass |
+| `npm --prefix api run gen:types`; `python3 api/scripts/python_stubs.py --check` | OK, no diff |
+| `node --test api/node/test/calls/every-call.test.mjs` | 3 pass |
 | `npm --prefix api/node test` | 23 pass, 0 fail, 1 skipped (`events.mjs` exec output: `LAYERFS_DAEMON` unset, NOT RUN) |
-| `python3 api/python/test/test_calls.py`; `python3 -m unittest discover -s api/python/test` | 7 tests OK (1 skipped); 39 tests OK (1 skipped, daemon) |
-| `cargo +1.85.1 test --locked -p layerfs-cli --test doctor` under `alarm 100` | FAILED: exit 142 while compiling (cold test build 75 s plus the dependency build). Built first with `--no-run`, it passes: 2 passed. Fixed in the docs |
+| `python3 api/python/test/calls/test_calls.py`; `python3 -m unittest discover -s api/python/test` | 7 tests OK (1 skipped); 39 tests OK (1 skipped, daemon) |
+| `cargo +1.85.1 test --locked -p layerfs-cli --test doctor_output report` under `alarm 100` | FAILED: exit 142 while compiling (cold test build 75 s plus the dependency build). Built first with `--no-run`, it passes: 2 passed. Fixed in the docs |
 | `layerfs help`, `layerfs --version` | OK |
 
 Missing before this work and added to the docs: any statement of how to pack

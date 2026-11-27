@@ -9,11 +9,11 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use layerfs_content::filesystem::attributes::codec::AttributeEntry;
-use layerfs_content::filesystem::attributes::keys::AttributeKey;
-use layerfs_content::filesystem::attributes::portable::PortableMetadata;
-use layerfs_content::filesystem::attributes::value::emit_value;
-use layerfs_content::filesystem::symlink::{emit_symlink, SymlinkTarget};
+use layerfs_content::filesystem::tree::attribute::codec::AttributeEntry;
+use layerfs_content::filesystem::tree::attribute::keys::AttributeKey;
+use layerfs_content::filesystem::tree::attribute::portable::PortableMetadata;
+use layerfs_content::filesystem::tree::attribute::value::emit_value;
+use layerfs_content::filesystem::name::symlink::{emit_symlink, SymlinkTarget};
 use layerfs_content::filesystem::{
     build_filesystem, DirectoryUpdate, FilesystemInput, FilesystemObjects, FilesystemResources,
     InodeUpdate, PathName,
@@ -192,7 +192,7 @@ pub fn build_tree(entries: usize) -> Built {
                 .expect("mtime value");
             let generic =
                 emit_value(&mut objects, b"opaque attribute bytes").expect("generic value");
-            layerfs_content::filesystem::attributes::build::build_attribute_tree(
+            layerfs_content::filesystem::tree::attribute::build::build_attribute_tree(
                 &mut objects,
                 vec![
                     Ok(AttributeEntry {

@@ -7,8 +7,8 @@ How the kernel reaches a mounted Workspace: route-neutral mount ports, then FUSE
 | | |
 | --- | --- |
 | Layer | [Engine](../README.md) |
-| Crates | `layerfs-mount-ports`, `layerfs-fuse`, `layerfs-nfs` |
-| Source | [`layerfs-mount-ports/src`](../../../../engine/crates/layerfs-mount-ports/src), [`layerfs-fuse/src`](../../../../engine/crates/layerfs-fuse/src), [`layerfs-nfs/src`](../../../../engine/crates/layerfs-nfs/src), [pinned fuser fork](fuse.md#fuser-git-dependency) |
+| Crates | `layerfs-vfs` (the mount ports, `ports/`), `layerfs-fuse`, `layerfs-nfs` |
+| Source | [`layerfs-vfs/src/ports`](../../../../engine/crates/layerfs-vfs/src/ports), [`layerfs-fuse/src`](../../../../engine/crates/layerfs-fuse/src), [`layerfs-nfs/src`](../../../../engine/crates/layerfs-nfs/src), [pinned fuser fork](fuse.md#fuser-git-dependency) |
 | Uses | [Workspace](../workspace/README.md), [Overlay](../overlay/README.md) |
 | Used by | [Daemon](../daemon/README.md) |
 | Flows | [A Workspace session](../../flows/workspace.md) |
@@ -30,7 +30,7 @@ How the kernel reaches a mounted Workspace: route-neutral mount ports, then FUSE
  +-------+-----------+     +-------+-------------+
          +-----------+-------------+
  +-------------------v--------------------------------+
- | layerfs-mount-ports                                |
+ | layerfs-vfs ports                                  |
  |  MountServices -> RequestServices, Fence           |
  |  KernelRead KernelData KernelMutation              |
  |  DirectoryStream            Phase timing           |
@@ -47,7 +47,7 @@ How the kernel reaches a mounted Workspace: route-neutral mount ports, then FUSE
 One engine mount of a Workspace is served by exactly one route. The daemon
 chooses it, attaches it and tears it down. The route per platform is the
 `kernel` field of [`control/SUPPORT.json`](../../../../control/SUPPORT.json),
-generated from [`support.rs`](../../../../control/crates/layerfs-platform/src/support.rs):
+generated from [`support.rs`](../../../../control/crates/layerfs-machine/src/table/support.rs):
 `"nfs"` for the macOS `host` platform only; `"fuse"` for macOS docker,
 apple-container and lima and for Linux `host` and docker; `null` (unsupported)
 for every other row, Windows included
@@ -59,12 +59,12 @@ for every other row, Windows included
 
 | Item | What it is | Source |
 | --- | --- | --- |
-| `MountServices` | One mounted Workspace; `request(&Fence)` makes a fresh per-request scope with no provider I/O, no new cache and no whole-Workspace lock | [`ports.rs`](../../../../engine/crates/layerfs-mount-ports/src/ports.rs) |
-| `RequestServices` | What one kernel request may ask. Acquiring calls (`observe_visit`, `read_visit`, `mutate_visit`, `directory_visit`, `publish_cookies`, `base`, `recognize`, `reserve_serial`) are refused once the fence stops; disposal calls (`reply_attempted`, `close_file`, `close_directory`, `forget`) never are | [`ports.rs`](../../../../engine/crates/layerfs-mount-ports/src/ports.rs) |
-| `Fence` | One mount's terminal stop, set once by forced teardown and never cleared; it keeps the mount's `FailedDemands` (count, first and latest cause) | [`ports.rs`](../../../../engine/crates/layerfs-mount-ports/src/ports.rs) |
-| `BaseDemandFailed` | A Store read for one request failed; only `Fence::failed_demand` builds it, so every marker has its record | [`ports.rs`](../../../../engine/crates/layerfs-mount-ports/src/ports.rs) |
-| `ServiceReply<T>` | A value plus the completion receipt; the value drops first | [`ports.rs`](../../../../engine/crates/layerfs-mount-ports/src/ports.rs) |
-| `Mounted` | The daemon's implementation over a `BoundWorkspace`; it checks the fence on entry to and every poll of the owner-admission and Store-reader waits | [`filesystem_port.rs`](../../../../engine/crates/layerfs-daemon/src/service/filesystem_port.rs) |
+| `MountServices` | One mounted Workspace; `request(&Fence)` makes a fresh per-request scope with no provider I/O, no new cache and no whole-Workspace lock | [`mount.rs`](../../../../engine/crates/layerfs-vfs/src/ports/mount.rs) |
+| `RequestServices` | What one kernel request may ask. Acquiring calls (`observe_visit`, `read_visit`, `mutate_visit`, `directory_visit`, `publish_cookies`, `base`, `recognize`, `reserve_serial`) are refused once the fence stops; disposal calls (`reply_attempted`, `close_file`, `close_directory`, `forget`) never are | [`mount.rs`](../../../../engine/crates/layerfs-vfs/src/ports/mount.rs) |
+| `Fence` | One mount's terminal stop, set once by forced teardown and never cleared; it keeps the mount's `FailedDemands` (count, first and latest cause) | [`mount.rs`](../../../../engine/crates/layerfs-vfs/src/ports/mount.rs) |
+| `BaseDemandFailed` | A Store read for one request failed; only `Fence::failed_demand` builds it, so every marker has its record | [`mount.rs`](../../../../engine/crates/layerfs-vfs/src/ports/mount.rs) |
+| `ServiceReply<T>` | A value plus the completion receipt; the value drops first | [`mount.rs`](../../../../engine/crates/layerfs-vfs/src/ports/mount.rs) |
+| `Mounted` | The daemon's implementation over a `BoundWorkspace`; it checks the fence on entry to and every poll of the owner-admission and Store-reader waits | [`ports.rs`](../../../../engine/crates/layerfs-daemon/src/ports.rs) |
 
 A job already admitted is awaited to its original result even after the fence
 stops: a stopped mount starts nothing new and still gives back what it holds.
@@ -85,15 +85,15 @@ stops: a stopped mount starts nothing new and still gives back what it holds.
 
 | Type or module | Kernel requests | Source |
 | --- | --- | --- |
-| `KernelRead` | LOOKUP, GETATTR, OPEN, OPENDIR; holds nothing after its visits (a LOOKUP also carries the directory it named, and a refused LOOKUP the directory row its own job read) | [`lookup.rs`](../../../../engine/crates/layerfs-mount-ports/src/operations/lookup.rs) |
-| `KernelData` | READ, READLINK | [`read.rs`](../../../../engine/crates/layerfs-mount-ports/src/operations/read.rs) |
-| `KernelMutation` | Every changing request; holds one `Publication` ticket until `replied` | [`mutation.rs`](../../../../engine/crates/layerfs-mount-ports/src/operations/mutation.rs) |
-| `DirectoryStream` | READDIR; only accepted names become valid offsets | [`directory.rs`](../../../../engine/crates/layerfs-mount-ports/src/operations/directory.rs) |
-| `create` | CREATE, MKNOD (regular only), MKDIR, SYMLINK; mode masked to `0o7777` | [`create.rs`](../../../../engine/crates/layerfs-mount-ports/src/operations/create.rs) |
-| `write` | WRITE at the kernel's offset (at most `WRITE_WINDOW`); SETATTR of mode, size, mtime | [`write.rs`](../../../../engine/crates/layerfs-mount-ports/src/operations/write.rs) |
-| `link`, `remove`, `rename` | Rename flag `0` replaces, `1` (no-replace) does not, any other is `Invalid` | [`rename.rs`](../../../../engine/crates/layerfs-mount-ports/src/operations/rename.rs) |
-| `flush` | FLUSH, FSYNC, FSYNCDIR: `Synchronize::NotImplemented`; nothing is buffered in the daemon | [`flush.rs`](../../../../engine/crates/layerfs-mount-ports/src/operations/flush.rs) |
-| `unsupported` | xattrs, ACCESS, READDIRPLUS, locks, BMAP, IOCTL, POLL, LSEEK, FALLOCATE, COPY_FILE_RANGE: `Absent::NotImplemented`; FIFOs, sockets, devices and foreign uid/gid: `NotPermitted` | [`unsupported.rs`](../../../../engine/crates/layerfs-mount-ports/src/operations/unsupported.rs) |
+| `KernelRead` | LOOKUP, GETATTR, OPEN, OPENDIR; holds nothing after its visits (a LOOKUP also carries the directory it named, and a refused LOOKUP the directory row its own job read) | [`lookup.rs`](../../../../engine/crates/layerfs-vfs/src/requests/lookup.rs) |
+| `KernelData` | READ, READLINK | [`read.rs`](../../../../engine/crates/layerfs-vfs/src/requests/read.rs) |
+| `KernelMutation` | Every changing request; holds one `Publication` ticket until `replied` | [`mutation.rs`](../../../../engine/crates/layerfs-vfs/src/requests/mutation.rs) |
+| `DirectoryStream` | READDIR; only accepted names become valid offsets | [`directory.rs`](../../../../engine/crates/layerfs-vfs/src/requests/directory.rs) |
+| `create` | CREATE, MKNOD (regular only), MKDIR, SYMLINK; mode masked to `0o7777` | [`create.rs`](../../../../engine/crates/layerfs-vfs/src/requests/create.rs) |
+| `write` | WRITE at the kernel's offset (at most `WRITE_WINDOW`); SETATTR of mode, size, mtime | [`write.rs`](../../../../engine/crates/layerfs-vfs/src/requests/write.rs) |
+| `link`, `remove`, `rename` | Rename flag `0` replaces, `1` (no-replace) does not, any other is `Invalid` | [`rename.rs`](../../../../engine/crates/layerfs-vfs/src/requests/rename.rs) |
+| `flush` | FLUSH, FSYNC, FSYNCDIR: `Synchronize::NotImplemented`; nothing is buffered in the daemon | [`flush.rs`](../../../../engine/crates/layerfs-vfs/src/requests/flush.rs) |
+| `unsupported` | xattrs, ACCESS, READDIRPLUS, locks, BMAP, IOCTL, POLL, LSEEK, FALLOCATE, COPY_FILE_RANGE: `Absent::NotImplemented`; FIFOs, sockets, devices and foreign uid/gid: `NotPermitted` | [`unsupported.rs`](../../../../engine/crates/layerfs-vfs/src/requests/unsupported.rs) |
 
 `Declined` is a definite answer with no publication: `Refused(Refusal)`,
 `NoSpace`, `Contended` or `TargetTooLong`. Each failure type keeps the
@@ -107,7 +107,7 @@ lock while it waits on the Store.
 `Phases` keeps one count and one nanosecond total per `Phase`: `ReadVisit`,
 `ReadSupply`, `MutateVisit`, `MutateSupply`, `MutateRelease`,
 `DirectoryVisit`, `DirectoryFinish`, `Forget`, `CloseDirectory`
-([`phase.rs`](../../../../engine/crates/layerfs-mount-ports/src/phase.rs)).
+([`phase.rs`](../../../../engine/crates/layerfs-vfs/src/requests/phase.rs)).
 The running callback's `Phases` sits in a thread-local that only the FUSE
 `Timed` guard sets
 ([`accounting.rs`](../../../../engine/crates/layerfs-fuse/src/request/accounting.rs)),
@@ -126,14 +126,14 @@ so NFS calls charge nothing.
 
 | Rule | FUSE | NFS | Source |
 | --- | --- | --- | --- |
-| Replies come from published state | `published(value, expected)`; `Incoherent::Unpublished` or `Foreign` refuses the reply | Reply only when the published stat names the expected serial; else `NFS3ERR_IO`, mutation retained | [`coherence/attributes.rs`](../../../../engine/crates/layerfs-fuse/src/coherence/attributes.rs), [`change.rs`](../../../../engine/crates/layerfs-nfs/src/change.rs) |
-| Entry and attribute lifetime | `TTL` 60 s; bounds how long the kernel answers alone, never makes an answer correct | `actimeo=60` and close-to-open | [`reply.rs`](../../../../engine/crates/layerfs-fuse/src/request/reply.rs), [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs) |
-| Page cache on open | `FOPEN_KEEP_CACHE` on, `FOPEN_DIRECT_IO` off | client cache | [`coherence/pages.rs`](../../../../engine/crates/layerfs-fuse/src/coherence/pages.rs) |
-| WRITE count | Full count or an error, never short | Short only after a later window failed; earlier windows stay published | [`coherence/pages.rs`](../../../../engine/crates/layerfs-fuse/src/coherence/pages.rs), [`change.rs`](../../../../engine/crates/layerfs-nfs/src/change.rs) |
-| Hard links | Aliases share one serial, so one kernel inode | `fileid` is the serial | [`link.rs`](../../../../engine/crates/layerfs-mount-ports/src/operations/link.rs), [`attributes.rs`](../../../../engine/crates/layerfs-nfs/src/attributes.rs) |
-| Ticket release | After the one reply attempt (fuser reports no send result) | After `write_record` returns | [`reply_order.rs`](../../../../engine/crates/layerfs-fuse/src/coherence/reply_order.rs), [`server.rs`](../../../../engine/crates/layerfs-nfs/src/server.rs) |
-| After a Commit installs a root other than the one shown | `inval_inode` / `inval_entry` per stale serial or name before the answer | Mode-preserving SETATTR refresh through the client, after the answer and best effort (at most 4,096 inodes) | [`invalidate.rs`](../../../../engine/crates/layerfs-daemon/src/control/invalidate.rs); [FUSE](fuse.md), [NFS](nfs.md) |
-| Durability of a reply | `FLUSH`/`FSYNC`/`FSYNCDIR` answer `ENOSYS` once; the kernel then reports success and stops sending them | WRITE answers `FILE_SYNC`, meaning published; the daemon flushes the client before each Commit: the flush helper when set, else the export volume's own flush (`sync_volume_np(<dir>, SYNC_VOLUME_WAIT)` on macOS, `sync(2)` elsewhere); a failed flush refuses the Commit as `Failed` at `commit:flush` | [`flush.rs`](../../../../engine/crates/layerfs-mount-ports/src/operations/flush.rs), [`changing.rs`](../../../../engine/crates/layerfs-nfs/src/changing.rs) |
+| Replies come from published state | `published(value, expected)`; `Incoherent::Unpublished` or `Foreign` refuses the reply | Reply only when the published stat names the expected serial; else `NFS3ERR_IO`, mutation retained | [`request/coherence.rs`](../../../../engine/crates/layerfs-fuse/src/request/coherence.rs), [`mutation.rs`](../../../../engine/crates/layerfs-nfs/src/kernel/mutation.rs) |
+| Entry and attribute lifetime | `TTL` 60 s; bounds how long the kernel answers alone, never makes an answer correct | `actimeo=60` and close-to-open | [`reply.rs`](../../../../engine/crates/layerfs-fuse/src/request/reply.rs), [`export.rs`](../../../../engine/crates/layerfs-daemon/src/workspace/nfs/export.rs) |
+| Page cache on open | `FOPEN_KEEP_CACHE` on, `FOPEN_DIRECT_IO` off | client cache | [`request/coherence.rs`](../../../../engine/crates/layerfs-fuse/src/request/coherence.rs) |
+| WRITE count | Full count or an error, never short | Short only after a later window failed; earlier windows stay published | [`request/coherence.rs`](../../../../engine/crates/layerfs-fuse/src/request/coherence.rs), [`mutation.rs`](../../../../engine/crates/layerfs-nfs/src/kernel/mutation.rs) |
+| Hard links | Aliases share one serial, so one kernel inode | `fileid` is the serial | [`link.rs`](../../../../engine/crates/layerfs-vfs/src/requests/link.rs), [`attributes.rs`](../../../../engine/crates/layerfs-nfs/src/protocol/attributes.rs) |
+| Ticket release | After the one reply attempt (fuser reports no send result) | After `write_record` returns | [`coherence.rs`](../../../../engine/crates/layerfs-fuse/src/request/coherence.rs), [`server.rs`](../../../../engine/crates/layerfs-nfs/src/server.rs) |
+| After a Commit installs a root other than the one shown | `inval_inode` / `inval_entry` per stale serial or name before the answer | Mode-preserving SETATTR refresh through the client, after the answer and best effort (at most 4,096 inodes) | [`invalidate.rs`](../../../../engine/crates/layerfs-daemon/src/workspace/fuse/invalidate.rs); [FUSE](fuse.md), [NFS](nfs.md) |
+| Durability of a reply | `FLUSH`/`FSYNC`/`FSYNCDIR` answer `ENOSYS` once; the kernel then reports success and stops sending them | WRITE answers `FILE_SYNC`, meaning published; the daemon flushes the client before each Commit: the flush helper when set, else the export volume's own flush (`sync_volume_np(<dir>, SYNC_VOLUME_WAIT)` on macOS, `sync(2)` elsewhere); a failed flush refuses the Commit as `Failed` at `commit:flush` | [`flush.rs`](../../../../engine/crates/layerfs-vfs/src/requests/flush.rs), [`mutation.rs`](../../../../engine/crates/layerfs-nfs/src/procedures/mutation.rs) |
 
 An install of the Workspace's own captured root sends nothing: the tree the
 mount shows is unchanged. The overlay is disposable and never synchronized to
@@ -143,32 +143,32 @@ stable media.
 
 | Rule | Enforced by |
 | --- | --- |
-| The kernel decides access: `allow_other,default_permissions`; the library uid filter is off (`SessionACL::All`) | [`syscalls.rs`](../../../../engine/crates/layerfs-fuse/src/mount/syscalls.rs), [`startup.rs`](../../../../engine/crates/layerfs-fuse/src/session/startup.rs) |
-| Every inode shows the configured command uid and gid; a chown to anything else is `EPERM`; mode bits beyond `0o7777` and special files are refused | [`unsupported.rs`](../../../../engine/crates/layerfs-mount-ports/src/operations/unsupported.rs), [`create.rs`](../../../../engine/crates/layerfs-mount-ports/src/operations/create.rs) |
-| Stable identity: one serial per inode for the mount's life, across rename, Commit and install; NFS handles are stable per mount and stale across mounts | [`attributes.rs`](../../../../engine/crates/layerfs-fuse/src/attributes.rs), [`handle.rs`](../../../../engine/crates/layerfs-nfs/src/handle.rs) |
+| The kernel decides access: `allow_other,default_permissions`; the library uid filter is off (`SessionACL::All`) | [`mount.rs`](../../../../engine/crates/layerfs-fuse/src/mount.rs), [`attach.rs`](../../../../engine/crates/layerfs-fuse/src/session/attach.rs) |
+| Every inode shows the configured command uid and gid; a chown to anything else is `EPERM`; mode bits beyond `0o7777` and special files are refused | [`unsupported.rs`](../../../../engine/crates/layerfs-vfs/src/requests/unsupported.rs), [`create.rs`](../../../../engine/crates/layerfs-vfs/src/requests/create.rs) |
+| Stable identity: one serial per inode for the mount's life, across rename, Commit and install; NFS handles are stable per mount and stale across mounts | [`attributes.rs`](../../../../engine/crates/layerfs-fuse/src/attributes.rs), [`handle.rs`](../../../../engine/crates/layerfs-nfs/src/protocol/handle.rs) |
 | Exact request ownership: each received unit has one disposition; a failure is retained with its future and inputs, never replayed | [`requests.rs`](../../../../engine/crates/layerfs-fuse/src/dispatch/requests.rs), [`failure.rs`](../../../../engine/crates/layerfs-fuse/src/request/failure.rs) |
-| Exact open and lookup ownership: OPEN/OPENDIR record a descriptor in their deciding job, RELEASE/RELEASEDIR/FORGET give it back; a stopped fence never refuses disposal | [`ports.rs`](../../../../engine/crates/layerfs-mount-ports/src/ports.rs), [`kernel.rs`](../../../../engine/crates/layerfs-nfs/src/kernel.rs) |
-| A mutation takes effect at the commit of its one owner job; the reply is built from that job's values and a published mutation is never undone | [`reply_order.rs`](../../../../engine/crates/layerfs-fuse/src/coherence/reply_order.rs) |
-| READDIR publishes exactly the accepted names as offsets before its reply | [`directory.rs`](../../../../engine/crates/layerfs-mount-ports/src/operations/directory.rs) |
-| Kernel writeback stays off: `FUSE_WRITEBACK_CACHE` is never selected; every `write(2)` is published before it returns | [`profile.rs`](../../../../engine/crates/layerfs-fuse/src/mount/profile.rs), [engine guide](../../../../engine/AGENTS.md) |
+| Exact open and lookup ownership: OPEN/OPENDIR record a descriptor in their deciding job, RELEASE/RELEASEDIR/FORGET give it back; a stopped fence never refuses disposal | [`mount.rs`](../../../../engine/crates/layerfs-vfs/src/ports/mount.rs), [`references.rs`](../../../../engine/crates/layerfs-nfs/src/kernel/references.rs) |
+| A mutation takes effect at the commit of its one owner job; the reply is built from that job's values and a published mutation is never undone | [`coherence.rs`](../../../../engine/crates/layerfs-fuse/src/request/coherence.rs) |
+| READDIR publishes exactly the accepted names as offsets before its reply | [`directory.rs`](../../../../engine/crates/layerfs-vfs/src/requests/directory.rs) |
+| Kernel writeback stays off: `FUSE_WRITEBACK_CACHE` is never selected; every `write(2)` is published before it returns | [`mount.rs`](../../../../engine/crates/layerfs-fuse/src/mount.rs), [engine guide](../../../../engine/AGENTS.md) |
 | FUSE uses the pinned organization fork directly | [`layerfs-fuse/Cargo.toml`](../../../../engine/crates/layerfs-fuse/Cargo.toml), [`Cargo.lock`](../../../../Cargo.lock), checked by [`check_product_boundary.py`](../../../../tools/check_product_boundary.py); see [FUSE](fuse.md#fuser-git-dependency) |
-| Filesystem access needs no Exec registration: any process that sees the mount is served the same way | [`ports.rs`](../../../../engine/crates/layerfs-mount-ports/src/ports.rs) (no command crosses `RequestServices`), [engine guide](../../../../engine/AGENTS.md) |
+| Filesystem access needs no Exec registration: any process that sees the mount is served the same way | [`mount.rs`](../../../../engine/crates/layerfs-vfs/src/ports/mount.rs) (no command crosses `RequestServices`), [engine guide](../../../../engine/AGENTS.md) |
 
 ## Limits and failures
 
 | Limit or failure | Value or error | Source |
 | --- | --- | --- |
 | READ and WRITE window | `READ_WINDOW` 128 KiB, `WRITE_WINDOW` 256 KiB; FUSE negotiates `READ_WINDOW` as `max_write`; larger is `EINVAL` | [`types.rs`](../../../../engine/crates/layerfs-overlay/src/contract/types.rs), [`callbacks.rs`](../../../../engine/crates/layerfs-fuse/src/request/callbacks.rs) |
-| FUSE input per request | `MAX_INPUT_BYTES` = `READ_WINDOW` + 510; more is `ENOTCONN` | [`types.rs`](../../../../engine/crates/layerfs-fuse/src/dispatch/types.rs) |
-| Name length | 255 bytes; longer is `ENAMETOOLONG` / `NFS3ERR_NAMETOOLONG` | [`callbacks.rs`](../../../../engine/crates/layerfs-fuse/src/request/callbacks.rs), [`change.rs`](../../../../engine/crates/layerfs-nfs/src/change.rs) |
-| Symlink target | Shorter than one page (FUSE: negotiated page size; NFS: `LINK_PAGE` 4096); else `ENAMETOOLONG` | [`create.rs`](../../../../engine/crates/layerfs-mount-ports/src/operations/create.rs), [`change.rs`](../../../../engine/crates/layerfs-nfs/src/change.rs) |
-| Serial allocator contended | `EAGAIN` / `NFS3ERR_JUKEBOX`; nothing created | [`attributes.rs`](../../../../engine/crates/layerfs-fuse/src/attributes.rs), [`change.rs`](../../../../engine/crates/layerfs-nfs/src/change.rs) |
-| Overlay full | `ENOSPC` / `NFS3ERR_NOSPC`, only for a known rollback | [`mutation.rs`](../../../../engine/crates/layerfs-mount-ports/src/operations/mutation.rs) |
+| FUSE input per request | `MAX_INPUT_BYTES` = `READ_WINDOW` + 510; more is `ENOTCONN` | [`disposition.rs`](../../../../engine/crates/layerfs-fuse/src/dispatch/disposition.rs) |
+| Name length | 255 bytes; longer is `ENAMETOOLONG` / `NFS3ERR_NAMETOOLONG` | [`callbacks.rs`](../../../../engine/crates/layerfs-fuse/src/request/callbacks.rs), [`mutation.rs`](../../../../engine/crates/layerfs-nfs/src/kernel/mutation.rs) |
+| Symlink target | Shorter than one page (FUSE: negotiated page size; NFS: `LINK_PAGE` 4096); else `ENAMETOOLONG` | [`create.rs`](../../../../engine/crates/layerfs-vfs/src/requests/create.rs), [`mutation.rs`](../../../../engine/crates/layerfs-nfs/src/kernel/mutation.rs) |
+| Serial allocator contended | `EAGAIN` / `NFS3ERR_JUKEBOX`; nothing created | [`attributes.rs`](../../../../engine/crates/layerfs-fuse/src/attributes.rs), [`mutation.rs`](../../../../engine/crates/layerfs-nfs/src/kernel/mutation.rs) |
+| Overlay full | `ENOSPC` / `NFS3ERR_NOSPC`, only for a known rollback | [`mutation.rs`](../../../../engine/crates/layerfs-vfs/src/requests/mutation.rs) |
 | Failed base read of one request | `EIO` for that request; the mount keeps serving; recorded in `FailedDemands` | [`terminal.rs`](../../../../engine/crates/layerfs-fuse/src/request/terminal.rs) |
 | Forced teardown | Waiting requests answer `ENOTCONN` | [`terminal.rs`](../../../../engine/crates/layerfs-fuse/src/request/terminal.rs) |
-| STATFS / FSSTAT | Fixed declared values (2^30 blocks and files), not capacity | [`inline.rs`](../../../../engine/crates/layerfs-fuse/src/request/inline.rs), [`nfs.rs`](../../../../engine/crates/layerfs-nfs/src/nfs.rs) |
-| NFS record and WRITE | `RECORD_LIMIT` 2 MiB per RPC record; `WRITE_LIMIT` 1 MiB per WRITE call | [`rpc.rs`](../../../../engine/crates/layerfs-nfs/src/rpc.rs), [`changing.rs`](../../../../engine/crates/layerfs-nfs/src/changing.rs) |
-| NFS synthetic kernel | 65,536 lookup references (default), 1,024 file and 256 directory descriptors | [`kernel.rs`](../../../../engine/crates/layerfs-nfs/src/kernel.rs) |
+| STATFS / FSSTAT | Fixed declared values (2^30 blocks and files), not capacity | [`inline.rs`](../../../../engine/crates/layerfs-fuse/src/request/inline.rs), [`program.rs`](../../../../engine/crates/layerfs-nfs/src/procedures/program.rs) |
+| NFS record and WRITE | `RECORD_LIMIT` 2 MiB per RPC record; `WRITE_LIMIT` 1 MiB per WRITE call | [`rpc.rs`](../../../../engine/crates/layerfs-nfs/src/protocol/rpc.rs), [`mutation.rs`](../../../../engine/crates/layerfs-nfs/src/procedures/mutation.rs) |
+| NFS synthetic kernel | 65,536 lookup references (default), 1,024 file and 256 directory descriptors | [`references.rs`](../../../../engine/crates/layerfs-nfs/src/kernel/references.rs) |
 | Application WAL SQLite database in an NFS Workspace (macOS) | First query fails `SQLITE_CANTOPEN` (14); convert to `journal_mode=DELETE` before import | [NFS](nfs.md) |
 | FUSE route outside Linux | `attributes`, `mount`, `request` and `session` build on Linux only | [`lib.rs`](../../../../engine/crates/layerfs-fuse/src/lib.rs) |
 
@@ -183,13 +183,13 @@ stable media.
 
 | Test or example | Command | Platform | Shows |
 | --- | --- | --- | --- |
-| [`kernel_mount.rs`](../../../../engine/crates/layerfs-daemon/tests/kernel_mount.rs) | `cargo +1.85.1 test --locked -p layerfs-daemon --test kernel_mount -- --test-threads=1` | Linux, `/dev/fuse`, `SYS_ADMIN` | The complete root read through ordinary calls with exact modes, times, owners, listings, bytes and link targets; refusals; reversible Busy; full drain; two Workspaces mounted independently |
-| [`kernel_coherence.rs`](../../../../engine/crates/layerfs-daemon/tests/kernel_coherence.rs) | `cargo +1.85.1 test --locked -p layerfs-daemon --test kernel_coherence -- --test-threads=1` | Linux, `/dev/fuse`, `SYS_ADMIN` | Shared-mapping stores are published; a LOOKUP racing create, unlink or rename never binds a stale inode; size never shrinks under concurrent append |
-| [`requests.rs`](../../../../engine/crates/layerfs-fuse/tests/requests.rs) | `cargo +1.85.1 test --locked -p layerfs-fuse --test requests` | any (no kernel) | A parked request resumes on its own thread and drain waits for it; a panic keeps its future and another mount stays usable |
-| [`protocol.rs`](../../../../engine/crates/layerfs-nfs/tests/protocol.rs) | `cargo +1.85.1 test --locked -p layerfs-nfs --test protocol` | any (no network) | XDR round trips and bounds, fragment joining and `RECORD_LIMIT`, `AUTH_UNIX` headers, handles stable per mount and stale after it |
-| [`write.rs`](../../../../engine/crates/layerfs-nfs/tests/write.rs) | `cargo +1.85.1 test --locked -p layerfs-nfs --test write` | any (in-process loopback export, no kernel mount) | Every changing NFS procedure; tickets released only after the reply; silly renames and AppleDouble names |
-| [`apple_double_view.rs`](../../../../engine/crates/layerfs-nfs/tests/apple_double_view.rs) | `cargo +1.85.1 test --locked -p layerfs-nfs --test apple_double_view` | any (in-process loopback export, no kernel mount) | A `._` file the Workspace holds is listed, read, written, replaced and removed as any other file and committed; a new companion still stays in export memory |
-| [`refresh.rs`](../../../../engine/crates/layerfs-nfs/tests/refresh.rs) | `cargo +1.85.1 test --locked -p layerfs-nfs --test refresh` | any (in-process loopback export, no kernel mount) | A refresh chmod changes nothing; a user chmod inside the mark window is applied and the refresh chmod after it does not undo it |
+| [`mount.rs`](../../../../engine/crates/layerfs-daemon/tests/kernel/mount.rs) | `cargo +1.85.1 test --locked -p layerfs-daemon --test kernel mount -- --test-threads=1` | Linux, `/dev/fuse`, `SYS_ADMIN` | The complete root read through ordinary calls with exact modes, times, owners, listings, bytes and link targets; refusals; reversible Busy; full drain; two Workspaces mounted independently |
+| [`coherence.rs`](../../../../engine/crates/layerfs-daemon/tests/kernel/coherence.rs) | `cargo +1.85.1 test --locked -p layerfs-daemon --test kernel coherence -- --test-threads=1` | Linux, `/dev/fuse`, `SYS_ADMIN` | Shared-mapping stores are published; a LOOKUP racing create, unlink or rename never binds a stale inode; size never shrinks under concurrent append |
+| [`dispatch.rs`](../../../../engine/crates/layerfs-fuse/tests/request/dispatch.rs) | `cargo +1.85.1 test --locked -p layerfs-fuse --test request dispatch` | any (no kernel) | A parked request resumes on its own thread and drain waits for it; a panic keeps its future and another mount stays usable |
+| [`protocol.rs`](../../../../engine/crates/layerfs-nfs/tests/export/protocol.rs) | `cargo +1.85.1 test --locked -p layerfs-nfs --test export protocol` | any (no network) | XDR round trips and bounds, fragment joining and `RECORD_LIMIT`, `AUTH_UNIX` headers, handles stable per mount and stale after it |
+| [`write.rs`](../../../../engine/crates/layerfs-nfs/tests/standalone/write.rs) | `cargo +1.85.1 test --locked -p layerfs-nfs --test write` | any (in-process loopback export, no kernel mount) | Every changing NFS procedure; tickets released only after the reply; silly renames and AppleDouble names |
+| [`view.rs`](../../../../engine/crates/layerfs-nfs/tests/apple_double/view.rs) | `cargo +1.85.1 test --locked -p layerfs-nfs --test apple_double view` | any (in-process loopback export, no kernel mount) | A `._` file the Workspace holds is listed, read, written, replaced and removed as any other file and committed; a new companion still stays in export memory |
+| [`refresh.rs`](../../../../engine/crates/layerfs-nfs/tests/export/refresh.rs) | `cargo +1.85.1 test --locked -p layerfs-nfs --test export refresh` | any (in-process loopback export, no kernel mount) | A refresh chmod changes nothing; a user chmod inside the mark window is applied and the refresh chmod after it does not undo it |
 
 Run each under a wall timeout of at most 120 s. The nightly lane runs each
 kernel binary alone in a container with `--device /dev/fuse --cap-add

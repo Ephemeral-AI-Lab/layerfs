@@ -1,11 +1,11 @@
 //! Bounded write units: begin, append, place, record roots and advance.
-use super::accounting::{entry_bytes, host_bytes, HOST_BYTES};
-use super::metadata_blob;
-use super::statements::{
-    signed, unsigned, Failure, ADVANCE, BEGIN, CLAIM_EPOCH, COMPLETE_FILE, SET_DIRECTORY_ROOT,
+use super::statements::{ADVANCE, BEGIN, CLAIM_EPOCH, COMPLETE_FILE, SET_DIRECTORY_ROOT};
+use crate::acquisition::{
+    failure::{signed, unsigned, Failure},
+    payload::{entry_bytes, host_bytes, metadata_blob, packed, well_formed},
 };
 use crate::backend::sqlite::session::prepared::Prepared;
-use crate::backend::{records::BackendError, Transaction};
+use crate::backend::{error::BackendError, Transaction};
 use layerfs_content::{inode_leaf::InodeKind, ObjectId};
 use layerfs_storage::port::acquisition::{Begin, HostIdentity, NewEntry, Owner, Phase, Placed};
 
@@ -141,29 +141,6 @@ pub(crate) fn put_one(
     Ok((first.map(unsigned).transpose()?, rows, bytes))
 }
 
-/// Shape validation before an individual entry's original attempted mutations.
-pub(crate) fn well_formed(entry: &NewEntry) -> bool {
-    let path = entry.host_path.as_deref();
-    (match entry.kind {
-        InodeKind::Directory => path.is_some() && entry.host.is_none(),
-        InodeKind::RegularFile => path.is_some() && entry.host.is_some(),
-        InodeKind::Symlink => path.is_none() && entry.host.is_none(),
-    }) && (entry.kind == InodeKind::Symlink) == entry.target_root.is_some()
-        && entry.key.parent.is_some() != (entry.position == Some(0))
-        && entry.key.parent.is_some() != entry.key.name.is_empty()
-        && (entry.key.parent.is_some() || entry.kind == InodeKind::Directory)
-        && entry.metadata.validate(entry.kind).is_ok()
-}
-
-/// Device, inode and evidence as one stored value.
-pub(crate) fn packed(host: HostIdentity) -> [u8; HOST_BYTES as usize] {
-    let mut out = [0; HOST_BYTES as usize];
-    out[..8].copy_from_slice(&host.device.to_be_bytes());
-    out[8..16].copy_from_slice(&host.inode.to_be_bytes());
-    out[16..].copy_from_slice(&host.evidence);
-    out
-}
-
 /// Assigns positions to one window of unpositioned children of `parent`.
 pub(crate) fn place_children(
     tx: &Transaction<'_>,
@@ -171,7 +148,7 @@ pub(crate) fn place_children(
     parent: u64,
     placed: &[Placed],
 ) -> Result<Vec<u64>, Failure> {
-    super::child_windows::place_children(tx, owner, parent, placed)
+    super::placement::place_children(tx, owner, parent, placed)
 }
 
 pub(crate) fn complete_files(

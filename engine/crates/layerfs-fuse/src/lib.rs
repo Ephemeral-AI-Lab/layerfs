@@ -1,7 +1,6 @@
 //! Kernel connection/request ownership over existing Workspace semantics.
 #![forbid(unsafe_code)]
 
-pub mod coherence;
 mod dispatch;
 
 #[cfg(target_os = "linux")]

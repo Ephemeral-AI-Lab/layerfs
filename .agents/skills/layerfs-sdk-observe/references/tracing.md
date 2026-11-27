@@ -86,7 +86,7 @@ layerfs home log --limit 1000 --outcome refused --detail | jq -c '.items[] | [.l
 | `ms` | the connection's whole time: connect, secret, request, events and answer |
 
 One worker-routed call is one line (R1). Written by
-`control/crates/layerfs-home/src/trace.rs` `connection`; a line that
+`control/crates/layerfs-home/src/log/trace.rs` `connection`; a line that
 cannot be written changes no outcome.
 
 ## The step lines
@@ -139,7 +139,7 @@ ran) and `helper.exit`
 Untraced, a step mark is one thread-local check: nothing is timed or sent,
 and the helper gets no file. A step line that cannot be written changes no
 outcome. Written by `layerfs-home/src/trace.rs` (`stepped`, `step`),
-`layerfs-sandbox-backend/src/runtime/trace.rs` and the helper's `exec.rs`.
+`layerfs-sandbox/src/runtime/trace.rs` and the helper's `exec.rs`.
 
 ## Where it stands
 

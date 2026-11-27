@@ -32,7 +32,7 @@ and to PostgreSQL advisory locks, which are scoped to the database, not to a sch
 schema per test does not separate them. The exact colliding key was not traced.
 
 The upgrade wire test restores its fixture into a private database per cut
-(`engine/crates/layerfs-persistence/tests/support/pg_fixture.rs`,
+(`engine/crates/layerfs-persistence/tests/support/pg/fixture.rs`,
 `FixtureDb::restore`) and showed no lock symptom. It passed alone,
 but the run was also under heavy host load (1-minute load 16.6 at the start), so its cause stays
 open.

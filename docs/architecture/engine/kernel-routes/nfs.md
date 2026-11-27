@@ -6,7 +6,7 @@ The loopback NFSv3 route of [Kernel routes](README.md), used by the macOS `host`
 
 | | |
 | --- | --- |
-| Source | [`layerfs-nfs/src`](../../../../engine/crates/layerfs-nfs/src), daemon side [`control/export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs) |
+| Source | [`layerfs-nfs/src`](../../../../engine/crates/layerfs-nfs/src), daemon side [`nfs/export.rs`](../../../../engine/crates/layerfs-daemon/src/workspace/nfs/export.rs) |
 
 `layerfs-nfs` serves one mounted Workspace as an NFSv3 export on a loopback
 TCP port, over the same mount ports FUSE uses. XDR, RPC record marking, NFS
@@ -37,13 +37,13 @@ The daemon starts it and has the host's own NFS client mount it.
 | `Server::start` | Starts the accept thread; one connection serves one call at a time, in arrival order | [`server.rs`](../../../../engine/crates/layerfs-nfs/src/server.rs) |
 | `ExportConfig` | `path` (normally `/`), `uid`/`gid` shown on every inode, `read_only`, `refuse_apple_double`, `lookups_held`, `companion_spill_dir`, `companion_resident_bytes`, `companions_held`; `writable(uid, gid)` is the default | [`server.rs`](../../../../engine/crates/layerfs-nfs/src/server.rs) |
 | `Server::stop` | Stop accepting, shut down and join every connection, then `Kernel::release`: descriptors first, then lookup references. The engine mount stays with the caller | [`server.rs`](../../../../engine/crates/layerfs-nfs/src/server.rs) |
-| `Kernel` | What a FUSE kernel would hold for a stateless client: one lookup reference per handed-out serial, implicit file and directory descriptors with the facts last published through them, a parent index for `..` | [`kernel.rs`](../../../../engine/crates/layerfs-nfs/src/kernel.rs) |
+| `Kernel` | What a FUSE kernel would hold for a stateless client: one lookup reference per handed-out serial, implicit file and directory descriptors with the facts last published through them, a parent index for `..` | [`references.rs`](../../../../engine/crates/layerfs-nfs/src/kernel/references.rs) |
 | Verifier | One WRITE/COMMIT verifier per export, from the clock and process id under a random key | [`server.rs`](../../../../engine/crates/layerfs-nfs/src/server.rs) |
-| Futures | Run to completion on the connection thread; not ready parks the thread until woken | [`block.rs`](../../../../engine/crates/layerfs-nfs/src/block.rs) |
+| Futures | Run to completion on the connection thread; not ready parks the thread until woken | [`wait.rs`](../../../../engine/crates/layerfs-nfs/src/kernel/wait.rs) |
 
 Every NFSv3 procedure is served; MKNOD answers `NFS3ERR_NOTSUPP`, and a
 read-only export answers each changing procedure `NFS3ERR_ROFS`
-([`nfs.rs`](../../../../engine/crates/layerfs-nfs/src/nfs.rs)). FSINFO declares
+([`program.rs`](../../../../engine/crates/layerfs-nfs/src/procedures/program.rs)). FSINFO declares
 `TRANSFER_WINDOW` = 256 KiB, asserted equal to the overlay `WRITE_WINDOW`.
 
 ## RPC and XDR (`rpc.rs`, `xdr.rs`)
@@ -55,23 +55,23 @@ read-only export answers each changing procedure `NFS3ERR_ROFS`
 
 | Case | Answer | Source |
 | --- | --- | --- |
-| Not a call, or undecodable header | No reply | [`rpc.rs`](../../../../engine/crates/layerfs-nfs/src/rpc.rs) |
-| `rpcvers != 2` | `MSG_DENIED` / `RPC_MISMATCH` 2..2 | [`rpc.rs`](../../../../engine/crates/layerfs-nfs/src/rpc.rs) |
-| Flavor not `AUTH_NONE`/`AUTH_UNIX`, bad body, or more than 16 groups | `MSG_DENIED` / `AUTH_ERROR` `AUTH_TOOWEAK` | [`rpc.rs`](../../../../engine/crates/layerfs-nfs/src/rpc.rs) |
+| Not a call, or undecodable header | No reply | [`rpc.rs`](../../../../engine/crates/layerfs-nfs/src/protocol/rpc.rs) |
+| `rpcvers != 2` | `MSG_DENIED` / `RPC_MISMATCH` 2..2 | [`rpc.rs`](../../../../engine/crates/layerfs-nfs/src/protocol/rpc.rs) |
+| Flavor not `AUTH_NONE`/`AUTH_UNIX`, bad body, or more than 16 groups | `MSG_DENIED` / `AUTH_ERROR` `AUTH_TOOWEAK` | [`rpc.rs`](../../../../engine/crates/layerfs-nfs/src/protocol/rpc.rs) |
 | Unknown program; wrong version | `PROG_UNAVAIL`; `PROG_MISMATCH` 3..3 | [`server.rs`](../../../../engine/crates/layerfs-nfs/src/server.rs) |
-| Unknown procedure; bad arguments | `PROC_UNAVAIL`; `GARBAGE_ARGS` | [`nfs.rs`](../../../../engine/crates/layerfs-nfs/src/nfs.rs) |
-| Record over `RECORD_LIMIT` (2 MiB) | Read error; the connection ends | [`rpc.rs`](../../../../engine/crates/layerfs-nfs/src/rpc.rs) |
+| Unknown procedure; bad arguments | `PROC_UNAVAIL`; `GARBAGE_ARGS` | [`program.rs`](../../../../engine/crates/layerfs-nfs/src/procedures/program.rs) |
+| Record over `RECORD_LIMIT` (2 MiB) | Read error; the connection ends | [`rpc.rs`](../../../../engine/crates/layerfs-nfs/src/protocol/rpc.rs) |
 
 `Reader` bounds-checks every read and declared length; `Writer` pads opaque
 data to four bytes. A reply is written as one last fragment.
 
 A call is framed from the bytes one `read` delivered: the connection keeps them
-in [`rpc::Records`](../../../../engine/crates/layerfs-nfs/src/rpc.rs), so a call
+in [`rpc::Records`](../../../../engine/crates/layerfs-nfs/src/protocol/rpc.rs), so a call
 whose fragments arrived together costs one socket read. A record larger than
 the 8 KiB read-ahead (a WRITE of a transfer window) is read into a buffer of its
 own, so its bytes are not copied twice. Those counts are the case's own and are
 reproducible on any platform
-([`tests/protocol.rs`](../../../../engine/crates/layerfs-nfs/tests/protocol.rs)):
+([`export/protocol.rs`](../../../../engine/crates/layerfs-nfs/tests/export/protocol.rs)):
 one read per call that arrived in one piece, two for a record past the
 read-ahead. A blocking read a signal interrupts is retried, as `read_exact`
 does, and the bytes already received stay buffered.
@@ -95,15 +95,15 @@ does, and the bytes already received stay buffered.
 The same serial always encodes to the same bytes for one mount. The tag key is
 drawn once per export; it makes guessing costly and does not authenticate.
 `fileid` in every `fattr3` is the serial
-([`attributes.rs`](../../../../engine/crates/layerfs-nfs/src/attributes.rs)).
+([`attributes.rs`](../../../../engine/crates/layerfs-nfs/src/protocol/attributes.rs)).
 
 | Synthetic-kernel bound | Value | On reaching it | Source |
 | --- | --- | --- | --- |
-| `LOOKUPS_HELD` (default `lookups_held`) | 65,536 | Least recently used references forgotten down to three quarters; a serial with a descriptor, silly name or held child is skipped; names kept | [`kernel.rs`](../../../../engine/crates/layerfs-nfs/src/kernel.rs) |
-| `RECENT_KEPT` | 64 most recent uses | Never collected | [`kernel.rs`](../../../../engine/crates/layerfs-nfs/src/kernel.rs) |
-| `FILES_HELD`, `DIRECTORIES_HELD` | 1,024 files, 256 directories | Least recently used descriptor closed | [`kernel.rs`](../../../../engine/crates/layerfs-nfs/src/kernel.rs) |
-| `VERIFIERS_HELD` | 1,024 | EXCLUSIVE CREATE verifiers kept for retransmission | [`kernel.rs`](../../../../engine/crates/layerfs-nfs/src/kernel.rs) |
-| `NAMES_HELD` | 4 Mi names | No new name remembered; a collected serial with no name is stale | [`kernel.rs`](../../../../engine/crates/layerfs-nfs/src/kernel.rs) |
+| `LOOKUPS_HELD` (default `lookups_held`) | 65,536 | Least recently used references forgotten down to three quarters; a serial with a descriptor, silly name or held child is skipped; names kept | [`references.rs`](../../../../engine/crates/layerfs-nfs/src/kernel/references.rs) |
+| `RECENT_KEPT` | 64 most recent uses | Never collected | [`references.rs`](../../../../engine/crates/layerfs-nfs/src/kernel/references.rs) |
+| `FILES_HELD`, `DIRECTORIES_HELD` | 1,024 files, 256 directories | Least recently used descriptor closed | [`references.rs`](../../../../engine/crates/layerfs-nfs/src/kernel/references.rs) |
+| `VERIFIERS_HELD` | 1,024 | EXCLUSIVE CREATE verifiers kept for retransmission | [`references.rs`](../../../../engine/crates/layerfs-nfs/src/kernel/references.rs) |
+| `NAMES_HELD` | 4 Mi names | No new name remembered; a collected serial with no name is stale | [`references.rs`](../../../../engine/crates/layerfs-nfs/src/kernel/references.rs) |
 
 ## Directories (`directory.rs`)
 
@@ -118,14 +118,14 @@ drawn once per export; it makes guessing costly and does not authenticate.
 
 | Rule | Source |
 | --- | --- |
-| The cookie is the engine's kernel offset on one implicit directory descriptor named by `cookieverf`; a retired offset or a listing continued after an install is `NFS3ERR_BAD_COOKIE`, and the client lists again | [`directory.rs`](../../../../engine/crates/layerfs-nfs/src/directory.rs), [`kernel.rs`](../../../../engine/crates/layerfs-nfs/src/kernel.rs) |
-| A READDIRPLUS entry carries the facts its window read — a local inode's current row, or an inherited inode's immutable base stat — and the handle of its serial, so the client needs no LOOKUP per name; both are optional in RFC 1813 and this export sends both for every named entry whose offsets the reply publishes, each handle taking its one lookup reference in the publishing visit (reused offset ranges take none) | [`directory.rs`](../../../../engine/crates/layerfs-nfs/src/directory.rs), [`kernel_directory.rs`](../../../../engine/crates/layerfs-workspace/src/operations/kernel_directory.rs), [`kernel_cookie.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/kernel_cookie.rs) |
-| A window's inherited inode values cost one batch inode demand for each level of the inode tree the cache does not already answer (`lookup_many` reads a level's pages in one `read_canonical_batch`, resident levels cost none) and its ordinary file lengths one batch length demand (`provide_lengths`) while the cache can remember them (too small for one entry remembers nothing, so each file asks for its own length); entries memory already answers cost no Store reader. Names and kinds come first, the offer then truncates the window to the names the reply publishes, and only those names' facts are read, so a re-sent reply reads nothing for a name it does not send. Test counts where earlier visits warmed upper levels are not a fresh mount's first window | [`kernel_directory.rs`](../../../../engine/crates/layerfs-workspace/src/operations/kernel_directory.rs), [`client.rs`](../../../../engine/crates/layerfs-workspace/src/base/client.rs) |
-| Those batches are not everything an entry costs, and this route changes none of the rest: an inherited inode whose metadata is not inline reports one portable-metadata demand per distinct metadata root, a listed subdirectory one listing of that subdirectory for its child-directory count, and a symlink entry one read of its target; only ordinary files with inline metadata pay only those batches (when the cache remembers lengths) | [`kernel_directory.rs`](../../../../engine/crates/layerfs-workspace/src/operations/kernel_directory.rs), [`view.rs`](../../../../engine/crates/layerfs-workspace/src/base/view.rs), [`links.rs`](../../../../engine/crates/layerfs-workspace/src/base/links.rs) |
-| READDIR has one count, which bounds the whole reply; READDIRPLUS sends `dircount` before it, and only `maxcount` bounds this reply | [`nfs.rs`](../../../../engine/crates/layerfs-nfs/src/nfs.rs), [`directory.rs`](../../../../engine/crates/layerfs-nfs/src/directory.rs) |
-| A reply's `dir_attributes` are the facts of the listed directory its window read — a local row, fresh from that visit, costing no extra read. An inherited directory has no local row, so its window reads none and the reply carries no attributes; the client then falls back to its own `actimeo` rather than restarting it on facts nothing refreshes | [`directory.rs`](../../../../engine/crates/layerfs-nfs/src/directory.rs), [`kernel_directory.rs`](../../../../engine/crates/layerfs-workspace/src/operations/kernel_directory.rs) |
-| `.` and `..` carry no attributes; `..` comes from the parent recorded at lookup, create, move or listing | [`kernel.rs`](../../../../engine/crates/layerfs-nfs/src/kernel.rs) |
-| Silly names and AppleDouble companions are never listed | [`names.rs`](../../../../engine/crates/layerfs-nfs/src/names.rs), [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs) |
+| The cookie is the engine's kernel offset on one implicit directory descriptor named by `cookieverf`; a retired offset or a listing continued after an install is `NFS3ERR_BAD_COOKIE`, and the client lists again | [`directory.rs`](../../../../engine/crates/layerfs-nfs/src/procedures/directory.rs), [`references.rs`](../../../../engine/crates/layerfs-nfs/src/kernel/references.rs) |
+| A READDIRPLUS entry carries the facts its window read — a local inode's current row, or an inherited inode's immutable base stat — and the handle of its serial, so the client needs no LOOKUP per name; both are optional in RFC 1813 and this export sends both for every named entry whose offsets the reply publishes, each handle taking its one lookup reference in the publishing visit (reused offset ranges take none) | [`directory.rs`](../../../../engine/crates/layerfs-nfs/src/procedures/directory.rs), [`directory.rs`](../../../../engine/crates/layerfs-vfs/src/operations/kernel/directory.rs), [`cookie.rs`](../../../../engine/crates/layerfs-overlay/src/kernel/cookie.rs) |
+| A window's inherited inode values cost one batch inode demand for each level of the inode tree the cache does not already answer (`lookup_many` reads a level's pages in one `read_canonical_batch`, resident levels cost none) and its ordinary file lengths one batch length demand (`provide_lengths`) while the cache can remember them (too small for one entry remembers nothing, so each file asks for its own length); entries memory already answers cost no Store reader. Names and kinds come first, the offer then truncates the window to the names the reply publishes, and only those names' facts are read, so a re-sent reply reads nothing for a name it does not send. Test counts where earlier visits warmed upper levels are not a fresh mount's first window | [`directory.rs`](../../../../engine/crates/layerfs-vfs/src/operations/kernel/directory.rs), [`fetch.rs`](../../../../engine/crates/layerfs-vfs/src/base/fetch.rs) |
+| Those batches are not everything an entry costs, and this route changes none of the rest: an inherited inode whose metadata is not inline reports one portable-metadata demand per distinct metadata root, a listed subdirectory one listing of that subdirectory for its child-directory count, and a symlink entry one read of its target; only ordinary files with inline metadata pay only those batches (when the cache remembers lengths) | [`directory.rs`](../../../../engine/crates/layerfs-vfs/src/operations/kernel/directory.rs), [`read.rs`](../../../../engine/crates/layerfs-vfs/src/base/read.rs), [`link_counts.rs`](../../../../engine/crates/layerfs-vfs/src/base/link_counts.rs) |
+| READDIR has one count, which bounds the whole reply; READDIRPLUS sends `dircount` before it, and only `maxcount` bounds this reply | [`program.rs`](../../../../engine/crates/layerfs-nfs/src/procedures/program.rs), [`directory.rs`](../../../../engine/crates/layerfs-nfs/src/procedures/directory.rs) |
+| A reply's `dir_attributes` are the facts of the listed directory its window read — a local row, fresh from that visit, costing no extra read. An inherited directory has no local row, so its window reads none and the reply carries no attributes; the client then falls back to its own `actimeo` rather than restarting it on facts nothing refreshes | [`directory.rs`](../../../../engine/crates/layerfs-nfs/src/procedures/directory.rs), [`directory.rs`](../../../../engine/crates/layerfs-vfs/src/operations/kernel/directory.rs) |
+| `.` and `..` carry no attributes; `..` comes from the parent recorded at lookup, create, move or listing | [`references.rs`](../../../../engine/crates/layerfs-nfs/src/kernel/references.rs) |
+| Silly names and AppleDouble companions are never listed | [`names.rs`](../../../../engine/crates/layerfs-nfs/src/kernel/names.rs), [`companions.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double/companions.rs) |
 
 ## Changes (`change.rs`, `changing.rs`)
 
@@ -140,23 +140,23 @@ drawn once per export; it makes guessing costly and does not authenticate.
 | Rule | Source |
 | --- | --- |
 | A publication ticket is released only after the reply's one send attempt, whether or not it reached the client | [`server.rs`](../../../../engine/crates/layerfs-nfs/src/server.rs) |
-| A WRITE is split into `WRITE_WINDOW` (256 KiB) windows, each one publication; a failure after the first is a short write of the windows already published. WRITE answers `FILE_SYNC`: published, not durable | [`change.rs`](../../../../engine/crates/layerfs-nfs/src/change.rs), [`changing.rs`](../../../../engine/crates/layerfs-nfs/src/changing.rs) |
-| `wcc_data` pre- and post-op attributes come from the publishing job's own inode state, RENAME included; no reply reads an attribute outside the job. An AppleDouble companion's CREATE, REMOVE or RENAME publishes no engine job and answers both halves from `Table::directory_stats` (or absent when unseen) | [`changing.rs`](../../../../engine/crates/layerfs-nfs/src/changing.rs), [`kernel_visit.rs`](../../../../engine/crates/layerfs-workspace/src/operations/kernel_visit.rs), [`kernel.rs`](../../../../engine/crates/layerfs-nfs/src/kernel.rs) |
-| RENAME looks nothing up first; a detached (`nlink == 0`) destination's reference and descriptor are retired inside that job | [`change.rs`](../../../../engine/crates/layerfs-nfs/src/change.rs) |
-| COMMIT answers the attributes last published or observed through the implicit descriptor, so `fsync` costs no owner job | [`change.rs`](../../../../engine/crates/layerfs-nfs/src/change.rs) |
-| A client silly rename (`.nfs` + 24 hex on Linux; `.nfs.` + 8 hex + `.` + 4 hex on macOS) is served as an UNLINK; the export keeps the inode until the final REMOVE | [`names.rs`](../../../../engine/crates/layerfs-nfs/src/names.rs) |
-| A serial whose last name this export removed gives back its reference and descriptor at once | [`kernel.rs`](../../../../engine/crates/layerfs-nfs/src/kernel.rs) |
-| SETATTR's guard compares a fresh GETATTR ctime, not atomic with the change; access time is dropped | [`change.rs`](../../../../engine/crates/layerfs-nfs/src/change.rs) |
-| ACCESS grants owner bits to the inode's uid or uid 0, group bits to its group, else other bits; a read-only export grants no change | [`attributes.rs`](../../../../engine/crates/layerfs-nfs/src/attributes.rs) |
+| A WRITE is split into `WRITE_WINDOW` (256 KiB) windows, each one publication; a failure after the first is a short write of the windows already published. WRITE answers `FILE_SYNC`: published, not durable | [`mutation.rs`](../../../../engine/crates/layerfs-nfs/src/kernel/mutation.rs), [`mutation.rs`](../../../../engine/crates/layerfs-nfs/src/procedures/mutation.rs) |
+| `wcc_data` pre- and post-op attributes come from the publishing job's own inode state, RENAME included; no reply reads an attribute outside the job. An AppleDouble companion's CREATE, REMOVE or RENAME publishes no engine job and answers both halves from `Table::directory_stats` (or absent when unseen) | [`mutation.rs`](../../../../engine/crates/layerfs-nfs/src/procedures/mutation.rs), [`visit.rs`](../../../../engine/crates/layerfs-vfs/src/operations/kernel/visit.rs), [`references.rs`](../../../../engine/crates/layerfs-nfs/src/kernel/references.rs) |
+| RENAME looks nothing up first; a detached (`nlink == 0`) destination's reference and descriptor are retired inside that job | [`mutation.rs`](../../../../engine/crates/layerfs-nfs/src/kernel/mutation.rs) |
+| COMMIT answers the attributes last published or observed through the implicit descriptor, so `fsync` costs no owner job | [`mutation.rs`](../../../../engine/crates/layerfs-nfs/src/kernel/mutation.rs) |
+| A client silly rename (`.nfs` + 24 hex on Linux; `.nfs.` + 8 hex + `.` + 4 hex on macOS) is served as an UNLINK; the export keeps the inode until the final REMOVE | [`names.rs`](../../../../engine/crates/layerfs-nfs/src/kernel/names.rs) |
+| A serial whose last name this export removed gives back its reference and descriptor at once | [`references.rs`](../../../../engine/crates/layerfs-nfs/src/kernel/references.rs) |
+| SETATTR's guard compares a fresh GETATTR ctime, not atomic with the change; access time is dropped | [`mutation.rs`](../../../../engine/crates/layerfs-nfs/src/kernel/mutation.rs) |
+| ACCESS grants owner bits to the inode's uid or uid 0, group bits to its group, else other bits; a read-only export grants no change | [`attributes.rs`](../../../../engine/crates/layerfs-nfs/src/protocol/attributes.rs) |
 
 ## LOOKUP and GETATTR (`nfs.rs`, `kernel.rs`)
 
 | Rule | Source |
 | --- | --- |
-| One owner visit answers a LOOKUP: the job that resolves a name has already read the directory's own row, so the reply's `dir_attributes` cost no second visit | [`nfs.rs`](../../../../engine/crates/layerfs-nfs/src/nfs.rs), [`kernel.rs`](../../../../engine/crates/layerfs-nfs/src/kernel.rs), [`kernel_read.rs`](../../../../engine/crates/layerfs-workspace/src/operations/kernel_read.rs) |
-| A LOOKUP that fails answers the directory's own fresh facts whenever the job that failed read its row, which is every name this export looks up: a name that binds nothing still read its parent's row in the same visit. `.`, `..`, a silly name, an AppleDouble companion (whose LOOKUP asks the view first, and answers the companion only after the view had no such name) and a refusal decided before any visit send no `dir_attributes`, so the client falls back to its own `actimeo`; RFC 1813 makes both fields optional. No LOOKUP answer repeats the export's last observation of the directory, which nothing ages. A failed LOOKUP's directory row is kept as the export's observation, as a successful one's is | [`nfs.rs`](../../../../engine/crates/layerfs-nfs/src/nfs.rs), [`kernel.rs`](../../../../engine/crates/layerfs-nfs/src/kernel.rs), [`kernel_read.rs`](../../../../engine/crates/layerfs-workspace/src/operations/kernel_read.rs) |
-| `read.rs` holds what a read answers: the entry, its directory and its descriptors, and the refusal with its status (`NFS3ERR_STALE` for an engine `Stale`, else `NFS3ERR_IO`) and the directory row the job read | [`read.rs`](../../../../engine/crates/layerfs-nfs/src/read.rs) |
-| An export remembers the facts it last published or observed for a directory (LOOKUP, GETATTR, OPENDIR, a publishing change) and answers from them only where no job reads that directory: an AppleDouble companion's `wcc_data`, whose change never touches it. A directory listing is not such a place: its reply says only what its own window read | [`kernel.rs`](../../../../engine/crates/layerfs-nfs/src/kernel.rs), [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs) |
+| One owner visit answers a LOOKUP: the job that resolves a name has already read the directory's own row, so the reply's `dir_attributes` cost no second visit | [`program.rs`](../../../../engine/crates/layerfs-nfs/src/procedures/program.rs), [`references.rs`](../../../../engine/crates/layerfs-nfs/src/kernel/references.rs), [`lookup.rs`](../../../../engine/crates/layerfs-vfs/src/operations/kernel/lookup.rs) |
+| A LOOKUP that fails answers the directory's own fresh facts whenever the job that failed read its row, which is every name this export looks up: a name that binds nothing still read its parent's row in the same visit. `.`, `..`, a silly name, an AppleDouble companion (whose LOOKUP asks the view first, and answers the companion only after the view had no such name) and a refusal decided before any visit send no `dir_attributes`, so the client falls back to its own `actimeo`; RFC 1813 makes both fields optional. No LOOKUP answer repeats the export's last observation of the directory, which nothing ages. A failed LOOKUP's directory row is kept as the export's observation, as a successful one's is | [`program.rs`](../../../../engine/crates/layerfs-nfs/src/procedures/program.rs), [`references.rs`](../../../../engine/crates/layerfs-nfs/src/kernel/references.rs), [`lookup.rs`](../../../../engine/crates/layerfs-vfs/src/operations/kernel/lookup.rs) |
+| `read.rs` holds what a read answers: the entry, its directory and its descriptors, and the refusal with its status (`NFS3ERR_STALE` for an engine `Stale`, else `NFS3ERR_IO`) and the directory row the job read | [`read.rs`](../../../../engine/crates/layerfs-nfs/src/kernel/read.rs) |
+| An export remembers the facts it last published or observed for a directory (LOOKUP, GETATTR, OPENDIR, a publishing change) and answers from them only where no job reads that directory: an AppleDouble companion's `wcc_data`, whose change never touches it. A directory listing is not such a place: its reply says only what its own window read | [`references.rs`](../../../../engine/crates/layerfs-nfs/src/kernel/references.rs), [`companions.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double/companions.rs) |
 
 ## Refresh after install (`refresh.rs`, daemon `export.rs`, `invalidate.rs`)
 
@@ -177,11 +177,11 @@ drawn once per export; it makes guessing costly and does not authenticate.
 
 | Rule | Source |
 | --- | --- |
-| One inode is marked right before its own refresh chmod, with the exact mode that chmod asks (the one the client shows through the mount point). A mark is taken by one mode-only SETATTR asking that mode and ends after `MARK_LIFE` (30 s); a serial the client never saw is left out; symlinks, vanished paths and paths that now name another inode are skipped; the thread stops once the export is gone or stopping | [`refresh.rs`](../../../../engine/crates/layerfs-nfs/src/refresh.rs), [`server.rs`](../../../../engine/crates/layerfs-nfs/src/server.rs), [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs) |
-| The refresh never writes into the Workspace and never reverts a mode the install changed | [`refresh.rs`](../../../../engine/crates/layerfs-nfs/src/refresh.rs) |
-| The mark suppresses only the refresh's own chmod. A client SETATTR asking another mode is applied even on a marked inode, and the refresh chmod still on its way is then answered without a change, so it never overwrites the newer mode. The one request the export cannot tell from the refresh's is a client chmod to the very mode just marked, sent in the microseconds between the mark and the refresh's chmod: it is answered unchanged and the refresh's chmod that follows applies that same mode | [`refresh.rs`](../../../../engine/crates/layerfs-nfs/src/refresh.rs) |
-| Best effort: the refresh runs after the Commit reply, so a client may still serve its cached attributes and listings for a moment after it; the walk stops at `REFRESHED` (4,096) stale inodes, and a failed walk, a failed chmod or one the client never sends leaves the rest to `actimeo` and close-to-open | [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs) |
-| `LAYERFS_NFS_REFRESH=0` leaves the client to `actimeo` and close-to-open | [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs) |
+| One inode is marked right before its own refresh chmod, with the exact mode that chmod asks (the one the client shows through the mount point). A mark is taken by one mode-only SETATTR asking that mode and ends after `MARK_LIFE` (30 s); a serial the client never saw is left out; symlinks, vanished paths and paths that now name another inode are skipped; the thread stops once the export is gone or stopping | [`refresh.rs`](../../../../engine/crates/layerfs-nfs/src/kernel/refresh.rs), [`server.rs`](../../../../engine/crates/layerfs-nfs/src/server.rs), [`export.rs`](../../../../engine/crates/layerfs-daemon/src/workspace/nfs/export.rs) |
+| The refresh never writes into the Workspace and never reverts a mode the install changed | [`refresh.rs`](../../../../engine/crates/layerfs-nfs/src/kernel/refresh.rs) |
+| The mark suppresses only the refresh's own chmod. A client SETATTR asking another mode is applied even on a marked inode, and the refresh chmod still on its way is then answered without a change, so it never overwrites the newer mode. The one request the export cannot tell from the refresh's is a client chmod to the very mode just marked, sent in the microseconds between the mark and the refresh's chmod: it is answered unchanged and the refresh's chmod that follows applies that same mode | [`refresh.rs`](../../../../engine/crates/layerfs-nfs/src/kernel/refresh.rs) |
+| Best effort: the refresh runs after the Commit reply, so a client may still serve its cached attributes and listings for a moment after it; the walk stops at `REFRESHED` (4,096) stale inodes, and a failed walk, a failed chmod or one the client never sends leaves the rest to `actimeo` and close-to-open | [`export.rs`](../../../../engine/crates/layerfs-daemon/src/workspace/nfs/export.rs) |
+| `LAYERFS_NFS_REFRESH=0` leaves the client to `actimeo` and close-to-open | [`export.rs`](../../../../engine/crates/layerfs-daemon/src/workspace/nfs/export.rs) |
 
 ## AppleDouble files (`apple_double.rs`, `apple_double/edit.rs`, `apple_double/index.rs`, `apple_double/reclaim.rs`, `apple_double_codec.rs`, `apple_double_spill.rs`)
 
@@ -212,10 +212,10 @@ does not hold uses the companions.
 
 | Bound | Value | Over the bound | Source |
 | --- | --- | --- | --- |
-| `HELD` | 65,536 slotted companion entries | `Companions::admits` decides the bound in one place, before anything is committed: CREATE, and a WRITE, SETATTR or RENAME that needs a new slot, first reclaim the orphan slotted companions outside the companion lock, once, and then answer the whole operation `NFS3ERR_NOSPC` with the body, its length and its name as they were (CREATE also increments `names_refused` and logs at most once per 60 s per export). A call whose commit needs I/O in between (`Companions::reserve`) holds the slot from the decision, so the bound holds when calls race for the last one | [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs) |
-| `FILE_BYTES` | 1 MiB per companion | WRITE / SETATTR `NFS3ERR_FBIG` | [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs) |
-| `RESIDENT_BYTES` | 32 MiB of companion bodies in all: a body kept as written at its length, a decoded one as `Image::cost`; an edit that leaves a body whole decodes it as it records it, so the count may stand one decoded body over until the next edit needs room | Spill the least recently touched bodies, decoded ones included, to `companion_spill_dir` (`<mounts>/.appledouble/<namespace>/<serial>`); host disk I/O errors map to `NFS3ERR_NOSPC` (`ENOSPC`/`EDQUOT`), `NFS3ERR_FBIG` (`EFBIG`), `NFS3ERR_ACCES` (`EACCES`), `NFS3ERR_PERM` (`EPERM`), `NFS3ERR_ROFS` (`EROFS`) or `NFS3ERR_IO` | [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs), [`apple_double_spill.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double_spill.rs), [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs) |
-| `DECODED_ENTRY_BYTES` | 128 KiB counted for one decoded companion: a cap on what one decoded body is charged, not on what a companion may store | A whole image costing more, or costing at least its own length (many small attributes), keeps its bytes as written, is charged at their length and still takes no `HELD` slot | [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs) |
+| `HELD` | 65,536 slotted companion entries | `Companions::admits` decides the bound in one place, before anything is committed: CREATE, and a WRITE, SETATTR or RENAME that needs a new slot, first reclaim the orphan slotted companions outside the companion lock, once, and then answer the whole operation `NFS3ERR_NOSPC` with the body, its length and its name as they were (CREATE also increments `names_refused` and logs at most once per 60 s per export). A call whose commit needs I/O in between (`Companions::reserve`) holds the slot from the decision, so the bound holds when calls race for the last one | [`companions.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double/companions.rs) |
+| `FILE_BYTES` | 1 MiB per companion | WRITE / SETATTR `NFS3ERR_FBIG` | [`companions.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double/companions.rs) |
+| `RESIDENT_BYTES` | 32 MiB of companion bodies in all: a body kept as written at its length, a decoded one as `Image::cost`; an edit that leaves a body whole decodes it as it records it, so the count may stand one decoded body over until the next edit needs room | Spill the least recently touched bodies, decoded ones included, to `companion_spill_dir` (`<mounts>/.appledouble/<namespace>/<serial>`); host disk I/O errors map to `NFS3ERR_NOSPC` (`ENOSPC`/`EDQUOT`), `NFS3ERR_FBIG` (`EFBIG`), `NFS3ERR_ACCES` (`EACCES`), `NFS3ERR_PERM` (`EPERM`), `NFS3ERR_ROFS` (`EROFS`) or `NFS3ERR_IO` | [`companions.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double/companions.rs), [`spill.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double/spill.rs), [`export.rs`](../../../../engine/crates/layerfs-daemon/src/workspace/nfs/export.rs) |
+| `DECODED_ENTRY_BYTES` | 128 KiB counted for one decoded companion: a cap on what one decoded body is charged, not on what a companion may store | A whole image costing more, or costing at least its own length (many small attributes), keeps its bytes as written, is charged at their length and still takes no `HELD` slot | [`companions.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double/companions.rs) |
 
 A companion whose main inode the export knows belongs to that inode rather than
 to one name: hard links share it, main-file RENAME keeps it under the new name
@@ -239,7 +239,7 @@ as does any name of a companion no main inode owns.
 
 When a write leaves an inode-bound companion holding a complete
 AppleDouble image that encodes back to the exact bytes written
-([`apple_double_codec.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double_codec.rs)),
+([`codec.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double/codec.rs)),
 it is marked whole and takes no `HELD` slot: decoded in memory (counted as
 `Image::cost` against `RESIDENT_BYTES`, at most `DECODED_ENTRY_BYTES` each), or
 kept as written bytes, which take the same budget at their length; partial
@@ -322,7 +322,7 @@ companion index, like the release line and the reclamation walk, and only those
 diagnostics read it.
 
 The requests one real client makes can be read from an optional trace
-([`trace.rs`](../../../../engine/crates/layerfs-nfs/src/trace.rs)): with
+([`trace.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double/trace.rs)): with
 `LAYERFS_NFS_TRACE=1` the export prints, to the daemon's standard error, one
 line for each request that names an AppleDouble companion - the `._` names
 themselves and the main file names of the inodes that hold one - carrying the
@@ -342,7 +342,7 @@ the variable is exactly `1`, is read once per process, and changes no state;
 the lines are written under the lock the request already holds.
 
 On the `macos-host` route the daemon is started with `env_clear` and an empty
-environment (`control/crates/layerfs-sandbox-backend/src/shared/daemon.rs`), so
+environment (`control/crates/layerfs-sandbox/src/spawn/daemon.rs`), so
 it does not inherit `LAYERFS_NFS_TRACE=1` from the shell that created the
 Sandbox: a trace run there needs `machine update macos-host --daemon` pointed at a
 wrapper that exports the variable and `exec`s the real daemon (measured on
@@ -367,11 +367,11 @@ or container, where the environment is passed differently.
 
 | Mount-table and helper rule | Source |
 | --- | --- |
-| Every step above is one attempt; the mount table is the only witness for a failed or timed-out unmount helper. | [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs) |
-| Attach reads the host's mount table once after the mount helper returns: one `/sbin/mount` run (macOS) or `/proc/self/mountinfo` read (Linux) per Attach; unmount timing is unaffected. The macOS run is bounded (500 ms, then killed and read as an unreadable table) by the listing the driver's inspection reads share, [`process::mount_table`](../../../../engine/crates/layerfs-bridge/src/process/mount_table.rs). | `Exported::tracked` in [`export_custody.rs`](../../../../engine/crates/layerfs-daemon/src/control/export_custody.rs) |
-| The mount point itself is never resolved (a lookup through a wedged mount can block or fail); `listed` compares the configured path and the same name below the canonical mount home. | [`export_helper.rs`](../../../../engine/crates/layerfs-daemon/src/control/export_helper.rs) `listed` |
-| A failed or timed-out unmount helper completes teardown only when Attach saw it listed, the helper has ended, and the table no longer lists it; a still-listed mount, an unreadable table, a helper that detaches lazily (`-l`), or a killed helper whose exit was not observed keeps `Retained(Detach)` and the export serving. A plain Linux `umount` drops the table entry before the superblock's shutdown, which flushes the client's writes through this export, so only an ended helper lets the table witness the end (`Ran::ended`). | `detached_export` in [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs) |
-| A helper past `KILL` and `REAP_WAIT` is reaped in the background by the shared retained queue, with nothing waiting for it or signalling twice. | [`process/retained.rs`](../../../../engine/crates/layerfs-bridge/src/process/retained.rs) |
+| Every step above is one attempt; the mount table is the only witness for a failed or timed-out unmount helper. | [`export.rs`](../../../../engine/crates/layerfs-daemon/src/workspace/nfs/export.rs) |
+| Attach reads the host's mount table once after the mount helper returns: one `/sbin/mount` run (macOS) or `/proc/self/mountinfo` read (Linux) per Attach; unmount timing is unaffected. The macOS run is bounded (500 ms, then killed and read as an unreadable table) by the listing the driver's inspection reads share, [`process::mount_table`](../../../../engine/crates/layerfs-os/src/mount_table.rs). | `Exported::tracked` in [`custody.rs`](../../../../engine/crates/layerfs-daemon/src/workspace/nfs/custody.rs) |
+| The mount point itself is never resolved (a lookup through a wedged mount can block or fail); `listed` compares the configured path and the same name below the canonical mount home. | [`helper.rs`](../../../../engine/crates/layerfs-daemon/src/workspace/nfs/helper.rs) `listed` |
+| A failed or timed-out unmount helper completes teardown only when Attach saw it listed, the helper has ended, and the table no longer lists it; a still-listed mount, an unreadable table, a helper that detaches lazily (`-l`), or a killed helper whose exit was not observed keeps `Retained(Detach)` and the export serving. A plain Linux `umount` drops the table entry before the superblock's shutdown, which flushes the client's writes through this export, so only an ended helper lets the table witness the end (`Ran::ended`). | `detached_export` in [`export.rs`](../../../../engine/crates/layerfs-daemon/src/workspace/nfs/export.rs) |
+| A helper past `KILL` and `REAP_WAIT` is reaped in the background by the shared retained queue, with nothing waiting for it or signalling twice. | [`process/retained.rs`](../../../../engine/crates/layerfs-os/src/process/retained.rs) |
 
 | MOUNT procedure | Answer |
 | --- | --- |
@@ -383,7 +383,7 @@ Client options are the daemon's `Mounter::host`. macOS:
 `vers=3,tcp,port={port},mountport={port},locallocks,nfc,noatime,actimeo=60,rsize=262144,wsize=262144,soft,intr,dumbtimer,timeo=300,retrans=6,mutejukebox,nobrowse`
 (`rsize`/`wsize` are `TRANSFER_WINDOW`); elsewhere
 `vers=3,proto=tcp,port={port},mountport={port},mountproto=tcp,nolock,actimeo=60`
-([`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs)).
+([`export.rs`](../../../../engine/crates/layerfs-daemon/src/workspace/nfs/export.rs)).
 An NFS ready receipt has `abi_major == 0` and its `mount_id` is the port.
 Forced teardown on this route is in
 [Daemon: Control calls](../daemon/control-calls.md#force).

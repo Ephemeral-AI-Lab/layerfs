@@ -6,7 +6,7 @@ The `workspace` calls: list mounted Workspaces, mount a Branch as a writable tre
 
 | | |
 | --- | --- |
-| Source | [`api/crates/layerfs-api/src/workspace`](../../../../api/crates/layerfs-api/src/workspace) (one file per call), [`layerfs-sandbox/src/workspace`](../../../../control/crates/layerfs-sandbox/src/workspace) (`calls.rs`, `answers.rs`, `exec.rs`, `list.rs`, `serve.rs`), [`layerfs-sandbox/src/exec`](../../../../control/crates/layerfs-sandbox/src/exec), [`daemon/values.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/values.rs) |
+| Source | [`crates/layerfs-api/src/families/workspace`](../../../../api/crates/layerfs-api/src/families/workspace) (one file per call), [`crates/layerfs-workspace/src`](../../../../control/crates/layerfs-workspace/src) (`calls.rs`, `answers.rs`, `exec.rs`, `list.rs`, `serve.rs`), [`layerfs-sandbox/src/exec`](../../../../control/crates/layerfs-sandbox/src/exec), [`daemon/refusal.rs`](../../../../control/crates/layerfs-sandbox/src/route/daemon/refusal.rs) |
 | Runs by default | records in the caller's process; `mount`, `commit`, `unmount`, `status` reach the Sandbox's daemon (directly when its port is forwarded, else through the machine: this process or its worker); `exec` and `cancel` run in the Sandbox's runtime on its machine, never in the daemon. `list` reads Workspace records and asks no daemon |
 | Design | [Sandboxes: daemon channel and exec](../../control/sandboxes/daemon-channel-and-exec.md), [Engine: daemon](../../engine/daemon/README.md), [Commit](../../engine/commit/README.md), [Workspace flow](../../flows/workspace.md), [Commit flow](../../flows/commit.md) |
 
@@ -42,11 +42,11 @@ A Workspace is named by its handle `<sandbox>:<name>`, the `workspace`
 handle (`<sandbox>:/path`) is refused `InvalidInput`
 ([`names.rs`](../../../../control/crates/layerfs-home/src/names.rs)). A
 Sandbox holds at most 16 Workspaces
-([`lifecycle.rs`](../../../../control/crates/layerfs-sandbox/src/lifecycle.rs)).
+([`serve.rs`](../../../../control/crates/layerfs-sandbox/src/lifecycle/serve.rs)).
 Under a folder scope, `mount` takes only `main`, mounted as the Branch
 `<namespace>.main`; `exec` starts the command in the scope's folder (a
 prefix, not confinement); and the Sandbox must belong to the scope's project
-([`calls/scope.rs`](../../../../api/crates/layerfs-api/src/calls/scope.rs)).
+([`guard/scope.rs`](../../../../api/crates/layerfs-api/src/dispatch/guard/scope.rs)).
 
 On `lima`, `mount`, `commit`, `unmount` and `status` go from the caller
 straight to the Sandbox's daemon; `exec` and `cancel` go through the
@@ -85,7 +85,7 @@ Python  layerfs.workspace.list(*, sandbox=None, limit=None, cursor=None)
 The handle of every mounted Workspace, to find one again. It reads Workspace
 records: the home's own for a Sandbox on the host machine or one reached directly,
 and one request to each other ready machine's worker for the records it
-keeps ([`workspace/list.rs`](../../../../control/crates/layerfs-sandbox/src/workspace/list.rs)).
+keeps ([`src/list.rs`](../../../../control/crates/layerfs-workspace/src/list.rs)).
 A Sandbox whose machine, or which itself, is not ready is named in
 `not_listed` with `blocked_by`; one whose worker did not answer with
 `reason` (`timeout`, `busy`, `lost`, or `refused` with its refusal in
@@ -135,7 +135,7 @@ daemon finds the Branch as it binds. The mount binds the whole root without
 a scan or copy; its only new file is the Workspace's overlay database,
 copied from the template. It is recorded as `workspace/<id>.json` in the
 Sandbox's folder
-([`workspace/serve.rs`](../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs)).
+([`machine/serve.rs`](../../../../control/crates/layerfs-workspace/src/machine/serve.rs)).
 After an uncertain mount, `workspace list` or `sandbox get` shows what is
 mounted.
 
@@ -144,7 +144,7 @@ mounted.
 | `Exists` | a Workspace of that name is mounted in the Sandbox | `fix` names `--name` |
 | `InvalidInput` | the Branch is `main`, or its default name is empty or reserved | `fix`: `layerfs branch fork <project> <name> main` for `main` |
 | `Capacity` | the Sandbox already holds 16 Workspaces | |
-| `NotFound` | no such Sandbox, project or Branch (the daemon's lookup, [`store/bind.rs`](../../../../engine/crates/layerfs-store-service/src/store/bind.rs)) | |
+| `NotFound` | no such Sandbox, project or Branch (the daemon's lookup, [`bind/run.rs`](../../../../engine/crates/layerfs-store-service/src/workspace/bind/run.rs)) | |
 
 Run on macOS (`macos-host`) with a debug build:
 
@@ -185,7 +185,7 @@ Python  layerfs.workspace.exec(workspace, command, *, cwd=None, env=None, stdin=
 
 Runs one `bash -c` command in the Workspace's directory, as the Sandbox's
 command identity with `HOME` its scratch folder, and waits for it; it does
-not commit ([`exec/run.rs`](../../../../control/crates/layerfs-sandbox/src/exec/run.rs)).
+not commit ([`exec/run.rs`](../../../../control/crates/layerfs-workspace/src/exec/run.rs)).
 A non-zero exit is not an error. The long form adds `stdout_file`,
 `stderr_file`, `cancelled`, `exec`, `stop` (`cgroup` on Linux kernels,
 `group` on `macos-host`), `stdout_bytes`, `stderr_bytes` and
@@ -202,7 +202,7 @@ cancel it, makes `unmount` and `sandbox remove` refuse `Busy` unless
 `--force`, and is what `sandbox get` lists under the Workspace's `running`,
 with the call's log tag and the command's program; a record whose owner
 process is gone is ended and removed by the next call that finds it
-([`exec/record.rs`](../../../../control/crates/layerfs-sandbox/src/exec/record.rs)).
+([`record/exec.rs`](../../../../control/crates/layerfs-sandbox/src/record/exec.rs)).
 There is no timeout, no implicit Commit and no automatic unmount.
 
 `--cwd` is a folder of the Workspace as a path from its root; `--env K=V`
@@ -256,7 +256,7 @@ Python  layerfs.workspace.cancel(workspace, *, exec=None)
 
 Ends every command running in the Workspace, or the one `--exec` names:
 SIGTERM to everything it started, then SIGKILL after 5 s
-([`exec/cancel.rs`](../../../../control/crates/layerfs-sandbox/src/exec/cancel.rs)).
+([`exec/settle.rs`](../../../../control/crates/layerfs-sandbox/src/exec/settle.rs)).
 Three short forms, all exit 0: `{"signal":"SIGTERM"}` (a command was
 signalled and has ended; `signal` is the last one sent),
 `{"already_ended":true}` (nothing was running: the named command had
@@ -311,7 +311,7 @@ process changed it, as one Commit on its Branch; `commit` is the Branch's
 new head. The daemon captures the Workspace's published frontier (not
 filtered by exec), saves, merges a moved head and publishes; only the
 publish step holds the Store's lane, and later writes stay in the Workspace
-([`daemon/values.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/values.rs)).
+([`daemon/refusal.rs`](../../../../control/crates/layerfs-sandbox/src/route/daemon/refusal.rs)).
 The Workspace stays mounted.
 
 When the Branch moved since the mount the changes are merged first
@@ -333,7 +333,7 @@ committed, and is never merged with. `--force --expected C` replaces only
 | --- | --- |
 | `Conflict` | a path conflicts, or the head is not `--expected`; nothing is committed. It carries `commit` (the head), `conflicts` (the first 20 paths) and `conflicts_count` |
 | `InvalidInput` | an `--expected` prefix several Commits start with (`matches`) |
-| `Busy` | another control operation runs on the Workspace ([`control/registry.rs`](../../../../engine/crates/layerfs-daemon/src/control/registry.rs)) |
+| `Busy` | another control operation runs on the Workspace ([`workspace/registry.rs`](../../../../engine/crates/layerfs-daemon/src/workspace/registry.rs)) |
 | `Unknown` | an earlier Commit's outcome was unknown or its install failed, and the one resolution this Commit ran first did not settle it (`detail.phase: "admission"`, the reason in `detail`): the daemon keeps that custody and refuses new Commits; or the reply was lost |
 
 After an uncertain Commit read `commit list` (a new head?) and
@@ -381,7 +381,7 @@ established without dialling again. The one exception is a record the daemon
 answered `Retained` at stage `Detach`: its export is still held and one
 forced client unmount finishes it, so `--force` may replace that record with
 a forced attempt. A Workspace the daemon no longer knows answers `ok`
-([`unmount_guard.rs`](../../../../control/crates/layerfs-sandbox/src/unmount_guard.rs)).
+([`unmount_guard.rs`](../../../../control/crates/layerfs-sandbox/src/record/unmount_guard.rs)).
 
 | Refusal | When |
 | --- | --- |
@@ -446,14 +446,14 @@ $ layerfs workspace status tests:agent
 
 | Error | When | Source |
 | --- | --- | --- |
-| `InvalidInput` | a bad handle (a path handle included) or option; `main` as the Branch; out of scope | [`workspace/serve.rs`](../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs) |
+| `InvalidInput` | a bad handle (a path handle included) or option; `main` as the Branch; out of scope | [`machine/serve.rs`](../../../../control/crates/layerfs-workspace/src/machine/serve.rs) |
 | `NotFound` | no such Sandbox (or its daemon ended itself when idle); the handle is not mounted (raised `NoSuchSandbox`, `NotMounted`) | same |
-| `Busy`, `Unresolved` | a `sandbox create` or `remove` holds the Sandbox (not for `status`); no daemon connection lent in time | [`record/sandbox.rs`](../../../../control/crates/layerfs-sandbox/src/record/sandbox.rs), [`daemon/pool.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/pool.rs) |
-| `Unavailable` | the machine's worker is not recorded or does not answer; a saved daemon that is not ready (raised `StaleSandbox`) | [`route.rs`](../../../../control/crates/layerfs-sandbox/src/route.rs), `daemon/pool.rs` |
-| `InvalidInput` | a request over one control record (raised `TooLarge`) | [`daemon/call.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/call.rs) |
+| `Busy`, `Unresolved` | a `sandbox create` or `remove` holds the Sandbox (not for `status`); no daemon connection lent in time | [`record/sandbox.rs`](../../../../control/crates/layerfs-sandbox/src/record/sandbox.rs), [`channel/pool.rs`](../../../../control/crates/layerfs-sandbox/src/route/daemon/channel/pool.rs) |
+| `Unavailable` | the machine's worker is not recorded or does not answer; a saved daemon that is not ready (raised `StaleSandbox`) | [`send.rs`](../../../../control/crates/layerfs-sandbox/src/route/machine/send.rs), `daemon/pool.rs` |
+| `InvalidInput` | a request over one control record (raised `TooLarge`) | [`daemon/call.rs`](../../../../control/crates/layerfs-sandbox/src/route/daemon/call.rs) |
 | daemon codes | a daemon control refusal keeps its own code with `detail.phase`, folded to its public code | `daemon/values.rs` |
-| `Failed` | a daemon exchange failed, in words. When the request was sent and no answer settled it, the message ends "the request was sent; its outcome is not known" and the refusal carries `attempted: true` (beside `error`, and in the long form's `detail`): read the Workspace's state before acting again | [`daemon/values.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/values.rs) `failure`, [`daemon/failure.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/failure.rs) |
-| `Unknown` | the worker's answer was lost after the request was sent | [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) |
+| `Failed` | a daemon exchange failed, in words. When the request was sent and no answer settled it, the message ends "the request was sent; its outcome is not known" and the refusal carries `attempted: true` (beside `error`, and in the long form's `detail`): read the Workspace's state before acting again | [`daemon/refusal.rs`](../../../../control/crates/layerfs-sandbox/src/route/daemon/refusal.rs) `failure`, [`daemon/failure.rs`](../../../../control/crates/layerfs-sandbox/src/route/daemon/failure.rs) |
+| `Unknown` | the worker's answer was lost after the request was sent | [`guest/client.rs`](../../../../control/crates/layerfs-machine/src/route/guest/client.rs) |
 
 ## Related
 

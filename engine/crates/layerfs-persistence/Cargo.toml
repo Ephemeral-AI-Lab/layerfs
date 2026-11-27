@@ -42,3 +42,9 @@ rusqlite = { version = "=0.40.2", features = ["bundled"] }
 [[example]]
 name = "gc_bench"
 test = true
+
+# One test in its own binary: no sibling test holds advisory keys while it
+# counts them.
+[[test]]
+name = "postgresql_session_keys"
+path = "tests/standalone/postgresql_session_keys.rs"

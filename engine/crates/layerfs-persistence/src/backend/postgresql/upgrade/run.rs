@@ -127,7 +127,7 @@ fn refusal(checked: &Check) -> Option<UpgradeError> {
             "PostgreSQL Store schema version {v} is {NEWER}, which writes \
              schema version {POSTGRESQL_LATEST}"
         ),
-        2 => crate::backend::records::POSTGRES_SCHEMA_2.to_owned(),
+        2 => crate::backend::error::POSTGRES_SCHEMA_2.to_owned(),
         1 => "PostgreSQL Store schema version 1: this build has no upgrade for it".to_owned(),
         v => format!("PostgreSQL Store schema version {v} is not a format this build recognizes"),
     };
@@ -261,7 +261,7 @@ fn prepare(
             "history_meta's catalog identity does not match its binding".to_owned(),
         ));
     }
-    let key = crate::history::admission::store_advisory_key(catalog);
+    let key = crate::gc::admission::intents::store_advisory_key(catalog);
     let mut context = Context {
         check: checked,
         version: 3,

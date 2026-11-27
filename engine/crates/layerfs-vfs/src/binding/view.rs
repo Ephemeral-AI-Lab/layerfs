@@ -1,0 +1,278 @@
+//! Effective read semantics over an owned unchanged base and short overlay jobs.
+use crate::{BaseStat, BaseView, OverlayRead, Workspace, WorkspaceError, WorkspaceResult};
+use layerfs_content::filesystem::{tree::attribute::PortableMetadata, PathName};
+use layerfs_content::object::inode_leaf::InodeKind;
+use layerfs_content::ContentError;
+use layerfs_overlay::{BaseSource, Inode};
+
+/// One retained source window. Its caller explicitly releases the exact engine
+/// source after provider/reply work is fenced; Drop performs no SQL.
+pub struct SourceView {
+    pub(crate) base: BaseView,
+    pub(crate) source: BaseSource,
+}
+/// Portable effective facts; namespace references are not POSIX directory nlink.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ViewStat {
+    pub serial: u64,
+    pub kind: InodeKind,
+    pub metadata: PortableMetadata,
+    pub namespace_refs: u64,
+    pub logical_len: u64,
+    /// Bindings of a directory that are directories: its POSIX link count
+    /// is two more while it has a name. Zero for other kinds.
+    pub subdirs: u64,
+}
+impl ViewStat {
+    /// The facts of a base inode. `subdirs` is the derived child-directory
+    /// count of a directory and zero for any other kind.
+    pub fn of_base(v: BaseStat, subdirs: u64) -> Self {
+        Self {
+            serial: v.serial,
+            kind: v.value.kind,
+            metadata: v.metadata,
+            namespace_refs: v.value.namespace_ref_count,
+            logical_len: v.logical_len,
+            subdirs,
+        }
+    }
+}
+/// The content kind of an overlay inode.
+fn kind_of(kind: layerfs_overlay::InodeKind) -> InodeKind {
+    match kind {
+        layerfs_overlay::InodeKind::File => InodeKind::RegularFile,
+        layerfs_overlay::InodeKind::Directory => InodeKind::Directory,
+        layerfs_overlay::InodeKind::Symlink => InodeKind::Symlink,
+    }
+}
+impl From<Inode> for ViewStat {
+    fn from(v: Inode) -> Self {
+        Self {
+            serial: v.serial,
+            kind: kind_of(v.kind),
+            metadata: PortableMetadata {
+                mode: u32::from(v.mode),
+                mtime_seconds: v.mtime_seconds,
+                mtime_nanoseconds: v.mtime_nanoseconds,
+            },
+            namespace_refs: v.nlink,
+            logical_len: v.size,
+            subdirs: v.subdirs,
+        }
+    }
+}
+impl Workspace {
+    /// Retains the selected binding for the owner-issued source. The source must
+    /// stay owned until this bounded processing window ends. No provider I/O here.
+    pub fn view_for_source(&self, source: BaseSource) -> WorkspaceResult<SourceView> {
+        if source.engine() != self.route().engine() {
+            return Err(layerfs_overlay::OverlayError::Stale.into());
+        }
+        let base = self.base()?;
+        if base.identity().0.to_bytes() != source.root() {
+            return Err(WorkspaceError::BaseChanged {
+                expected: source.root(),
+                actual: base.identity().0.to_bytes(),
+            });
+        }
+        Ok(SourceView { base, source })
+    }
+}
+impl SourceView {
+    /// Reuses this exact retained source/root with an admitted provider. This
+    /// neither acquires a source nor reads the Store; the caller owns both.
+    pub fn with_client(&self, client: std::sync::Arc<crate::CanonicalClient>) -> Self {
+        Self {
+            base: self.base.with_client(client),
+            source: self.source,
+        }
+    }
+    pub const fn source(&self) -> BaseSource {
+        self.source
+    }
+    pub fn base(&self) -> &BaseView {
+        &self.base
+    }
+    pub fn stat(&self, overlay: &impl OverlayRead, serial: u64) -> WorkspaceResult<ViewStat> {
+        if let Some(value) = overlay.inode(self.source, serial)? {
+            return Ok(value.into());
+        }
+        let inherited = match self.base.stat(serial) {
+            Ok(value) if value.value.kind == InodeKind::Directory => {
+                let subdirs = self.base.subdirs(value.value)?;
+                Some(ViewStat::of_base(value, subdirs))
+            }
+            Ok(value) => Some(ViewStat::of_base(value, 0)),
+            Err(WorkspaceError::Content(ContentError::PathNotFound)) => None,
+            Err(error) => return Err(error),
+        };
+        if let Some(value) = overlay.inode(self.source, serial)? {
+            return Ok(value.into());
+        }
+        inherited.ok_or(ContentError::PathNotFound.into())
+    }
+    /// The kinds [`Self::stat`] reports for `serials` (a listed page), with
+    /// no metadata, length or sub-directory read: the overlay's own inodes
+    /// first, then one [`BaseView::values`] for the rest, the overlay asked
+    /// again after it as `stat` does (#818 W5). A serial neither holds is
+    /// `PathNotFound`. Bounded by the page: one value per serial.
+    pub fn kinds(
+        &self,
+        overlay: &impl OverlayRead,
+        serials: &[u64],
+    ) -> WorkspaceResult<Vec<InodeKind>> {
+        let mut kinds = Vec::with_capacity(serials.len());
+        let mut inherited = Vec::new();
+        for (index, serial) in serials.iter().enumerate() {
+            let local = overlay.inode(self.source, *serial)?;
+            if local.is_none() {
+                inherited.push(index);
+            }
+            kinds.push(local.map(|row| kind_of(row.kind)));
+        }
+        let wanted: Vec<u64> = inherited.iter().map(|index| serials[*index]).collect();
+        for (index, value) in inherited.into_iter().zip(self.base.values(&wanted)?) {
+            kinds[index] = match overlay.inode(self.source, serials[index])? {
+                Some(row) => Some(kind_of(row.kind)),
+                None => value.map(|value| value.kind),
+            };
+        }
+        kinds
+            .into_iter()
+            .map(|kind| kind.ok_or(ContentError::PathNotFound.into()))
+            .collect()
+    }
+    /// Canonical root directory serial of the owned base; never rebound.
+    pub fn root_serial(&self) -> u64 {
+        self.base.root().root_inode().serial()
+    }
+    /// Whether the owned base can bind names under this directory, after the
+    /// kind/removal checks every name read shares. A directory created above
+    /// the installed floor has no base children, so no base demand is made.
+    pub(crate) fn inherits(&self, serial: u64, local: Option<&Inode>) -> WorkspaceResult<bool> {
+        match local {
+            Some(row) if row.kind != layerfs_overlay::InodeKind::Directory => {
+                Err(ContentError::WrongLogicalRole.into())
+            }
+            Some(row) if row.nlink == 0 && serial != self.root_serial() => {
+                Err(ContentError::PathNotFound.into())
+            }
+            Some(row) => Ok(!self.source.created_above(row.born)),
+            None if self.base.inode(serial)?.value.kind != InodeKind::Directory => {
+                Err(ContentError::WrongLogicalRole.into())
+            }
+            None => Ok(true),
+        }
+    }
+    pub fn lookup(
+        &self,
+        overlay: &impl OverlayRead,
+        parent: u64,
+        name: &PathName,
+    ) -> WorkspaceResult<ViewStat> {
+        // A walk stats names in listing order: remember the lengths of the
+        // files listed after this one with its own (F-032).
+        let serial = self.bound(overlay, parent, name, |value| {
+            self.base.sibling_lengths_for(parent, name, value)
+        })?;
+        self.stat(overlay, serial)
+    }
+    /// What [`Self::lookup`] binds `name` under `parent` to, with the kind
+    /// [`Self::stat`] reports and no metadata, length or sub-directory read:
+    /// a path walk needs no more of the directories it passes (#818 W6).
+    pub fn lookup_kind(
+        &self,
+        overlay: &impl OverlayRead,
+        parent: u64,
+        name: &PathName,
+    ) -> WorkspaceResult<(u64, InodeKind)> {
+        let serial = self.bound(overlay, parent, name, |_| Ok(()))?;
+        let kind = self.kinds(overlay, &[serial])?;
+        Ok((serial, kind[0]))
+    }
+    /// The serial `name` binds under `parent`: the overlay's entry, else the
+    /// base child (`found` sees it), the overlay asked again after the base.
+    fn bound(
+        &self,
+        overlay: &impl OverlayRead,
+        parent: u64,
+        name: &PathName,
+        found: impl FnOnce(&layerfs_content::filesystem::Resolved) -> WorkspaceResult<()>,
+    ) -> WorkspaceResult<u64> {
+        let local = overlay.inode(self.source, parent)?;
+        let inherits = self.inherits(parent, local.as_ref())?;
+        if let Some(local) = overlay.directory_entry(self.source, parent, name.as_bytes())? {
+            return local.serial.ok_or(ContentError::PathNotFound.into());
+        }
+        if !inherits {
+            return Err(ContentError::PathNotFound.into());
+        }
+        let inherited = match self.base.child(parent, name) {
+            Ok(value) => {
+                found(&value)?;
+                Some(value.serial)
+            }
+            Err(ContentError::PathNotFound) => None,
+            Err(error) => return Err(error.into()),
+        };
+        match overlay.directory_entry(self.source, parent, name.as_bytes())? {
+            Some(local) => local.serial,
+            None => inherited,
+        }
+        .ok_or(ContentError::PathNotFound.into())
+    }
+    /// Effective local symlink layers, followed by exact immutable demand.
+    pub fn readlink(
+        &self,
+        overlay: &impl OverlayRead,
+        serial: u64,
+    ) -> WorkspaceResult<layerfs_content::filesystem::SymlinkTarget> {
+        let local = overlay.read(self.source, serial, 0, layerfs_overlay::CELL_BYTES as u32)?;
+        self.emit_link(serial, local, self.source.root())
+    }
+    fn emit_link(
+        &self,
+        serial: u64,
+        local: Option<layerfs_overlay::LocalRead>,
+        root: [u8; 32],
+    ) -> WorkspaceResult<layerfs_content::filesystem::SymlinkTarget> {
+        let retained = local.as_ref().and_then(|r| r.base_root).unwrap_or(root);
+        let base = self.base.at(retained)?;
+        match local {
+            Some(local) => link_target(Some(base.as_ref()), serial, local),
+            None => Ok(base.readlink(serial)?),
+        }
+    }
+}
+/// A symlink's local window with its inherited bytes read from `base`, which
+/// the caller bound to the root those bytes belong to. A window with no
+/// inherited byte needs no base.
+pub(crate) fn link_target(
+    base: Option<&BaseView>,
+    serial: u64,
+    mut local: layerfs_overlay::LocalRead,
+) -> WorkspaceResult<layerfs_content::filesystem::SymlinkTarget> {
+    if local.kind != layerfs_overlay::InodeKind::Symlink {
+        return Err(ContentError::WrongLogicalRole.into());
+    }
+    if local.size > layerfs_overlay::CELL_BYTES as u64 || local.data.len() != local.size as usize {
+        return Err(ContentError::InvalidRecord("symlink window").into());
+    }
+    if local.span.is_some() {
+        let base = base.ok_or(ContentError::InvalidRecord("inherited window without base"))?;
+        let target = base.readlink(serial)?;
+        for (slot, byte) in local.data.iter_mut().enumerate() {
+            if local
+                .inherited
+                .get(slot / 8)
+                .is_some_and(|b| b & (1 << (slot % 8)) != 0)
+            {
+                *byte = *target
+                    .as_bytes()
+                    .get(slot)
+                    .ok_or(ContentError::InvalidRecord("inherited symlink span"))?;
+            }
+        }
+    }
+    Ok(layerfs_content::filesystem::SymlinkTarget::new(local.data)?)
+}

@@ -6,7 +6,7 @@ The `commit` calls: list a Branch's Commits, read one Commit and compare two Com
 
 | | |
 | --- | --- |
-| Source | [`api/crates/layerfs-api/src/commit`](../../../../api/crates/layerfs-api/src/commit) (one file per call), [`layerfs-store/src/calls/commit.rs`](../../../../control/crates/layerfs-store/src/calls/commit.rs), [`layerfs-home/src/cursor.rs`](../../../../control/crates/layerfs-home/src/cursor.rs), [`methods/branch`](../../../../engine/crates/layerfs-store-service/src/methods/branch), [`read/compare.rs`](../../../../engine/crates/layerfs-store-service/src/read/compare.rs) |
+| Source | [`crates/layerfs-api/src/families/commit`](../../../../api/crates/layerfs-api/src/families/commit) (one file per call), [`layerfs-store/src/data/commit.rs`](../../../../control/crates/layerfs-store/src/data/commit.rs), [`src/reply/cursor.rs`](../../../../control/crates/layerfs-home/src/reply/cursor.rs), [`families/branch`](../../../../engine/crates/layerfs-store-service/src/families/branch), [`compare/diff.rs`](../../../../engine/crates/layerfs-store-service/src/filesystem/compare/diff.rs) |
 | Runs by default | where the Store's calls run (the caller's process, or the Store machine's worker); all three only read and never take the publication lane |
 | Design | [Store calls](../../engine/store-calls/README.md), [reads](../../engine/store-calls/reads.md), [History](../../core/history/README.md) |
 
@@ -30,7 +30,7 @@ The `commit` calls: list a Branch's Commits, read one Commit and compare two Com
 | [`commit.diff`](#commitdiff) | `Diff` (one page of the paths that differ) | `work` |
 
 Each call file calls one function of
-[`layerfs_store::calls::commit`](../../../../control/crates/layerfs-store/src/calls/commit.rs),
+[`layerfs_store::calls::commit`](../../../../control/crates/layerfs-store/src/data/commit.rs),
 which sends one `StoreOp` on the project's Store and maps the answer to the
 call's long form (a Commit's time becomes `created_at`, UTC text). A Commit
 argument is a full id (66 hex characters) or a prefix of 8 or more
@@ -40,7 +40,7 @@ characters: a prefix more than one Commit starts with is refused
 (`out of scope: history`).
 
 The two paged calls carry a cursor made by
-[`cursor.rs`](../../../../control/crates/layerfs-home/src/cursor.rs): an
+[`cursor.rs`](../../../../control/crates/layerfs-home/src/reply/cursor.rs): an
 opaque text holding the call it belongs to, the place the page ended, the
 filters and the Commits the first page pinned. A cursor given with other
 filters or another pin, or to another call, is refused `InvalidInput`; one
@@ -185,11 +185,11 @@ $ layerfs commit diff shop/api agent --with patch --path /docs/a.txt
 
 | Error | When | Source |
 | --- | --- | --- |
-| `InvalidInput` | a bad argument; an ambiguous prefix (`matches`); a cursor of other filters, another pin or another call; out of scope (`history`) | [`calls/check.rs`](../../../../api/crates/layerfs-api/src/calls/check.rs), [`cursor.rs`](../../../../control/crates/layerfs-home/src/cursor.rs) |
-| `NotFound` | the Store, project, Branch or Commit is missing; `--at` or the Commit is not in the Branch's history; a cursor's Commit is gone | [`history/lookup.rs`](../../../../engine/crates/layerfs-store-service/src/history/lookup.rs) |
-| `Busy`, `Unresolved` | a move or remove holds the Store | [`op.rs`](../../../../control/crates/layerfs-home/src/op.rs) |
-| `Unavailable` | the Store's worker is not recorded or does not answer; nothing starts a stopped machine | [`place.rs`](../../../../control/crates/layerfs-store/src/place.rs) |
-| `Unknown` | a worker's answer was lost; a read may be called again | [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) |
+| `InvalidInput` | a bad argument; an ambiguous prefix (`matches`); a cursor of other filters, another pin or another call; out of scope (`history`) | [`guard/arguments.rs`](../../../../api/crates/layerfs-api/src/dispatch/guard/arguments.rs), [`cursor.rs`](../../../../control/crates/layerfs-home/src/reply/cursor.rs) |
+| `NotFound` | the Store, project, Branch or Commit is missing; `--at` or the Commit is not in the Branch's history; a cursor's Commit is gone | [`src/lookup.rs`](../../../../engine/crates/layerfs-store-service/src/lookup.rs) |
+| `Busy`, `Unresolved` | a move or remove holds the Store | [`intent.rs`](../../../../control/crates/layerfs-home/src/record/intent.rs) |
+| `Unavailable` | the Store's worker is not recorded or does not answer; nothing starts a stopped machine | [`executor.rs`](../../../../control/crates/layerfs-store/src/admin/route/executor.rs) |
+| `Unknown` | a worker's answer was lost; a read may be called again | [`guest/client.rs`](../../../../control/crates/layerfs-machine/src/route/guest/client.rs) |
 
 ## Related
 

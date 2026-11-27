@@ -1,0 +1,24 @@
+[package]
+name = "layerfs-workspace"
+description = "Workspace management above the Sandbox: mount, Exec, Commit, status and unmount of a Sandbox's Workspaces, routed to the daemon on its machine"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+
+layerfs-history = { path = "../../../core/crates/layerfs-history" }
+layerfs-home = { path = "../layerfs-home" }
+layerfs-machine = { path = "../layerfs-machine" }
+layerfs-protocol = { path = "../../../engine/crates/layerfs-protocol" }
+layerfs-sandbox = { path = "../layerfs-sandbox" }
+layerfs-store = { path = "../layerfs-store" }
+
+[dev-dependencies]
+
+layerfs-content = { path = "../../../core/crates/layerfs-content" }
+
+[features]
+# The machine calls (2.0, #533): host builds only.
+machine = ["layerfs-machine/machine", "layerfs-sandbox/machine"]

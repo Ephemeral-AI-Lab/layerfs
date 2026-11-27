@@ -4,8 +4,8 @@
 //! letter or digit, never a Windows device name (each name is a folder in
 //! the home). A project is always `<store>/<project>`. Each kind of name
 //! is a type checked once by its `parse` (#536 §9.2).
-use crate::outcome::refused;
-use layerfs_bridge::control::SdkRefusal;
+use crate::reply::outcome::refused;
+use layerfs_protocol::sdk::SdkRefusal;
 
 /// Windows device names, refused everywhere.
 const DEVICES: [&str; 22] = [

@@ -1,12 +1,13 @@
 //! `machine.update`.
-use super::list::changed;
-use super::spec::machine_of;
+use super::record::adapter_spec::machine_of;
+use super::status::list::changed;
+use crate::platform::HostOs;
 use crate::Related;
-use layerfs_bridge::control::SdkValue;
-use layerfs_home::home::{lock, paths};
-use layerfs_home::outcome::shell_word;
-use layerfs_home::outcome::{refused, Outcome};
-use layerfs_platform::HostOs;
+use layerfs_home::disk::paths;
+use layerfs_home::lock::home;
+use layerfs_home::reply::outcome::shell_word;
+use layerfs_home::reply::outcome::{refused, Outcome};
+use layerfs_protocol::sdk::SdkValue;
 use std::path::Path;
 
 /// What an update answers beside `ok` and `outcome`.
@@ -50,7 +51,7 @@ pub struct MachineUpdate {
 pub fn update(home: &Path, request: &MachineUpdate, related: Related) -> Outcome {
     let home = home.to_path_buf();
     let name = request.name.as_str();
-    let _lock = lock::take(&home)?;
+    let _lock = home::take(&home)?;
     let record = machine_of(&home, name)?;
     let kind = record.platform()?;
     let resize = request.cpus.is_some() || request.memory.is_some();
@@ -84,7 +85,7 @@ pub fn update(home: &Path, request: &MachineUpdate, related: Related) -> Outcome
             "InUse",
             format!("machine {name} is running on its Docker socket: stop it before changing the socket"),
         );
-        return Err(layerfs_home::outcome::with_fix(
+        return Err(layerfs_home::reply::outcome::with_fix(
             refusal,
             format!("layerfs machine stop {name}", name = shell_word(name)),
         ));
@@ -127,7 +128,7 @@ pub fn update(home: &Path, request: &MachineUpdate, related: Related) -> Outcome
 
 /// The Docker socket `--docker` names: an absolute path, or `unix://` and
 /// one; `None` for `""`, which clears the recorded one.
-fn docker_socket(value: &str) -> Result<Option<&str>, layerfs_bridge::control::SdkRefusal> {
+fn docker_socket(value: &str) -> Result<Option<&str>, layerfs_protocol::sdk::SdkRefusal> {
     if value.is_empty() {
         return Ok(None);
     }

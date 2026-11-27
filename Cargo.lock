@@ -704,49 +704,26 @@ dependencies = [
 name = "layerfs-api"
 version = "2.0.0"
 dependencies = [
- "layerfs-bridge",
- "layerfs-bucket",
  "layerfs-content",
- "layerfs-control",
  "layerfs-history",
  "layerfs-home",
+ "layerfs-inspect",
  "layerfs-machine",
+ "layerfs-os",
  "layerfs-overlay",
  "layerfs-persistence",
- "layerfs-platform",
  "layerfs-project",
+ "layerfs-protocol",
  "layerfs-sandbox",
- "layerfs-sandbox-backend",
  "layerfs-storage",
  "layerfs-store",
  "layerfs-store-service",
  "layerfs-telemetry",
  "layerfs-workspace",
+ "libc",
  "nix",
  "postgres",
  "rusqlite",
- "sha2 0.11.0",
-]
-
-[[package]]
-name = "layerfs-bridge"
-version = "2.0.0"
-dependencies = [
- "layerfs-content",
- "layerfs-history",
- "nix",
- "snow",
-]
-
-[[package]]
-name = "layerfs-bucket"
-version = "2.0.0"
-dependencies = [
- "layerfs-persistence",
- "layerfs-storage",
- "layerfs-store-service",
- "native-tls",
- "nix",
  "sha2 0.11.0",
 ]
 
@@ -755,7 +732,11 @@ name = "layerfs-cli"
 version = "2.0.0"
 dependencies = [
  "layerfs-api",
- "layerfs-bridge",
+ "layerfs-home",
+ "layerfs-os",
+ "layerfs-protocol",
+ "layerfs-sandbox",
+ "layerfs-store",
  "nix",
  "postgres",
 ]
@@ -769,49 +750,23 @@ dependencies = [
 ]
 
 [[package]]
-name = "layerfs-control"
-version = "2.0.0"
-dependencies = [
- "layerfs-bridge",
- "layerfs-bucket",
- "layerfs-content",
- "layerfs-daemon",
- "layerfs-fuse",
- "layerfs-history",
- "layerfs-home",
- "layerfs-machine",
- "layerfs-overlay",
- "layerfs-persistence",
- "layerfs-project",
- "layerfs-sandbox",
- "layerfs-sandbox-backend",
- "layerfs-storage",
- "layerfs-store",
- "layerfs-store-service",
- "layerfs-telemetry",
- "layerfs-workspace",
- "libc",
- "nix",
-]
-
-[[package]]
 name = "layerfs-daemon"
 version = "2.0.0"
 dependencies = [
  "blake3",
- "layerfs-bridge",
  "layerfs-content",
  "layerfs-fuse",
  "layerfs-history",
- "layerfs-mount-ports",
  "layerfs-nfs",
+ "layerfs-os",
  "layerfs-overlay",
  "layerfs-persistence",
  "layerfs-project",
+ "layerfs-protocol",
  "layerfs-storage",
  "layerfs-store-service",
  "layerfs-telemetry",
- "layerfs-workspace",
+ "layerfs-vfs",
  "nix",
 ]
 
@@ -821,9 +776,8 @@ version = "2.0.0"
 dependencies = [
  "fuser",
  "layerfs-content",
- "layerfs-mount-ports",
  "layerfs-overlay",
- "layerfs-workspace",
+ "layerfs-vfs",
  "libc",
  "nix",
 ]
@@ -840,7 +794,32 @@ dependencies = [
 name = "layerfs-home"
 version = "2.0.0"
 dependencies = [
- "layerfs-bridge",
+ "layerfs-os",
+ "layerfs-protocol",
+ "libc",
+ "nix",
+]
+
+[[package]]
+name = "layerfs-inspect"
+version = "2.0.0"
+dependencies = [
+ "layerfs-content",
+ "layerfs-daemon",
+ "layerfs-fuse",
+ "layerfs-history",
+ "layerfs-home",
+ "layerfs-machine",
+ "layerfs-os",
+ "layerfs-overlay",
+ "layerfs-persistence",
+ "layerfs-project",
+ "layerfs-protocol",
+ "layerfs-sandbox",
+ "layerfs-storage",
+ "layerfs-store",
+ "layerfs-store-service",
+ "layerfs-telemetry",
  "libc",
  "nix",
 ]
@@ -849,35 +828,28 @@ dependencies = [
 name = "layerfs-machine"
 version = "2.0.0"
 dependencies = [
- "layerfs-bridge",
  "layerfs-home",
- "layerfs-platform",
-]
-
-[[package]]
-name = "layerfs-mount-ports"
-version = "2.0.0"
-dependencies = [
- "layerfs-content",
- "layerfs-overlay",
- "layerfs-workspace",
+ "layerfs-os",
+ "layerfs-protocol",
+ "libc",
+ "nix",
 ]
 
 [[package]]
 name = "layerfs-nfs"
 version = "2.0.0"
 dependencies = [
- "layerfs-bridge",
  "layerfs-content",
  "layerfs-daemon",
  "layerfs-history",
- "layerfs-mount-ports",
  "layerfs-overlay",
  "layerfs-persistence",
  "layerfs-project",
+ "layerfs-protocol",
  "layerfs-storage",
+ "layerfs-store-service",
  "layerfs-telemetry",
- "layerfs-workspace",
+ "layerfs-vfs",
  "libc",
 ]
 
@@ -886,10 +858,16 @@ name = "layerfs-node"
 version = "2.0.0"
 dependencies = [
  "layerfs-api",
- "layerfs-bridge",
  "napi",
  "napi-build",
  "napi-derive",
+]
+
+[[package]]
+name = "layerfs-os"
+version = "2.0.0"
+dependencies = [
+ "nix",
 ]
 
 [[package]]
@@ -921,22 +899,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "layerfs-platform"
-version = "2.0.0"
-dependencies = [
- "layerfs-bridge",
- "layerfs-sandbox-backend",
- "nix",
-]
-
-[[package]]
 name = "layerfs-project"
 version = "2.0.0"
 dependencies = [
- "layerfs-bridge",
  "layerfs-content",
  "layerfs-history",
+ "layerfs-os",
  "layerfs-persistence",
+ "layerfs-protocol",
  "layerfs-storage",
  "layerfs-telemetry",
  "postgres",
@@ -944,11 +914,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "layerfs-protocol"
+version = "2.0.0"
+dependencies = [
+ "layerfs-content",
+ "layerfs-history",
+ "snow",
+]
+
+[[package]]
 name = "layerfs-python"
 version = "2.0.0"
 dependencies = [
  "layerfs-api",
- "layerfs-bridge",
  "pyo3",
  "pyo3-build-config",
 ]
@@ -957,23 +935,23 @@ dependencies = [
 name = "layerfs-sandbox"
 version = "2.0.0"
 dependencies = [
- "layerfs-bridge",
+ "layerfs-content",
+ "layerfs-daemon",
+ "layerfs-fuse",
  "layerfs-history",
  "layerfs-home",
  "layerfs-machine",
+ "layerfs-os",
+ "layerfs-overlay",
  "layerfs-persistence",
  "layerfs-project",
- "layerfs-sandbox-backend",
+ "layerfs-protocol",
+ "layerfs-storage",
  "layerfs-store",
+ "layerfs-store-service",
+ "layerfs-telemetry",
+ "layerfs-vfs",
  "libc",
- "sha2 0.11.0",
-]
-
-[[package]]
-name = "layerfs-sandbox-backend"
-version = "2.0.0"
-dependencies = [
- "layerfs-bridge",
  "nix",
  "rustix",
  "sha2 0.11.0",
@@ -994,20 +972,22 @@ dependencies = [
 name = "layerfs-store"
 version = "2.0.0"
 dependencies = [
- "layerfs-bridge",
- "layerfs-bucket",
  "layerfs-content",
  "layerfs-history",
  "layerfs-home",
  "layerfs-machine",
+ "layerfs-os",
  "layerfs-persistence",
  "layerfs-project",
+ "layerfs-protocol",
  "layerfs-storage",
  "layerfs-store-service",
  "layerfs-telemetry",
  "libc",
+ "native-tls",
  "nix",
  "postgres",
+ "sha2 0.11.0",
 ]
 
 [[package]]
@@ -1015,15 +995,16 @@ name = "layerfs-store-service"
 version = "2.0.0"
 dependencies = [
  "blake3",
- "layerfs-bridge",
  "layerfs-content",
  "layerfs-history",
+ "layerfs-os",
  "layerfs-overlay",
  "layerfs-persistence",
  "layerfs-project",
+ "layerfs-protocol",
  "layerfs-storage",
  "layerfs-telemetry",
- "layerfs-workspace",
+ "layerfs-vfs",
  "nix",
  "postgres",
  "rusqlite",
@@ -1038,13 +1019,27 @@ dependencies = [
 ]
 
 [[package]]
-name = "layerfs-workspace"
+name = "layerfs-vfs"
 version = "2.0.0"
 dependencies = [
  "layerfs-content",
  "layerfs-daemon",
  "layerfs-overlay",
+ "layerfs-store-service",
  "layerfs-telemetry",
+]
+
+[[package]]
+name = "layerfs-workspace"
+version = "2.0.0"
+dependencies = [
+ "layerfs-content",
+ "layerfs-history",
+ "layerfs-home",
+ "layerfs-machine",
+ "layerfs-protocol",
+ "layerfs-sandbox",
+ "layerfs-store",
 ]
 
 [[package]]

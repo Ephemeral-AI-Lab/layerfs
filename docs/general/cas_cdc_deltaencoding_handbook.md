@@ -229,8 +229,8 @@ reuse percentage. High-entropy data may still benefit from exact unchanged-chunk
 reuse even when its newly written chunks do not compress well.
 
 Source: [stream constructor](../../core/crates/layerfs-content/src/file/construction/bytes.rs),
-[policy](../../core/crates/layerfs-content/src/contract/policy.rs),
-[CDC scanner/profile](../../core/crates/layerfs-content/src/file/cdc/gear.rs).
+[policy](../../core/crates/layerfs-content/src/policy.rs),
+[CDC scanner/profile](../../core/crates/layerfs-content/src/file/cdc.rs).
 
 ## 4. CAS: exact reuse and collision checks
 
@@ -279,8 +279,8 @@ cost. A reused object need not be a zero-I/O result. Object identity also does n
 imply garbage collection: this guide supplies no manual deletion protocol for
 objects that a failed candidate appears to leave unused.
 
-Source: [wave exact reuse](../../core/crates/layerfs-storage/src/save/wave.rs),
-[publication arbitration](../../core/crates/layerfs-storage/src/save/publication.rs).
+Source: [wave exact reuse](../../core/crates/layerfs-storage/src/save/prepare/wave.rs),
+[publication arbitration](../../core/crates/layerfs-storage/src/save/publish/register.rs).
 
 ## 5. Delta encoding: current implementation, not a generic diff
 
@@ -351,7 +351,7 @@ chunk the base payload covering its byte range:
 | Producer | Base offered | Source |
 | --- | --- | --- |
 | Localized edit of a file the base holds (#352 F-005) | the same file's base mapping, through the edit's `Aligner` | [edit apply](../../core/crates/layerfs-content/src/file/edit/apply.rs) |
-| Workspace Commit of a fresh file that a rename put in place of another (#352 F-063), or that took a path where the base held a file (#88) | the replaced file, through the same `Aligner`, via `construct_runs_with_predecessor` | [run constructor](../../core/crates/layerfs-content/src/file/construction/runs.rs), [captured file](../../engine/crates/layerfs-workspace/src/construction/captured/owner.rs) |
+| Workspace Commit of a fresh file that a rename put in place of another (#352 F-063), or that took a path where the base held a file (#88) | the replaced file, through the same `Aligner`, via `construct_runs_with_predecessor` | [run constructor](../../core/crates/layerfs-content/src/file/construction/runs.rs), [captured file](../../engine/crates/layerfs-vfs/src/construction/file/owner.rs) |
 | `construct_bytes_with_predecessor` with a caller's base | the supplied root, positionally | [byte constructor](../../core/crates/layerfs-content/src/file/construction/bytes.rs) |
 
 The F-063 route exists because git, editors and package managers save by
@@ -494,7 +494,7 @@ depth cap, or with the new branch would exceed the metadata chain budgets, the
 program is built against the whole branch at the root of that chain instead
 (#89), so the branch chain restarts at depth one rather than storing the branch
 whole every ninth Commit; the root must fit the same budgets
-([branch selection](../../core/crates/layerfs-storage/src/encoding/delta/branch.rs)).
+([branch selection](../../core/crates/layerfs-storage/src/encoding/delta/program_page.rs)).
 Directory leaves and branches and extent leaves and branches take the same
 program since layerfs-project #92. A directory page is offered the page it replaces, or the
 page it was split from or merged into. An extent page is offered the earlier
@@ -506,13 +506,13 @@ are framing version 26, which a 2.0 reader refuses by version.
 Value pooling, full-object CAS, and leaf delta encoding are three distinct reuse
 mechanisms. This guide's FULL/PREFIX selection diagram describes payloads only.
 
-Sources: [pooled Save](../../core/crates/layerfs-storage/src/save/pooled.rs),
+Sources: [pooled Save](../../core/crates/layerfs-storage/src/save/select/pooled.rs),
 [metadata delta grammar](../../core/crates/layerfs-storage/src/encoding/pool/delta.rs),
 [pooled reader](../../core/crates/layerfs-storage/src/encoding/pool/read.rs).
 
 Source: [selector](../../core/crates/layerfs-storage/src/encoding/delta/select.rs),
 [candidate signatures/index](../../core/crates/layerfs-storage/src/encoding/delta/candidates.rs),
-[independent/PREFIX encoding](../../core/crates/layerfs-storage/src/encoding/full.rs),
+[independent/PREFIX encoding](../../core/crates/layerfs-storage/src/encoding/delta/full.rs),
 [Zstd codec](../../core/crates/layerfs-storage/src/encoding/codec.rs).
 
 ## 6. Dependency chains: storage savings have read costs
@@ -600,8 +600,8 @@ validation scope. Returned canonical objects are authenticated in both; selected
 units do not imply an audit of all unread pack bytes.
 
 Source: [chain resolver](../../core/crates/layerfs-storage/src/encoding/delta/read.rs),
-[storage budgets](../../core/crates/layerfs-storage/src/store/policy.rs),
-[construction depth policy](../../core/crates/layerfs-content/src/contract/policy.rs).
+[storage budgets](../../core/crates/layerfs-storage/src/policy.rs),
+[construction depth policy](../../core/crates/layerfs-content/src/policy.rs).
 
 ## 7. Localized edits versus fresh CDC construction
 

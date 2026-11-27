@@ -6,15 +6,14 @@
 //! Moved with the code from the daemon's `support/sdk_compare.rs`; a call no
 //! longer crosses a control connection.
 use super::installed;
-use layerfs_bridge::control::{SdkCall, SdkValue};
 use layerfs_content::filesystem::PathName;
 use layerfs_history::{BranchId, CommitOutcome, HistoryName, LayerStackId, WorkspaceId};
+use layerfs_protocol::sdk::{SdkCall, SdkValue};
 use layerfs_store_service::{
-    bootstrap::open_store_observed,
-    store::{BindRequest, CommitOptions, CommitSuccess},
+    store::{open::open_store_observed, BindRequest, CommitOptions, CommitSuccess},
     Owner, OwnerConfig, StoreService,
 };
-use layerfs_workspace::{Operation, Outcome, Position, Time};
+use layerfs_vfs::{Operation, Outcome, Position, Time};
 use std::path::Path;
 
 /// One change [`Fixture::workspace_commit`] applies at a path.
@@ -94,7 +93,7 @@ impl Fixture {
         &self,
         method: &str,
         mut fields: Vec<(&str, SdkValue)>,
-    ) -> Result<SdkValue, layerfs_bridge::control::SdkRefusal> {
+    ) -> Result<SdkValue, layerfs_protocol::sdk::SdkRefusal> {
         fields.push(("project", SdkValue::text("installed")));
         let call = SdkCall {
             method: method.into(),
@@ -105,7 +104,7 @@ impl Fixture {
                     .collect(),
             ),
         };
-        layerfs_store_service::methods::call(&self.service, &call)
+        layerfs_store_service::families::call(&self.service, &call)
     }
 
     pub fn call(&self, method: &str, fields: Vec<(&str, SdkValue)>) -> SdkValue {

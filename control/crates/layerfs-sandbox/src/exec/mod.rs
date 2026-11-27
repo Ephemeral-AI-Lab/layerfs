@@ -3,11 +3,9 @@
 //! (`record`) and its cancel (`cancel`, `workspace.cancel`, and what
 //! close and unmount do with running commands). The daemon supervises no
 //! command: exec and cancel live here and in the Sandbox backend.
-pub mod cancel;
 pub mod id;
-mod pending;
-pub mod record;
+#[doc(hidden)]
+pub mod output;
+pub(crate) mod pending;
 pub mod remote;
-mod run;
-
-pub use run::{checked_env, exec, start_folder, Exec};
+pub mod settle;

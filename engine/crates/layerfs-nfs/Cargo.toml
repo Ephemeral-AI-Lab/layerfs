@@ -9,11 +9,9 @@ license.workspace = true
 [dependencies]
 layerfs-content = { path = "../../../core/crates/layerfs-content" }
 layerfs-overlay = { path = "../layerfs-overlay" }
-layerfs-workspace = { path = "../layerfs-workspace" }
-layerfs-mount-ports = { path = "../layerfs-mount-ports" }
-
+layerfs-vfs = { path = "../layerfs-vfs" }
 [dev-dependencies]
-layerfs-bridge = { path = "../layerfs-bridge" }
+layerfs-protocol = { path = "../layerfs-protocol" }
 layerfs-daemon = { path = "../layerfs-daemon" }
 layerfs-history = { path = "../../../core/crates/layerfs-history" }
 layerfs-persistence = { path = "../layerfs-persistence" }
@@ -21,3 +19,12 @@ layerfs-project = { path = "../layerfs-project" }
 layerfs-storage = { path = "../../../core/crates/layerfs-storage" }
 layerfs-telemetry = { path = "../../../core/crates/layerfs-telemetry" }
 libc = "=0.2.189"
+layerfs-store-service = { path = "../layerfs-store-service" }
+
+[[test]]
+name = "helper_deadline"
+path = "tests/standalone/helper_deadline.rs"
+
+[[test]]
+name = "write"
+path = "tests/standalone/write.rs"

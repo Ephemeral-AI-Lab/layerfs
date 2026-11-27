@@ -8,10 +8,8 @@ license.workspace = true
 
 [dependencies]
 layerfs-overlay = { path = "../layerfs-overlay" }
-layerfs-workspace = { path = "../layerfs-workspace" }
+layerfs-vfs = { path = "../layerfs-vfs" }
 layerfs-content = { path = "../../../core/crates/layerfs-content" }
-layerfs-mount-ports = { path = "../layerfs-mount-ports" }
-
 [target.'cfg(target_os = "linux")'.dependencies]
 fuser = { version = "=0.18.0", git = "https://github.com/Ephemeral-AI-Lab/fuser.git", rev = "7393bca050fcbd0ed2a03f7e79bec0f8bd9755c4", default-features = false }
 libc = "=0.2.189"

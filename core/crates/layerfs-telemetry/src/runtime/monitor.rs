@@ -98,7 +98,7 @@ impl Monitor {
                         now.duration_since(due).as_millis() / u128::from(config.interval_ms);
                     let at_ns = u64::try_from(start.elapsed().as_nanos()).unwrap_or(u64::MAX);
                     let probe_start=Instant::now();
-                    let sample = crate::platform::sample(at_ns, config.cpu, config.memory).map(|mut sample|{
+                    let sample = crate::runtime::sample(at_ns, config.cpu, config.memory).map(|mut sample|{
                         sample.probe_ns=u64::try_from(probe_start.elapsed().as_nanos()).ok();
                         sample.at_ns=u64::try_from(start.elapsed().as_nanos()).unwrap_or(u64::MAX);
                         sample
@@ -109,7 +109,7 @@ impl Monitor {
                     if now >= emission {
                         if let Some((out,identity))=&output {
                             if let Some(sample)=sample {out.submit(crate::output::encode_resource(*identity,sample));}
-                            else {out.submit(format!("LFT1 {{\"v\":1,\"kind\":\"resource-unavailable\",\"run\":\"{:032x}\",\"namespace\":{},\"pid\":{},\"role\":{},\"source\":\"{}\",\"selected\":{},\"failures\":{},\"overflow\":{}}}\n",identity.run,identity.namespace,identity.pid,identity.role,crate::platform::SOURCE.as_str(),u8::from(config.cpu) | (u8::from(config.memory) << 1),owner.failures.value(),owner.failures.overflowed()).into_bytes());}
+                            else {out.submit(format!("LFT1 {{\"v\":1,\"kind\":\"resource-unavailable\",\"run\":\"{:032x}\",\"namespace\":{},\"pid\":{},\"role\":{},\"source\":\"{}\",\"selected\":{},\"failures\":{},\"overflow\":{}}}\n",identity.run,identity.namespace,identity.pid,identity.role,crate::runtime::SOURCE.as_str(),u8::from(config.cpu) | (u8::from(config.memory) << 1),owner.failures.value(),owner.failures.overflowed()).into_bytes());}
                         }
                         emission = now + Duration::from_secs(1);
                     }

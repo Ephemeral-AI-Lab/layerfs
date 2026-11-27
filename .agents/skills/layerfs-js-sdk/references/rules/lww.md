@@ -1,7 +1,7 @@
 # Merge rules: `/.lww`
 
 > **Status:** Current general guide. Part of the `layerfs-js-sdk` skill. Read from
-> `core/crates/layerfs-content/src/merge/lww.rs` and the compare-and-merge contract;
+> `core/crates/layerfs-content/src/merge/rule/lww.rs` and the compare-and-merge contract;
 > the Commit case is covered by verification case B10. Calls and answer keys are
 > the LayerFS 2.0 call surface's (from its spec rows; the 2.0 answers were not
 > exercised with a rule in this pass); the merge rules themselves did not change.

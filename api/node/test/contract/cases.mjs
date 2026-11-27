@@ -1,4 +1,4 @@
-// The case list that api/node/test/contract.mjs runs, in order, through Node, Python (sync and
+// The case list that api/node/test/contract/front-ends.test.mjs runs, in order, through Node, Python (sync and
 // aio) and the command, each against its own fresh Disposable home. Only calls that need no
 // daemon, mount, bucket or other machine: store.create on native, project.init, file.*,
 // branch.*, commit.*.

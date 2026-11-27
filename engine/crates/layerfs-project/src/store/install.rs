@@ -1,9 +1,11 @@
 //! Bounded one-attempt file streaming; the host never opens the installed Store.
 use super::{InstallError, InstallFailure, InstallWork, Installed, SealedProject};
-use layerfs_bridge::{
-    control::{ControlError, InstallPhase, InstallReply, INSTALL_FINISH},
+use layerfs_protocol::{
     duplex::{Connection, MAX_PLAINTEXT_BYTES},
-    provision::StoreProfile,
+    provision::{
+        install::{ControlError, InstallPhase, InstallReply, INSTALL_FINISH},
+        manifest::StoreProfile,
+    },
 };
 use std::{
     fs::File,
@@ -23,7 +25,7 @@ pub fn install(
 /// Installs the same sealed input after reopening its private discovery record.
 pub fn install_file(
     store: &layerfs_persistence::SealedStore,
-    manifest: &layerfs_bridge::provision::StoreManifest,
+    manifest: &layerfs_protocol::provision::manifest::StoreManifest,
     connection: &mut Connection,
 ) -> Result<Installed, Box<InstallFailure>> {
     let mut phase = InstallPhase::Request;

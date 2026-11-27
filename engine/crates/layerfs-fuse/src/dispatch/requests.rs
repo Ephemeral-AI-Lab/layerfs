@@ -1,7 +1,7 @@
 //! Per-mount request drain and failure custody. Receive workers run requests directly.
 use super::{DispatchError, FailureView, MountWork, RequestDisposition, RequestFuture};
-use layerfs_mount_ports::ports::Fence;
 use layerfs_overlay::KernelMount;
+use layerfs_vfs::ports::mount::Fence;
 use std::{
     any::Any,
     fmt,

@@ -1,5 +1,5 @@
 //! Cooperative local-volume ownership before one SQLite write attempt.
-use crate::backend::records::BackendError;
+use crate::backend::error::BackendError;
 use std::path::Path;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 use {
@@ -142,7 +142,7 @@ impl crate::backend::sqlite::session::connection::State {
     /// and the lane is not kept until the Session drops (finding #2).
     pub(crate) fn finish_writer(
         &mut self,
-        background: Option<&crate::backend::sqlite::session::background::Checkpointer>,
+        background: Option<&crate::backend::sqlite::session::checkpointer::Checkpointer>,
     ) -> Result<(), BackendError> {
         let Some(writer) = self.writer_hold.take() else {
             return Ok(());

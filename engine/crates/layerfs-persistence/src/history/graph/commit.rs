@@ -1,0 +1,427 @@
+//! Commit insertion, atomic Branch overwrite, ancestry and history pages.
+//!
+//! One transaction checks the expected head and captured provenance, inserts
+//! or verifies the immutable Commit and advances the Branch. A moved head is
+//! refused unless the request forces an overwrite; a forced candidate keeps its
+//! captured parent and reports the head it displaced. There is no stage row.
+
+use super::super::params;
+use super::super::statement::transaction::Transaction;
+use layerfs_content::ObjectId;
+use layerfs_history::error::{HistoryError, HistoryResult, Missing, MovedState};
+use layerfs_history::identity::{
+    BranchId, CatalogId, CommitAttempt, CommitId, LayerId, LayerStackId, NodeId,
+};
+use layerfs_history::records::{
+    CommitHistoryRequest, CommitMeta, CommitOutcome, CommitRecord, CommitRequest, PageResult,
+};
+
+use super::super::statement::rows::{commit_row, one, sql};
+use layerfs_history::catalog::query::{self, Context, Cursor, Range};
+
+const COMMIT_BY_ID: &str = "commit_commit_by_id";
+
+const COMMIT_BY_ATTEMPT: &str = "commit_commit_by_attempt";
+
+const INSERT_COMMIT: &str = "commit_insert_commit";
+
+const ADVANCE_BRANCH: &str = "commit_advance_branch";
+
+/// Reads one Commit by identity.
+pub(crate) fn commit(tx: &Transaction<'_>, id: CommitId) -> HistoryResult<Option<CommitRecord>> {
+    one(tx, COMMIT_BY_ID, [id.as_slice()], commit_row)
+}
+
+/// Reads the Commit one publication attempt made (#776 R1): the attempt is
+/// unique among the Store's Commits, through its partial index.
+pub(crate) fn commit_by_attempt(
+    tx: &Transaction<'_>,
+    attempt: CommitAttempt,
+) -> HistoryResult<Option<CommitRecord>> {
+    one(tx, COMMIT_BY_ATTEMPT, [attempt.as_slice()], commit_row)
+}
+
+/// True when an existing row for this identity carries the same immutable fields.
+pub(crate) fn verify_commit(tx: &Transaction<'_>, record: &CommitRecord) -> HistoryResult<bool> {
+    match commit(tx, record.id)? {
+        None => Ok(false),
+        Some(stored) => {
+            if stored.root == record.root
+                && stored.parent == record.parent
+                && stored.base_layer == record.base_layer
+                && stored.second_parent == record.second_parent
+                && stored.stack == record.stack
+                && (CommitMeta {
+                    time_ms: record.meta.time_ms,
+                    ..stored.meta
+                }) == record.meta
+            {
+                Ok(true)
+            } else {
+                Err(HistoryError::Integrity("Commit identity"))
+            }
+        }
+    }
+}
+
+/// True when `target` is on `head`'s first-parent chain.
+///
+/// A run is a first-parent path, so `target` is on the chain when it is in
+/// one of the runs the chain passes through, no deeper than where the chain
+/// leaves that run. Work follows the runs (the forks from Commits on the
+/// chain), not its length.
+pub(crate) fn ancestry_contains(
+    tx: &Transaction<'_>,
+    head: Option<CommitId>,
+    target: CommitId,
+) -> HistoryResult<bool> {
+    let Some(head) = head else {
+        return Ok(false);
+    };
+    let target = super::super::lineage::records::commit_line(tx, target)?;
+    let mut current = super::super::lineage::records::commit_line(tx, head)?;
+    loop {
+        if current.depth < target.depth {
+            return Ok(false);
+        }
+        if current.run == target.run {
+            return Ok(true);
+        }
+        match super::super::lineage::records::commit_line(tx, current.run)?.parent {
+            Some(parent) => current = super::super::lineage::records::commit_line(tx, parent)?,
+            None => return Ok(false),
+        }
+    }
+}
+
+/// Publishes one candidate against the expected Branch head. The Branch, its
+/// LayerStack, base root and head Commit come from one statement; only a
+/// forced overwrite reads the Commit it expected separately.
+pub(crate) fn commit_branch(
+    tx: &Transaction<'_>,
+    request: &CommitRequest,
+) -> HistoryResult<CommitOutcome> {
+    // Spec 5: the project epoch is read no later than the resources the
+    // write depends on. One statement reads the Branch, the rows it resolves
+    // to and its project's epoch from one snapshot (#768; it was a probe, the
+    // epoch, then a re-read): a removal that committed before it is visible
+    // (its row is filtered), and one that commits after it changes the epoch
+    // `confirm` re-checks, so the Commit never lands on a retired Branch.
+    let (rows, epoch) = super::branch::snapshot_rows_with_epoch(tx, request.branch)?
+        .ok_or(HistoryError::Missing(Missing::Branch))?;
+    let fence = crate::gc::fence::observed(rows.branch.stack, epoch)?;
+    let branch = rows.branch.clone();
+    let stack = rows.stack()?.ok_or(HistoryError::Integrity("LayerStack"))?;
+    if stack.profile != request.profile || stack.scope != request.scope {
+        return Err(HistoryError::Integrity("Commit context"));
+    }
+    let moved =
+        branch.base_layer != request.expected_base || branch.head_commit != request.expected_head;
+    let answered = branch
+        .head_commit
+        .map_or(NodeId::Layer(branch.base_layer), NodeId::Commit);
+    let refused = (moved && (!request.force || branch.base_layer != request.expected_base))
+        || request
+            .required_head
+            .is_some_and(|required| required != answered);
+    if refused {
+        return Err(head_moved(request, &branch));
+    }
+    // Past the check above the expected base is the Branch's own.
+    let base_root = rows
+        .base_root()?
+        .ok_or(HistoryError::Missing(Missing::Layer))?;
+    let root_of = |head: Option<CommitId>| -> HistoryResult<_> {
+        match head {
+            Some(head) => {
+                let record = if Some(head) == branch.head_commit {
+                    rows.head()?
+                } else {
+                    commit(tx, head)?
+                };
+                let record = record.ok_or(HistoryError::Integrity("Branch Commit"))?;
+                if record.stack != branch.stack || record.base_layer != branch.base_layer {
+                    return Err(HistoryError::Integrity("Branch Commit ownership"));
+                }
+                Ok(record.root)
+            }
+            None => Ok(base_root),
+        }
+    };
+    if root_of(request.expected_head)? != request.expected_root {
+        return Err(HistoryError::Integrity("Commit context"));
+    }
+    let current_root = root_of(branch.head_commit)?;
+    if request.candidate_root == current_root {
+        return Ok(CommitOutcome::UpToDate {
+            head: branch.head_commit,
+            root: current_root,
+        });
+    }
+    let record = new_commit(
+        tx,
+        branch.stack,
+        request.branch,
+        request.candidate_root,
+        request.expected_head,
+        request.expected_base,
+        request.second_parent,
+        &CommitMeta {
+            displaced: branch.head_commit.filter(|_| moved),
+            ..request.meta.clone()
+        },
+    )?;
+    // The advance replaces only the head this transaction read: if another
+    // writer moved the Branch meanwhile (a PostgreSQL lane connection lost
+    // inside the lane), no row matches and nothing is published.
+    let advanced = tx
+        .execute(
+            ADVANCE_BRANCH,
+            params![
+                record.id.as_slice(),
+                branch.id.as_slice(),
+                request.expected_base.as_slice(),
+                branch.head_commit.map(|id| id.to_bytes().to_vec()),
+            ],
+        )
+        .map_err(sql)?;
+    match advanced {
+        1 => {}
+        0 => {
+            let now = super::branch::snapshot_rows(tx, request.branch)?
+                .ok_or(HistoryError::Missing(Missing::Branch))?;
+            return Err(head_moved(request, &now.branch));
+        }
+        _ => return Err(HistoryError::Integrity("Branch advance")),
+    }
+    fence.confirm(tx)?;
+    let displaced = branch.head_commit.filter(|_| moved);
+    Ok(CommitOutcome::Committed {
+        record: Box::new(record),
+        displaced,
+    })
+}
+
+/// The refusal of a publication over a head other than the one it expects.
+fn head_moved(
+    request: &CommitRequest,
+    branch: &layerfs_history::records::BranchRecord,
+) -> HistoryError {
+    HistoryError::HeadMoved(Box::new(MovedState {
+        expected_head: request.expected_head,
+        actual_head: branch.head_commit,
+        expected_base: request.expected_base,
+        actual_base: branch.base_layer,
+    }))
+}
+
+/// Derives, checks and inserts one Commit made on `branch` now, or verifies
+/// the identical record that already exists.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn new_commit(
+    tx: &Transaction<'_>,
+    stack: LayerStackId,
+    branch: BranchId,
+    root: ObjectId,
+    parent: Option<CommitId>,
+    base_layer: LayerId,
+    second_parent: Option<NodeId>,
+    meta: &CommitMeta,
+) -> HistoryResult<CommitRecord> {
+    let record = derive_record(stack, branch, root, parent, base_layer, second_parent, meta)?;
+    // Every new Commit takes the next Store serial in this transaction.
+    let serial = super::super::counters::position::next_serial(tx)?;
+    // The insert names a new identity; an existing one is then verified.
+    let inserted = tx
+        .execute(INSERT_COMMIT, insert_params(&record, serial)?)
+        .map_err(sql)?;
+    if inserted == 1 {
+        super::super::lineage::records::record_commit(tx, &record)?;
+        return Ok(record);
+    }
+    // An identical Commit already exists: it keeps its own recorded time.
+    if !verify_commit(tx, &record)? {
+        return Err(HistoryError::Integrity("Commit identity"));
+    }
+    commit(tx, record.id)?.ok_or(HistoryError::Integrity("Commit identity"))
+}
+
+/// The record of one Commit made on `branch` now: its checked meta with the
+/// default message, the Branch and the time filled, and its identity.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn derive_record(
+    stack: LayerStackId,
+    branch: BranchId,
+    root: ObjectId,
+    parent: Option<CommitId>,
+    base_layer: LayerId,
+    second_parent: Option<NodeId>,
+    meta: &CommitMeta,
+) -> HistoryResult<CommitRecord> {
+    derive_record_at(
+        stack,
+        branch,
+        root,
+        parent,
+        base_layer,
+        second_parent,
+        meta,
+        None,
+    )
+}
+
+/// [`derive_record`] made at `time_ms` instead of now, when given.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn derive_record_at(
+    stack: LayerStackId,
+    branch: BranchId,
+    root: ObjectId,
+    parent: Option<CommitId>,
+    base_layer: LayerId,
+    second_parent: Option<NodeId>,
+    meta: &CommitMeta,
+    time_ms: Option<i64>,
+) -> HistoryResult<CommitRecord> {
+    meta.check()?;
+    let meta = CommitMeta {
+        message: Some(
+            meta.message
+                .clone()
+                .unwrap_or_else(|| format!("{:?} filesystem change", meta.via)),
+        ),
+        branch: Some(branch),
+        time_ms: time_ms.unwrap_or_else(|| {
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |elapsed| {
+                    i64::try_from(elapsed.as_millis()).unwrap_or(i64::MAX)
+                })
+        }),
+        ..meta.clone()
+    };
+    Ok(CommitRecord {
+        id: CommitId::derive(root, parent, base_layer, second_parent, &meta),
+        stack,
+        root,
+        parent,
+        base_layer,
+        second_parent,
+        meta,
+    })
+}
+
+/// The 19 values of a Commit row, in `commit_insert_commit` order.
+pub(crate) fn insert_params(
+    record: &CommitRecord,
+    serial: u64,
+) -> HistoryResult<Vec<crate::backend::seam::Param>> {
+    Ok(params![
+        record.id.as_slice(),
+        record.stack.as_slice(),
+        record.root.as_bytes().as_slice(),
+        record.parent.map(|id| id.to_bytes().to_vec()),
+        record.base_layer.as_slice(),
+        record.second_parent.map(|id| id.as_slice().to_vec()),
+        record.meta.branch.map(|id| id.to_bytes().to_vec()),
+        i64::from(record.meta.via.code()),
+        record.meta.message.clone(),
+        record.meta.merged_from.map(|id| id.as_slice().to_vec()),
+        record.meta.time_ms,
+        i64::try_from(record.meta.statistics.logical)
+            .map_err(|_| HistoryError::Capacity("logical bytes"))?,
+        i64::try_from(record.meta.statistics.new_canonical)
+            .map_err(|_| HistoryError::Capacity("canonical bytes"))?,
+        i64::try_from(record.meta.statistics.new_stored)
+            .map_err(|_| HistoryError::Capacity("stored bytes"))?,
+        i64::try_from(record.meta.statistics.new_metadata)
+            .map_err(|_| HistoryError::Capacity("metadata bytes"))?,
+        super::super::counters::facts::encode(&record.meta.lww, &record.meta.units)?,
+        record.meta.displaced.map(|id| id.to_bytes().to_vec()),
+        i64::try_from(serial).map_err(|_| HistoryError::Capacity("history serials"))?,
+        record
+            .meta
+            .attempt
+            .map(|attempt| attempt.to_bytes().to_vec()),
+    ])
+}
+
+/// Walks one Branch's ancestry from an immutable start, newest first.
+pub(crate) fn commit_history(
+    tx: &Transaction<'_>,
+    catalog: CatalogId,
+    incarnation: u64,
+    key: &[u8; 32],
+    request: &CommitHistoryRequest,
+) -> HistoryResult<PageResult<CommitRecord>> {
+    let branch =
+        super::branch::branch(tx, request.branch)?.ok_or(HistoryError::Missing(Missing::Branch))?;
+    let capacity = query::capacity(request.limit, CommitRecord::MAXIMUM_ENCODED_BYTES)?;
+    let context = Context {
+        key,
+        catalog,
+        incarnation,
+        range: Range::CommitAncestry,
+        subject: request.branch.as_slice(),
+    };
+    let cursor = request
+        .cursor
+        .as_ref()
+        .map(|bytes| query::decode(context, bytes))
+        .transpose()?;
+    let (start, mut current) = if let Some(cursor) = cursor {
+        let anchor = CommitId::from_slice(&cursor.anchor)?;
+        if request.start.is_some_and(|start| start != anchor) {
+            return Err(HistoryError::InvalidInput("page cursor anchor"));
+        }
+        let position = CommitId::from_slice(&cursor.position)?;
+        let anchor_record = commit(tx, anchor)?.ok_or(HistoryError::Integrity("Commit anchor"))?;
+        let last = commit(tx, position)?.ok_or(HistoryError::Integrity("Commit chain"))?;
+        // The keyed cursor attests that traversal from this anchor delivered
+        // this position. Rewalking it would impose a lifetime listing ceiling.
+        if anchor_record.stack != branch.stack || last.stack != branch.stack {
+            return Err(HistoryError::Integrity("page cursor ancestry"));
+        }
+        (Some(anchor), last.parent)
+    } else {
+        let start = request.start.or(branch.head_commit);
+        if let Some(start) = start {
+            let record = commit(tx, start)?.ok_or(HistoryError::Missing(Missing::Commit))?;
+            if record.stack != branch.stack {
+                return Err(HistoryError::Integrity("Commit ownership"));
+            }
+            if request.start.is_some() && !ancestry_contains(tx, branch.head_commit, start)? {
+                return Err(HistoryError::NotInHistory("Commit"));
+            }
+        }
+        (start, start)
+    };
+    let Some(start) = start else {
+        return Ok(PageResult {
+            records: Vec::new(),
+            continuation: None,
+        });
+    };
+    let mut records = Vec::new();
+    while let Some(id) = current {
+        if records.len() > capacity {
+            break;
+        }
+        let record = commit(tx, id)?.ok_or(HistoryError::Integrity("Commit chain"))?;
+        if record.stack != branch.stack {
+            return Err(HistoryError::Integrity("Commit ownership"));
+        }
+        current = record.parent;
+        records.push(record);
+    }
+    let more = records.len() > capacity;
+    query::page(records, capacity, more, |record| {
+        query::encode(
+            context,
+            &Cursor {
+                anchor: start.as_slice().to_vec(),
+                position: record.id.as_slice().to_vec(),
+            },
+        )
+        .map(Some)
+    })
+}

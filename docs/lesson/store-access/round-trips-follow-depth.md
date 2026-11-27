@@ -67,7 +67,7 @@ are **measured**, one sample, in the named commit's own base and head arms.
   `directory_bindings` diffs them 128 at a time, both root pages of a window in one
   demand of at most 2 MiB. Measured C4s4 `bindings` 11,403 → 2,056 (`0e8c0a79ae`).
   Lives in `core/crates/layerfs-content/src/compare/tree.rs` (`directory_bindings`,
-  `new_bindings`), called from `engine/crates/layerfs-store-service/src/store/hints.rs`
+  `new_bindings`), called from `engine/crates/layerfs-store-service/src/workspace/commit/hints.rs`
   (`collect_new_bindings`).
 - **F2, publication waves** (write side). Before: a ~60 B similar file's ring proposal
   was often still unpublished in the same Save, so `register_ready` published it first,
@@ -75,19 +75,19 @@ are **measured**, one sample, in the named commit's own base and head arms.
   (`SAVE_PENDING_BASE_BYTES`) and holds winners to the end of the wave
   (`SAVE_DEFERRED_BYTES`). Measured B1 5,309 → 1,405, B6e 4,508 → 891 (base
   `e11d8c8d0f`); stored bytes changed slightly and were reported. Lives in
-  `core/crates/layerfs-storage/src/save/select.rs` and `save/deferred.rs`.
+  `core/crates/layerfs-storage/src/save/select/representation.rs` and `save/deferred.rs`.
 - **F3, directory-rewrite base reads.** Before: one point read per base directory
   rewritten or removed (an lldb trace corrected the spec's entry point). Now a window's
   base roots are read in grouped demands of at most 256 pages (`RootsAhead`), each row
   decodes its fetched page (`fetched_root`), and chains are located a level at a time
   (`chains` in `core/crates/layerfs-storage/src/read/prefetch.rs`). Measured C4s4
   construct 8,514 → 2,021, B2 1,722 → 322 (`945393a43f`). Lives in
-  `core/crates/layerfs-content/src/filesystem/directory/ahead.rs` and
+  `core/crates/layerfs-content/src/filesystem/tree/directory/read_ahead.rs` and
   `sorted/finish.rs` (`apply_directory_changes`).
 - **F4, inode values shared across phases.** Before: logical counting and bindings
   each walked both inode tables and read-ahead gave up early, so each changed leaf was
   a point read and a value lookup, twice. Now `logical.count` walks once
-  (`logical_size_and_directories` in `core/crates/layerfs-content/src/filesystem/statistics.rs`)
+  (`logical_size_and_directories` in `core/crates/layerfs-content/src/filesystem/construction/statistics.rs`)
   and hands the changed directories to `bindings`. The Save prepares a demand's leaves
   ahead with one value lookup per window (`prepare_leaves` in
   `core/crates/layerfs-storage/src/encoding/pool/read.rs`: 128 leaves, 1 MiB, the
@@ -98,12 +98,12 @@ are **measured**, one sample, in the named commit's own base and head arms.
   and fetches roots in batches of at most 4 MiB; a file whose overlay inherits every
   byte keeps its base root with no read (`files_kept`). Measured reader trips C3
   356 → 0, C4 726 → 1, B5e 384 → 6 (`961cfe242d`). Lives in
-  `engine/crates/layerfs-workspace/src/construction/namespace/files.rs` and `base/batch.rs`.
+  `engine/crates/layerfs-vfs/src/construction/namespace/base_files.rs` and `base/batch.rs`.
 
 ### #815 Stage 1: joined locate and read (a measured miss)
 
 The joined fetch (`b829bda882`) returned eligible metadata packs inside the existing
-locate reply (`admit_joined_packs` in `core/crates/layerfs-storage/src/read/joined.rs`).
+locate reply (`admit_joined_packs` in `core/crates/layerfs-storage/src/read/source/joined.rs`).
 C4s4 went 568 → 569 trips, 472 statements in both arms; C4 146 → 147, the extra trip a
 first-use prepare. Construction still issued each read when it reached it, so every
 dependent wait stayed. The cost was the chain of waits, not the number of statements.
@@ -118,7 +118,7 @@ dependent wait stayed. The cost was the chain of waits, not the number of statem
   (`eligible`, `run`, `run_tail`), selected by `publish_captured` in `storage/provider.rs`.
 - **Grouped inode chain and pooled-value reads.** The sorted inode merge looks at the
   next 1,024 serials and fetches up to 64 touched leaves in one demand (`Leaves::read`
-  in `core/crates/layerfs-content/src/filesystem/sorted/read_ahead.rs`). A pooled-value
+  in `core/crates/layerfs-content/src/filesystem/tree/pages/read_ahead.rs`). A pooled-value
   demand above 4,096 ordinals sends two statements in one flight (`inode_values_pair`
   in `metadata/reads.rs`). No separate count; see the combined result below.
 - **Reuse of captured base pages.** Pages the Workspace's captured base already holds
@@ -130,10 +130,10 @@ dependent wait stayed. The cost was the chain of waits, not the number of statem
 - **Binding transition.** C4s4 `bindings` still had 98 trips. Now the canonical
   directory merge records each binding as it consumes it, and the final inode merge
   proves each parent's rebuilt root before Commit uses the rows (`BindingChanges` in
-  `core/crates/layerfs-content/src/filesystem/binding_changes.rs`). An early build of it
+  `core/crates/layerfs-content/src/filesystem/construction/captured_bindings.rs`). An early build of it
   measured 171 C4s4 trips against the prototype's 288 (`216df82fc2`, other sources).
 - **Retained locators, fenced overflow writes.** Checked locators stay with the capture
-  within 196 KiB (`CapturedLocators` in `core/crates/layerfs-storage/src/read/captured.rs`);
+  within 196 KiB (`CapturedLocators` in `core/crates/layerfs-storage/src/read/source/captured.rs`);
   overflow binding batches go as fenced flights (`publish_captured_tail`). C4s4 242 → 203
   cold (`db54e9d75f`).
 

@@ -1,5 +1,5 @@
 //! Persisted construction and physical representation policy.
-use crate::backend::{records::BackendError, Transaction};
+use crate::backend::{error::BackendError, Transaction};
 use layerfs_storage::{port::PersistenceError, StoragePolicy};
 pub(crate) fn read(tx: &Transaction<'_>) -> Result<StoragePolicy, PersistenceError> {
     let rows=tx.query("SELECT format_profile,small_file_threshold_bytes,whole_file_delta_max_depth,chunk_delta_max_depth,metadata_delta_max_depth,schema_version FROM store_policy WHERE id=1",vec![])?;

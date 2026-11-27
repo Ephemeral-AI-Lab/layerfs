@@ -13,35 +13,47 @@ nothing in engine or core depends on it, and the API layer calls it.
 
 ## Picture
 
-Each entity crate keeps records and calls; its driver does the work on a
-kernel, a provider or a bucket, takes every input as an argument and
-writes no record.
+Each entity crate keeps records and calls; its driver module
+(`layerfs-machine` `platform/`, `layerfs-store` `backup/`,
+`layerfs-sandbox` `backend/`) does the work on a kernel, a provider or a
+bucket, takes every input as an argument and writes no record.
 
 ```text
-                     layerfs-control
-          worker server, inventory, doctor, migrate,
-          machine/Store/project/backup calls + checks
+                     layerfs-inspect             layerfs-workspace
+          worker server, inventory, doctor,      Workspace calls, exec,
+          machine/Store/project/backup calls     unmount guard
+          + checks                                      |
+                            |                           |
+                            v                           |
+              +----> layerfs-sandbox <------------------+
+              |      records, launch, exec, daemon channel;
+              |      backend/: how a Sandbox runs (process, namespaces)
+              |             |
+              |             v
+              +----> layerfs-store
+              |      Store and project records and calls;
+              |      backup/: how a Store is backed up
+              |      (local_folder, minio, r2)
+              |             |
+              |             v
+              +----> layerfs-machine
+                     machine records and calls; platform/ (feature
+                     machine): where Sandboxes run (host, docker,
+                     apple_container, lima)
                             |
                             v
-  entity crates             |              drivers
-  -------------             v              -------
-              +----> layerfs-sandbox ----> layerfs-sandbox-backend
-              |             |               (how a Sandbox runs:
-              |             v                process, namespaces)
-              |      layerfs-store ------> layerfs-bucket
-              |             |               (how a Store is backed up:
-              |             v                local_folder, minio, r2)
-              +----> layerfs-machine ----> layerfs-platform
-                            |   (feature    (where Sandboxes run:
-                            v    machine)    host, docker,
-                      layerfs-home           apple_container, lima)
+                      layerfs-home
                  (home, records, locks,
                   op, names, secrets, logs)
 ```
 
-Arrows follow each crate's `[dependencies]`; edges may skip down the chain,
-never up. `layerfs-machine` reaches `layerfs-platform` only through its
-`machine` feature, which the guest worker's build leaves off
+Arrows follow each crate's `[dependencies]`; edges may skip down the chain
+(`layerfs-workspace` also reaches `layerfs-store` and `layerfs-machine`
+directly), never up. What a machine or a Store reads of the Sandboxes that
+use it comes through a trait, `layerfs_machine::MachineUsers` or
+`layerfs_store::StoreUsers`, implemented in `layerfs_sandbox::users`.
+`layerfs-machine` builds its platform adapters only with its `machine`
+feature, which the guest worker's build leaves off
 ([`layerfs-machine/Cargo.toml`](../../../control/crates/layerfs-machine/Cargo.toml)).
 
 ## Topics
@@ -49,11 +61,11 @@ never up. `layerfs-machine` reaches `layerfs-platform` only through its
 | Topic | Crates | What it covers | Pages |
 | --- | --- | --- | --- |
 | [Home](home/README.md) | `layerfs-home` | Opening a home, layout, record files, locks, the `op` intent, names, secrets, traces and the call log; the inventory of relationships | none |
-| [Machines](machines/README.md) | `layerfs-machine`, `layerfs-platform` | Machine records and calls; one adapter per platform; the support table | [Platforms](machines/platforms.md), [Workers and reach](machines/workers-and-reach.md) |
+| [Machines](machines/README.md) | `layerfs-machine` | Machine records and calls; one adapter per platform; the support table | [Platforms](machines/platforms.md), [Workers and reach](machines/workers-and-reach.md) |
 | [Stores and projects](stores-and-projects/README.md) | `layerfs-store` (but `backup/`) | Store and project records, placement, leases, the open-Store cache, Store calls | [SQLite and PostgreSQL](stores-and-projects/sqlite-and-postgresql.md), [Projects](stores-and-projects/projects.md) |
-| [Sandboxes](sandboxes/README.md) | `layerfs-sandbox`, `layerfs-sandbox-backend` | Sandbox records and lifecycle, Workspace calls, exec; the two backends; the inspect route | [Daemon channel and exec](sandboxes/daemon-channel-and-exec.md), [Backends](sandboxes/backends.md), [Inspection](sandboxes/inspect.md) |
-| [Backups](backups/README.md) | `layerfs-store` `backup/`, `layerfs-bucket` | Whole-Store backup to a bucket and restore | [Buckets](backups/buckets.md) |
-| [Doctor](doctor/README.md) | `layerfs-control` `doctor/` | Read-only home, host, machine, Sandbox, Store and backup checks | [Checks](doctor/checks.md) |
+| [Sandboxes](sandboxes/README.md) | `layerfs-sandbox`, `layerfs-workspace` | Sandbox records and lifecycle, Workspace calls, exec; the two backends; the inspect route | [Daemon channel and exec](sandboxes/daemon-channel-and-exec.md), [Backends](sandboxes/backends.md), [Inspection](sandboxes/inspect.md) |
+| [Backups](backups/README.md) | `layerfs-store` `backup/` | Whole-Store backup to a bucket and restore | [Buckets](backups/buckets.md) |
+| [Doctor](doctor/README.md) | `layerfs-inspect` `doctor/` | Read-only home, host, machine, Sandbox, Store and backup checks | [Checks](doctor/checks.md) |
 
 ## Where each call runs
 
@@ -64,35 +76,35 @@ machine's worker, or in a Sandbox's daemon.
 
 | Call | Caller's process | Machine's worker (when the Store's or Sandbox's machine is not local) | Sandbox daemon | Source |
 | --- | --- | --- | --- | --- |
-| `branch.*`, `commit.*`, `file.*` on a PostgreSQL Store | all of it: URL from the record, password resolved now, under the Store's lease; except the CLI's `file.read`, `file.stat` and `file.list` on a Store whose record holds a `login_revision`, which go to the host worker's held sessions (#819 P-B) | — | — | [`call.rs`](../../../control/crates/layerfs-store/src/call.rs), [`host_postgresql.rs`](../../../control/crates/layerfs-store/src/host_postgresql.rs) |
-| the same on a sqlite Store, machine local | all of it, on `store/<s>/store.sqlite` | — | — | [`place.rs`](../../../control/crates/layerfs-store/src/place.rs) |
-| the same on a sqlite Store, other machine | holds the lease, sends the record | `store.call`: opens `<root>/store/<s>/store.sqlite`, holds the lease there | — | `place.rs`, [`worker_server.rs`](../../../control/crates/layerfs-control/src/worker_server.rs) |
-| `project.init` | checks; walks and copies the folder | `project.stage` (parts), then `project.init` | — | [`project/family.rs`](../../../control/crates/layerfs-store/src/project/family.rs), [`project/send.rs`](../../../control/crates/layerfs-store/src/project/send.rs) |
-| `project.export` | destination checks, strict local writer, atomic rename | `project.export` streams pinned tree records | — | [`project/export/route.rs`](../../../control/crates/layerfs-store/src/project/export/route.rs) |
-| `project.delete` | record, durable intent and lock work | `project.delete.admit`, `project.delete`, `project.delete.entry`, `project.delete.release` | — | [`project/delete.rs`](../../../control/crates/layerfs-store/src/project/delete.rs), `project/family.rs` |
-| `store.move` | phases, records, locks | `store.file` steps on the source and target | — | [`sqlite/transfer/phases.rs`](../../../control/crates/layerfs-store/src/sqlite/transfer/phases.rs) |
-| `store.remove` | records, locks | `store.file` `remove` | — | [`sqlite/remove.rs`](../../../control/crates/layerfs-store/src/sqlite/remove.rs) |
-| `store.list`, `store.get` | records only; `--with live`: leases and `store.file` `stat`, compaction record and heads, when reached; `--with stats` opens the Store; `--with format` reads the format from the file's header or one `SELECT` | `store.file` `stat`, when reached; `store.format` for `--with format` | — | [`get.rs`](../../../control/crates/layerfs-store/src/get.rs), [`live.rs`](../../../control/crates/layerfs-store/src/live.rs), [`list.rs`](../../../control/crates/layerfs-store/src/list.rs) |
-| `store.compact` | the Store's lease; PostgreSQL dials its URL, a sqlite file here rebuilds in this process | `store.compact`: a sqlite file on that machine rebuilds there (spec S6, #42 D5) | — | [`compact.rs`](../../../control/crates/layerfs-store/src/compact.rs) |
-| `store.upgrade` | the exclusive `op` and the Store's lease; PostgreSQL dials its URL, a sqlite file here upgrades in this process | `store.upgrade` (and `store.cancel` on a second connection): a sqlite file on that machine upgrades there (#804) | — | [`upgrade.rs`](../../../control/crates/layerfs-store/src/upgrade.rs) |
-| `store.attach` | records; the Store's address and login are dialled here for a locally executing machine | `store.reach`: the machine's check | — | [`layerfs-control/src/store.rs`](../../../control/crates/layerfs-control/src/store.rs) |
-| `backup.create` | uploads to the bucket | `store.file` `stage`, `read`, `unstage` | — | [`backup/create.rs`](../../../control/crates/layerfs-store/src/backup/create.rs) |
+| `branch.*`, `commit.*`, `file.*` on a PostgreSQL Store | all of it: URL from the record, password resolved now, under the Store's lease; except the CLI's `file.read`, `file.stat` and `file.list` on a Store whose record holds a `login_revision`, which go to the host worker's held sessions (#819 P-B) | — | — | [`call.rs`](../../../control/crates/layerfs-store/src/admin/route/call.rs), [`postgresql.rs`](../../../control/crates/layerfs-store/src/admin/host_worker/postgresql.rs) |
+| the same on a sqlite Store, machine local | all of it, on `store/<s>/store.sqlite` | — | — | [`executor.rs`](../../../control/crates/layerfs-store/src/admin/route/executor.rs) |
+| the same on a sqlite Store, other machine | holds the lease, sends the record | `store.call`: opens `<root>/store/<s>/store.sqlite`, holds the lease there | — | `place.rs`, [`serve.rs`](../../../api/crates/layerfs-api/src/worker/serve.rs) |
+| `project.init` | checks; walks and copies the folder | `project.stage` (parts), then `project.init` | — | [`init/run.rs`](../../../control/crates/layerfs-store/src/data/project/init/run.rs), [`init/send.rs`](../../../control/crates/layerfs-store/src/data/project/init/send.rs) |
+| `project.export` | destination checks, strict local writer, atomic rename | `project.export` streams pinned tree records | — | [`project/export/run.rs`](../../../control/crates/layerfs-store/src/data/project/export/run.rs) |
+| `project.delete` | record, durable intent and lock work | `project.delete.admit`, `project.delete`, `project.delete.entry`, `project.delete.release` | — | [`delete/run.rs`](../../../control/crates/layerfs-store/src/data/project/delete/run.rs), `project/family.rs` |
+| `store.move` | phases, records, locks | `store.file` steps on the source and target | — | [`backend/sqlite/move_phases.rs`](../../../control/crates/layerfs-store/src/backend/sqlite/move_phases.rs) |
+| `store.remove` | records, locks | `store.file` `remove` | — | [`sqlite/remove.rs`](../../../control/crates/layerfs-store/src/backend/sqlite/remove.rs) |
+| `store.list`, `store.get` | records only; `--with live`: leases and `store.file` `stat`, compaction record and heads, when reached; `--with stats` opens the Store; `--with format` reads the format from the file's header or one `SELECT` | `store.file` `stat`, when reached; `store.format` for `--with format` | — | [`get.rs`](../../../control/crates/layerfs-store/src/admin/status/get.rs), [`live.rs`](../../../control/crates/layerfs-store/src/admin/status/live.rs), [`list.rs`](../../../control/crates/layerfs-store/src/admin/status/list.rs) |
+| `store.compact` | the Store's lease; PostgreSQL dials its URL, a sqlite file here rebuilds in this process | `store.compact`: a sqlite file on that machine rebuilds there (spec S6, #42 D5) | — | [`compact.rs`](../../../control/crates/layerfs-store/src/admin/maintenance/compact.rs) |
+| `store.upgrade` | the exclusive `op` and the Store's lease; PostgreSQL dials its URL, a sqlite file here upgrades in this process | `store.upgrade` (and `store.cancel` on a second connection): a sqlite file on that machine upgrades there (#804) | — | [`upgrade.rs`](../../../control/crates/layerfs-store/src/admin/maintenance/upgrade.rs) |
+| `store.attach` | records; the Store's address and login are dialled here for a locally executing machine | `store.reach`: the machine's check | — | [`src/admin/with_users.rs`](../../../control/crates/layerfs-store/src/admin/with_users.rs) |
+| `backup.create` | uploads to the bucket | `store.file` `stage`, `read`, `unstage` | — | [`jobs/create.rs`](../../../control/crates/layerfs-store/src/backup/jobs/create.rs) |
 | `machine.*`, `store.create`, `store.connect`, `store.disconnect`, `store.detach`, `backup.connect`, `backup.disconnect`, `backup.list`, `backup.restore` | all of it | — | — | [Machines](machines/README.md), [Backups](backups/README.md) |
-| `sandbox.create`, `sandbox.remove` | records, intent | `sandbox.host` with the internal host ops `sandbox.create` and `sandbox.close` (the worker runs the same host code on its own `linux-host`) | started, stopped | [`route.rs`](../../../control/crates/layerfs-sandbox/src/route.rs), [`remove.rs`](../../../control/crates/layerfs-sandbox/src/remove.rs), [`host/call.rs`](../../../control/crates/layerfs-sandbox/src/host/call.rs) |
-| `workspace.mount`, `commit`, `unmount`, `status` on a forwarded Sandbox | dials the daemon directly | — | serves it | [`direct.rs`](../../../control/crates/layerfs-sandbox/src/direct.rs) |
+| `sandbox.create`, `sandbox.remove` | records, intent | `sandbox.host` with the internal host ops `sandbox.create` and `sandbox.close` (the worker runs the same host code on its own `linux-host`) | started, stopped | [`send.rs`](../../../control/crates/layerfs-sandbox/src/route/machine/send.rs), [`remove.rs`](../../../control/crates/layerfs-sandbox/src/lifecycle/remove.rs), [`machine/call.rs`](../../../control/crates/layerfs-sandbox/src/route/machine/call.rs) |
+| `workspace.mount`, `commit`, `unmount`, `status` on a forwarded Sandbox | dials the daemon directly | — | serves it | [`direct.rs`](../../../control/crates/layerfs-sandbox/src/route/direct.rs) |
 | the same, not forwarded | — (local machine: dials the daemon) | `sandbox.host`; the worker dials the daemon | serves it | `route.rs` |
-| `workspace.exec` | checks the directory; keeps the command's record when forwarded (route `machine:<name>`) | runs `bash -c` through the Sandbox runtime (always the machine) | — | [`workspace/exec.rs`](../../../control/crates/layerfs-sandbox/src/workspace/exec.rs) |
-| `workspace.cancel` (`--exec E` for one command) | where the record is: here when forwarded (then rides `sandbox.host`) | else here; an unreached worker answers `{outcome: "unknown"}`, nothing changed | — | `workspace/exec.rs`, [`exec/cancel.rs`](../../../control/crates/layerfs-sandbox/src/exec/cancel.rs) |
+| `workspace.exec` | checks the directory; keeps the command's record when forwarded (route `machine:<name>`) | runs `bash -c` through the Sandbox runtime (always the machine) | — | [`exec/call.rs`](../../../control/crates/layerfs-workspace/src/exec/call.rs) |
+| `workspace.cancel` (`--exec E` for one command) | where the record is: here when forwarded (then rides `sandbox.host`) | else here; an unreached worker answers `{outcome: "unknown"}`, nothing changed | — | `workspace/exec.rs`, [`exec/settle.rs`](../../../control/crates/layerfs-sandbox/src/exec/settle.rs) |
 
 | Platform | sqlite Store calls on macOS / Linux / Windows | Workspace calls skip the worker? | Source |
 | --- | --- | --- | --- |
-| `host` | caller / caller / worker | yes (the daemon is on this host) | [`host/profile.rs`](../../../control/crates/layerfs-platform/src/platforms/host/profile.rs) |
-| `docker` | worker / worker / — | no: ports publish only at container start | [`docker/adapter.rs`](../../../control/crates/layerfs-platform/src/platforms/docker/adapter.rs) |
-| `apple-container` | worker / — / — | no: ports publish only at create | [`apple_container/adapter.rs`](../../../control/crates/layerfs-platform/src/platforms/apple_container/adapter.rs) |
-| `lima` | worker / — / — | yes: an `ssh -L` forward | [`lima/adapter.rs`](../../../control/crates/layerfs-platform/src/platforms/lima/adapter.rs) |
+| `host` | caller / caller / worker | yes (the daemon is on this host) | [`host/profile.rs`](../../../control/crates/layerfs-machine/src/platform/host/profile.rs) |
+| `docker` | worker / worker / — | no: ports publish only at container start | [`docker/adapter.rs`](../../../control/crates/layerfs-machine/src/platform/docker/adapter.rs) |
+| `apple-container` | worker / — / — | no: ports publish only at create | [`apple_container/adapter.rs`](../../../control/crates/layerfs-machine/src/platform/apple_container/adapter.rs) |
+| `lima` | worker / — / — | yes: an `ssh -L` forward | [`lima/adapter.rs`](../../../control/crates/layerfs-machine/src/platform/lima/adapter.rs) |
 
 The machine whose calls run in this process
-([`layerfs_machine::in_process`](../../../control/crates/layerfs-machine/src/local.rs):
+([`layerfs_machine::in_process`](../../../control/crates/layerfs-machine/src/route/runs_here.rs):
 the built-in machine whose platform's executor is `Local` here, the host machine (`macos-host` or `linux-host`) on
 macOS and Linux, none on Windows) is where a sqlite Store goes when
 `store create` names no machine, one end of every `store move`, and the
@@ -107,8 +119,8 @@ is `Unavailable`, naming `layerfs machine start`. A build without the
 local and every other machine a worker. The daemon serves no Store calls:
 a mount's caller reads no Store (the daemon finds the Branch by name), and
 a status's head read takes the Store's own route
-([`place.rs`](../../../control/crates/layerfs-store/src/place.rs),
-[`direct.rs`](../../../control/crates/layerfs-sandbox/src/direct.rs)).
+([`executor.rs`](../../../control/crates/layerfs-store/src/admin/route/executor.rs),
+[`direct.rs`](../../../control/crates/layerfs-sandbox/src/route/direct.rs)).
 Store calls in a process pass the engine's kernel guard
 ([Stores and projects](stores-and-projects/README.md#invariants)). The
 worker and daemon wire records are in [Bridge](../engine/bridge/README.md)
@@ -122,9 +134,9 @@ registry or factory.
 
 | To add | Trait and match | Touch | Source |
 | --- | --- | --- | --- |
-| a platform | `Adapter`, `adapter()`; facts in `Platform::profile()` | `platforms/<p>/` (`profile.rs`, `adapter.rs`), one `Platform` variant, its `support.rs` rows, conformance arms | [`adapter.rs`](../../../control/crates/layerfs-platform/src/adapter.rs), [Platforms](machines/platforms.md#adding-a-platform) |
-| a Sandbox backend | `BackendAdapter`, `adapter()` | `backend/<b>/`, one `Backend` variant, one arm, one record type | [`backend/adapter.rs`](../../../control/crates/layerfs-sandbox-backend/src/backend/adapter.rs), [Backends](sandboxes/backends.md) |
-| a bucket provider | `Driver` (sealed by a private `Sealed` supertrait) | `bucket/<p>/`, one `Provider` variant in [`backup/link.rs`](../../../control/crates/layerfs-bucket/src/backup/link.rs) | [`bucket/driver.rs`](../../../control/crates/layerfs-bucket/src/bucket/driver.rs), [Buckets](backups/buckets.md) |
+| a platform | `Adapter`, `adapter()`; facts in `Platform::profile()` | `platforms/<p>/` (`profile.rs`, `adapter.rs`), one `Platform` variant, its `support.rs` rows, conformance arms | [`adapter.rs`](../../../control/crates/layerfs-machine/src/platform/adapter.rs), [Platforms](machines/platforms.md#adding-a-platform) |
+| a Sandbox backend | `BackendAdapter`, `adapter()` | `backend/<b>/`, one `Backend` variant, one arm, one record type | [`backend/adapter.rs`](../../../control/crates/layerfs-sandbox/src/backend/adapter.rs), [Backends](sandboxes/backends.md) |
+| a bucket provider | `Driver` (sealed by a private `Sealed` supertrait) | `bucket/<p>/`, one `Provider` variant in [`bucket/registry.rs`](../../../control/crates/layerfs-store/src/backup/bucket/registry.rs) | [`bucket/driver.rs`](../../../control/crates/layerfs-store/src/backup/bucket/driver.rs), [Buckets](backups/buckets.md) |
 
 Every refusal of a platform, host and Store kind comes from the one support
 table, and `control/SUPPORT.json` is generated from it
@@ -135,12 +147,12 @@ kind or kernel route is an engine change.
 
 | Rule | Enforced by |
 | --- | --- |
-| sqlite Store calls run in a process on the Store's kernel (the caller on the local host machine, else that machine's worker); PostgreSQL Store calls and bucket I/O run in the caller's process (the CLI's PostgreSQL file reads in the host worker on this computer); a sqlite Store is on exactly one machine; a PostgreSQL Store is on no machine: its Sandboxes run on every machine whose platform runs them | [`place.rs`](../../../control/crates/layerfs-store/src/place.rs), [`support.rs`](../../../control/crates/layerfs-platform/src/support.rs) |
-| Workers listen on loopback behind a secret; one attempt per call, no retry, no replay; an uncertain outcome is reported, never resent | [`worker/client.rs`](../../../control/crates/layerfs-machine/src/worker/client.rs) |
-| A PostgreSQL password is resolved only in the caller, travels only in one worker request and the Sandbox's private daemon setup file, and is never written to a record, log, trace or `Debug` output; the host worker holds one only while a call or a session of that Store needs it, never on disk, with core dumps off (and, on Linux, not dumpable) | [`secrets.rs`](../../../control/crates/layerfs-home/src/secrets.rs), [SQLite and PostgreSQL](stores-and-projects/sqlite-and-postgresql.md#credentials) |
-| Drivers know nothing of the home and write no records | [`layerfs-platform/src/lib.rs`](../../../control/crates/layerfs-platform/src/lib.rs) |
-| Stored and displayed values do not follow internal renames: the `NativeBackend` adapter is stored and shown as `"process"` | [`process/adapter.rs`](../../../control/crates/layerfs-sandbox-backend/src/backend/process/adapter.rs) |
-| sqlite Stores open with the Normal profile (WAL, synchronous=NORMAL), the only SQLite profile; their records carry the label `normal`; Durable execution is `NOT_RUN — disabled by owner until explicit reauthorization` | [`record.rs`](../../../control/crates/layerfs-store/src/record.rs) |
+| sqlite Store calls run in a process on the Store's kernel (the caller on the local host machine, else that machine's worker); PostgreSQL Store calls and bucket I/O run in the caller's process (the CLI's PostgreSQL file reads in the host worker on this computer); a sqlite Store is on exactly one machine; a PostgreSQL Store is on no machine: its Sandboxes run on every machine whose platform runs them | [`executor.rs`](../../../control/crates/layerfs-store/src/admin/route/executor.rs), [`support.rs`](../../../control/crates/layerfs-machine/src/table/support.rs) |
+| Workers listen on loopback behind a secret; one attempt per call, no retry, no replay; an uncertain outcome is reported, never resent | [`guest/client.rs`](../../../control/crates/layerfs-machine/src/route/guest/client.rs) |
+| A PostgreSQL password is resolved only in the caller, travels only in one worker request and the Sandbox's private daemon setup file, and is never written to a record, log, trace or `Debug` output; the host worker holds one only while a call or a session of that Store needs it, never on disk, with core dumps off (and, on Linux, not dumpable) | [`keys.rs`](../../../control/crates/layerfs-home/src/secret/keys.rs), [SQLite and PostgreSQL](stores-and-projects/sqlite-and-postgresql.md#credentials) |
+| Drivers know nothing of the home and write no records | [`src/platform/mod.rs`](../../../control/crates/layerfs-machine/src/platform/mod.rs) |
+| Stored and displayed values do not follow internal renames: the `NativeBackend` adapter is stored and shown as `"process"` | [`process/adapter.rs`](../../../control/crates/layerfs-sandbox/src/backend/process/adapter.rs) |
+| sqlite Stores open with the Normal profile (WAL, synchronous=NORMAL), the only SQLite profile; their records carry the label `normal`; Durable execution is `NOT_RUN — disabled by owner until explicit reauthorization` | [`store.rs`](../../../control/crates/layerfs-store/src/admin/record/store.rs) |
 
 The binding code rules for this layer are in the
 [control guide](../../../control/AGENTS.md).

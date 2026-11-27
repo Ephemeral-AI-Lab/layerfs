@@ -1,8 +1,8 @@
 //! Reclamation of the companion slots no name reaches, at the index bound.
-use super::Orphan;
-use crate::{apple_double_spill::unlink_paths, attributes::Status, kernel::Kernel};
+use super::companions::Orphan;
+use crate::{apple_double::spill::unlink_paths, kernel::Kernel, protocol::attributes::Status};
 use layerfs_content::filesystem::PathName;
-use layerfs_workspace::KernelReadOperation;
+use layerfs_vfs::KernelReadOperation;
 
 impl Kernel {
     /// The companion slots no name reaches any more: one whose main inode

@@ -20,11 +20,11 @@
 //! owner job's failure, an uncertain outcome, a failed reply-ticket step. A
 //! job already submitted is never ended here: its request receives the
 //! original result first.
-use crate::{coherence::reply_order, RequestDisposition};
+use crate::{request::coherence, RequestDisposition};
 use fuser::Errno;
-use layerfs_mount_ports::{
-    operations::{DirectoryFailure, MutationFailure, ReadFailure},
-    ports::Fence,
+use layerfs_vfs::{
+    ports::mount::Fence,
+    requests::{DirectoryFailure, MutationFailure, ReadFailure},
 };
 
 /// The kernel's own abort releases the blocked caller; this errno only ends
@@ -59,11 +59,11 @@ pub(super) async fn mutation(fence: &Fence, failure: MutationFailure) -> Request
     if failure.fenced() {
         fence.replied();
     } else if failure.base_demand().is_none() {
-        return reply_order::retained(failure);
+        return coherence::retained(failure);
     }
     match failure.relinquish().await {
         Ok(()) => RequestDisposition::Complete,
-        Err(failure) => reply_order::retained(failure),
+        Err(failure) => coherence::retained(failure),
     }
 }
 pub(super) async fn directory(fence: &Fence, failure: DirectoryFailure) -> RequestDisposition {

@@ -1,26 +1,26 @@
 //! Whole Store-half Commit over one writable clone of the retained wide preparation.
 #[allow(dead_code)]
-#[path = "../tests/support/complete_bytes.rs"]
+#[path = "../tests/support/complete/bytes.rs"]
 mod bytes;
 #[allow(dead_code)]
-#[path = "e2_startup/records.rs"]
+#[path = "store_accounting/engine_records.rs"]
 mod engine_records;
 #[allow(dead_code)]
-#[path = "../tests/support/complete_fixture.rs"]
+#[path = "../tests/support/complete/fixture.rs"]
 mod fixture;
 #[allow(dead_code)]
-#[path = "e2_startup/json.rs"]
+#[path = "store_accounting/json.rs"]
 mod json;
 #[path = "store_accounting/produce.rs"]
 mod produce;
 #[path = "store_accounting/records.rs"]
 mod records;
 #[allow(dead_code)]
-#[path = "../tests/support/host_install.rs"]
+#[path = "../tests/support/install/host.rs"]
 mod support;
 use layerfs_content::filesystem::{FilesystemRootId, PathName};
-use layerfs_daemon::{store::BindRequest, Owner, OwnerConfig};
 use layerfs_history::{CommitOutcome, WorkspaceId};
+use layerfs_store_service::{store::BindRequest, Owner, OwnerConfig};
 use std::{
     fs::OpenOptions,
     io::{BufRead, Write},

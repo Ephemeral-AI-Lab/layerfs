@@ -15,7 +15,7 @@ use super::{
     connection::{Session, State},
     driver::Error,
 };
-use crate::backend::records::BackendError;
+use crate::backend::error::BackendError;
 use layerfs_telemetry::timer::waits::Wait;
 use postgres::{error::SqlState, types::ToSql, Row, SimpleQueryMessage, Statement};
 use std::{

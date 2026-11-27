@@ -100,6 +100,17 @@ class CounterTests(unittest.TestCase):
         ):
             self.assertEqual(production_loc.crate_layer(name), "control")
 
+    def test_828_crates_and_the_workspace_name_by_folder(self):
+        # #828: the merged engine and control crates; layerfs-workspace was the
+        # engine's crate and is the control layer's, so its folder decides.
+        for name in ("layerfs-protocol", "layerfs-os", "layerfs-vfs", "layerfs-bridge", "layerfs-mount-ports"):
+            self.assertEqual(production_loc.crate_layer(name), "engine")
+        self.assertEqual(production_loc.crate_layer("layerfs-inspect"), "control")
+        engine = Path("/r/engine/crates/layerfs-workspace")
+        control = Path("/r/control/crates/layerfs-workspace")
+        self.assertEqual(production_loc.crate_layer("layerfs-workspace", engine), "engine")
+        self.assertEqual(production_loc.crate_layer("layerfs-workspace", control), "control")
+
     def test_front_ends_are_api_crates_and_nfs_is_engine(self):
         # #533 step 2: the NFS export; the call surface, binary, binding and PyO3 module.
         self.assertEqual(production_loc.crate_layer("layerfs-nfs"), "engine")

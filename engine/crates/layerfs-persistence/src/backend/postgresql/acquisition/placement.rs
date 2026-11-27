@@ -6,17 +6,17 @@
 //! `WRITE_WINDOW_BYTES`, checked by the provider), so a set window is never
 //! larger than a `PUT_ENTRIES` statement.
 use super::{
+    accounting::charge,
     reads::get,
     unit::{values, Writes},
-    writes::{bind, charge},
+    writes::bind,
 };
-use crate::backend::{
-    postgresql::session::transaction::Transaction,
-    records::BackendError,
-    sqlite::acquisition::{
+use crate::{
+    acquisition::{
+        failure::{signed, Failure},
         placement::{plan, Placement},
-        statements::{signed, Failure},
     },
+    backend::{error::BackendError, postgresql::session::transaction::Transaction},
 };
 use layerfs_storage::port::acquisition::{HostIdentity, Owner, Placed};
 use postgres::Row;

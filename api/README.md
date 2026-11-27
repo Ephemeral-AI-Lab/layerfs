@@ -111,7 +111,7 @@ explicit reauthorization. One attempted operation; no retry or replay.
 ## Tests
 
 ```bash
-perl -e 'alarm 120; exec @ARGV' node --test api/node/test/calls.mjs
+perl -e 'alarm 120; exec @ARGV' node --test api/node/test/calls/every-call.test.mjs
 ```
 
 They run over the real addon (build it first) in a private temporary home:

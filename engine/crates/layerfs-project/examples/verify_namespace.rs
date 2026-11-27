@@ -1,7 +1,9 @@
 //! Independent full host-import oracle over public C1, C2 and C5 reads.
 use layerfs_content::{
-    filesystem::attributes::portable::PortableMetadata,
-    filesystem::attributes::read::{read_portable, AttributeReadWork},
+    filesystem::tree::attribute::{
+        portable::PortableMetadata,
+        read::{read_portable, AttributeReadWork},
+    },
     inode_leaf::{InodeKind, InodeValue},
     read_all, FilesystemRead, LogicalPath, ObjectId,
 };

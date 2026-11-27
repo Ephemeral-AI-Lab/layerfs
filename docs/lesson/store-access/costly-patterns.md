@@ -50,7 +50,7 @@ and these calls ran 57–419× slower than on SQLite (5–33× locally) (measure
 
 - **What it looks like.** After the Save, a walk over the old and new roots reads
   each changed directory version with its own locate and value read:
-  `collect_new_bindings` (`engine/crates/layerfs-store-service/src/store/hints.rs`)
+  `collect_new_bindings` (`engine/crates/layerfs-store-service/src/workspace/commit/hints.rs`)
   over `new_bindings` (`core/crates/layerfs-content/src/compare/tree.rs`).
 - **Cost seen.** C4s4 (10,000 files added in 3,942 directories): 15,570 locates and
   1,558 value reads at `ca4be0bf3c`, about 15 s (estimated). After F1 the
@@ -59,10 +59,10 @@ and these calls ran 57–419× slower than on SQLite (5–33× locally) (measure
   98 were left before #816's binding transition (measured,
   [#815 record](https://github.com/Ephemeral-AI-Lab/layerfs/issues/815#issuecomment-7185513233)).
 - **How to see it.** The writer's `SqlWork` trips in the `bindings` phase; pinned by
-  `engine/crates/layerfs-store-service/tests/commit_batched_reads.rs` (`adds`).
+  `engine/crates/layerfs-store-service/tests/commit/batched_reads.rs` (`adds`).
 - **Fix.** Diff 128 changed directories a window (`directory_bindings`), or reuse
   the bindings the directory merge already saw (`BindingChanges` in
-  `core/crates/layerfs-content/src/filesystem/binding_changes.rs`).
+  `core/crates/layerfs-content/src/filesystem/construction/captured_bindings.rs`).
 - **Status.** Fixed: F1 in [#820](https://github.com/Ephemeral-AI-Lab/layerfs/pull/820),
   the certified binding transition in #816. C4s4 is now 203 trips in all.
 
@@ -70,20 +70,20 @@ and these calls ran 57–419× slower than on SQLite (5–33× locally) (measure
 
 - **What it looks like.** Construction rewrites each changed base directory from its
   root page, read on its own, about twice per touched and once per removed directory:
-  `apply_directory_changes` in `core/crates/layerfs-content/src/filesystem/sorted/finish.rs`.
+  `apply_directory_changes` in `core/crates/layerfs-content/src/filesystem/tree/pages/finish.rs`.
 - **Cost seen.** 7,359 trips on the 10k add and 1,443 on B2 (delete `node_modules`)
   at `ca4be0bf3c`; about 6.6 s and 1.3 s (estimated).
 - **How to see it.** Most of `construct` on a wide add; pinned per phase in
   `commit_batched_directories.rs`.
 - **Fix.** Group a window's base roots into demands of `PAGES_AHEAD` = 256 ids
-  (`core/crates/layerfs-content/src/filesystem/directory/ahead.rs`); see
+  (`core/crates/layerfs-content/src/filesystem/tree/directory/read_ahead.rs`); see
   [construction](../../architecture/engine/commit/construction.md#base-directory-reads-810-f3).
 - **Status.** Fixed: F3 in #820. A large directory's deeper pages are read on demand.
 
 ### 3. One write round trip per Save batch or publication wave
 
 - **What it looks like.** A similar tiny file whose ring proposal is still pending
-  forces a publication first (`offer` in `core/crates/layerfs-storage/src/save/select.rs`,
+  forces a publication first (`offer` in `core/crates/layerfs-storage/src/save/select/representation.rs`,
   then `seal_pending` and `register_ready`), about 6 trips each. And each Save batch
   publishes as its own fenced `BEGIN`, lane acquisition, registration and `COMMIT`.
 - **Cost seen.** B1 (npm install, 10,002 files) made 614 waves, about 4.5 s
@@ -92,7 +92,7 @@ and these calls ran 57–419× slower than on SQLite (5–33× locally) (measure
   Its 54 separate Save publications then cost 216 trips; one flight per batch took
   B1 from 713 to 453, 260 saved (measured,
   [#816](https://github.com/Ephemeral-AI-Lab/layerfs/issues/816#issuecomment-7187186832)).
-- **How to see it.** `Diagnostics::publish` (`core/crates/layerfs-storage/src/read/counters.rs`),
+- **How to see it.** `Diagnostics::publish` (`core/crates/layerfs-storage/src/read/source/counters.rs`),
   pinned in `commit_similar_tiny_files.rs`; transactions in `SqlWork`.
 - **Fix.** Decide before publishing (`declared_acquired`, `prefix_cannot_win`); send
   a batch as one fenced flight (`run` in
@@ -120,14 +120,14 @@ and these calls ran 57–419× slower than on SQLite (5–33× locally) (measure
 
 - **What it looks like.** Per changed file, even for `chmod` or `touch`, the Workspace
   reader asks its length (`provided_length` in
-  `engine/crates/layerfs-workspace/src/base/client.rs`), then locates and reads it.
+  `engine/crates/layerfs-vfs/src/base/fetch.rs`), then locates and reads it.
 - **Cost seen.** 725 trips on C4 and 375 on C3 at `ca4be0bf3c`; about 1.2 s and
   0.35 s (estimated).
 - **How to see it.** Workspace-reader trips in the writer/reader split.
   `commit_batched_base_files.rs` pins `content_reads` at 0 for its C3-like shape.
 - **Fix.** Decide a whole inode page together: keep a fully inherited file
-  (`inherited` in `engine/crates/layerfs-workspace/src/construction/captured/kept.rs`),
-  batch the rest (`base_files` in `engine/crates/layerfs-workspace/src/base/batch.rs`).
+  (`inherited` in `engine/crates/layerfs-vfs/src/construction/file/kept.rs`),
+  batch the rest (`base_files` in `engine/crates/layerfs-vfs/src/base/batch.rs`).
 - **Status.** Fixed: F5 in #820. C3 is 36 trips and reads no file content
   (measured, [#810 closing](https://github.com/Ephemeral-AI-Lab/layerfs/issues/810#issuecomment-7203083110)).
 
@@ -135,7 +135,7 @@ and these calls ran 57–419× slower than on SQLite (5–33× locally) (measure
 
 - **What it looks like.** Removing a directory's last binding releases every entry
   under it: `release_zero_count` in
-  `core/crates/layerfs-content/src/filesystem/references/release.rs` reads the
+  `core/crates/layerfs-content/src/filesystem/construction/reference/release.rs` reads the
   removed tree's pages and base records while writing almost nothing.
 - **Cost seen.** B2 at `056e920166`, 11,439 entries deleted: 1,417 directory pages
   and 1,649 objects read in 33 waves, 4 objects written; 114 trips (92 in
@@ -173,7 +173,7 @@ and these calls ran 57–419× slower than on SQLite (5–33× locally) (measure
   Joining helps only where the locate is still its own sequential trip, such as an
   uncached read that locates and then fetches each object; count that path first.
   #818 found one: the SDK's control reader (session 0) caches nothing
-  (`ReadSession::cached`, `engine/crates/layerfs-store-service/src/store/read_handle.rs`),
+  (`ReadSession::cached`, `engine/crates/layerfs-store-service/src/workspace/bind/reader.rs`),
   so each object read is a locate, then a pack fetch (pattern 15).
 - **Status.** In Commit construction, landed in #820 as a measured miss. For the
   uncached SDK reader, joining is proposed in #818 (open).
@@ -182,7 +182,7 @@ and these calls ran 57–419× slower than on SQLite (5–33× locally) (measure
 
 - **What it looks like.** On a cold Commit the Workspace readers fetch base pages one
   demand per round trip (`CanonicalClient` in
-  `engine/crates/layerfs-workspace/src/base/client.rs` misses its cache).
+  `engine/crates/layerfs-vfs/src/base/fetch.rs` misses its cache).
 - **Cost seen.** Reader trips, v2 to tip: B5e 26 to 25, C1 32 to 31, C4s4 38 to 34
   (measured, [#824](https://github.com/Ephemeral-AI-Lab/layerfs/issues/824)). Enough
   to put B5e and C1 over caps set from warm counts.
@@ -194,8 +194,8 @@ and these calls ran 57–419× slower than on SQLite (5–33× locally) (measure
 ### 10. A per-item loop hidden by a cache or size threshold
 
 - **What it looks like.** Init's `logical_size`
-  (`core/crates/layerfs-content/src/filesystem/statistics.rs`, called from
-  `engine/crates/layerfs-project/src/import/init.rs`) reads each file's root alone,
+  (`core/crates/layerfs-content/src/filesystem/construction/statistics.rs`, called from
+  `engine/crates/layerfs-project/src/import/run.rs`) reads each file's root alone,
   hidden until the 4,096-entry locator cache overflows. A directory of 512+ entries
   (`WINDOW_ROWS`) is placed by `place_children` (`postgresql/acquisition/writes.rs`
   in `layerfs-persistence`): per child, `INSERT init_host_file`, then `UPDATE init_entry`.
@@ -223,7 +223,7 @@ and these calls ran 57–419× slower than on SQLite (5–33× locally) (measure
 - **What it looks like.** Each `fs.blame` version reads its Commit row and Branch
   name, the parent's row (again next step), the parent's root, an uncached path
   walk and `node_serial`, one version after another. `fs.revision` (`history` in
-  `engine/crates/layerfs-store-service/src/operator/files.rs`) walks twice a version.
+  `engine/crates/layerfs-store-service/src/families/operator/files.rs`) walks twice a version.
 - **Cost seen.** ~22 trips a version for `blame`, ~40 for `revision`; at 100
   versions 2,325 and 3,890 trips, 31,202 and 50,860 ms at +10 ms (SQLite 173, 286).
   `blame` server reads: 1,212 pages, 252 Commit rows, 250 Branch rows, 101
@@ -261,8 +261,8 @@ and these calls ran 57–419× slower than on SQLite (5–33× locally) (measure
 ### 15. A batched helper that exists but serves one route only
 
 - **What it looks like.** `branch_snapshot_named` (`HistoryCatalog`,
-  `core/crates/layerfs-history/src/contract/catalog.rs`) is called only from mount
-  (`engine/crates/layerfs-store-service/src/store/bind.rs`); the joined locate and
+  `core/crates/layerfs-history/src/catalog/contract.rs`) is called only from mount
+  (`engine/crates/layerfs-store-service/src/workspace/bind/run.rs`); the joined locate and
   pack fetch only through `locate_for_save` (`layerfs-storage/src/read/fetch.rs`).
   Init skips `file_lengths`; only its narrow windows use a multi-row `unnest`.
 - **Cost seen.** None of its own; it is the unused half of patterns 8, 10, 11, 14.

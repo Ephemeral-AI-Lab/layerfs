@@ -13,15 +13,15 @@
 //! limit) and keeps the leading rows that fit, in the same statement, where
 //! a sizing read and a second read did before. Rows are put in key order
 //! here, whatever order the joined statement returns them in.
+use crate::acquisition::{
+    failure::{signed, Failure},
+    payload::metadata_parse,
+};
 use crate::backend::{
+    error::BackendError,
     postgresql::{
         history::statements,
         session::{rows, transaction::Transaction},
-    },
-    records::BackendError,
-    sqlite::acquisition::{
-        metadata_parse,
-        statements::{signed, Failure},
     },
 };
 use layerfs_content::{inode_leaf::InodeKind, ObjectId};
@@ -85,7 +85,7 @@ fn read(
     let owner_at = (first.columns().iter())
         .position(|column| column.name() == "owner_phase")
         .ok_or(BackendError::Integrity)?;
-    super::writes::decoded(first, owner_at)?;
+    super::accounting::decoded(first, owner_at)?;
     if get::<Option<i32>>(first, 0)?.is_none() {
         if found.len() != 1 {
             return Err(BackendError::Integrity.into());
@@ -369,7 +369,7 @@ pub(super) fn bindings(
     Ok(ordered(out))
 }
 
-/// The operation's charges: the owner row alone (`writes::owner`).
+/// The operation's charges: the owner row alone (`accounting::owner`).
 pub(super) fn work(tx: &Transaction<'_>, owner: Owner) -> Result<AcquisitionWork, Failure> {
-    Ok(super::writes::owner(tx, owner)?.1)
+    Ok(super::accounting::owner(tx, owner)?.1)
 }

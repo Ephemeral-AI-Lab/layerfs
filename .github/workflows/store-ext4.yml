@@ -2,7 +2,7 @@
 #
 # A Store opens only on a directory that is private, owned by the test user and
 # on a local filesystem whose locks reach every opener: ext4, xfs or btrfs on
-# Linux (engine/crates/layerfs-store-service/src/kernel_guard.rs). The Store
+# Linux (engine/crates/layerfs-store-service/src/store/kernel_guard.rs). The Store
 # suites keep their Stores in TMPDIR and in $CARGO_TARGET_DIR/tmp, so both must
 # be on such a filesystem, and an overlay checkout or a tmpfs /tmp is refused.
 # tools/ci/test_store_ext4.sh refuses any other directory before cargo starts

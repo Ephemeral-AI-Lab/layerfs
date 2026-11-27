@@ -12,21 +12,22 @@ is in the [archived guide history](../docs/research/history/agents-guides/README
 
 | Crate | Owns | Architecture |
 | --- | --- | --- |
-| `layerfs-bridge` | the process facts the home and the Sandbox driver share (`process`), wire and native records, native install and control channels | [Bridge](../docs/architecture/engine/bridge/README.md) |
+| `layerfs-protocol` | the wire: SDK call shape and values (`sdk`), the daemon control wire (`daemon`), authenticated duplex channels (`duplex`), Store provisioning records (`provision`) | [Bridge](../docs/architecture/engine/bridge/README.md) |
+| `layerfs-os` | what the kernel reports: the process facts the home and the Sandbox driver share (`process`), the macOS mount table and bounded host-name resolution (`network`), the Sandbox runtime layer (`runtime`) | [Bridge](../docs/architecture/engine/bridge/README.md) |
 | `layerfs-daemon` | mounted Workspaces, their overlay connections and locks, mount/Ready/unmount, Commit composition, the direct Store adapter | [Daemon](../docs/architecture/engine/daemon/README.md) |
-| `layerfs-fuse`, `layerfs-nfs`, `layerfs-mount-ports` | the kernel routes: FUSE and NFS as peers over the shared mount ports (#535 D3) | [Kernel routes](../docs/architecture/engine/kernel-routes/README.md) |
+| `layerfs-fuse`, `layerfs-nfs` | the kernel routes: FUSE and NFS as peers over the shared mount ports in `layerfs-vfs` (#535 D3) | [Kernel routes](../docs/architecture/engine/kernel-routes/README.md) |
 | `layerfs-overlay` | each Workspace's own overlay SQLite file | [Overlay](../docs/architecture/engine/overlay/README.md) |
 | `layerfs-persistence` | global Store writes, SQLite and PostgreSQL (#535 D2) | [Store](../docs/architecture/engine/store/README.md) |
 | `layerfs-project` | native import; Project Store Init and install (`layerfs-project::store`) | [Project Init](../docs/architecture/engine/project-init/README.md) |
 | `layerfs-store-service` | the SDK Store calls (`src/methods/`) over `read`, `write` and `history` | [Store calls](../docs/architecture/engine/store-calls/README.md) |
-| `layerfs-workspace` | the Workspace view and captured construction (`CapturedNamespace`) | [Workspace](../docs/architecture/engine/workspace/README.md), [Commit](../docs/architecture/engine/commit/README.md) |
+| `layerfs-vfs` | the Workspace view, captured construction (`CapturedNamespace`) and the shared mount ports (`ports`) | [Workspace](../docs/architecture/engine/workspace/README.md), [Commit](../docs/architecture/engine/commit/README.md) |
 
 - **No engine crate depends on an API or control crate.** Core owns content,
   history, storage and telemetry. Since #535 (owner, 2026-11-03, D1, D4)
   Sandbox and network code live in the [control layer](../control/AGENTS.md)
-  (renamed from connect by layerfs-project#101, D-6): the Sandbox runtime
-  (`layerfs-sandbox-backend`), the machine layer (`layerfs-platform`) and
-  remote storage (`layerfs-bucket`, with `layerfs-store-service`'s `remote/`).
+  (renamed from connect by layerfs-project#101, D-6): the Sandbox backends
+  (`layerfs-sandbox` `backend/`), the machine layer (`layerfs-machine`
+  `platform/`) and backup buckets (`layerfs-store` `backup/`).
 - **Store service methods** (#536 H3): `src/methods/` holds the method table
   (`methods::call`), its argument reader and one file per `file.*`/`branch.*`
   call, and is the facade over `read`, `write` and `history`, which know no
@@ -75,7 +76,7 @@ is in the [archived guide history](../docs/research/history/agents-guides/README
   through its backend-neutral port. Init into an existing Store is a live add
   through the Store's own writer (2.0, #533); the Init that creates, seals and
   installs a Store file stays for Store creation and install. Project's
-  owner-approved first-party edges (Bridge provisioning types, Persistence)
+  owner-approved first-party edges (`layerfs-protocol` provisioning types, Persistence)
   stay bounded by the guard's allowlist; Project uses no third-party database
   driver directly.
 - **Source pins:** `docs/architecture/` describes product source, not release
@@ -151,7 +152,7 @@ lifecycles (names and paths rechecked 2026-11-16):
   bounded capacities on both routes. An incremental file root need not equal a
   fresh reconstruction: retained chunk boundaries can differ.
 - **The product Commit:** `BoundWorkspace::commit_captured` runs
-  [`CapturedNamespace`](crates/layerfs-workspace/src/construction/driver.rs)
+  [`CapturedNamespace`](crates/layerfs-vfs/src/construction/driver.rs)
   inside the Commit driver. It acquires the captured reader and one operation
   owner, hands the driver the original cause on failure, and releases both
   only once the outcome is known, keeping them with the failure when it is
@@ -362,5 +363,5 @@ dependency change is authorized.
 | Crate | Allowed module | Why |
 | --- | --- | --- |
 | `layerfs-persistence` | `src/backend/sqlite/lifecycle/file_control.rs`, macOS only | sets and reads back `SQLITE_FCNTL_PERSIST_WAL` under sole seal ownership and on a live-Store snapshot's own new destination connection (#506); owner authorization 2026-10-07, "Approve the narrowly audited seal wrapper" ([decision](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/307/SEAL-PERSIST-WAL-DECISION-20261007.md)); no manual sidecar deletion |
-| `layerfs-bridge` | `src/process/darwin.rs`, macOS only | `proc_pidinfo`, `proc_listallpids` and the `sysctl` boot id, each with its SAFETY comment; moved below the drivers by layerfs-project#112 (finding R10, accepted 2026-11-06, #101 M-3) |
-| `layerfs-bridge` | `src/process/inherit.rs`, Unix | `Command::pre_exec` marking every descriptor above stderr close-on-exec in a spawned host worker (Linux `close_range(3, ~0, CLOSE_RANGE_CLOEXEC)`, else `fcntl` over the descriptors listed before the fork), each with its SAFETY comment; #833 review finding 1, owner approved 2026-11-27 ("Approve it") |
+| `layerfs-os` | `src/process/darwin.rs`, macOS only | `proc_pidinfo`, `proc_listallpids` and the `sysctl` boot id, each with its SAFETY comment; moved below the drivers by layerfs-project#112 (finding R10, accepted 2026-11-06, #101 M-3), into `layerfs-bridge` (now `layerfs-os`, #828) |
+| `layerfs-os` | `src/process/inherit.rs`, Unix | `Command::pre_exec` marking every descriptor above stderr close-on-exec in a spawned host worker (Linux `close_range(3, ~0, CLOSE_RANGE_CLOEXEC)`, else `fcntl` over the descriptors listed before the fork), each with its SAFETY comment; #833 review finding 1, owner approved 2026-11-27 ("Approve it") |

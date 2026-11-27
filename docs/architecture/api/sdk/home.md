@@ -12,7 +12,7 @@ call to list or remove it. `home.doctor` is one of
 
 | | |
 | --- | --- |
-| Source | [`api/crates/layerfs-api/src/home`](../../../../api/crates/layerfs-api/src/home) (one file per call), [`layerfs-control/src/home.rs`](../../../../control/crates/layerfs-control/src/home.rs), [`layerfs-control/src/home_tree.rs`](../../../../control/crates/layerfs-control/src/home_tree.rs), [`layerfs-home/src/logs.rs`](../../../../control/crates/layerfs-home/src/logs.rs), [`layerfs-home/src/home/generation.rs`](../../../../control/crates/layerfs-home/src/home/generation.rs) |
+| Source | [`crates/layerfs-api/src/families/home`](../../../../api/crates/layerfs-api/src/families/home) (one file per call), [`src/home/get.rs`](../../../../control/crates/layerfs-inspect/src/home/get.rs), [`src/home/tree.rs`](../../../../control/crates/layerfs-inspect/src/home/tree.rs), [`src/log/calls.rs`](../../../../control/crates/layerfs-home/src/log/calls.rs), [`layerfs-home/src/record/generation.rs`](../../../../control/crates/layerfs-home/src/record/generation.rs) |
 | Runs by default | the caller's process; `doctor` also asks each running machine's worker. `init`, `get` and `doctor` are not opened by the dispatcher (`Call.opens` is false): `init` opens the home itself, the others never do. `get`, `log` and `clear_log` are `quiet`: they write no call-log line |
 | Design | [Home](../../control/home/README.md), [opening a home](../../control/home/README.md#opening-a-home), [Doctors](../../control/doctor/README.md) |
 | Clients | `layerfs.home` is this family (`layerfs.home.get()`, `layerfs.home.init()`); a client's home is the one given to `client()` and is no field of it |
@@ -107,7 +107,7 @@ and it answers for a home that does not exist yet, creating nothing.
 | Field | Meaning |
 | --- | --- |
 | `home` | the home's path |
-| `state`, `reason`, `fix` | `ready`, or `broken` with why and the one shell line that fixes it ([`state.rs`](../../../../control/crates/layerfs-home/src/state.rs)): `missing` (no folder, or one holding only `layerfs.lock`, the integration folders `runtime/`, `job/`, `stat/`, `preset/` and `.DS_Store`; `layerfs home init`), `outdated` (a folder that is not a LayerFS 2.0 home: a `layerfs.json` of another layout, or other files and no `layerfs.json`; `mv <home> <home>.old && layerfs home init`), `failed` (a `layerfs.json` this build cannot read; `message` says why; no fix line) |
+| `state`, `reason`, `fix` | `ready`, or `broken` with why and the one shell line that fixes it ([`state.rs`](../../../../control/crates/layerfs-home/src/reply/state.rs)): `missing` (no folder, or one holding only `layerfs.lock`, the integration folders `runtime/`, `job/`, `stat/`, `preset/` and `.DS_Store`; `layerfs home init`), `outdated` (a folder that is not a LayerFS 2.0 home: a `layerfs.json` of another layout, or other files and no `layerfs.json`; `mv <home> <home>.old && layerfs home init`), `failed` (a `layerfs.json` this build cannot read; `message` says why; no fix line) |
 | `version` | this build's version |
 | `generation` | the home's [generation](../../control/home/README.md#the-generation-counter): a number that moves when a record is written or removed and never for a read. Null unless the home is ready |
 | `message` | a sentence saying what is wrong, null when ready |
@@ -138,7 +138,7 @@ description, socket, candidates`. It needs no home; a build without the
 were `machine.platforms`, removed with no alias.
 
 **`--with tree`** adds `tree: { machines, stores, buckets }` from the home's
-records only ([`home_tree.rs`](../../../../control/crates/layerfs-control/src/home_tree.rs)):
+records only ([`tree.rs`](../../../../control/crates/layerfs-inspect/src/home/tree.rs)):
 it dials nothing, and is null unless the home is ready.
 
 | Node | Long form | Short form |

@@ -7,8 +7,7 @@ use super::{
 use crate::{
     encoding::{codec::DecompressionWorkspace, delta::read::stored_base, GroupCache},
     error::{StorageError, StorageResult},
-    location::ObjectLocation,
-    source::Source,
+    location::{ObjectLocation, Source},
 };
 use layerfs_content::ObjectId;
 use std::collections::{BTreeMap, BTreeSet};

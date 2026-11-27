@@ -6,13 +6,12 @@
 //! with `a`'s `/.lww`, and a clean result becomes one Commit with two parents.
 //! A conflict creates nothing. Publishing is a compare-and-swap on main's
 //! head by default, and reports the main Layers a forced publication skipped.
-use super::lookup::{
+use super::resolve::{self, Named};
+use crate::lookup::{
     self as args, branch_node, commit_value, hex, history, invalid, layer_value, node_text, refuse,
     root, short, Answer,
 };
-use super::resolve::{self, Named};
 use crate::store::{CommitError, Store};
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_content::{
     filesystem::FilesystemRootId,
     merge::{merge_roots, MergeInput, MergeUnit, RulesFrom, Units},
@@ -22,7 +21,8 @@ use layerfs_history::{
     CommitMeta, CommitVia, ForkRequest, ForkSource, HistoryError, LayerId, LayerStackRecord,
     MergeCommit, MergeHead, MergeSide, NodeId, MAXIMUM_PAGE_RECORDS,
 };
-use layerfs_workspace::InodeSerials;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
+use layerfs_vfs::InodeSerials;
 use std::sync::Arc;
 
 /// The name of the project's line of Layers.
@@ -43,7 +43,7 @@ fn side(
     name: &str,
 ) -> Result<
     (MergeSide, NodeId, Option<layerfs_history::BranchRecord>),
-    layerfs_bridge::control::SdkRefusal,
+    layerfs_protocol::sdk::SdkRefusal,
 > {
     if name == MAIN {
         return Ok((MergeSide::Main, NodeId::Layer(stack.head_layer), None));
@@ -159,7 +159,9 @@ pub fn list_commits(
                 continue;
             }
             let cost = record.meta.message.as_ref().map_or(0, String::len) + 1024;
-            if items.len() == limit || spent + cost > crate::read::reads::REPLY_BUDGET {
+            if items.len() == limit
+                || spent + cost > crate::filesystem::tree::positional::REPLY_BUDGET
+            {
                 more = true;
                 break 'pages;
             }
@@ -204,7 +206,7 @@ pub struct Merge<'a> {
 /// nothing.
 pub fn merge(store: &Arc<Store>, stack: &LayerStackRecord, request: &Merge<'_>) -> Answer {
     let name = request.into.unwrap_or(request.left);
-    let admission = crate::history::admission::SharedIntent::begin(
+    let admission = crate::history::gc_admission::SharedIntent::begin(
         store.history(),
         layerfs_history::records::GcIntentKind::Merge,
         stack,
@@ -345,13 +347,13 @@ fn merge_inner(store: &Arc<Store>, stack: &LayerStackRecord, merge: &Merge<'_>) 
     // post-frontier re-creation stays and wins the merge.
     let reader = store.ports(stack.scope);
     let derive = |node, root| {
-        crate::removal::derive_root(store, stack.id, &*reader, &save, node, root)
-            .map_err(crate::removal::refusal)
+        crate::history::whiteout::derive_root(store, stack.id, &*reader, &save, node, root)
+            .map_err(crate::history::whiteout::refusal)
     };
     let base_root = derive(base_node, FilesystemRootId(root(store, base_node)?))?;
     let ours = derive(ln, FilesystemRootId(root(store, ln)?))?;
     let theirs = derive(rn, FilesystemRootId(root(store, rn)?))?;
-    let mut sides = super::units::Sides {
+    let mut sides = super::merge_units::Sides {
         base: base_root,
         ours,
         theirs,
@@ -361,7 +363,7 @@ fn merge_inner(store: &Arc<Store>, stack: &LayerStackRecord, merge: &Merge<'_>) 
     let mut decided = Vec::new();
     if !admitted.is_empty() {
         let units = crate::telemetry::timed("branch.merge.units", |timing| {
-            super::units::decide(store, &save, &hints, &admitted, &sides, &mut fresh, timing)
+            super::merge_units::decide(store, &save, &hints, &admitted, &sides, &mut fresh, timing)
         })?;
         (sides.ours, sides.theirs, decided) = (units.ours, units.theirs, units.reports);
     }
@@ -396,7 +398,7 @@ fn merge_inner(store: &Arc<Store>, stack: &LayerStackRecord, merge: &Merge<'_>) 
         (None, None) => args::content(error),
     })?;
     store.note_merge(&merged);
-    let lww = layerfs_bridge::sdk_values::lww(&merged.lww);
+    let lww = layerfs_protocol::sdk::lww(&merged.lww);
     if !merged.clean() {
         // Nothing is created: the unfinished Save is dropped.
         drop(save);
@@ -411,7 +413,7 @@ fn merge_inner(store: &Arc<Store>, stack: &LayerStackRecord, merge: &Merge<'_>) 
                 ("mergeBase", SdkValue::text(node_text(base_node))),
                 (
                     "conflicts",
-                    layerfs_bridge::sdk_values::conflicts(&merged.conflicts),
+                    layerfs_protocol::sdk::conflicts(&merged.conflicts),
                 ),
                 (
                     "paths",
@@ -428,18 +430,18 @@ fn merge_inner(store: &Arc<Store>, stack: &LayerStackRecord, merge: &Merge<'_>) 
                 ("lww", lww),
                 (
                     "conflictsTruncated",
-                    SdkValue::Bool(layerfs_bridge::sdk_values::conflicts_truncated(
+                    SdkValue::Bool(layerfs_protocol::sdk::conflicts_truncated(
                         &merged.conflicts,
                     )),
                 ),
                 (
                     "lwwTruncated",
-                    SdkValue::Bool(layerfs_bridge::sdk_values::lww_truncated(&merged.lww)),
+                    SdkValue::Bool(layerfs_protocol::sdk::lww_truncated(&merged.lww)),
                 ),
-                ("units", layerfs_bridge::sdk_values::units(&decided)),
+                ("units", layerfs_protocol::sdk::units(&decided)),
                 (
                     "unitsTruncated",
-                    SdkValue::Bool(layerfs_bridge::sdk_values::units_truncated(&decided)),
+                    SdkValue::Bool(layerfs_protocol::sdk::units_truncated(&decided)),
                 ),
             ]),
         ));
@@ -452,7 +454,7 @@ fn merge_inner(store: &Arc<Store>, stack: &LayerStackRecord, merge: &Merge<'_>) 
     // File lengths from the Store catalogue a window at a time, as a Commit
     // counts them, never from each changed file's root (#364).
     let mut refused = None;
-    let logical = layerfs_content::filesystem::statistics::logical_size_after_with(
+    let logical = layerfs_content::filesystem::construction::statistics::logical_size_after_with(
         &reader,
         ours,
         merged.root,
@@ -532,12 +534,12 @@ fn merge_inner(store: &Arc<Store>, stack: &LayerStackRecord, merge: &Merge<'_>) 
         ("conflictsTruncated", SdkValue::Bool(false)),
         (
             "lwwTruncated",
-            SdkValue::Bool(layerfs_bridge::sdk_values::lww_truncated(&merged.lww)),
+            SdkValue::Bool(layerfs_protocol::sdk::lww_truncated(&merged.lww)),
         ),
-        ("units", layerfs_bridge::sdk_values::units(&decided)),
+        ("units", layerfs_protocol::sdk::units(&decided)),
         (
             "unitsTruncated",
-            SdkValue::Bool(layerfs_bridge::sdk_values::units_truncated(&decided)),
+            SdkValue::Bool(layerfs_protocol::sdk::units_truncated(&decided)),
         ),
     ]))
 }

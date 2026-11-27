@@ -55,9 +55,11 @@
 //! cannot run on that session. The outcome is decided, and an unknown one
 //! quarantines the session, while the session's lock is still held
 //! (`Session::decided_turn`).
-use super::{fused::nonce, statements};
+use super::super::session::attempt::nonce;
+use super::statements;
+use crate::backend::error::BackendError;
 use crate::backend::postgresql::{
-    metadata::{chains, reads},
+    metadata::{chains, values},
     objects::read,
     session::{
         connection::{Session, SessionKey},
@@ -66,7 +68,7 @@ use crate::backend::postgresql::{
         rows,
     },
 };
-use crate::backend::records::{BackendError, Record, Value};
+use crate::backend::seam::{Record, Value};
 use layerfs_history::error::HistoryError;
 use postgres::error::SqlState;
 use postgres::types::ToSql;
@@ -147,7 +149,7 @@ fn reader_texts(schema: &str) -> Vec<String> {
     vec![
         fenced(&chains::ROOTS.replace("{schema}", schema), schema),
         fenced(&read::ranges_sql(schema), schema),
-        fenced(&reads::values_sql(schema), schema),
+        fenced(&values::values_sql(schema), schema),
     ]
 }
 
@@ -160,7 +162,7 @@ fn reader_texts(schema: &str) -> Vec<String> {
 pub(crate) fn create_texts(schema: &str) -> Result<Vec<String>, BackendError> {
     let mut texts = vec![
         super::reserve::text(schema),
-        crate::backend::postgresql::metadata::writes::ALLOCATE.to_owned(),
+        crate::backend::postgresql::metadata::allocation::ALLOCATE.to_owned(),
         crate::backend::postgresql::objects::publish::COPY.to_owned(),
         crate::backend::postgresql::objects::publish::ROWS.to_owned(),
         // As `Mechanics::history_arrays` sends it.
