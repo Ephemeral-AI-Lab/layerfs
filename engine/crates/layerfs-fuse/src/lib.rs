@@ -1,7 +1,6 @@
 //! Kernel connection/request ownership over existing Workspace semantics.
 #![forbid(unsafe_code)]
 
-pub mod coherence;
 mod dispatch;
 
 #[cfg(target_os = "linux")]
@@ -17,3 +16,16 @@ pub use dispatch::{
     DispatchError, FailureView, InputFailure, MountRequests, MountWork, Received,
     RequestDisposition, RequestFuture, RequestOwner, MAX_INPUT_BYTES, RECEIVE_SLOTS,
 };
+
+// #828 compat: old public module paths, removed in wave 3.
+#[doc(hidden)]
+#[cfg(target_os = "linux")]
+pub mod coherence {
+    // #828 compat
+    #[doc(hidden)]
+    pub use crate::request::coherence as attributes; // #828 compat
+    #[doc(hidden)]
+    pub use crate::request::coherence as pages; // #828 compat
+    #[doc(hidden)]
+    pub use crate::request::coherence as reply_order; // #828 compat
+}

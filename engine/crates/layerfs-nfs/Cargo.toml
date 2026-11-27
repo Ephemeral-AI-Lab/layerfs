@@ -20,3 +20,11 @@ layerfs-storage = { path = "../../../core/crates/layerfs-storage" }
 layerfs-telemetry = { path = "../../../core/crates/layerfs-telemetry" }
 libc = "=0.2.189"
 layerfs-store-service = { path = "../layerfs-store-service" }
+
+[[test]]
+name = "helper_deadline"
+path = "tests/standalone/helper_deadline.rs"
+
+[[test]]
+name = "write"
+path = "tests/standalone/write.rs"

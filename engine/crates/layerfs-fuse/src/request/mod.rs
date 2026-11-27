@@ -1,10 +1,11 @@
 //! Kernel callback entry and single owned reply attempts.
 mod accounting;
 mod callbacks;
+pub mod coherence;
 mod directory;
 mod failure;
 mod inline;
-mod mutate;
+mod mutation;
 mod reply;
 mod state;
 mod terminal;

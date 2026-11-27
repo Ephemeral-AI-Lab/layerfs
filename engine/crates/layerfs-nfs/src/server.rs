@@ -3,15 +3,16 @@
 //! Each accepted connection is served by its own thread, one call at a time,
 //! in arrival order. A call's reply is written first; only after that single
 //! send attempt returned are the publication tickets of the mutations it
-//! decided released (see [`crate::change::Tickets`]). Stop closes the listener and every connection, joins
+//! decided released (see [`crate::kernel::mutation::Tickets`]). Stop closes the listener and every connection, joins
 //! their threads and only then gives back the synthetic kernel's holdings,
 //! so no call is running when references are released.
 use crate::{
-    change::Tickets,
-    kernel::{Kernel, Released},
-    mount,
-    nfs::{self, Policy},
-    rpc::{self, Accept, Refused},
+    kernel::{mutation::Tickets, Kernel, Released},
+    procedures::{
+        mount,
+        program::{self, Policy},
+    },
+    protocol::rpc::{self, Accept, Refused},
 };
 use layerfs_overlay::KernelMount;
 use layerfs_vfs::ports::mount::MountServices;
@@ -67,8 +68,8 @@ impl ExportConfig {
             refuse_apple_double: true,
             lookups_held: crate::kernel::LOOKUPS_HELD,
             companion_spill_dir: None,
-            companion_resident_bytes: crate::apple_double::RESIDENT_BYTES,
-            companions_held: crate::apple_double::HELD,
+            companion_resident_bytes: crate::apple_double::companions::RESIDENT_BYTES,
+            companions_held: crate::apple_double::companions::HELD,
         }
     }
 }
@@ -97,7 +98,7 @@ const MOUNT_PROCEDURES: [&str; 6] = ["MNT_NULL", "MNT", "DUMP", "UMNT", "UMNTALL
 impl Counters {
     fn charge(&self, program: u32, procedure: u32, started: Instant) {
         let slot = match program {
-            nfs::PROGRAM => self.nfs.get(procedure as usize),
+            program::PROGRAM => self.nfs.get(procedure as usize),
             mount::PROGRAM => self.mount.get(procedure as usize),
             _ => None,
         };
@@ -122,12 +123,12 @@ impl Counters {
                 .collect::<Vec<_>>()
         };
         let mut all = rows(&MOUNT_PROCEDURES, &self.mount);
-        all.extend(rows(&nfs::PROCEDURES, &self.nfs));
+        all.extend(rows(&program::PROCEDURES, &self.nfs));
         all
     }
 }
 
-/// Marks a refresh chmod on the export it came from (see [`crate::refresh`]);
+/// Marks a refresh chmod on the export it came from (see [`crate::kernel::refresh`]);
 /// holds no reference that keeps a stopped export alive.
 #[derive(Clone)]
 pub struct Refresher(std::sync::Weak<Shared>);
@@ -229,7 +230,7 @@ impl Server {
     /// After an install: the paths below the mount point of the stale
     /// `serials` the client may cache, each with its serial, for the
     /// mode-preserving SETATTR that makes the client drop its cache (see
-    /// [`crate::refresh`]). Marks nothing: [`Refresher::arm`] does, per path.
+    /// [`crate::kernel::refresh`]). Marks nothing: [`Refresher::arm`] does, per path.
     pub fn refresh(
         &self,
         serials: impl IntoIterator<Item = u64>,
@@ -363,7 +364,7 @@ fn answer(shared: &Shared, record: &[u8], tickets: &mut Tickets) -> Option<Vec<u
     };
     let mut out = rpc::accepted(call.xid, Accept::Success);
     let result = match (call.program, call.version) {
-        (nfs::PROGRAM, nfs::VERSION) => nfs::call(
+        (program::PROGRAM, program::VERSION) => program::call(
             &shared.kernel,
             Policy {
                 read_only: shared.config.read_only,
@@ -382,7 +383,7 @@ fn answer(shared: &Shared, record: &[u8], tickets: &mut Tickets) -> Option<Vec<u
             &mut arguments,
             &mut out,
         ),
-        (nfs::PROGRAM, _) => Err(Accept::ProgramMismatch { low: 3, high: 3 }),
+        (program::PROGRAM, _) => Err(Accept::ProgramMismatch { low: 3, high: 3 }),
         (mount::PROGRAM, _) => Err(Accept::ProgramMismatch { low: 3, high: 3 }),
         _ => Err(Accept::ProgramUnavailable),
     };

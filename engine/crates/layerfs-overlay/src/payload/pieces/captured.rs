@@ -1,6 +1,6 @@
 //! The captured run step of a file whose layers hold reference pieces.
 use crate::{
-    layers::Layer, payload::captured_runs::gap_bounds, CapturedGap, CapturedRunCursor,
+    generation::captured::runs::gap_bounds, layers::Layer, CapturedGap, CapturedRunCursor,
     CapturedRunReply, CapturedRunStep, CapturedRunWork, Overlay, OverlayError, OverlayResult,
     CELL_BYTES,
 };

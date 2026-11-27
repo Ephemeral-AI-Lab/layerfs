@@ -197,7 +197,7 @@ async fn dispose(answer: KernelRead) -> RequestDisposition {
 }
 /// The declared page-cache treatment of every opened or created file.
 pub(super) fn open_flags() -> FopenFlags {
-    let cache = crate::coherence::pages::open_cache();
+    let cache = crate::request::coherence::open_cache();
     let mut flags = FopenFlags::empty();
     flags.set(FopenFlags::FOPEN_KEEP_CACHE, cache.keep);
     flags.set(FopenFlags::FOPEN_DIRECT_IO, cache.direct);

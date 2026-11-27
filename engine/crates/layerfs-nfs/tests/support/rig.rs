@@ -148,8 +148,8 @@ impl Rig {
             branch,
             entries: initialized.entries,
             lookups_held: layerfs_nfs::kernel::LOOKUPS_HELD,
-            companion_resident_bytes: layerfs_nfs::apple_double::RESIDENT_BYTES,
-            companions_held: layerfs_nfs::apple_double::HELD,
+            companion_resident_bytes: layerfs_nfs::apple_double::companions::RESIDENT_BYTES,
+            companions_held: layerfs_nfs::apple_double::companions::HELD,
             companion_spill_dir: None,
         }
     }

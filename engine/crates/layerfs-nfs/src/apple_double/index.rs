@@ -1,13 +1,15 @@
 //! The companion index of one export: its names, main inodes, slots of the
 //! index bound, resident budget and eviction order.
-use super::{
+use super::companions::{
     Body, Companion, Companions, Decoded, Holding, Named, Orphan, Slot, DECODED_ENTRY_BYTES,
 };
 use crate::{
-    apple_double_codec::Image,
-    apple_double_spill::{spill_path, touch},
-    attributes::Status,
-    trace::Route as Trace,
+    apple_double::{
+        codec::Image,
+        spill::{spill_path, touch},
+        trace::Route as Trace,
+    },
+    protocol::attributes::Status,
 };
 use layerfs_content::object::inode_leaf::InodeKind;
 use layerfs_vfs::ViewStat;

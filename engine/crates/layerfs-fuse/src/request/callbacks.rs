@@ -2,7 +2,7 @@
 use super::{
     accounting::Opcode,
     failure::{failed, KernelInput},
-    mutate::{Appended, MutationReply},
+    mutation::{Appended, MutationReply},
     reply::ReadReply,
     state::KernelFilesystem,
 };
