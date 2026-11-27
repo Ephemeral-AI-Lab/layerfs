@@ -1,25 +1,28 @@
 //! `fs.glob`.
-use crate::methods::args::{optional_path, paging, snapshot_full, text, Answer};
+use crate::methods::args::{optional_path, paging, snapshot_in, snapshot_target, text, Answer};
+use crate::read::cached::Cached;
 use crate::{
-    read::{paged_reads, query, reads, search, snapshot, visibility},
+    read::{paged_reads, query, reads, search, visibility},
     StoreService,
 };
 use layerfs_bridge::control::SdkValue;
+use layerfs_content::compare::memo::Memo;
 
 /// `glob(pattern, { branch, commit?, path?, pageSize?, pagePos? })`: paths matching a `/.lww`-syntax pattern.
 pub fn glob(service: &StoreService, args: &SdkValue) -> Answer {
-    let (stack, reader, snap) = snapshot_full(service, args)?;
+    let (stack, reader, name) = snapshot_target(service, args)?;
+    // The call's caches, from the root's open on (#818 R4).
+    let cached = Cached::new(&reader)?;
+    let (snap, saved) = snapshot_in(service, &stack, &cached, name)?;
     let pattern = text(args, "pattern")?;
     let path = optional_path(args)?;
-    let seen = visibility::Visibility::load(&service.store, &stack, &snap)?;
-    if snapshot::entry(&reader, &snap.tree, &path)?.is_some() {
-        if let Some(refusal) = visibility::refuse(&path, &seen) {
-            return Err(refusal);
-        }
-    }
+    let seen = visibility::Visibility::load(&service.store, &stack, &snap, saved.removals)?;
+    // One path walk for the call (#818 R3), through its caches and memo.
+    let memo = Memo::new(&cached);
+    let entry = visibility::checked(&memo, &snap, &path, &seen)?;
     // The page-independent `removed_count`: the hidden entries this pattern
     // would return anywhere under `path`, not only direct children.
-    let removed = seen.hidden_matches(&reader, &snap, &path, pattern)?;
+    let removed = seen.hidden_matches(&memo, &snap, &path, pattern)?;
     let filters = search::Filters::of(args)?;
     if args.get("page").is_some() {
         if filters.any() {
@@ -30,6 +33,8 @@ pub fn glob(service: &StoreService, args: &SdkValue) -> Answer {
         return paged_reads::pin(
             &service.store,
             &snap,
+            &saved.record,
+            &saved.recorded,
             paged_reads::glob(
                 &service.store,
                 &reader,
@@ -46,7 +51,21 @@ pub fn glob(service: &StoreService, args: &SdkValue) -> Answer {
     paged_reads::pin(
         &service.store,
         &snap,
-        reads::glob(&reader, &snap, pattern, &path, &seen, &filters, limit, pos)
-            .map(|value| visibility::settle(value, &seen, removed)),
+        &saved.record,
+        &saved.recorded,
+        reads::glob(
+            memo,
+            &snap,
+            pattern,
+            &path,
+            entry,
+            &seen,
+            &filters,
+            limit,
+            pos,
+            // Wide windows where a demand costs a round trip (#818 R6).
+            cached.wide(),
+        )
+        .map(|value| visibility::settle(value, &seen, removed)),
     )
 }

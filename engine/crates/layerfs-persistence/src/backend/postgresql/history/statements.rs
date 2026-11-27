@@ -53,6 +53,9 @@ pub(crate) fn qualified(key: &str) -> Option<&'static str> {
         "branch_branch_by_id_any" => Some(include_str!(
             "../../../../sql/postgresql/queries/history/branch_branch_by_id_any.sql"
         )),
+        "branch_branch_by_name" => Some(include_str!(
+            "../../../../sql/postgresql/queries/history/branch_branch_by_name.sql"
+        )),
         "branch_snapshot" => Some(include_str!(
             "../../../../sql/postgresql/queries/history/branch_snapshot.sql"
         )),
@@ -71,11 +74,57 @@ pub(crate) fn qualified(key: &str) -> Option<&'static str> {
         "layerstack_stack_by_name" => Some(include_str!(
             "../../../../sql/postgresql/queries/history/layerstack_stack_by_name.sql"
         )),
+        "paths_markers" => Some(include_str!(
+            "../../../../sql/postgresql/queries/history/paths_markers.sql"
+        )),
         "paths_node_markers" => Some(include_str!(
             "../../../../sql/postgresql/queries/history/paths_node_markers.sql"
         )),
         "position_node_serial" => Some(include_str!(
             "../../../../sql/postgresql/queries/history/position_node_serial.sql"
+        )),
+        // A read call's context in one statement (#818 R5); PostgreSQL only:
+        // SQLite reads it through the catalog's default, statement by
+        // statement.
+        "read_context_named" => Some(include_str!(
+            "../../../../sql/postgresql/queries/history/read_context_named.sql"
+        )),
+        "read_context_node" => Some(include_str!(
+            "../../../../sql/postgresql/queries/history/read_context_node.sql"
+        )),
+        // First-parent Commits in windows (#818 H4); PostgreSQL only.
+        "lineage_chain_window" => Some(include_str!(
+            "../../../../sql/postgresql/queries/history/lineage_chain_window.sql"
+        )),
+        // Init's acquisition reads (#818 I3a): each window joined to the
+        // live owner row; the owner row alone serves `work` and every
+        // ordinary write unit's owner check.
+        "acquisition_owner" => Some(include_str!(
+            "../../../../sql/postgresql/queries/history/acquisition_owner.sql"
+        )),
+        "acquisition_unplaced" => Some(include_str!(
+            "../../../../sql/postgresql/queries/history/acquisition_unplaced.sql"
+        )),
+        "acquisition_directories" => Some(include_str!(
+            "../../../../sql/postgresql/queries/history/acquisition_directories.sql"
+        )),
+        "acquisition_directory_path" => Some(include_str!(
+            "../../../../sql/postgresql/queries/history/acquisition_directory_path.sql"
+        )),
+        "acquisition_jobs" => Some(include_str!(
+            "../../../../sql/postgresql/queries/history/acquisition_jobs.sql"
+        )),
+        "acquisition_job" => Some(include_str!(
+            "../../../../sql/postgresql/queries/history/acquisition_job.sql"
+        )),
+        "acquisition_file_roots" => Some(include_str!(
+            "../../../../sql/postgresql/queries/history/acquisition_file_roots.sql"
+        )),
+        "acquisition_entries" => Some(include_str!(
+            "../../../../sql/postgresql/queries/history/acquisition_entries.sql"
+        )),
+        "acquisition_bindings" => Some(include_str!(
+            "../../../../sql/postgresql/queries/history/acquisition_bindings.sql"
         )),
         _ => None,
     }

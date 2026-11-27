@@ -99,7 +99,8 @@ impl HistoryCatalog for HistoryProvider {
         stack: LayerStackId,
         name: &HistoryName,
     ) -> HistoryResult<Option<BranchRecord>> {
-        self.read(|tx| branch::branch_named(tx, stack, name))
+        // One statement (#818 R1): one fenced autocommit read on PostgreSQL.
+        self.read_statement(|tx| branch::branch_named(tx, stack, name))
     }
 
     fn branch_snapshot(&self, id: BranchId) -> HistoryResult<Option<BranchSnapshot>> {
@@ -119,6 +120,23 @@ impl HistoryCatalog for HistoryProvider {
         branch: &HistoryName,
     ) -> HistoryResult<NamedSnapshot> {
         self.read_statement(|tx| branch::branch_snapshot_named(tx, stack, branch))
+    }
+
+    fn read_context(
+        &self,
+        project: &HistoryName,
+        target: &ContextTarget,
+    ) -> HistoryResult<ReadContext> {
+        match &self.engine {
+            // One fenced statement (#818 R5).
+            crate::backend::Engine::Postgres(_) => {
+                self.read_statement(|tx| branch::read_context(tx, project, target))
+            }
+            // Today's statements in today's order: the default's body.
+            crate::backend::Engine::Sqlite(_) => {
+                layerfs_history::catalog::read_context_serial(self, project, target)
+            }
+        }
     }
 
     fn branches(
@@ -315,6 +333,15 @@ impl HistoryCatalog for HistoryProvider {
     }
 
     fn reserve_inodes(&self, request: &ReserveRequest) -> HistoryResult<Reservation> {
+        // #818 W4: on PostgreSQL, outside a held lane, one message whose
+        // checks run on the server; a count of zero keeps the transaction
+        // and its refusal order.
+        if let crate::backend::Engine::Postgres(session) = &self.engine {
+            use crate::backend::postgresql::history::{binding_append, reserve};
+            if request.count > 0 && binding_append::eligible(session)? {
+                return reserve::run(session, self.catalog_id, request);
+            }
+        }
         self.write(|tx| allocation::reserve_inodes(tx, self.catalog_id, request))
     }
 
@@ -342,11 +369,29 @@ impl HistoryCatalog for HistoryProvider {
     }
 
     fn path_removals(&self, stack: LayerStackId) -> HistoryResult<Vec<PathRemovalRecord>> {
-        self.read(|tx| super::paths::markers(tx, stack))
+        // One statement (#818 R1), as `node_path_removals` below.
+        self.read_statement(|tx| super::paths::markers(tx, stack))
     }
 
     fn node_history_serial(&self, node: NodeId) -> HistoryResult<Option<u64>> {
         self.read_statement(|tx| super::position::node_serial(tx, node))
+    }
+
+    fn first_parent_window(
+        &self,
+        head: CommitId,
+        count: usize,
+    ) -> HistoryResult<Vec<HistoryResult<ChainRow>>> {
+        match &self.engine {
+            // One fenced statement (#818 H4).
+            crate::backend::Engine::Postgres(_) => {
+                self.read_statement(|tx| super::lineage::chain_window(tx, head, count))
+            }
+            // Today's statements in today's order: the default's body.
+            crate::backend::Engine::Sqlite(_) => {
+                layerfs_history::catalog::first_parent_window_serial(self, head, count)
+            }
+        }
     }
 
     fn node_path_removals(

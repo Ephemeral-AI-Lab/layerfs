@@ -15,11 +15,14 @@
 //! between two heights, and have no budget: every answer is exact.
 
 use super::params;
-use super::rows::{cell, commit_column, layer_column, many, one, required, sql, stack_column};
+use super::rows::{
+    cell, commit_column, commit_row, layer_column, many, one, required, sql, stack_column, unsigned,
+};
 use super::transaction::Transaction;
 use layerfs_history::error::{HistoryError, HistoryResult, Missing};
 use layerfs_history::identity::{CommitId, LayerId, LayerStackId, NodeId};
 use layerfs_history::records::CommitRecord;
+use layerfs_history::ChainRow;
 use std::collections::HashMap;
 
 const COMMIT: &str = "lineage_commit";
@@ -36,6 +39,7 @@ const ABSORB: &str = "lineage_absorb";
 const REACH: &str = "lineage_reach";
 const REACH_PRUNE: &str = "lineage_reach_prune";
 const REACH_INSERT: &str = "lineage_reach_insert";
+const CHAIN_WINDOW: &str = "lineage_chain_window";
 
 /// The height of a Layer that does not exist: absorbed by none yet.
 pub(crate) const NEVER: i64 = i64::MAX;
@@ -137,6 +141,60 @@ pub(crate) fn commit_at(
     one(tx, COMMIT_AT, params![run.as_slice(), depth], |row| {
         required(commit_column(row, 0)?, "Commit identity")
     })
+}
+
+/// Up to `count` Commits along first parents from `head`, in one statement
+/// (#818 H4): PostgreSQL's
+/// [`layerfs_history::HistoryCatalog::first_parent_window`]. The statement
+/// follows run segments through the `commit_runs` (run, depth) index: a run
+/// is one first-parent path, and its first Commit's parent lies in another
+/// run. Each row carries its segment and depth, so the order is checked
+/// here, not trusted to the fenced wrapper. The window ends, with no error,
+/// at the first row that is not the Commit the walk would read next (a gap
+/// in the rows) or whose identity or serial does not decode: a caller reads
+/// that Commit itself and meets exactly what `commit` and
+/// `node_history_serial` answer today. A Commit row that is the next one
+/// but fails to decode is that row's error, as `commit` reports it.
+pub(crate) fn chain_window(
+    tx: &Transaction<'_>,
+    head: CommitId,
+    count: usize,
+) -> HistoryResult<Vec<HistoryResult<ChainRow>>> {
+    if count == 0 {
+        return Ok(Vec::new());
+    }
+    let limit = i64::try_from(count).unwrap_or(i64::MAX);
+    let rows = tx
+        .query(CHAIN_WINDOW, params![head.as_slice(), limit])
+        .map_err(sql)?;
+    let mut ordered = Vec::with_capacity(rows.len());
+    for row in &rows {
+        let (Ok(segment), Ok(depth)) = (cell::<i64>(row, 19), cell::<i64>(row, 20)) else {
+            break;
+        };
+        ordered.push(((segment, std::cmp::Reverse(depth)), row));
+    }
+    ordered.sort_by_key(|(key, _)| *key);
+    let mut window = Vec::with_capacity(ordered.len());
+    let mut next = Some(head);
+    for (_, row) in ordered {
+        let Some(id) = next else { break };
+        if !matches!(commit_column(row, 0), Ok(Some(found)) if found == id) {
+            break;
+        }
+        let Ok(serial) = unsigned(row, 18) else { break };
+        match commit_row(row) {
+            Ok(record) => {
+                next = record.parent;
+                window.push(Ok(ChainRow { record, serial }));
+            }
+            Err(error) => {
+                window.push(Err(error));
+                break;
+            }
+        }
+    }
+    Ok(window)
 }
 
 /// Records a new Commit's lineage from its parents' rows.

@@ -158,7 +158,7 @@ pub fn init_observed(
         &mut progress,
         timer,
     );
-    let (root, root_serial, entries, save) = match acquired {
+    let (root, root_serial, entries, logical, save) = match acquired {
         Ok(value) => value,
         Err(error) => return Err(backing.settle(error, &mut progress.work)),
     };
@@ -173,12 +173,15 @@ pub fn init_observed(
         .child("history.finish_tree_save")
         .run(|_| save.finish().map_err(storage))?;
     progress.tick()?;
+    // The logical bytes the file construction summed from the scan: each
+    // regular identity's length once per path, as `logical_size` counts the
+    // built root (#818 I1), without reading the roots back.
+    let logical = u64::try_from(logical).map_err(|_| {
+        ProjectError::Content(layerfs_content::ContentError::InvalidRecord(
+            "logical byte overflow",
+        ))
+    })?;
     let reader = store.reader().map_err(storage)?;
-    let logical = layerfs_content::filesystem::statistics::logical_size(
-        &reader,
-        layerfs_content::filesystem::FilesystemRootId(root),
-    )
-    .map_err(ProjectError::Content)?;
     // The binding hints, the publication and the release below run after
     // `request.name` moves into the Stack; name the project and operation now
     // (F43R4-2, F43R5-1).
@@ -238,10 +241,13 @@ fn acquire<'a>(
     backing: &Backing<'_>,
     progress: &mut ImportProgress,
     timer: &TimingScope<'_, Active>,
-) -> ProjectResult<(ObjectId, u64, u64, Save<'a>)> {
+) -> ProjectResult<(ObjectId, u64, u64, u128, Save<'a>)> {
     let scanned = {
         let provider = store.reader().map_err(storage)?;
-        let save = store.begin_save().map_err(storage)?;
+        // Init's three Saves publish through the provider's fenced flight
+        // where eligible: one message per publication on PostgreSQL, with
+        // the ordinary publication's custody (#818 I3c).
+        let save = store.begin_save().map_err(storage)?.publishing_in_flights();
         let built = timer.child("history.import_scan").run(|_| {
             let mut sink = save.sink();
             let mut objects = FilesystemObjects::new(&provider, &mut sink);
@@ -257,8 +263,8 @@ fn acquire<'a>(
             .run(|_| save.finish().map_err(storage))?;
         scanned
     };
-    let save = store.begin_save().map_err(storage)?;
-    timer
+    let save = store.begin_save().map_err(storage)?.publishing_in_flights();
+    let logical = timer
         .child("history.import_files")
         .run(|_| files::save_files(backing, scanned.aliases, store, &save, progress))?;
     progress.tick()?;
@@ -291,7 +297,7 @@ fn acquire<'a>(
             progress,
         )
     })?;
-    Ok((root, reservation.start, scanned.entries, save))
+    Ok((root, reservation.start, scanned.entries, logical, save))
 }
 
 /// Refuses host Init where the required Unix metadata contract is unavailable.

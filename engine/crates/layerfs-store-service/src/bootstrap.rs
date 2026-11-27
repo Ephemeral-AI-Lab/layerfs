@@ -138,6 +138,19 @@ impl OpenedStore {
             Writer::Postgres(storage) => storage.prepare_mount_writes().map_err(StorageError::from),
         }
     }
+    /// Prepares the writer's create statements in one flight (#818 W4): on
+    /// PostgreSQL one round trip and one read transaction, so a first create
+    /// (an SDK write that does not take the fused Commit) prepares none of
+    /// them, and its serial reservation is one message. The SDK's Store open
+    /// calls it (`StoreService::open_postgres`); the daemon does not.
+    /// Nothing on SQLite (its deferred writer included) or on a read-only
+    /// PostgreSQL service, which sends no writes.
+    pub fn prepare_sdk_writes(&self) -> StorageResult<()> {
+        match &self.writer {
+            Writer::ReadOnly(_) | Writer::Sqlite(_) | Writer::DeferredSqlite { .. } => Ok(()),
+            Writer::Postgres(storage) => storage.prepare_sdk_writes().map_err(StorageError::from),
+        }
+    }
     /// The Store-file operations of a SQLite session (`None` for a
     /// PostgreSQL Store, which has no file).
     pub fn file(&self) -> Option<&dyn layerfs_persistence::StoreFile> {
@@ -372,6 +385,7 @@ pub(crate) fn open_postgres_read_only(
     let history = Arc::new(opened.history);
     let control = StoreReader::new(Storage::new(opened.storage)?, history.clone());
     let control = observe(&observations, 0, provider, control)?;
+    let batches = layerfs_storage::port::PackPersistence::batched_chain_reads(&*session);
     let store = Store::with_control_reader(
         history,
         control,
@@ -383,7 +397,8 @@ pub(crate) fn open_postgres_read_only(
         cache_bytes,
         ReservationBlocks::default(),
         1,
-    )?;
+    )?
+    .with_batched_read_session(batches);
     Ok(OpenedStore {
         store: Arc::new(store),
         sqlite_version: version,

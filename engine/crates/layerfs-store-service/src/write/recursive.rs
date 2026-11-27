@@ -10,11 +10,13 @@ use layerfs_overlay::{
     OperationRecordExpectedValue,
 };
 use layerfs_workspace::{Operation, OperationRecordApply, OverlayOperationRecords};
+/// One listed entry: its name, serial and kind.
+type Row = (Vec<u8>, u64, InodeKind);
 struct Frame {
     path: String,
     serial: u64,
     after: Option<Vec<u8>>,
-    rows: std::vec::IntoIter<(Vec<u8>, u64)>,
+    rows: std::vec::IntoIter<Row>,
     done: bool,
 }
 impl Frame {
@@ -36,6 +38,26 @@ fn join(path: &str, name: &[u8]) -> Result<String> {
     ))
 }
 impl Mutation<'_> {
+    /// Fills `frame` with its directory's next listed page, each entry with
+    /// its kind from one demand for the page (#818 W5): a walk needs no
+    /// child's metadata or length to descend.
+    fn next_page(&self, frame: &mut Frame) -> Result<()> {
+        let page = (self.view)
+            .list(self.op.overlay(), frame.serial, frame.after.as_deref())
+            .map_err(read_failure)?;
+        let serials: Vec<u64> = page.entries.iter().map(|(_, serial)| *serial).collect();
+        let kinds = (self.view)
+            .kinds(self.op.overlay(), &serials)
+            .map_err(read_failure)?;
+        frame.after = page.continuation;
+        frame.done = frame.after.is_none();
+        let rows = page.entries.into_iter().zip(kinds);
+        frame.rows = rows
+            .map(|((name, serial), kind)| (name, serial, kind))
+            .collect::<Vec<Row>>()
+            .into_iter();
+        Ok(())
+    }
     /// Removes the entry at `path`; a folder that is not empty only when
     /// `recursive`, else it is refused `NotEmpty`.
     pub fn remove(&mut self, path: &str, recursive: bool) -> Result<()> {
@@ -69,23 +91,13 @@ impl Mutation<'_> {
                 Some(row) => Some(row),
                 None if frame.done => None,
                 None => {
-                    let page = self
-                        .view
-                        .list(self.op.overlay(), frame.serial, frame.after.as_deref())
-                        .map_err(read_failure)?;
-                    frame.after = page.continuation;
-                    frame.done = frame.after.is_none();
-                    frame.rows = page.entries.into_iter();
+                    self.next_page(frame)?;
                     continue;
                 }
             };
-            if let Some((name, serial)) = next {
+            if let Some((name, serial, kind)) = next {
                 let child = join(&frame.path, &name)?;
-                let stat = self
-                    .view
-                    .stat(self.op.overlay(), serial)
-                    .map_err(read_failure)?;
-                if stat.kind == InodeKind::Directory {
+                if kind == InodeKind::Directory {
                     stack.push(Frame::new(child, serial));
                 } else {
                     self.apply(Operation::Unlink {
@@ -158,27 +170,17 @@ impl Mutation<'_> {
                         continue;
                     }
                     None => {
-                        let page = self
-                            .view
-                            .list(self.op.overlay(), frame.serial, frame.after.as_deref())
-                            .map_err(read_failure)?;
-                        frame.after = page.continuation;
-                        frame.done = frame.after.is_none();
-                        frame.rows = page.entries.into_iter();
+                        self.next_page(frame)?;
                         continue;
                     }
                 };
-                let Some((name, serial)) = next else {
+                let Some((name, serial, kind)) = next else {
                     continue;
                 };
                 let source = join(&frame.path, &name)?;
                 let target = format!("{to}{}", &source[from.len()..]);
-                let stat = self
-                    .view
-                    .stat(self.op.overlay(), serial)
-                    .map_err(read_failure)?;
                 self.copy_one(serial, &target, scope)?;
-                if stat.kind == InodeKind::Directory {
+                if kind == InodeKind::Directory {
                     stack.push(Frame::new(source, serial));
                 }
             }
@@ -291,7 +293,7 @@ fn exists(to: &str) -> layerfs_bridge::control::SdkRefusal {
     let message = format!("{to} already exists");
     args::refuse("Exists", message, layerfs_bridge::control::SdkValue::Null)
 }
-fn overlap(from: &str, to: &str) -> Result<()> {
+pub(super) fn overlap(from: &str, to: &str) -> Result<()> {
     if from == to || from == "/" || to.starts_with(&format!("{from}/")) {
         Err(args::invalid("source and destination overlap"))
     } else {

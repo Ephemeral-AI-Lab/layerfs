@@ -486,6 +486,84 @@ impl Fetch {
         self.fetch_page([locations], packs, true, compact_inode_packs)
             .map(drop)
     }
+    /// [`Fetch::whole_packs`] for a per-object demand (#818 H5): the same
+    /// packs in one classified call of whole reads; a refused one is kept
+    /// refused ([`Self::per_object`]) and one already refused is not asked.
+    pub(crate) fn whole_packs_each(&self, ids: &[i64], packs: &mut PackCache) -> StorageResult<()> {
+        let limit = self.metadata.whole_pack_bytes();
+        if limit <= crate::port::PACK_READ_PREFIX_BYTES {
+            return Ok(());
+        }
+        let mut cohort = Vec::new();
+        let mut wanted = Vec::new();
+        let mut bytes = 0usize;
+        {
+            let descriptors = self.descriptors.borrow();
+            for id in ids.iter().copied().collect::<BTreeSet<_>>() {
+                let Some(info) = descriptors.get(&id) else {
+                    continue;
+                };
+                if info.length > limit.min(crate::policy::PACK_LIMIT)
+                    || bytes + info.length > DEPENDENCY_PACK_CACHE_BYTES
+                {
+                    continue;
+                }
+                bytes += info.length;
+                cohort.push((id, info.length));
+                if !packs.contains_key(&id) {
+                    wanted.push(*info);
+                }
+            }
+        }
+        if wanted.len() < 2 {
+            return Ok(());
+        }
+        packs.reserve(&cohort)?;
+        let mut reads = Vec::with_capacity(wanted.len());
+        for info in wanted {
+            match self.published_body(info.pack_id)? {
+                Some((info, body)) => packs.insert(info.pack_id, body)?,
+                None if self.is_refused(info.pack_id) => {}
+                None => reads.push(GroupRead {
+                    pack: info,
+                    ranges: Vec::new(),
+                }),
+            }
+        }
+        if reads.is_empty() {
+            return Ok(());
+        }
+        self.note(|c| {
+            c.read_packs += 1;
+            c.pack_misses += reads.len() as u64;
+        });
+        let mut answers = Vec::new();
+        self.metadata.read_groups_classified(&reads, &mut answers)?;
+        if answers.len() != reads.len() {
+            return Err(StorageError::Integrity("metadata pack cardinality/bytes"));
+        }
+        for (read, answer) in reads.iter().zip(answers) {
+            let id = read.pack.pack_id;
+            let pack = match answer {
+                Ok(GroupReadAnswer::Whole(pack)) if pack.info() == read.pack => pack,
+                Ok(_) => return Err(StorageError::Integrity("metadata pack descriptor")),
+                Err(error @ (PersistenceError::Missing | PersistenceError::Malformed)) => {
+                    self.refuse(id, error.into());
+                    continue;
+                }
+                Err(error) => return Err(error.into()),
+            };
+            let (info, body) = pack.into_parts();
+            if let Err(error) = super::fetch::validate_frame(info, &body) {
+                self.refuse(id, error);
+                continue;
+            }
+            self.remember_pack(info)?;
+            self.note(|c| c.pack_read_bytes += body.len() as u64);
+            packs.insert(id, body)?;
+        }
+        Ok(())
+    }
     /// Pages a demand (#758): fetches the uncached groups of the longest
     /// leading run of `consumers` (each the rows one consumer reads next) and
     /// of their chains in one `read_groups` call of at most
@@ -518,6 +596,7 @@ impl Fetch {
         compact_inode_packs: bool,
     ) -> StorageResult<usize> {
         let batched = self.metadata.batched_chain_reads();
+        let per_object = self.refused.borrow().is_some();
         if !self.trust_hints.get() || !batched && self.hints.borrow().chains.is_empty() {
             return Ok(0);
         }
@@ -545,6 +624,10 @@ impl Fetch {
                 // A held body is served to every read; a published one
                 // only while serving published bodies (`published_has`).
                 if self.published_has(info.pack_id) {
+                    continue;
+                }
+                // A pack this per-object demand saw refused is not asked again.
+                if self.is_refused(info.pack_id) {
                     continue;
                 }
                 if packs.group(self, info.pack_id, group)?.is_some() {
@@ -620,7 +703,7 @@ impl Fetch {
             return Ok(covered);
         }
         let mut answers = Vec::new();
-        if compact_inode_packs {
+        if compact_inode_packs || per_object {
             self.metadata.read_groups_classified(&reads, &mut answers)?;
         } else {
             let hinted_only = planned.iter().any(|(_, own)| !own);
@@ -645,19 +728,34 @@ impl Fetch {
         });
         let mut stale = false;
         for ((read, answer), (groups, own)) in reads.iter().zip(answers).zip(&planned) {
+            let id = read.pack.pack_id;
             let answer = match answer {
-                Err(PersistenceError::Missing | PersistenceError::Malformed) if !own => {
+                Err(error @ (PersistenceError::Missing | PersistenceError::Malformed)) if !own => {
+                    // An absent pack is absent whoever names it; a malformed
+                    // reply to a member's ranges may be the hint's.
+                    if error == PersistenceError::Missing {
+                        self.refuse(id, error.into());
+                    }
                     stale = true;
+                    continue;
+                }
+                Err(error @ (PersistenceError::Missing | PersistenceError::Malformed))
+                    if per_object =>
+                {
+                    self.refuse(id, error.into());
                     continue;
                 }
                 answer => answer?,
             };
             let wanted = groups.iter().copied().collect();
-            let admitted = self.admit(read, answer, groups).and_then(|acquisition| {
-                packs.admit_groups(self, read.pack.pack_id, &wanted, groups, acquisition)
-            });
+            let admitted = self
+                .admit(read, answer, groups)
+                .and_then(|acquisition| packs.admit_groups(self, id, &wanted, groups, acquisition));
             match admitted {
                 Err(_) if !own => stale = true,
+                Err(error) if per_object && !super::objects::call_failure(&error) => {
+                    self.refuse(id, error);
+                }
                 other => {
                     other?;
                 }

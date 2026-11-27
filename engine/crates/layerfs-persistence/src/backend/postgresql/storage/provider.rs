@@ -27,6 +27,7 @@ impl PostgresStorage {
         rows: &mut Vec<LocatedObject>,
         chains: &mut LocatedChains,
         joined: Option<(&[i64], &mut Vec<PersistedPack>)>,
+        unpacked: Option<&mut Vec<ObjectId>>,
     ) -> Result<(), PersistenceError> {
         rows.clear();
         chains.chains.clear();
@@ -39,7 +40,7 @@ impl PostgresStorage {
         let kept = (&self.session.chain_packs, incarnation);
         self.session.read_immutable(|tx| {
             super::super::metadata::chains::locate_chains(
-                tx, &policy, kept, roots, rows, chains, joined,
+                tx, &policy, kept, roots, rows, chains, joined, unpacked,
             )
         })
     }
@@ -147,6 +148,12 @@ impl PostgresStorage {
     pub fn prepare_mount_writes(&self) -> Result<(), PersistenceError> {
         self.session.prepare_mount_writes().map_err(Into::into)
     }
+    /// Prepares the writer session's create statements in one flight (#818
+    /// W4): one round trip when the SDK opens the Store, so a first create
+    /// (a write that does not take the fused Commit) prepares none of them.
+    pub fn prepare_sdk_writes(&self) -> Result<(), PersistenceError> {
+        self.session.prepare_sdk_writes().map_err(Into::into)
+    }
     /// Makes this writer session reopen after a quarantine: the next call
     /// outside a held lane opens one new connection and settles what the
     /// closed one left before its own work (`session/reopen.rs`). The Store
@@ -188,7 +195,7 @@ impl PackPersistence for PostgresStorage {
         rows: &mut Vec<LocatedObject>,
         chains: &mut LocatedChains,
     ) -> Result<(), PersistenceError> {
-        self.locate_root_packs(roots, rows, chains, None)
+        self.locate_root_packs(roots, rows, chains, None, None)
     }
     fn locate_chains_with_packs(
         &self,
@@ -199,7 +206,19 @@ impl PackPersistence for PostgresStorage {
         bodies: &mut Vec<PersistedPack>,
     ) -> Result<(), PersistenceError> {
         bodies.clear();
-        self.locate_root_packs(roots, rows, chains, Some((resident, bodies)))
+        self.locate_root_packs(roots, rows, chains, Some((resident, bodies)), None)
+    }
+    /// The same statements as `locate_chains`; a located root whose pack row
+    /// is gone is listed in `unpacked` instead of refusing the call (#818 H5).
+    fn locate_chains_each(
+        &self,
+        roots: &[ObjectId],
+        rows: &mut Vec<LocatedObject>,
+        chains: &mut LocatedChains,
+        unpacked: &mut Vec<ObjectId>,
+    ) -> Result<(), PersistenceError> {
+        unpacked.clear();
+        self.locate_root_packs(roots, rows, chains, None, Some(unpacked))
     }
     /// Group reads (#758): every read's bytes in one statement per 2 MiB of
     /// returned bytes, through the multi-range `substring` reader

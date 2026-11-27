@@ -33,10 +33,15 @@ use layerfs_storage::{location::PackDomain, pack::layout, port::*};
 use postgres::types::Type;
 use std::collections::BTreeSet;
 
+/// The pack bodies' `COPY`, which the SDK open prepares
+/// (`mount::create_texts`).
+pub(crate) const COPY: &str =
+    "COPY pack (pack_id,domain,digest,length,body,directory) FROM STDIN (FORMAT binary)";
+
 pub(crate) fn packs(tx: &Transaction<'_>, packs: &[PublishedPack]) -> Result<(), BackendError> {
     let directories = packs.iter().map(directory).collect::<Result<Vec<_>, _>>()?;
     tx.copy_in(
-        "COPY pack (pack_id,domain,digest,length,body,directory) FROM STDIN (FORMAT binary)",
+        COPY,
         &[
             Type::INT8,
             Type::INT8,
@@ -101,7 +106,7 @@ pub(crate) fn run(tx: &Transaction<'_>, batch: &Publication) -> Result<Published
 /// subquery, so `ancestor_entry` stays inlined. A list over the column's 850
 /// bytes (more entries than any readable chain) is left NULL, unrecorded,
 /// as is one whose base is stored nowhere.
-const ROWS: &str = include_str!("../../../../sql/postgresql/publish_rows.sql");
+pub(crate) const ROWS: &str = include_str!("../../../../sql/postgresql/publish_rows.sql");
 
 /// The index key of an object id: its first eight bytes as a signed
 /// big-endian `bigint`, as the schema's `object_location_prefix` computes it.

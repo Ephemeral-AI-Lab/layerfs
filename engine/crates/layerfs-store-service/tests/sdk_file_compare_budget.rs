@@ -102,7 +102,9 @@ fn equal_bytes_under_different_roots_are_unknown_when_the_request_cannot_admit_t
     );
     let stack =
         layerfs_store_service::history::lookup::project(&f.service.store, "installed").unwrap();
-    let reader = snapshot::reader(&f.service.store, &stack);
+    let ports = snapshot::reader(&f.service.store, &stack);
+    // The call's caches, as `fs.diff_files` and `fs.revision` read (#818 H3).
+    let reader = layerfs_store_service::read::cached::Cached::new(&ports).unwrap();
     let mut none = 0;
     assert_eq!(
         file_facts::changes_bounded(&reader, Some(a), Some(b), &mut none)
@@ -148,7 +150,9 @@ fn equal_roots_and_known_different_sizes_do_not_spend_payload_budget() {
     let b = entry(&f, "main", "/long");
     let stack =
         layerfs_store_service::history::lookup::project(&f.service.store, "installed").unwrap();
-    let reader = snapshot::reader(&f.service.store, &stack);
+    let ports = snapshot::reader(&f.service.store, &stack);
+    // The call's caches, as `fs.diff_files` and `fs.revision` read (#818 H3).
+    let reader = layerfs_store_service::read::cached::Cached::new(&ports).unwrap();
     let mut none = 0;
     assert!(
         !file_facts::changes_bounded(&reader, Some(a), Some(a), &mut none)

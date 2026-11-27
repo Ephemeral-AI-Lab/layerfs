@@ -105,8 +105,19 @@ pub struct Store {
     /// (#768 step B, PostgreSQL): with its admission and markers it is then
     /// two writer messages and no reader round trip.
     pub(super) mount_on_writer: bool,
+    /// The recorded logical size of the node any of this Store's
+    /// Workspaces last read or published (#818 W3), so a Workspace bound
+    /// to the Commit another one just published reads none. A node's
+    /// recorded size never changes. Bound: one `(NodeId, u64)`; a poisoned
+    /// slot keeps nothing.
+    pub(super) last_logical: Mutex<Option<(layerfs_history::NodeId, u64)>>,
+    /// A Store with no writer whose read session pays a round trip per
+    /// demand (#819's PostgreSQL read-only open): its reads plan as a
+    /// PostgreSQL writer's Store plans them (#818).
+    read_session_batches: bool,
     /// Dropped after the readers so SQLite can clean up WAL and SHM on its
-    /// last writable close.
+    /// last writable close. Keep it the last field: fields drop in
+    /// declaration order.
     sqlite_writer: Option<Arc<layerfs_persistence::DeferredSqliteWriter>>,
 }
 impl Store {
@@ -225,6 +236,8 @@ impl Store {
             committer: None,
             fused: Default::default(),
             mount_on_writer: false,
+            last_logical: Mutex::default(),
+            read_session_batches: false,
             sqlite_writer: None,
         })
     }
@@ -233,6 +246,12 @@ impl Store {
         writer: Arc<layerfs_persistence::DeferredSqliteWriter>,
     ) -> Self {
         self.sqlite_writer = Some(writer);
+        self
+    }
+
+    /// Marks a writerless Store whose read session batches demands.
+    pub(crate) fn with_batched_read_session(mut self, batches: bool) -> Self {
+        self.read_session_batches = batches;
         self
     }
 
@@ -433,6 +452,13 @@ impl Store {
     /// The daemon calls it after it reported ready, on a thread of its own.
     pub fn prefill_reader(&self) -> Option<StorageResult<()>> {
         self.readers.prefill()
+    }
+    /// Whether the Store's provider pays a round trip per demand and reads
+    /// a grouped demand in one (PostgreSQL): a planned read pays only there
+    /// (#818 W6). The opened writer answers; a writerless Store answers for
+    /// its read session (#819: SQLite's deferred writer plans none).
+    pub(crate) fn batched_reads(&self) -> bool {
+        self.batched_chain_reads() || self.read_session_batches
     }
     pub fn mount_reader(&self, workspace: WorkspaceId) -> Result<(), Arc<PortError>> {
         self.readers.mount(workspace, false)

@@ -11,7 +11,9 @@
 //! resent or discarded.
 use crate::bootstrap::{open_sqlite_for_calls, open_store_observed, OpenedStore};
 use crate::kernel_guard::{self, Unsupported};
-use crate::store::{BindRequest, BoundWorkspace, CommitFailure, Store};
+use crate::store::{
+    BindRefusal, BindRequest, BindSuccess, BoundWorkspace, CommitFailure, NamedBindRequest, Store,
+};
 use crate::{Owner, OwnerClient, OwnerConfig};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_history::{BranchId, WorkspaceId};
@@ -27,6 +29,22 @@ use std::sync::{Arc, Mutex};
 pub struct Retained {
     pub workspace: Arc<BoundWorkspace>,
     pub failure: Box<CommitFailure>,
+}
+
+/// Why [`StoreService::bind_named`] bound no Workspace.
+#[derive(Debug)]
+pub enum NamedBindFailure {
+    /// Refused before any read: the overlay owner's maintenance stopped or
+    /// the call capacity is full.
+    Admission(String),
+    /// The bind itself refused: no such project or Branch, a read or a
+    /// later bind step. `looked_up` is false when it refused before it read
+    /// the project and Branch (its reader did not open), so the caller's
+    /// own lookups still answer first.
+    Bind {
+        refusal: Box<BindRefusal>,
+        looked_up: bool,
+    },
 }
 
 /// Private Workspaces one process's Store calls may hold at once: one per
@@ -185,6 +203,10 @@ impl StoreService {
             ReservationBlocks::default(),
         )
         .map_err(open_refusal)?;
+        // #818 W4: one flight, so a first create prepares nothing. Only
+        // this writable open: SQLite's deferred writer and the read-only
+        // sessions have no writer statements to prepare.
+        opened.prepare_sdk_writes().map_err(open_refusal)?;
         Ok(Self::later(opened, template))
     }
 
@@ -249,6 +271,46 @@ impl StoreService {
         branch: BranchId,
         timing: &TimingScope<'_, Active>,
     ) -> Result<Arc<BoundWorkspace>, String> {
+        let owner = self.admit()?;
+        let bound = crate::telemetry::phase(timing, "store.bind", || {
+            self.store
+                .bind_private(owner, BindRequest { workspace, branch })
+        });
+        self.bound_or_released(bound)
+            .map_err(|refusal| refusal.to_string())
+    }
+
+    /// [`Self::bind`] of Branch `branch` of `project` by name: the bind
+    /// finds both with its snapshot in one read (#818 W2).
+    pub fn bind_named(
+        &self,
+        workspace: WorkspaceId,
+        project: &str,
+        branch: &str,
+        timing: &TimingScope<'_, Active>,
+    ) -> Result<Arc<BoundWorkspace>, NamedBindFailure> {
+        let owner = self.admit().map_err(NamedBindFailure::Admission)?;
+        let request = NamedBindRequest {
+            workspace,
+            project: project.to_owned(),
+            branch: branch.to_owned(),
+        };
+        let looked_up = std::cell::Cell::new(false);
+        let bound = crate::telemetry::phase(timing, "store.bind", || {
+            (self.store).bind_named_private(owner, request, &looked_up)
+        });
+        self.bound_or_released(bound)
+            .map_err(|refusal| NamedBindFailure::Bind {
+                refusal: Box::new(refusal),
+                looked_up: looked_up.get(),
+            })
+    }
+
+    /// Admits one more private Workspace, before any read: starts the
+    /// overlay owner if no call has yet, then refuses while its maintenance
+    /// is stopped or the call capacity is full. A start that fails refuses
+    /// this call alone.
+    fn admit(&self) -> Result<OwnerClient, String> {
         let owner = self.owner()?;
         if let Some(stopped) = owner.maintenance_failure().map_err(|e| e.to_string())? {
             return Err(format!("overlay maintenance stopped: {stopped}"));
@@ -261,17 +323,19 @@ impl StoreService {
         if admitted.is_err() {
             return Err("Capacity: Store call Workspace capacity".to_owned());
         }
-        let bound = crate::telemetry::phase(timing, "store.bind", || {
-            self.store
-                .bind_private(owner, BindRequest { workspace, branch })
-        });
-        match bound {
-            Ok(success) => Ok(Arc::new(success.workspace)),
-            Err(refusal) => {
+        Ok(owner)
+    }
+
+    /// The bound Workspace, or the refusal with its admission given back.
+    fn bound_or_released(
+        &self,
+        bound: Result<BindSuccess, BindRefusal>,
+    ) -> Result<Arc<BoundWorkspace>, BindRefusal> {
+        bound
+            .map(|success| Arc::new(success.workspace))
+            .inspect_err(|_| {
                 self.bound.fetch_sub(1, Ordering::AcqRel);
-                Err(refusal.to_string())
-            }
-        }
+            })
     }
 
     /// Closes a private Workspace and retires its overlay namespace.

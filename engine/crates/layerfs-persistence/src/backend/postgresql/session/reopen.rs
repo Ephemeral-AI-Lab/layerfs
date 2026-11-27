@@ -411,12 +411,19 @@ impl Session {
         Ok(())
     }
 
-    /// Step 5: the mount statements the open prepared, prepared again.
+    /// Step 5: the mount and create statements the open prepared, prepared
+    /// again, in one flight.
     fn prepare_again(&self, state: &mut State) -> Result<(), BackendError> {
-        if !self.mount_writes.load(Ordering::SeqCst) {
+        let mut texts = Vec::new();
+        if self.mount_writes.load(Ordering::SeqCst) {
+            texts.extend(mount::writer_texts(&self.settings.schema)?);
+        }
+        if self.sdk_writes.load(Ordering::SeqCst) {
+            texts.extend(mount::create_texts(&self.settings.schema)?);
+        }
+        if texts.is_empty() {
             return Ok(());
         }
-        let texts = mount::writer_texts(&self.settings.schema)?;
         let texts: Vec<&str> = texts.iter().map(String::as_str).collect();
         let begin = self.settings.read_begin();
         match state.statements_in(&texts, Some(&begin)) {

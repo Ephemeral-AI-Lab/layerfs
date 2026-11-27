@@ -134,6 +134,81 @@ pub fn lookup_many(
     Ok(answers)
 }
 
+/// Reads inode values from several tables at once: answer `i` is
+/// `demands[i].1` in table `demands[i].0`, in demand order, duplicates
+/// included.
+///
+/// Every table descends together, one level per wave, so the waves number
+/// the height of the tallest table, not the tables. A page that several
+/// tables share is read once per wave and checked separately for each place
+/// a table found it (root or not, the level and largest key its parent
+/// recorded), with the same checks and answers as [`lookup_many`] on each
+/// table alone. A wave reads at most `pages_per_demand` pages per demand
+/// (at least one), so a wave whose distinct pages exceed it takes more than
+/// one demand.
+pub fn lookup_tables(
+    reader: &dyn AuthenticatedObjects,
+    demands: &[(InodeTable, u64)],
+    pages_per_demand: usize,
+    work: &mut InodeReadWork,
+) -> ContentResult<Vec<Option<InodeValue>>> {
+    let mut answers = vec![None; demands.len()];
+    if demands.iter().any(|(_, serial)| *serial == 0) {
+        return Err(ContentError::InvalidRecord("inode serial"));
+    }
+    type Place = (ObjectId, bool, Option<(u8, u64)>);
+    let mut level: BTreeMap<Place, Vec<usize>> = BTreeMap::new();
+    for (index, (table, _)) in demands.iter().enumerate() {
+        level
+            .entry((table.root, true, None))
+            .or_default()
+            .push(index);
+    }
+    let mut depth = 0_u8;
+    while !level.is_empty() {
+        if depth > crate::filesystem::limits::MAXIMUM_TREE_LEVEL {
+            return Err(ContentError::MappingDepthExceeded);
+        }
+        let mut ids = level.keys().map(|(id, ..)| *id).collect::<Vec<_>>();
+        ids.dedup();
+        let mut pages = BTreeMap::new();
+        for wave in ids.chunks(pages_per_demand.max(1)) {
+            let read = decoded::pages(reader, wave, Role::Inodes)?;
+            work.read_waves = work.read_waves.saturating_add(1);
+            pages.extend(wave.iter().copied().zip(read));
+        }
+        let mut next: BTreeMap<Place, Vec<usize>> = BTreeMap::new();
+        for ((id, root_page, expected), indices) in level {
+            let decoded = pages.get(&id).ok_or(ContentError::BatchCardinality {
+                requested: ids.len(),
+                returned: pages.len(),
+            })?;
+            work.pages_read = work.pages_read.saturating_add(1);
+            match page(decoded.inode_wire()?, root_page, expected)? {
+                Page::Leaf { rows, .. } => {
+                    for index in indices {
+                        work.demands = work.demands.saturating_add(1);
+                        answers[index] = rows.find(demands[index].1);
+                    }
+                }
+                Page::Branch { level, children } => {
+                    for index in indices {
+                        let position = children.partition_point(|(key, _)| *key < demands[index].1);
+                        if let Some((maximum, child)) = children.get(position).copied() {
+                            next.entry((child, false, Some((level - 1, maximum))))
+                                .or_default()
+                                .push(index);
+                        }
+                    }
+                }
+            }
+        }
+        level = next;
+        depth = depth.saturating_add(1);
+    }
+    Ok(answers)
+}
+
 /// Rows of the one leaf holding the first serial after `after`, in serial
 /// order; `None` starts before every serial. Empty only at the end of the table.
 ///

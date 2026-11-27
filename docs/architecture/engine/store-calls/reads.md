@@ -21,8 +21,41 @@ name: "main" | Branch name | 66-hex Commit or Layer id
   +-- 66 hex      -> Commit | Layer                   Kind::Commit/Layer
   +-- Branch name -> head Commit, else base Layer     Kind::Branch
   v
-Snap { kind, label, node, root, tree }  --> every later step reads by root
+Snap { kind, label, node, root, tree, serial }  --> every later step reads by root
 ```
+
+The resolve reads the node's Commit or Layer row once: the ownership check
+and the root come from the same record. A read call (`stat`, `read`, `list`,
+`glob`, `grep`, `blame`, through `snapshot_full`) also keeps that record and
+reads the node's `history_serial` together with the project's
+`project.remove_file` markers in one statement (`node_path_removals`) where
+the serial alone was read (#818 R2). The record builds the answer's `at`
+without a second read; the markers reach the visibility filter at the place
+the marker read used to be, so its failure still refuses there: a failed
+serial read refuses instead of falling back to serial 0 (an order change
+approved by the owner, 2026-11-27). A node with
+no row, or a provider without the combined read, reads the markers alone.
+
+A read naming `main`, a valid Branch name or a full Commit or Layer identity
+reads its history context with one catalog call, `read_context` (#818 R5):
+the project's stack, the Branch, the node's record and, on PostgreSQL, the
+node's serial, the project's markers and a Commit's recorded Branch, all in
+one fenced statement (`read_context_named`, `read_context_node`). The store
+service decodes it in the order the reads ran one by one: `NoSuchProject`,
+then the Branch (with the identity-shaped rule), `NoSuchCommit`/`NotFound`,
+another project's node, the root's tree, then the path. The markers (with
+the serial) and the recorded Branch are each decoded into their own result,
+so a row that does not decode refuses where the reads one by one meet it:
+the markers at the marker step after the path, the recorded Branch where
+the answer's `at` reads it (read again there). A failure of the statement
+itself refuses before the path, as the project read's did (also when it
+hits what was the marker read: an order change approved by the owner,
+2026-11-27). SQLite's provider
+answers with the default, `read_context_serial`: the stack, Branch and node
+reads one after another, with the markers and the recorded Branch read later
+where they always were, so its statements do not change. A `commit` prefix,
+an invalid name or an identity that does not parse keeps the reads one by
+one.
 
 | Rule | Detail | Source |
 | --- | --- | --- |
@@ -50,10 +83,12 @@ Snap { kind, label, node, root, tree }  --> every later step reads by root
 ```text
 walk_within(snap, path)          depth-first, name order, one memo per walk
   directory windows: 64 names / 8 KiB
+    (unpaged grep and glob on PostgreSQL: 256 names / 8 KiB, #818 R6)
   glob: enter only folders matching walk::leading(pattern)
   |
-grep: files gathered in windows of ROOTS = 64
-  Cached::roots   lengths first, then roots per demand (<= 64 files, 4 MiB)
+grep: files gathered in windows of ROOTS = 64 (PostgreSQL: WIDE_ROOTS = 256)
+  Cached::roots   lengths first, then roots per demand (<= 64 files, or 256
+                  on PostgreSQL; always <= 4 MiB of root bytes)
   search::matches literal substring over whole text parts
   search::Reuse   content already scanned this call answered from kept lines
 ```
@@ -63,7 +98,8 @@ grep: files gathered in windows of ROOTS = 64
 | `fs.list` | One page of a directory: `name`, `path`, `type`, `inode`. | [`reads.rs`](../../../../engine/crates/layerfs-store-service/src/read/reads.rs) |
 | `fs.glob` | Paths matching a `/.lww`-syntax glob; only folders on the pattern's literal lead are entered. | [`walk.rs`](../../../../engine/crates/layerfs-store-service/src/read/walk.rs) |
 | `fs.grep` | Lines holding a nonempty literal; a pattern with LF anywhere but last matches nothing; binary files skipped and counted. | [`search.rs`](../../../../engine/crates/layerfs-store-service/src/read/search.rs) |
-| Per-call cache | `Cached` keeps pack bodies, decoded groups and the decode arena for the call's later demands; dropped with the call. | [`cached.rs`](../../../../engine/crates/layerfs-store-service/src/read/cached.rs) |
+| Per-call cache | `Cached` keeps pack bodies, decoded groups and the decode arena for the call's later demands; dropped with the call. The five reads build it before the snapshot resolves, so the root's tree opens through it, and file sizes and grep's lengths read through it too (`lengths_with`, #818 R4). | [`cached.rs`](../../../../engine/crates/layerfs-store-service/src/read/cached.rs) |
+| One path walk | `fs.stat`, `fs.read`, `fs.list`, `fs.glob` and `fs.grep` build the call's `Cached` and one `Memo` first and walk the path once, strictly, through them (#818 R3): a symlink component or a read failure refuses there, a hidden entry refuses `Removed`, and the entry found is what the read, listing or walk starts from. An absent path is refused `NoSuchPath` by the read itself, after the arguments it reads first. The marker lookups of `removed_count` go through the same memo; the paged forms keep their own walk. | [`visibility.rs`](../../../../engine/crates/layerfs-store-service/src/read/visibility.rs), [`reads.rs`](../../../../engine/crates/layerfs-store-service/src/read/reads.rs) |
 
 ## Numbered pages and continuations
 
@@ -109,6 +145,11 @@ fs.blame(path, fromLine, lineCount <= 2000)
 | First parents | A Commit's parent, or its base Layer; a Layer's source Commit, else its parent Layer. | [`blame.rs`](../../../../engine/crates/layerfs-store-service/src/read/blame.rs), [`operator/files.rs`](../../../../engine/crates/layerfs-store-service/src/operator/files.rs) |
 | Coarse comparison | A middle too large for the bounded LCS becomes one removed/added block and is disclosed (`comparisonCoarse`). | [`blame.rs`](../../../../engine/crates/layerfs-store-service/src/read/blame.rs), [`line_alignment.rs`](../../../../engine/crates/layerfs-store-service/src/read/line_alignment.rs) |
 | Attribution | `includeAttribution` on a comparison runs blame per changed file under one shared budget (10,000 steps, 64 MiB); byte equality is never taken as an owner. Exhaustion is reported as incomplete coverage or `Capacity`. | [`attribution.rs`](../../../../engine/crates/layerfs-store-service/src/read/attribution.rs) |
+| Rows read once | A blame, revision or `fs.list_revisions` walk reads its rows through one per-call `Rows` (#818 H1): the last 8 Commit/Layer rows are held, so a node read as a parent is not read again as the next node or for a `ref`, `comparedTo` or record; each Branch name is read once per call on the control reader (it was read on the writer's session), at most 1,024 names kept; a name met once the memo is full is read each time. Where the Store batches reads (PostgreSQL), blame's and `fs.revision`'s walks read their parent Commits with each one's serial in windows of 16, 32, 64 then 128, never more than the walk's remaining work bound (`first_parent_window`, #818 H4); a window's row that failed to read refuses only when the walk reaches it, and a node outside the window is read alone as before. SQLite reads no window. Blame takes the resolve's row and recorded Branch, keeps each owner's `ref` from the row held when the owner was assigned, and carries the older text of one comparison to the next. | [`history/rows.rs`](../../../../engine/crates/layerfs-store-service/src/history/rows.rs) |
+| One walk per node | `fs.revision` and `fs.list_revisions` read a node's path entry (and, in `fs.revision`, its serial when the entry exists) once: a node's parent side is the next node's own and is carried to it (#818 H2). A hidden parent ends the walk, so nothing is carried past it. | [`revision.rs`](../../../../engine/crates/layerfs-store-service/src/read/revision.rs), [`operator/files.rs`](../../../../engine/crates/layerfs-store-service/src/operator/files.rs) |
+| One cache across versions | `fs.blame`, `fs.revision`, `fs.diff_files`, `fs.list_revisions` and `fs.get_storage` read every version's objects through one call `Cached` (roots, inode and directory pages, file lengths, text windows, byte ranges and comparisons; 3 MiB bound) and bind path names through its directory memo, `(directory root, name) → serial`, at most 4,096 names: a directory root's contents never change, so a name bound once is bound in every version holding that root (#818 H3). `fs.diff_files` keeps its strict lookup (`raw`) instead of walking again, and its attribution's blame pages read through the same cache; a branch comparison's owners share one cache per path. | [`cached.rs`](../../../../engine/crates/layerfs-store-service/src/read/cached.rs) |
+| Version windows | Where the Store pays a round trip per demand and its reader serves per-object reads at once (`reads_each_at_once`), blame's and `fs.revision`'s walks look their path up in windows of the versions their row window holds: 16, 32, 64 then 128 versions resolved level by level together (`PathAcross`: one roots demand, one per inode level, one per directory page level of the memo's misses; #818 H5). A window reads ahead through per-object reads (`read_canonical_each`): an object that is missing, mismatched or undecodable is recorded by the call's caches and never read again, and the window's versions are then walked alone as the walk reaches them, so the failure refuses only at a version the walk reads, as before; a failure of a demand itself refuses at once. An object's own failure is any storage failure the storage reader reports per object (the complement of `layerfs_storage::read::call_failure`: a refused or malformed pack, a missing dependency, a collision or a bound included); each object is read once however often a demand names it, and the call records at most 4,096 failed objects: a per-object read that could overfill the record is not made, so the window's versions are walked alone and each object is read once where the walk needs it. A strict-walk refusal (intermediate symlink, unbound component) is reproduced by walking that version alone. The Store's reader serves a per-object demand at once, with the batched read's calls (`Storage::read_each_with`, `lengths_each_with`, #818 lane S), so PostgreSQL's history calls read in windows. SQLite, and readers without per-object demands, walk each version alone. | [`versions.rs`](../../../../engine/crates/layerfs-store-service/src/read/versions.rs), [`cached.rs`](../../../../engine/crates/layerfs-store-service/src/read/cached.rs) |
+| Reads planned ahead | Under the same condition (#818 H6), a version window also reads ahead what the walk reads at its versions, through per-object demands: its regular files' lengths in one demand (`lengths_each_with`); for blame, the roots of the older texts it compares, in walk order while each comparison's `(newer + older) * 3` bytes fit the remaining budget, at most 64 roots and 4 MiB of root bytes in one demand; for `fs.revision`, its entries' attribute-tree roots. `fs.diff_files` locates both sides, then reads both sides' lengths and text roots (within the text bound) together; the left side's text is still read, and the right side's refusal still met, in that order; a failure while locating the right side now comes before the left text's demands (an order change approved by the owner, 2026-11-27). The call's caches keep each length or file's own failure, and hold the roots read ahead (at most 4 MiB, released by the next plan); a demand naming only kept lengths or held roots is answered from them, and a kept failure refuses where the call first asks for that file. Each comparison's `equal_edges` stays per pair, and the content-comparison budget is charged in the same order. | [`versions.rs`](../../../../engine/crates/layerfs-store-service/src/read/versions.rs), [`cached.rs`](../../../../engine/crates/layerfs-store-service/src/read/cached.rs), [`file_compare.rs`](../../../../engine/crates/layerfs-store-service/src/read/file_compare.rs) |
 
 ## Compare
 

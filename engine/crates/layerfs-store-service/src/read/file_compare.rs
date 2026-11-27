@@ -1,14 +1,16 @@
 //! File comparison's compatible legacy view and numbered aligned detail rows.
 use super::{
     attribution,
+    cached::{self, Cached},
     compare::{self, Selector},
     file_facts, query,
     snapshot::{self, Snap},
+    versions::Batching,
     visibility::Visibility,
 };
 use crate::{
     history::{lookup as args, saved},
-    store::{Store, StorePorts},
+    store::Store,
 };
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_content::{
@@ -23,6 +25,8 @@ pub struct Options {
     pub allow_missing: bool,
     pub page: query::ResultPage,
     pub extended: bool,
+    /// Whether both sides' files are read together (#818 H6).
+    pub batching: Batching,
 }
 
 struct Side {
@@ -37,12 +41,12 @@ struct Side {
 fn side(
     store: &Arc<Store>,
     stack: &LayerStackRecord,
-    reader: &StorePorts,
+    reader: &Cached<'_>,
     selector: args::Arg<Selector<'_>>,
     allow_missing: bool,
 ) -> Result<Side, SdkRefusal> {
     let selector = selector?;
-    let snap = snapshot::resolve(store, stack, reader, selector.at)?;
+    let snap = snapshot::resolve_in(store, stack, reader, selector.at)?;
     // Explicit selectors stay in their project; a globally valid ID is not admission.
     let belongs = match snap.node {
         layerfs_history::NodeId::Commit(id) => args::commit(store, id)?.stack == stack.id,
@@ -56,7 +60,7 @@ fn side(
     // §4.3: a side is visible, hidden or absent; a hidden side is treated as
     // absent for the comparison but keeps its own `Removed` side object and
     // never refuses, even when `allowMissing` is false.
-    let raw = snapshot::entry(reader, &snap.tree, &selector.path)?;
+    let raw = reader.lookup(&snap.tree, &selector.path)?;
     let hidden = if raw.is_some() {
         Visibility::for_snap(store, &snap)?.hidden(&selector.path)
     } else {
@@ -67,7 +71,8 @@ fn side(
     } else if allow_missing {
         raw
     } else {
-        Some(snapshot::existing(reader, &snap, &selector.path)?)
+        // The strict lookup above is the one `existing` made (#818 H3).
+        Some(snapshot::found(&snap, &selector.path, raw)?)
     };
     if hidden.is_none() && entry.is_some_and(|e| e.value.kind == InodeKind::Directory) {
         return Err(args::refuse(
@@ -76,18 +81,57 @@ fn side(
             SdkValue::map([("path", SdkValue::text(&selector.path))]),
         ));
     }
-    let text = if hidden.is_some() {
-        None
-    } else {
-        snapshot::text(reader, entry)?
-    };
     Ok(Side {
         path: selector.path,
         snap,
         entry,
         hidden,
-        text,
+        text: None,
     })
+}
+
+/// The side with its text read, unless hidden.
+fn with_text(reader: &Cached<'_>, mut side: Side) -> Result<Side, SdkRefusal> {
+    if side.hidden.is_none() {
+        side.text = snapshot::text(reader, side.entry)?;
+    }
+    Ok(side)
+}
+
+/// Both sides' regular files read together (#818 H6): their lengths in one
+/// per-object demand, then the roots of the texts within the text bound in
+/// one, kept and held by the call's caches, so each side's reads are served
+/// where they were made, an object's own failure there too.
+fn plan(reader: &Cached<'_>, sides: [&Side; 2]) -> Result<(), SdkRefusal> {
+    let mut files = Vec::new();
+    for side in sides.iter().filter(|side| side.hidden.is_none()) {
+        if let Some(e) = side
+            .entry
+            .filter(|e| e.value.kind == InodeKind::RegularFile)
+        {
+            if !files.contains(&e.value.content_root) {
+                files.push(e.value.content_root);
+            }
+        }
+    }
+    if files.is_empty() {
+        return Ok(());
+    }
+    reader.lengths_each(&files)?;
+    let (mut texts, mut lengths) = (Vec::new(), Vec::new());
+    for file in files {
+        if let Some(Ok(length)) = reader.length(file) {
+            if length <= MAXIMUM_TEXT_BYTES {
+                texts.push(file);
+                lengths.push(length);
+            }
+        }
+    }
+    let first = cached::batches(&lengths)
+        .into_iter()
+        .next()
+        .unwrap_or_default();
+    reader.hold_each(&texts[first]).map_err(args::content)
 }
 
 fn label(side: &Side) -> SdkValue {
@@ -108,14 +152,14 @@ fn label(side: &Side) -> SdkValue {
     ])
 }
 
-fn omitted(reader: &StorePorts, side: &Side) -> Result<Option<&'static str>, SdkRefusal> {
+fn omitted(reader: &Cached<'_>, side: &Side) -> Result<Option<&'static str>, SdkRefusal> {
     if side.hidden.is_some() {
         return Ok(None);
     }
     Ok(match side.entry {
         None => None,
         Some(e) if e.value.kind != InodeKind::RegularFile => Some("unsupported_type"),
-        Some(e) if snapshot::size(reader, &e)? > MAXIMUM_TEXT_BYTES => Some("text_limit"),
+        Some(e) if snapshot::size_in(reader, &e)? > MAXIMUM_TEXT_BYTES => Some("text_limit"),
         Some(_) if side.text.is_none() => Some("binary"),
         Some(_) => None,
     })
@@ -129,9 +173,23 @@ pub fn diff(
     right: args::Arg<Selector<'_>>,
     options: Options,
 ) -> args::Answer {
-    let reader = snapshot::reader(store, stack);
-    let left = side(store, stack, &reader, left, options.allow_missing)?;
-    let right = side(store, stack, &reader, right, options.allow_missing)?;
+    let ports = snapshot::reader(store, stack);
+    // Both sides' objects go through the call's caches (#818 H3).
+    let reader = &Cached::new(&ports)?;
+    let left = side(store, stack, reader, left, options.allow_missing)?;
+    // Planned together, the right side is located before the left side's
+    // text is read; its refusal still follows that read, as before.
+    let (left, right) = if options.batching.on(store, reader) {
+        let right = side(store, stack, reader, right, options.allow_missing);
+        if let Ok(right) = &right {
+            plan(reader, [&left, right])?;
+        }
+        (with_text(reader, left)?, with_text(reader, right?)?)
+    } else {
+        let left = with_text(reader, left)?;
+        let right = side(store, stack, reader, right, options.allow_missing)?;
+        (left, with_text(reader, right)?)
+    };
     // Only a genuinely absent side is `NoSuchPath`; a hidden side is the
     // `Removed` state, and two hidden sides are a removal with both objects.
     if left.entry.is_none()
@@ -147,16 +205,16 @@ pub fn diff(
     }
     let mut content_budget = file_facts::CONTENT_QUERY_BYTES;
     let (content, metadata, identity) = if options.extended {
-        file_facts::changes_bounded(&reader, left.entry, right.entry, &mut content_budget)?
+        file_facts::changes_bounded(reader, left.entry, right.entry, &mut content_budget)?
     } else {
-        file_facts::changes(&reader, left.entry, right.entry)?
+        file_facts::changes(reader, left.entry, right.entry)?
     };
     let equal = left.entry.is_some() && right.entry.is_some() && !content;
     let same_inode = left
         .entry
         .zip(right.entry)
         .is_some_and(|(a, b)| a.serial == b.serial);
-    let reason = omitted(&reader, &left)?.or(omitted(&reader, &right)?);
+    let reason = omitted(reader, &left)?.or(omitted(reader, &right)?);
     let mut legacy_budget = super::window::BYTES;
     let (legacy_kind, mut legacy_hunks) = match (&left.text, &right.text) {
         (Some(a), Some(b)) if a == b => ("Equal", Some(SdkValue::List(Vec::new()))),
@@ -173,7 +231,7 @@ pub fn diff(
         let right_seen = Visibility::for_snap(store, &right.snap)?;
         attribution::align(
             store,
-            &reader,
+            reader,
             (
                 (&left.snap, &left.path, &left_seen),
                 (&right.snap, &right.path, &right_seen),
@@ -258,8 +316,8 @@ pub fn diff(
         ("hunks", legacy_hunks.unwrap_or_default()),
         ("leftRef", saved::reference(store, left.snap.node)?),
         ("rightRef", saved::reference(store, right.snap.node)?),
-        ("before", file_facts::facts(&reader, left.entry)?),
-        ("after", file_facts::facts(&reader, right.entry)?),
+        ("before", file_facts::facts(reader, left.entry)?),
+        ("after", file_facts::facts(reader, right.entry)?),
         ("changeKind", SdkValue::text(change_kind)),
         (
             "changes",

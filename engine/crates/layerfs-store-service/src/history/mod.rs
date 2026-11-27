@@ -7,6 +7,7 @@ pub mod listing;
 pub mod lookup;
 pub mod removal;
 pub mod resolve;
+pub mod rows;
 pub mod saved;
 mod units;
 

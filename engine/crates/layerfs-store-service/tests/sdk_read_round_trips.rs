@@ -1,0 +1,318 @@
+//! #818 read pins (lane RH owns this file): the counted SQL work of the SDK
+//! read calls `fs.stat`, `fs.read`, `fs.list`, `fs.glob` and `fs.grep`,
+//! through the method table on the Store as the SDK opens it, on SQLite and
+//! on PostgreSQL.
+//!
+//! Setup (not counted): the #818 probe's Store (`fs_call_round_trips.rs`):
+//! Init of 10 × 100 files, a depth-7 file and a 2,000-line file, Branch
+//! `work`, 100 `fs.write` Commits. Then each case runs on a **new Store
+//! open** (`.cold`: every session connects and prepares at first use, no
+//! object cached), and the same call once more on that open (`.warm`: what a
+//! repeated call costs with today's 64 KiB object cache and the sessions'
+//! prepared statements). Last, one `project.remove_file` puts a marker on
+//! the project, and three `hidden.*` cases run cold with markers present,
+//! so a skipped walk cannot hide a regression.
+//!
+//! Counts per role (support `round_trips.rs`): writer, control reader
+//! (session 0, which serves every SDK read), Workspace readers; each
+//! `[connects, round_trips, statements, transactions]`. The PostgreSQL half
+//! needs `LAYERFS_TEST_POSTGRES_URL` and reports NOT_RUN without it; it also
+//! prints the server's top-level `pg_stat_statements` calls per case
+//! (`RT_COUNTS ... "server"`), a cross-check that is printed, not pinned.
+//!
+//! Relation to the probe's baseline (056e920166 receipts `sqlite.log`,
+//! `pg.log`): the probe runs every read case one after another on the Store
+//! open that wrote the history, so its numbers are neither cold nor warm
+//! here. Measured at 3a904ac225:
+//!
+//! - `.warm` equals the probe's row for `stat.root`, `read.small_depth3`,
+//!   `read.lines_100_200`, `list.root`, `glob.dir_100` and
+//!   `grep.one_file_dir`, on both backends (PostgreSQL 18, 38, 30, 18, 30,
+//!   23 trips; SQLite 39, 83, 66, 39, 66, 49 statements).
+//! - The probe's `stat.depth3` (PostgreSQL 50, its 3 prepares; SQLite 95)
+//!   was its first read after the writes and paid the upper levels' reads;
+//!   `stat.depth7` (73 / 152), `read.2000_lines` (32 / 68), `list.dir_100`
+//!   (33 / 69) and `glob.tree` (23 / 44) also ran with less cached than a
+//!   repeat finds (`.warm`: 65, 30, 31, 20; 144, 66, 67, 41). `grep.tree_1k`
+//!   (78 / 131) is half as much warm (38 / 77): the repeat finds the tree's
+//!   directory objects in the object cache.
+//! - `.cold` adds the control reader's first use on the new open (PostgreSQL:
+//!   its connect and the prepare of each statement it runs, 17 to 29 trips
+//!   above `.warm`; SQLite: 8 to 20 statements) and an empty object cache;
+//!   `grep.tree_1k` is 73 trips (79 statements) above its warm repeat.
+//!
+//! A lane that changes these counts updates the case's numbers and says why
+//! in the comment above the table, as `mount_round_trips.rs` does.
+#[path = "support/round_trips.rs"]
+mod rt;
+
+use layerfs_bridge::control::SdkValue;
+use rt::{branch_arg as branch, path_arg as path, t, Backend, Counts, Measured, Pin, Store};
+
+const NONE: Counts = [0, 0, 0, 0];
+
+/// SQLite: `[0, 0, statements, transactions]` per role. Baseline,
+/// 3a904ac225 (production source identical to 056e920166); the `probe`
+/// comments keep the baseline row.
+///
+/// - #818 R2 (dedupe, both backends): the resolve reads the Commit row once
+///   (ownership and root), the node's serial and the markers are one read,
+///   and `at` is built from the kept record: 3 reads fewer, each a
+///   transaction of 3 statements here (−9 statements, −3 transactions);
+///   `hidden.stat.removed` −2 reads (a refusal builds no `at`).
+/// - #818 R3 (dedupe): one path walk per call, through the call's caches
+///   and memo; the hidden-path check's walk on the bare reader is gone. The
+///   walk that stays finds this tree's pages in the call's cache, so every
+///   case's count no longer grows with depth here (`stat` 22 to 23
+///   statements warm at depths 0 to 7); markers are looked up through the
+///   same memo (`hidden.list.dir_100` −67).
+/// - #818 R4: the root's tree opens through the call's caches, and file
+///   lengths read through them: −1 statement on every case (the root's
+///   page, read once). PostgreSQL unchanged.
+const SQLITE: &[Pin] = &[
+    // probe stat.root: 39 statements
+    pin("stat.root.cold", NONE, [0, 0, 29, 5], NONE),
+    pin("stat.root.warm", NONE, [0, 0, 21, 5], NONE),
+    // probe stat.depth3: 95
+    pin("stat.depth3.cold", NONE, [0, 0, 35, 5], NONE),
+    pin("stat.depth3.warm", NONE, [0, 0, 22, 5], NONE),
+    // probe stat.depth7: 152
+    pin("stat.depth7.cold", NONE, [0, 0, 39, 5], NONE),
+    pin("stat.depth7.warm", NONE, [0, 0, 22, 5], NONE),
+    // probe read.small_depth3: 83
+    pin("read.small_depth3.cold", NONE, [0, 0, 36, 5], NONE),
+    pin("read.small_depth3.warm", NONE, [0, 0, 23, 5], NONE),
+    // probe read.2000_lines: 68
+    pin("read.2000_lines.cold", NONE, [0, 0, 33, 5], NONE),
+    pin("read.2000_lines.warm", NONE, [0, 0, 22, 5], NONE),
+    // probe read.lines_100_200: 66
+    pin("read.lines_100_200.cold", NONE, [0, 0, 33, 5], NONE),
+    pin("read.lines_100_200.warm", NONE, [0, 0, 22, 5], NONE),
+    // probe list.root: 39
+    pin("list.root.cold", NONE, [0, 0, 30, 5], NONE),
+    pin("list.root.warm", NONE, [0, 0, 21, 5], NONE),
+    // probe list.dir_100: 69
+    pin("list.dir_100.cold", NONE, [0, 0, 36, 5], NONE),
+    pin("list.dir_100.warm", NONE, [0, 0, 23, 5], NONE),
+    // probe glob.dir_100: 66
+    pin("glob.dir_100.cold", NONE, [0, 0, 34, 5], NONE),
+    pin("glob.dir_100.warm", NONE, [0, 0, 22, 5], NONE),
+    // probe glob.tree: 44
+    pin("glob.tree.cold", NONE, [0, 0, 43, 5], NONE),
+    pin("glob.tree.warm", NONE, [0, 0, 23, 5], NONE),
+    // probe grep.one_file_dir: 49
+    pin("grep.one_file_dir.cold", NONE, [0, 0, 33, 5], NONE),
+    pin("grep.one_file_dir.warm", NONE, [0, 0, 22, 5], NONE),
+    // probe grep.tree_1k: 131
+    pin("grep.tree_1k.cold", NONE, [0, 0, 138, 5], NONE),
+    pin("grep.tree_1k.warm", NONE, [0, 0, 59, 5], NONE),
+    // Markers present (one `project.remove_file` of /src/d09/f099.txt).
+    pin("hidden.stat.depth3.cold", NONE, [0, 0, 35, 5], NONE),
+    pin("hidden.list.dir_100.cold", NONE, [0, 0, 36, 5], NONE),
+    pin("hidden.stat.removed.cold", NONE, [0, 0, 31, 4], NONE),
+];
+
+/// PostgreSQL: `[connects, round_trips, statements, transactions]` per
+/// role. Baseline, 3a904ac225; the `probe` comments keep the baseline row.
+///
+/// - #818 R1: the Branch-by-name and marker reads are one fenced statement
+///   each, no read transaction: every case −4 round trips and −2
+///   transactions (3 trips each before, 1 after); statements unchanged.
+/// - #818 R2: 3 reads fewer (see SQLITE), −3 round trips warm
+///   (`stat.root` 14 → 11); cold −4, the two statements the merged read
+///   replaces costing one prepare less; `hidden.stat.removed` −3 cold.
+/// - #818 R3: the hidden-path walk on the bare reader is gone: −3 at the
+///   root and −7 per component, cold and warm (`stat.root` 11 → 8,
+///   `stat.depth3` 30 → 9, `stat.depth7` 58 → 9 warm); `grep.tree_1k` −3;
+///   `hidden.list.dir_100` −28 (its marker lookup through the memo too).
+/// - #818 R5: the project, Branch, Commit, serial with markers and recorded
+///   Branch reads are one context statement: −4 round trips and statements
+///   warm (`stat.root` 8 → 4); cold −8, four prepares fewer too;
+///   `hidden.stat.removed` −6 cold (it reads no recorded Branch).
+/// - #818 R6 (batch): `fs.grep` and `fs.glob` take folder pages of up to
+///   256 names and `fs.grep` windows of up to 256 files, roots in demands of
+///   at most 256 and the existing 4 MiB (byte bounds unchanged):
+///   `grep.tree_1k` cold 92 → 62, warm 24 → 15; the globs and
+///   `grep.one_file_dir` unchanged. SQLite unchanged.
+const POSTGRESQL: &[Pin] = &[
+    // probe stat.root: 18 trips
+    pin("stat.root.cold", NONE, [1, 16, 11, 0], NONE),
+    pin("stat.root.warm", NONE, [0, 4, 4, 0], NONE),
+    // probe stat.depth3: 50
+    pin("stat.depth3.cold", NONE, [1, 22, 17, 0], NONE),
+    pin("stat.depth3.warm", NONE, [0, 5, 5, 0], NONE),
+    // probe stat.depth7: 73
+    pin("stat.depth7.cold", NONE, [1, 26, 21, 0], NONE),
+    pin("stat.depth7.warm", NONE, [0, 5, 5, 0], NONE),
+    // probe read.small_depth3: 38
+    pin("read.small_depth3.cold", NONE, [1, 23, 18, 0], NONE),
+    pin("read.small_depth3.warm", NONE, [0, 6, 6, 0], NONE),
+    // probe read.2000_lines: 32
+    pin("read.2000_lines.cold", NONE, [1, 20, 15, 0], NONE),
+    pin("read.2000_lines.warm", NONE, [0, 5, 5, 0], NONE),
+    // probe read.lines_100_200: 30
+    pin("read.lines_100_200.cold", NONE, [1, 20, 15, 0], NONE),
+    pin("read.lines_100_200.warm", NONE, [0, 5, 5, 0], NONE),
+    // probe list.root: 18
+    pin("list.root.cold", NONE, [1, 17, 12, 0], NONE),
+    pin("list.root.warm", NONE, [0, 4, 4, 0], NONE),
+    // probe list.dir_100: 33
+    pin("list.dir_100.cold", NONE, [1, 23, 18, 0], NONE),
+    pin("list.dir_100.warm", NONE, [0, 6, 6, 0], NONE),
+    // probe glob.dir_100: 30
+    pin("glob.dir_100.cold", NONE, [1, 21, 16, 0], NONE),
+    pin("glob.dir_100.warm", NONE, [0, 5, 5, 0], NONE),
+    // probe glob.tree: 23
+    pin("glob.tree.cold", NONE, [1, 30, 25, 0], NONE),
+    pin("glob.tree.warm", NONE, [0, 6, 6, 0], NONE),
+    // probe grep.one_file_dir: 23
+    pin("grep.one_file_dir.cold", NONE, [1, 20, 15, 0], NONE),
+    pin("grep.one_file_dir.warm", NONE, [0, 5, 5, 0], NONE),
+    // probe grep.tree_1k: 78
+    pin("grep.tree_1k.cold", NONE, [1, 62, 57, 0], NONE),
+    pin("grep.tree_1k.warm", NONE, [0, 15, 15, 0], NONE),
+    // Markers present.
+    pin("hidden.stat.depth3.cold", NONE, [1, 22, 17, 0], NONE),
+    pin("hidden.list.dir_100.cold", NONE, [1, 23, 18, 0], NONE),
+    pin("hidden.stat.removed.cold", NONE, [1, 21, 16, 0], NONE),
+];
+
+const fn pin(case: &'static str, writer: Counts, control: Counts, workspace: Counts) -> Pin {
+    Pin {
+        case,
+        writer,
+        control,
+        workspace,
+    }
+}
+
+#[test]
+fn sqlite_read_counts() {
+    let mut store = Store::sqlite("reads-sqlite");
+    let measured = scenarios(&mut store);
+    rt::check("sdk_read_round_trips", Backend::Sqlite, &measured, SQLITE);
+}
+
+#[test]
+fn postgresql_read_counts() {
+    let _turn = rt::postgresql_turn();
+    let Some(mut store) = Store::postgresql("reads") else {
+        return;
+    };
+    let measured = scenarios(&mut store);
+    rt::check(
+        "sdk_read_round_trips",
+        Backend::Postgresql,
+        &measured,
+        POSTGRESQL,
+    );
+}
+
+fn scenarios(store: &mut Store) -> Vec<Measured> {
+    rt::probe_store(store);
+    let mut out = Vec::new();
+    let mut case = |name: &str, method: &str, fields: Vec<(&'static str, SdkValue)>| {
+        rt::cold_warm(
+            store,
+            &mut out,
+            name,
+            method,
+            "ok",
+            fields.clone(),
+            Some(fields),
+        );
+    };
+    case("stat.root", "fs.stat", vec![branch(), path("/")]);
+    case(
+        "stat.depth3",
+        "fs.stat",
+        vec![branch(), path("/src/d05/f050.txt")],
+    );
+    case(
+        "stat.depth7",
+        "fs.stat",
+        vec![branch(), path("/deep/a/b/c/d/e/leaf.txt")],
+    );
+    case(
+        "read.small_depth3",
+        "fs.read",
+        vec![branch(), path("/src/d05/f050.txt")],
+    );
+    case(
+        "read.2000_lines",
+        "fs.read",
+        vec![branch(), path("/text/big.txt")],
+    );
+    case(
+        "read.lines_100_200",
+        "fs.read",
+        vec![
+            branch(),
+            path("/text/big.txt"),
+            ("startLine", SdkValue::Int(100)),
+            ("endLine", SdkValue::Int(200)),
+        ],
+    );
+    case("list.root", "fs.list", vec![branch(), path("/")]);
+    case(
+        "list.dir_100",
+        "fs.list",
+        vec![branch(), path("/src/d05"), ("pageSize", SdkValue::Int(100))],
+    );
+    case(
+        "glob.dir_100",
+        "fs.glob",
+        vec![branch(), path("/src/d05"), ("pattern", t("f0*"))],
+    );
+    case(
+        "glob.tree",
+        "fs.glob",
+        vec![branch(), path("/"), ("pattern", t("*"))],
+    );
+    case(
+        "grep.one_file_dir",
+        "fs.grep",
+        vec![branch(), path("/text"), ("pattern", t("needle"))],
+    );
+    case(
+        "grep.tree_1k",
+        "fs.grep",
+        vec![branch(), path("/"), ("pattern", t("needle"))],
+    );
+
+    // A marker on the project (not counted), then reads with it present.
+    let opened = store.open("remove");
+    let removed = opened
+        .call("project.remove_file", vec![path("/src/d09/f099.txt")])
+        .unwrap();
+    assert_eq!(removed.get_text("kind"), Some("Removed"));
+    opened.stop();
+    rt::cold_warm(
+        store,
+        &mut out,
+        "hidden.stat.depth3",
+        "fs.stat",
+        "ok",
+        vec![branch(), path("/src/d05/f050.txt")],
+        None,
+    );
+    rt::cold_warm(
+        store,
+        &mut out,
+        "hidden.list.dir_100",
+        "fs.list",
+        "ok",
+        vec![branch(), path("/src/d09"), ("pageSize", SdkValue::Int(100))],
+        None,
+    );
+    rt::cold_warm(
+        store,
+        &mut out,
+        "hidden.stat.removed",
+        "fs.stat",
+        "refused Removed",
+        vec![branch(), path("/src/d09/f099.txt")],
+        None,
+    );
+    out
+}

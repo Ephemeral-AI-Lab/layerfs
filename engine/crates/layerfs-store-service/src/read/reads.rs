@@ -3,12 +3,11 @@
 use super::{
     cached::{self, Cached},
     search,
-    snapshot::{answer, existing, header, kind_name, size, Snap},
+    snapshot::{answer, found, header, kind_name, size_in, Snap},
     visibility::Visibility,
     walk, window,
 };
 use crate::history::lookup::{self as args, invalid, Answer, Arg};
-use crate::store::StorePorts;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_content::{
     compare::{memo::Memo, EntryFacts},
@@ -26,18 +25,20 @@ pub const REPLY_BUDGET: usize = window::BYTES;
 /// One window of the file at `path`: lines `start` through `end`, as far as
 /// the reply budget allows. With `binary`, a file that is not text answers
 /// `binary: true` and its `size` instead of being refused `Binary`.
+///
+/// `entry` is the call's one path lookup (#818 R3), made through a memo
+/// over `cached`; the file's own objects are read through the caches only.
+#[allow(clippy::too_many_arguments)]
 pub fn read(
-    reader: &StorePorts,
+    cached: &Cached,
     snap: &Snap,
     path: &str,
+    entry: Option<EntryFacts>,
     start: Arg<u64>,
     end: Arg<u64>,
     binary: bool,
 ) -> Answer {
-    // The lookup's pages are memoized over the call's caches; the file's
-    // own objects are read through the caches only.
-    let cached = Cached::new(reader)?;
-    let entry = existing(&Memo::new(&cached), snap, path)?;
+    let entry = found(snap, path, entry)?;
     let (start, end) = (start?, end?);
     if end < start {
         return Err(invalid("endLine must be at least startLine"));
@@ -47,7 +48,7 @@ pub fn read(
     let (mut content, mut next, mut clipped) = (String::new(), None, false);
     // a line past the asked end is the next line, but the read is whole
     let (mut last, mut asked) = (None, false);
-    let scanned = window::lines(&cached, &entry, REPLY_BUDGET, start, |n, line| {
+    let scanned = window::lines(cached, &entry, REPLY_BUDGET, start, |n, line| {
         if n > requested_end {
             (next, asked) = (Some(n), true);
             return Ok(false);
@@ -66,7 +67,7 @@ pub fn read(
             let mut fields = header(snap, path);
             fields.extend([
                 ("binary", SdkValue::Bool(true)),
-                ("size", SdkValue::Int(size(reader, &entry)? as i64)),
+                ("size", SdkValue::Int(size_in(cached, &entry)? as i64)),
             ]);
             return answer(fields);
         }
@@ -90,18 +91,18 @@ pub fn read(
             "nextLine",
             next.map_or(SdkValue::Null, |n| SdkValue::Int(n as i64)),
         ),
-        ("size", SdkValue::Int(size(reader, &entry)? as i64)),
+        ("size", SdkValue::Int(size_in(cached, &entry)? as i64)),
     ]);
     answer(fields)
 }
 
 /// The type, inode, size, permission mode and modification time of the
-/// entry at `path`. An inline mode costs no object read.
-pub fn stat(reader: &StorePorts, snap: &Snap, path: &str) -> Answer {
-    let cached = Cached::new(reader)?;
-    let entry = existing(&Memo::new(&cached), snap, path)?;
+/// entry at `path`, the call's one lookup (#818 R3). An inline mode costs
+/// no object read.
+pub fn stat(cached: &Cached, snap: &Snap, path: &str, entry: Option<EntryFacts>) -> Answer {
+    let entry = found(snap, path, entry)?;
     let metadata = read_portable(
-        &cached,
+        cached,
         entry.value.metadata_root,
         entry.value.kind,
         &mut AttributeReadWork::default(),
@@ -111,7 +112,7 @@ pub fn stat(reader: &StorePorts, snap: &Snap, path: &str) -> Answer {
     fields.extend([
         ("type", SdkValue::text(kind_name(entry.value.kind))),
         ("inode", SdkValue::Int(entry.serial as i64)),
-        ("size", SdkValue::Int(size(reader, &entry)? as i64)),
+        ("size", SdkValue::Int(size_in(cached, &entry)? as i64)),
         ("mode", SdkValue::Int(i64::from(metadata.mode))),
         (
             "modifiedMs",
@@ -124,20 +125,21 @@ pub fn stat(reader: &StorePorts, snap: &Snap, path: &str) -> Answer {
     answer(fields)
 }
 
-/// One page of the directory at `path`, `paging` (limit, offset) from the
-/// caller.
+/// One page of the directory at `path`, the call's one lookup (#818 R3),
+/// `paging` (limit, offset) from the caller.
+///
+/// One memo for the call (#352 011.a1), the one its lookup used: the
+/// entries' inode lookups share the inode table's upper pages, read once,
+/// so an entry costs its leaf.
 pub fn list(
-    reader: &StorePorts,
+    memo: &Memo,
     snap: &Snap,
     path: &str,
+    entry: Option<EntryFacts>,
     seen: &Visibility,
     paging: Arg<(usize, u64)>,
 ) -> Answer {
-    let cached = Cached::new(reader)?;
-    // One memo for the call (#352 011.a1): the entries' inode lookups share
-    // the inode table's upper pages, read once, so an entry costs its leaf.
-    let memo = Memo::new(&cached);
-    let dir = existing(&memo, snap, path)?;
+    let dir = found(snap, path, entry)?;
     if dir.value.kind != InodeKind::Directory {
         return Err(args::refuse(
             "NotDirectory",
@@ -150,7 +152,7 @@ pub fn list(
         (None, 0u64, Vec::new(), 0, false);
     'pages: loop {
         let page = list_after(
-            &memo,
+            memo,
             DirectoryRoot(dir.value.content_root),
             after.as_ref(),
             64,
@@ -181,7 +183,7 @@ pub fn list(
         }
         // The page's entries are looked up together, one descent per level.
         let serials: Vec<u64> = taken.iter().map(|(_, serial)| *serial).collect();
-        let values = snap.tree.values(&memo, &serials).map_err(args::content)?;
+        let values = snap.tree.values(memo, &serials).map_err(args::content)?;
         for ((name, serial), value) in taken.into_iter().zip(values) {
             let value = value.ok_or_else(|| args::failed("missing bound inode"))?;
             items.push(SdkValue::map([
@@ -214,13 +216,16 @@ pub fn list(
 
 /// One page of the lines under `path` that contain `pattern`, a nonempty
 /// literal the caller checked, in the files `filters` leave in; binary
-/// files are skipped and counted.
+/// files are skipped and counted. The walk starts from `entry`, the call's
+/// one lookup (#818 R3), and reads through its `memo`.
 #[allow(clippy::too_many_arguments)]
-pub fn grep(
-    reader: &StorePorts,
-    snap: &Snap,
+pub fn grep<'a>(
+    cached: &'a Cached,
+    memo: Memo<'a>,
+    snap: &'a Snap,
     pattern: &str,
     path: &str,
+    entry: Option<EntryFacts>,
     seen: &Visibility,
     filters: &search::Filters,
     limit: usize,
@@ -240,23 +245,39 @@ pub fn grep(
     let mut reuse = search::Reuse::default();
     // The walk and the file scans share one call's read caches; files are
     // scanned in walk order, a window of them at a time.
-    let cached = Cached::new(reader)?;
+    let top = found(snap, path, entry)?;
     let mut window = Vec::new();
     let excluded = |file: &str| filters.excluded(file);
-    walk::walk_excluding(&cached, snap, path, None, excluded, |file, entry| {
-        if entry.value.kind == InodeKind::RegularFile
-            && seen.hidden(file).is_none()
-            && filters.included(file)
-        {
-            window.push((file.to_owned(), entry));
-        }
-        if window.len() == cached::ROOTS {
-            page.scan(&cached, &mut reuse, &mut window)?;
-        }
-        Ok(!page.more)
-    })?;
+    // Wide windows where a demand costs a round trip (#818 R6).
+    let wide = cached.wide();
+    let files = if wide {
+        cached::WIDE_ROOTS
+    } else {
+        cached::ROOTS
+    };
+    walk::walk_excluding(
+        memo,
+        snap,
+        path,
+        top,
+        None,
+        wide,
+        excluded,
+        |file, entry| {
+            if entry.value.kind == InodeKind::RegularFile
+                && seen.hidden(file).is_none()
+                && filters.included(file)
+            {
+                window.push((file.to_owned(), entry));
+            }
+            if window.len() == files {
+                page.scan(cached, &mut reuse, &mut window, files)?;
+            }
+            Ok(!page.more)
+        },
+    )?;
     if !page.more {
-        page.scan(&cached, &mut reuse, &mut window)?;
+        page.scan(cached, &mut reuse, &mut window, files)?;
     }
     let Page {
         items,
@@ -296,6 +317,7 @@ impl Page<'_> {
         cached: &Cached,
         reuse: &mut search::Reuse,
         window: &mut Vec<(String, EntryFacts)>,
+        files: usize,
     ) -> Result<(), SdkRefusal> {
         let mut ids: Vec<_> = window
             .iter()
@@ -304,7 +326,7 @@ impl Page<'_> {
             .collect();
         ids.sort_unstable();
         ids.dedup();
-        let mut views = cached.roots(&ids)?;
+        let mut views = cached.roots(&ids, files)?;
         let (pattern, fold) = (self.pattern, self.fold);
         for (file, entry) in window.drain(..) {
             if self.more {
@@ -345,25 +367,28 @@ impl Page<'_> {
 }
 
 /// One page of the paths under `path` that match the glob `pattern` and
-/// that `filters` do not leave out.
+/// that `filters` do not leave out. The walk starts from `entry`, the
+/// call's one lookup (#818 R3), and reads through its `memo`.
 #[allow(clippy::too_many_arguments)]
-pub fn glob(
-    reader: &StorePorts,
-    snap: &Snap,
+pub fn glob<'a>(
+    memo: Memo<'a>,
+    snap: &'a Snap,
     pattern: &str,
     path: &str,
+    entry: Option<EntryFacts>,
     seen: &Visibility,
     filters: &search::Filters,
     limit: usize,
     pos: u64,
+    wide: bool,
 ) -> Answer {
     let rule = Rule::glob(pattern);
     let (mut items, mut found, mut spent, mut more) = (Vec::new(), 0u64, 0, false);
     // Only the folders the pattern's literal leading folders allow.
-    let cached = Cached::new(reader)?;
+    let top = super::snapshot::found(snap, path, entry)?;
     let within = walk::leading(pattern);
     let excluded = |file: &str| filters.excluded(file);
-    walk::walk_excluding(&cached, snap, path, within, excluded, |file, _| {
+    walk::walk_excluding(memo, snap, path, top, within, wide, excluded, |file, _| {
         if seen.hidden(file).is_some() {
             return Ok(true);
         }
