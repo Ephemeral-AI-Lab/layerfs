@@ -41,11 +41,24 @@
 //! C-9 corrected it to the product's one receive loop per mount
 //! (`layerfs-fuse` `dispatch/types.rs`, `RECEIVE_SLOTS = 1`). The test asserts
 //! that the receipt, control Status and the process's own thread table agree
-//! on one.
+//! on one. It counts every receive-loop thread of the process, so it is a
+//! binary of its own (#828): another test's mount would add to the count.
 #![cfg(target_os = "linux")]
-use crate::fusectl;
-use crate::mounted;
-use crate::rig;
+#[allow(dead_code)]
+#[path = "../support/kernel/fusectl.rs"]
+mod fusectl;
+#[allow(dead_code)]
+#[path = "../support/installed_store.rs"]
+mod installed;
+#[allow(dead_code)]
+#[path = "../support/rigs/namespace_model.rs"]
+mod model;
+#[allow(dead_code)]
+#[path = "../support/mounted.rs"]
+mod mounted;
+#[allow(dead_code)]
+#[path = "../support/mounted_commit.rs"]
+mod rig;
 use layerfs_fuse::request::Opcode;
 use layerfs_protocol::daemon::{MountPhase, Reply};
 use mounted::{mount_entry, until};

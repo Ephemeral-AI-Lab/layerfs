@@ -33,7 +33,6 @@ mod mounted_fusectl;
 mod mutating;
 mod mutation;
 mod negative_entries;
-mod negotiation_flags;
 mod reader_health;
 mod rename_predecessor;
 #[cfg(target_os = "linux")]

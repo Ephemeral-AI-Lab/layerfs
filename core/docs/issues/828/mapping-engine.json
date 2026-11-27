@@ -849,9 +849,9 @@
   },
   {
    "old": "engine/crates/layerfs-daemon/tests/fp2_negotiation_flags.rs",
-   "new": "engine/crates/layerfs-daemon/tests/kernel/negotiation_flags.rs",
+   "new": "engine/crates/layerfs-daemon/tests/standalone/negotiation_flags.rs",
    "change": "rename",
-   "note": "test area kernel/ (one binary); campaign prefix dropped"
+   "note": "own binary: it counts the process's receive-loop threads; campaign prefix dropped"
   },
   {
    "old": "engine/crates/layerfs-daemon/tests/fp31_forget_underflow.rs",

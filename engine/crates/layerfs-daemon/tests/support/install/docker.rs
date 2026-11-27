@@ -43,7 +43,8 @@ impl Daemon {
         let volume = format!("{name}-store");
         let binary = std::env::var("LAYERFS_INSTALL_DAEMON_BINARY")
             .expect("explicit build-listed Linux binary");
-        assert!(binary.starts_with("/work/target/issue320/linux-test/debug/deps/host_handoff-"));
+        // the Linux build of the `install` area binary, which holds host_handoff (#828)
+        assert!(binary.starts_with("/work/target/issue320/linux-test/debug/deps/install-"));
         let absent = docker(&["volume", "inspect", &volume]);
         assert!(
             !absent.status.success()
@@ -80,7 +81,7 @@ impl Daemon {
                 &binary,
                 "--ignored",
                 "--exact",
-                "linux_daemon_install_role",
+                "host_handoff::linux_daemon_install_role",
                 "--nocapture",
                 "--test-threads=1",
             ])

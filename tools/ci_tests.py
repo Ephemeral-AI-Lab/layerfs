@@ -22,14 +22,15 @@ Usage (from the repository root):
                                      for each group of targets that are empty
                                      without a cargo feature of their package
   ci_tests.py executables            read `cargo test --no-run --message-format
-                                     json` on stdin, print `<dir>\\t<exe>\\t<filters>`
-                                     for each mount test binary
+                                     json` on stdin, print `<dir>\\t<exe>\\t<filter>`
+                                     for each mount run: a one-file binary, or one
+                                     module of an area binary
 
 A key is `(package, binary)` or, for one module of an area binary that joins
 several test files (`tests/<area>/main.rs`, #828), `(package, binary, module)`.
 A module key leaves its binary in the push job's build and filters the module's
-tests by name (`test(/^module::/)`); the mount lane runs only those modules
-(libtest filters `module::`).
+tests by name (`test(/^module::/)`); the mount lane runs each module of an area
+binary on its own (libtest filter `module::`), one container and 120 s cap each.
 
 `--test NAME` selects every package's target of that name. A name shared by two
 packages (for example `postgresql` in layerfs-persistence and
@@ -348,13 +349,17 @@ def test_flags(keys):
 
 
 def executables(lines, mount, meta):
-    """Yield (directory, executable, libtest filters): a binary listed whole runs
-    every test; one listed by module runs only those modules' tests."""
+    """Yield (directory, executable, libtest filter) runs, each under its own cap.
+
+    A one-file binary listed whole runs every test in one run. An area binary
+    (`tests/<area>/main.rs`, #828) runs one module per run, whether it is listed
+    whole or by module: its modules were one binary each before #828, and each
+    keeps the 120 s cap and the fresh container it had then."""
     wanted = {}
     for key in mount:
         wanted.setdefault(key[:2], set())
         if len(key) == 3:
-            wanted[key[:2]].add(f"{key[2]}::")
+            wanted[key[:2]].add(key[2])
     whole = {key[:2] for key in mount if len(key) == 2}
     names = {Path(p["manifest_path"]): p["name"] for p in meta["packages"]}
     for line in lines:
@@ -369,9 +374,27 @@ def executables(lines, mount, meta):
             continue
         manifest = Path(message["manifest_path"])
         binary = (names.get(manifest), target["name"])
-        if binary in wanted:
-            filters = "" if binary in whole else " ".join(sorted(wanted[binary]))
-            yield manifest.parent, message["executable"], filters
+        if binary not in wanted:
+            continue
+        source = Path(target.get("src_path", ""))
+        if binary in whole and source.name == "main.rs":
+            selected = sorted(module for module, _ in modules(source))
+        elif binary in whole:
+            yield manifest.parent, message["executable"], ""
+            continue
+        else:
+            selected = sorted(wanted[binary])
+        for module in selected:
+            yield manifest.parent, message["executable"], module_filter(module, selected)
+
+
+def module_filter(module, siblings):
+    """The libtest filter that selects module `module`'s tests alone. libtest
+    filters by substring, so `module::` must not also match a sibling."""
+    clash = [other for other in siblings if other != module and other.endswith(module)]
+    if clash:
+        raise SystemExit(f"mount module filter {module}:: also selects {clash}")
+    return f"{module}::"
 
 
 def main(argv):

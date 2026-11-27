@@ -1091,15 +1091,15 @@
   },
   {
    "old": "api/crates/layerfs-api/tests/sandbox_deploy.rs",
-   "new": "api/crates/layerfs-api/tests/sandbox/deploy.rs",
+   "new": "api/crates/layerfs-api/tests/standalone/sandbox_deploy.rs",
    "change": "rename",
-   "note": "module of the sandbox test binary"
+   "note": "own binary: it sets the process's environment"
   },
   {
    "old": "api/crates/layerfs-api/tests/sandbox_direct.rs",
-   "new": "api/crates/layerfs-api/tests/sandbox_daemon/direct.rs",
+   "new": "api/crates/layerfs-api/tests/standalone/sandbox_direct.rs",
    "change": "rename",
-   "note": "module of the sandbox_daemon test binary"
+   "note": "own binary: it sets the process's environment"
   },
   {
    "old": "api/crates/layerfs-api/tests/sandbox_direct_live.rs",

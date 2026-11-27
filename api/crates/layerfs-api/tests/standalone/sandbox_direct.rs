@@ -7,7 +7,7 @@
 //! refused `Unsupported` (the platform was removed in 2.0) before the worker
 //! is asked; on `docker` (namespaces in its worker container, D-8), whose
 //! adapter forwards nothing, every call goes through the worker as before. What it does not prove: a real daemon answering
-//! (`sandbox_direct_live.rs` dials a host daemon). One test, because it
+//! (`sandbox_daemon/direct_live.rs` dials a host daemon). One test, because it
 //! sets the process's environment.
 #![cfg(all(unix, feature = "machine"))]
 use layerfs_api::home::{self, paths, read_record, write_record};

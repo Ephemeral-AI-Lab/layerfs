@@ -39,3 +39,7 @@ path = "tests/standalone/mounted_commit_cycles.rs"
 [[test]]
 name = "unmount_stalled"
 path = "tests/standalone/unmount_stalled.rs"
+
+[[test]]
+name = "negotiation_flags"
+path = "tests/standalone/negotiation_flags.rs"

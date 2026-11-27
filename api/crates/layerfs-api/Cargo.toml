@@ -84,6 +84,14 @@ name = "store_call_steps"
 path = "tests/standalone/store_call_steps.rs"
 
 [[test]]
+name = "sandbox_deploy"
+path = "tests/standalone/sandbox_deploy.rs"
+
+[[test]]
+name = "sandbox_direct"
+path = "tests/standalone/sandbox_direct.rs"
+
+[[test]]
 name = "machine_built_ins_once"
 path = "tests/standalone/machine_built_ins_once.rs"
 

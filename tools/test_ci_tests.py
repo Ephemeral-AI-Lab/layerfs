@@ -1,5 +1,6 @@
 import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -89,12 +90,15 @@ class ExecutablesFromCargoJson(unittest.TestCase):
     def test_keeps_only_mount_test_binaries(self):
         meta = {"packages": [{"name": "layerfs-daemon", "manifest_path": "/w/engine/crates/layerfs-daemon/Cargo.toml"}]}
 
-        def artifact(name, kind, exe):
+        def artifact(name, kind, exe, src_path=None):
+            target = {"name": name, "kind": [kind]}
+            if src_path:
+                target["src_path"] = src_path
             return json.dumps(
                 {
                     "reason": "compiler-artifact",
                     "manifest_path": "/w/engine/crates/layerfs-daemon/Cargo.toml",
-                    "target": {"name": name, "kind": [kind]},
+                    "target": target,
                     "executable": exe,
                 }
             )
@@ -117,9 +121,35 @@ class ExecutablesFromCargoJson(unittest.TestCase):
             found,
             [
                 (daemon, "/t/mounted_commit-1", ""),
-                (daemon, "/t/unmount-1", "detach_stages:: forced_smoke::"),
+                (daemon, "/t/unmount-1", "detach_stages::"),
+                (daemon, "/t/unmount-1", "forced_smoke::"),
             ],
         )
+
+    def test_an_area_binary_listed_whole_runs_one_module_per_run(self):
+        meta = {"packages": [{"name": "layerfs-daemon", "manifest_path": "/w/d/Cargo.toml"}]}
+        with tempfile.TemporaryDirectory() as folder:
+            area = Path(folder) / "mounted"
+            area.mkdir()
+            for name in ("main", "store_read", "coherence"):
+                (area / f"{name}.rs").write_text("")
+            line = json.dumps(
+                {
+                    "reason": "compiler-artifact",
+                    "manifest_path": "/w/d/Cargo.toml",
+                    "target": {"name": "mounted", "kind": ["test"], "src_path": str(area / "main.rs")},
+                    "executable": "/t/mounted-1",
+                }
+            )
+            found = list(ci_tests.executables([line], [("layerfs-daemon", "mounted")], meta))
+        self.assertEqual(
+            found,
+            [(Path("/w/d"), "/t/mounted-1", "coherence::"), (Path("/w/d"), "/t/mounted-1", "store_read::")],
+        )
+
+    def test_a_module_filter_that_selects_a_sibling_is_refused(self):
+        with self.assertRaises(SystemExit):
+            ci_tests.module_filter("unmount", ["forced_unmount", "unmount"])
 
 
 if __name__ == "__main__":

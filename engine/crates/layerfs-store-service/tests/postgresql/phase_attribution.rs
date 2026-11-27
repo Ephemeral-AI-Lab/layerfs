@@ -117,7 +117,8 @@ fn postgresql_case_attribution() {
 /// one plain driver connect: the first open also builds the process's TLS
 /// connector (persistence `session/connection.rs` `tls()`), whatever the
 /// URL's `sslmode`. Run it
-/// alone (`postgresql_first_open --exact`) so nothing opened a session
+/// alone (`--test postgresql -- --exact phase_attribution::postgresql_first_open`)
+/// so nothing opened a session
 /// before it in this process. Each open reads only the server version
 /// (`PostgresHandles::binding`), so it needs no LayerFS schema.
 #[test]

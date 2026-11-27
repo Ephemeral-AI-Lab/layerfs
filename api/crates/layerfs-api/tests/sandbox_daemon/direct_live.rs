@@ -9,7 +9,7 @@
 //! stand-in's hello stops it before a call). The Sandbox is created and closed by helper processes (this
 //! test binary run again), so this process opens it only through its
 //! forwarded record. It does not prove an `ssh -L` carries the port, nor
-//! a guest runtime (exec stays on the worker; `sandbox_direct.rs`).
+//! a guest runtime (exec stays on the worker; `standalone/sandbox_direct.rs`).
 //! Needs the macOS daemon at LAYERFS_DAEMON; without it, NOT_RUN.
 #![cfg(all(target_os = "macos", feature = "machine"))]
 use layerfs_api::home::{self, paths, read_record, write_record};
