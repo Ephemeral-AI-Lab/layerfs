@@ -41,12 +41,12 @@ use std::{collections::BTreeSet, sync::atomic::Ordering};
 
 /// `writes::owner` as an assertion: `Stale` without the live row,
 /// `Integrity` for an unknown phase or a negative count.
-const OWNER_LIVE: &str = "SELECT CASE WHEN count(*)=0 THEN 1/count(*)::int \
+pub(super) const OWNER_LIVE: &str = "SELECT CASE WHEN count(*)=0 THEN 1/count(*)::int \
  WHEN bool_and(phase BETWEEN 1 AND 6 AND least(held_rows,held_bytes,peak_rows,peak_bytes,removed_rows,removed_bytes)>=0) THEN 1 \
  ELSE (32768+count(*))::smallint::int END \
  FROM {s}.init_operation WHERE operation_id=$1::bigint AND owner_epoch=$2::bigint";
 /// `writes::CHARGE`: `Stale` without the row, `Integrity` for negative rows.
-const CHARGED: &str = "WITH c AS (UPDATE {s}.init_operation SET held_rows=held_rows+$3::bigint,held_bytes=held_bytes+$4::bigint,peak_rows=greatest(peak_rows,held_rows+$3::bigint),peak_bytes=greatest(peak_bytes,held_bytes+$4::bigint) WHERE operation_id=$1::bigint AND owner_epoch=$2::bigint RETURNING held_rows) \
+pub(super) const CHARGED: &str = "WITH c AS (UPDATE {s}.init_operation SET held_rows=held_rows+$3::bigint,held_bytes=held_bytes+$4::bigint,peak_rows=greatest(peak_rows,held_rows+$3::bigint),peak_bytes=greatest(peak_bytes,held_bytes+$4::bigint) WHERE operation_id=$1::bigint AND owner_epoch=$2::bigint RETURNING held_rows) \
  SELECT CASE WHEN count(*)=0 THEN 1/count(*)::int WHEN min(held_rows)>=0 THEN 1 ELSE (32768+count(*))::smallint::int END FROM c";
 /// `writes::FILE_ROOTS` returning the recorded positions as one array, with
 /// `layerfs.recorded` set to whether every input position was recorded
@@ -97,16 +97,16 @@ pub(super) fn eligible(session: &Session) -> Result<bool, BackendError> {
 /// The live owner's signed identity, as the unit binds it.
 pub(super) type Identity = (i64, i64);
 
-type Replies = [Result<Reply, Refusal>];
+pub(super) type Replies = [Result<Reply, Refusal>];
 
 /// One root window: its first index in the unit, positions and roots.
 type Window<'a> = (usize, Vec<i64>, Vec<&'a [u8]>);
 
-fn text(sql: &str, schema: &str) -> String {
+pub(super) fn text(sql: &str, schema: &str) -> String {
     sql.replace("{s}", schema)
 }
 
-fn rows(reply: &Result<Reply, Refusal>) -> Option<&[Row]> {
+pub(super) fn rows(reply: &Result<Reply, Refusal>) -> Option<&[Row]> {
     match reply {
         Ok(Reply::Rows(rows)) => Some(rows),
         _ => None,
@@ -123,19 +123,8 @@ fn send<T>(
     divided: impl Fn(usize, &Replies) -> Failure,
     answer: impl FnOnce(&Replies) -> Option<T>,
 ) -> Result<T, Failure> {
-    let generation = session.incarnation.load(Ordering::SeqCst);
     let schema = session.settings.schema.as_str();
-    let nonce = nonce();
-    let begin = format!(
-        "{}; SELECT CASE WHEN g IS NULL THEN (32768 + (g IS NULL)::int)::smallint::int \
-         ELSE 1/(g={generation})::int END FROM \
-         (SELECT (SELECT catalog_incarnation FROM {schema}.history_meta WHERE id=1) AS g) m; \
-         SELECT set_config('layerfs.attempt','{nonce}',true)",
-        session.settings.write_begin(true)
-    );
-    let check = format!(
-        "SELECT 1/(current_setting('layerfs.attempt',true) IS NOT DISTINCT FROM '{nonce}')::int"
-    );
+    let (begin, check) = opening(session);
     let owner_sql = text(OWNER_LIVE, schema);
     let owner: [&(dyn ToSql + Sync); 2] = [&operation, &epoch];
     let count = body.len();
@@ -159,28 +148,60 @@ fn send<T>(
     outcome
 }
 
+/// A unit's `BEGIN` text (the lane row and barrier, the generation fence,
+/// the attempt token) and its token check before `COMMIT`.
+pub(super) fn opening(session: &Session) -> (String, String) {
+    let generation = session.incarnation.load(Ordering::SeqCst);
+    let schema = session.settings.schema.as_str();
+    let nonce = nonce();
+    let begin = format!(
+        "{}; SELECT CASE WHEN g IS NULL THEN (32768 + (g IS NULL)::int)::smallint::int \
+         ELSE 1/(g={generation})::int END FROM \
+         (SELECT (SELECT catalog_incarnation FROM {schema}.history_meta WHERE id=1) AS g) m; \
+         SELECT set_config('layerfs.attempt','{nonce}',true)",
+        session.settings.write_begin(true)
+    );
+    let check = format!(
+        "SELECT 1/(current_setting('layerfs.attempt',true) IS NOT DISTINCT FROM '{nonce}')::int"
+    );
+    (begin, check)
+}
+
+/// A refusal no assertion names: the ordinary classification, or `Unknown`
+/// for an unanswered request on a session that is not trusted.
+pub(super) fn refused(refusal: &Refusal, trusted: bool) -> Failure {
+    match () {
+        _ if refusal.code.is_some() => refusal.error.into(),
+        _ if !refusal.sent && trusted => refusal.error.into(),
+        _ => BackendError::Unknown.into(),
+    }
+}
+
+/// Whether a refusal is an assertion's division by zero.
+pub(super) fn divided(refusal: &Refusal) -> bool {
+    refusal.code.as_ref() == Some(&SqlState::DIVISION_BY_ZERO)
+}
+
 /// The unit's answer from its replies: the first refusal decides, as the
 /// ordinary unit's first failing statement did.
 fn decide<T>(
     replies: &Replies,
     trusted: bool,
     count: usize,
-    divided: &impl Fn(usize, &Replies) -> Failure,
+    assertion: &impl Fn(usize, &Replies) -> Failure,
     answer: impl FnOnce(&Replies) -> Option<T>,
 ) -> Result<T, Failure> {
     const FIRST: usize = 2;
     let body = FIRST..FIRST + count;
     for (index, reply) in replies.iter().enumerate() {
         let Err(refusal) = reply else { continue };
-        let division = refusal.code.as_ref() == Some(&SqlState::DIVISION_BY_ZERO);
+        let division = divided(refusal);
         return Err(match index {
             // The generation fence, as the ordinary `BEGIN` batch answers it.
             0 if division => BackendError::Stale.into(),
             1 if division => Failure::Stale,
-            i if division && body.contains(&i) => divided(i - FIRST, &replies[body]),
-            _ if refusal.code.is_some() => refusal.error.into(),
-            _ if !refusal.sent && trusted => refusal.error.into(),
-            _ => BackendError::Unknown.into(),
+            i if division && body.contains(&i) => assertion(i - FIRST, &replies[body]),
+            _ => refused(refusal, trusted),
         });
     }
     if !trusted || replies.len() != count + 4 {
@@ -343,3 +364,14 @@ pub(super) fn dispose(
     };
     send(session, identity, body, |_, _| Failure::Stale, answer)
 }
+
+/// The flights' statements, prepared ahead by a waiting unit (`unit::run`).
+pub(super) const TEXTS: &[&str] = &[
+    OWNER_LIVE,
+    CHARGED,
+    FILE_ROOTS,
+    DIRECTORY_ROOTS,
+    ADVANCED,
+    DISCARD,
+    RELEASED,
+];

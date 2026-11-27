@@ -1761,9 +1761,32 @@ quarantines the session; nothing is resent. A session without a generation,
 a write nested in the held lane, or a position that does not convert to
 signed runs the ordinary transaction instead
 ([`flights.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/acquisition/flights.rs)).
-A warm unit is one round trip instead of five to thirteen. `put_entries` and
-`place_children` keep the ordinary transaction: their dependency check is a
-wait inside the transaction.
+A warm unit is one round trip instead of five to thirteen.
+
+**Write units that wait (#818 I3b, part A).** `put_entries` and
+`place_children` read a reply before they know what to send next: the D17
+dependency check of each window, and a dependent row's `BIND_HOST_FILE`
+(its canonical position is the entry's parameter). Each is one transaction
+over several flights of one writer turn (`DecidedTurn::prepare_unit`,
+`send_in_unit`): the unit's statements are prepared before `BEGIN` in one
+flight (the first unit prepares every acquisition write text, so later unit
+kinds find theirs cached); each wait ends a flight; every other statement is
+queued and sent, in order, at the head of the next flight. A queued
+placement (`PLACE_CHILDREN`, `PLACE_ENTRY`) is decoded when its flight
+returns, in request order before any later reply, so its `Changed` comes
+where the per-statement loop found it. The first flight opens as a flight
+above does (lane row, barrier, fence, attempt token, owner assertion); the
+last sends what is queued, `CHARGED`, the token check and `COMMIT`
+(`place_children` first reads its placements back, since its charge depends
+on them). A refusal from the client (`Bounds`, a malformed reply) first sends
+what is queued, so an earlier server refusal still wins; a refusal or lost
+reply in a flight rolls back (or quarantines) as the session's unit rules
+say, and a unit left open is rolled back by the turn's end. Same refusal
+order, rows and charges as the ordinary transaction, which still runs when
+the session is not eligible
+([`unit.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/acquisition/unit.rs)).
+An independent window is two round trips (dependency check; inserts, charge
+and `COMMIT`) instead of six; a placement unit of one set window is three.
 
 **Wide-directory placement (#818 I2a).** A `place_children` unit (one write
 window: at most 4,096 children or 1 MiB) binds and places its children in
@@ -1780,8 +1803,8 @@ children before it; the rest go in one statement (`PLACE_CHILDREN`: the
 upsert and the update as data-modifying CTEs over `unnest` arrays, answering
 each slot's binding and kind). The first slot with no binding, no placed row
 or a kind that disagrees is the loop's `Changed`, and the unit rolls back as
-before. A flat directory of 10,000 files places in 3 units of 2 round trips
-instead of 20,000 ([`placement.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/acquisition/placement.rs)).
+before. A flat directory of 10,000 files places in 3 units of 3 round trips
+(part A) instead of 20,000 ([`placement.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/acquisition/placement.rs)).
 
 ```text
  release of the last operation                    one Write transaction
@@ -1807,9 +1830,10 @@ reuses an operation id
 | [`postgresql_open_check.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_open_check.rs) | `LAYERFS_TEST_POSTGRES_URL=… cargo +1.85.1 test --locked -p layerfs-persistence --test postgresql_open_check` | `Full` and `Light` refusals |
 | [`postgresql_acquisition_compaction.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_acquisition_compaction.rs) | `LAYERFS_TEST_POSTGRES_URL=… cargo +1.85.1 test --locked -p layerfs-persistence --test postgresql_acquisition_compaction` | Compaction after the last release, never touching a live operation |
 | [`acquisition_placement.rs`](../../../../engine/crates/layerfs-persistence/tests/acquisition_placement.rs) | `LAYERFS_TEST_POSTGRES_URL=… cargo +1.85.1 test --locked -p layerfs-persistence --test acquisition_placement` | Set-window placement gives the per-row loop's first refusal, rows and charges (repeated names and positions, unsigned positions, stored-row dependencies, all-hardlink and large mixed directories), both backends |
-| [`postgresql_placement_fault.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_placement_fault.rs) | same, `--test postgresql_placement_fault` | Drop and kill at every server message of a placement unit (84 + 84): the unit is atomic, never replayed |
+| [`postgresql_placement_fault.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_placement_fault.rs) | same, `--test postgresql_placement_fault` | Drop and kill at every server message of a placement unit (72 + 72): the unit is atomic, never replayed |
 | [`postgresql_save_flight_fault.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_save_flight_fault.rs) | same, `--test postgresql_save_flight_fault` | A Save publishing in flights stores the ordinary Save's rows in fewer round trips; drop and kill at every server message of its finish (68 + 68): atomic, a dropped reply never a success, never replayed |
-| [`postgresql_acquisition_flights.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_acquisition_flights.rs) | same, `--test postgresql_acquisition_flights` | The no-wait write units give SQLite's answers and charges (recorded, repeated, missing, filled and unconvertible root positions, every phase, removal budgets, disposal with another operation live and of the last one, stale owners); a warm unit is one round trip and one transaction; drop and kill at every server message of each unit kind (327 + 327): atomic, a dropped reply never a success, never replayed |
+| [`postgresql_acquisition_flights.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_acquisition_flights.rs) | same, `--test postgresql_acquisition_flights` | The no-wait write units give SQLite's answers and charges (recorded, repeated, missing, filled and unconvertible root positions, every phase, removal budgets, disposal with another operation live and of the last one, stale owners); a warm unit is one round trip and one transaction; drop and kill at every server message of each unit kind (251 + 251): atomic, a dropped reply never a success, never replayed |
+| [`postgresql_acquisition_units.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_acquisition_units.rs) | same, `--test postgresql_acquisition_units` | `put_entries` over flights gives SQLite's answers, charges and rows (independent windows, aliases in and across units, the first refusal of every tail order: `Changed`, `Bounds`, a stored key, a repeated position; stale owners); a warm independent window is two round trips and one transaction; drop and kill at every server message of three unit kinds (156 + 156): atomic, never replayed |
 | [`postgresql_acquisition_reads.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_acquisition_reads.rs) | same, `--test postgresql_acquisition_reads` | Every read window, paged under row and byte limits, equals SQLite's; empty, released, missing and foreign owners stay distinct; drop and kill at every server message of each read kind (78 + 78): never a wrong answer, no row changed, never replayed |
 
 Without `LAYERFS_TEST_POSTGRES_URL` these tests print `NOT_RUN` and check
