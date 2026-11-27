@@ -254,7 +254,13 @@ workers in [Workers and reach](docs/architecture/control/machines/workers-and-re
 | Cluster two | also [Workspace](docs/architecture/engine/workspace/README.md), [Overlay](docs/architecture/engine/overlay/README.md), [Commit](docs/architecture/engine/commit/README.md), [Kernel routes](docs/architecture/engine/kernel-routes/README.md), [Daemon](docs/architecture/engine/daemon/README.md), [Bridge](docs/architecture/engine/bridge/README.md) |
 | Documentation or a release | [documentation policy](docs/general/documentation-policy.md), [release policy](docs/general/release-policy.md) |
 | A pull request or issue | [code review and triage policy](docs/policy/code-review.md) |
-| A measurement | [measurement workflow](docs/general/agent-measurement-policy.md), [benchmark rules](docs/general/benchmark_rules.md), [report template](docs/general/benchmark_agent_report.md), the owning harness contract |
+| Code that reads or writes the Store (Commit, Init, file and history calls) | the architecture page it touches, and every lesson in [docs/lesson/store-access/](docs/lesson/store-access/) |
+| Running tests outside CI (PostgreSQL-backed binaries or a full pass) | every lesson in [docs/lesson/testing/](docs/lesson/testing/) |
+| Reviewing, triaging or measuring a performance issue | the [lesson index](docs/lesson/README.md)'s symptom table, then every lesson in [docs/lesson/store-access/](docs/lesson/store-access/) and [docs/lesson/measurement/](docs/lesson/measurement/) |
+| A measurement | [measurement workflow](docs/general/agent-measurement-policy.md), [benchmark rules](docs/general/benchmark_rules.md), [report template](docs/general/benchmark_agent_report.md), the owning harness contract, and every lesson in [docs/lesson/measurement/](docs/lesson/measurement/) |
+
+Lessons are short rules learned in merged work or measured findings; the
+[lesson index](docs/lesson/README.md) lists them by category and by symptom.
 
 ## Measurements
 

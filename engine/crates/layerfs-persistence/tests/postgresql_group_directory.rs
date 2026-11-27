@@ -7,7 +7,13 @@
 mod chains;
 
 use chains::*;
-use layerfs_storage::{location::LocatedChains, pack::layout, port::PackPersistence, Storage};
+use layerfs_storage::{
+    location::LocatedChains,
+    pack::layout,
+    policy::DEPENDENCY_PACK_CACHE_BYTES,
+    port::{GroupRead, GroupReadAnswer, ObjectKey, PackPersistence, PackRange, PersistenceError},
+    Storage,
+};
 use std::collections::BTreeSet;
 
 #[test]
@@ -125,6 +131,89 @@ fn the_chain_locate_returns_the_directories_of_root_and_member_packs() {
         assert_eq!(directory.prefix, body[..header.body_offset]);
         assert_eq!(directory.pack.length, body.len());
     }
+}
+
+#[test]
+fn classified_group_reads_bind_missing_width_and_digest_to_each_pack() {
+    let Some(url) = url() else { return };
+    let store = Store::new(&url, "classified_groups");
+    let storage = storage(&store.handles);
+    let object = whole(&noise(7, 9_000));
+    let id = object.id();
+    save(&storage, vec![object]);
+    let handles = store.open();
+    let mut rows = Vec::new();
+    handles.storage.locate(&[id], &mut rows).unwrap();
+    let pack = rows[0].pack;
+    let good = GroupRead {
+        pack,
+        ranges: Vec::new(),
+    };
+    let mut missing = good.clone();
+    missing.pack.pack_id += 1_000_000;
+    let mut short = good.clone();
+    short.ranges.push(PackRange {
+        offset: pack.length - 1,
+        length: 2,
+    });
+    let mut bad_digest = good.clone();
+    let mut wrong_key = *pack.key.as_bytes();
+    wrong_key[0] ^= 1;
+    bad_digest.pack.key = ObjectKey::from_bytes(wrong_key);
+    let mut bad_width = good.clone();
+    bad_width.pack.length -= 1;
+    let mut ranged = good.clone();
+    ranged.ranges.push(PackRange {
+        offset: 1,
+        length: 5,
+    });
+
+    let mut out = Vec::new();
+    handles
+        .storage
+        .read_groups_classified(&[good.clone()], &mut out)
+        .unwrap();
+    let GroupReadAnswer::Whole(expected) = out.pop().unwrap().unwrap() else {
+        panic!("whole pack expected");
+    };
+    let before = handles.diagnostics().unwrap();
+    handles
+        .storage
+        .read_groups_classified(
+            &[missing, short, good.clone(), bad_digest, ranged, bad_width],
+            &mut out,
+        )
+        .unwrap();
+    let after = handles.diagnostics().unwrap();
+    assert_eq!(after.statements - before.statements, 1);
+    assert_eq!(after.round_trips - before.round_trips, 1);
+    assert_eq!(after.prepares - before.prepares, 0);
+    let bytes = expected.body()[1..6].to_vec();
+    assert_eq!(
+        out,
+        [
+            Err(PersistenceError::Missing),
+            Err(PersistenceError::Malformed),
+            Ok(GroupReadAnswer::Whole(expected)),
+            Err(PersistenceError::Malformed),
+            Ok(GroupReadAnswer::Ranges(vec![bytes])),
+            Err(PersistenceError::Malformed),
+        ],
+    );
+
+    let mut oversize = good;
+    oversize.pack.length = DEPENDENCY_PACK_CACHE_BYTES + 1;
+    assert_eq!(
+        handles
+            .storage
+            .read_groups_classified(&[oversize], &mut out),
+        Err(PersistenceError::Malformed),
+    );
+    assert_eq!(
+        handles.diagnostics().unwrap().round_trips,
+        after.round_trips
+    );
+    assert!(out.is_empty());
 }
 
 /// One demand whose needed groups pass 2 MiB (#758 phase 3): one locate

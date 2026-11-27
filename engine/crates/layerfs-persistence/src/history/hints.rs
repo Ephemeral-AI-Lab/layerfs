@@ -4,7 +4,7 @@ use super::params;
 use super::rows::{cell, many, sql};
 use super::transaction::Transaction;
 use crate::backend::Column;
-use crate::blocks::hints::{decode, encode, group_of};
+use crate::blocks::hints::{decode, encode, group_of, Block};
 use layerfs_history::error::{HistoryError, HistoryResult};
 use layerfs_history::records::BindingHint;
 
@@ -14,6 +14,21 @@ const INSERT_BLOCKS: &str = "hint_insert_blocks";
 pub(crate) const ARRAY_ROWS: usize = 1024;
 
 const BLOCKS_OF: &str = "hint_blocks_of";
+
+/// Binding hint rows one write transaction carries: the batch callers
+/// record at a time, and the most one overflow flight takes.
+pub const HINT_BATCH_ROWS: usize = 4096;
+
+/// Only one existing array statement fits the overflow flight. Invalid rows
+/// follow the ordinary transaction so its fence and encoding error order hold.
+pub(crate) fn overflow_blocks(rows: &[BindingHint]) -> Option<Vec<Block>> {
+    if rows.is_empty() || rows.len() > HINT_BATCH_ROWS {
+        return None;
+    }
+    encode(rows)
+        .ok()
+        .filter(|blocks| !blocks.is_empty() && blocks.len() <= ARRAY_ROWS)
+}
 
 /// Appends the bindings as new blocks, each the next of its group. A
 /// binding recorded before may be recorded again: readers drop repeats.

@@ -63,7 +63,10 @@ since the race wrote nothing, so a lost reply on either is resolved by its
 lookup (below). An unknown outcome never continues, and neither does a
 race refusal whose session lost a later reply (a definite `Conflict`). A
 Commit whose new bindings pass one hint transaction (4,096 rows) publishes
-its tail, then its hints, then attempts the Commit alone fused. Only a Commit that is not forced, names
+its tail, then its hints, then attempts the Commit alone fused. A bounded
+PostgreSQL captured tail can use the existing generation-fenced writer
+flight. It compares first winners and settles the held Save before the
+first binding write. Only a Commit that is not forced, names
 no other `--expected` head, and whose construction kept its whole built set
 (`ConstructedObjects::covers`) is fused; every other Commit takes steps 3
 and 4 as drawn.

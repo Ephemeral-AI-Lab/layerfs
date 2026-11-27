@@ -277,6 +277,15 @@ impl Store {
     pub fn set_serial_low_water(&self, serials: u64) {
         self.serial_low_water.store(serials, Ordering::Relaxed);
     }
+    /// Whether the opened writer reads known chains in one wave (#816: a
+    /// PostgreSQL writer). A Store with no opened writer provider plans no
+    /// batched reads: SQLite's deferred writer (whose provider keeps the
+    /// default `false`) and a one-shot read, which binds no Workspace.
+    pub(super) fn batched_chain_reads(&self) -> bool {
+        self.writer
+            .as_ref()
+            .is_some_and(|writer| writer.batched_chain_reads())
+    }
     /// Independent mutable producer state over the same opened write provider.
     /// No shared Save or whole-Commit ownership is acquired here.
     pub fn producer(&self) -> StorageResult<Storage> {

@@ -318,6 +318,12 @@ pub trait HistoryCatalog: Send + Sync {
         Ok(())
     }
 
+    /// Appends one overflow batch after the Commit's Save has acknowledged.
+    /// Each batch acknowledges independently before the caller sends the next.
+    fn record_overflow_bindings(&self, rows: &[crate::records::BindingHint]) -> HistoryResult<()> {
+        self.record_bindings(rows)
+    }
+
     /// Every recorded binding of inode `child`, from any saved tree: hints the
     /// caller checks against its own tree. Empty when none are kept.
     fn bindings_of(&self, _child: u64) -> HistoryResult<Vec<crate::records::BindingHint>> {

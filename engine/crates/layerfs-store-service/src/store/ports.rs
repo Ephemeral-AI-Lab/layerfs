@@ -2,7 +2,7 @@
 use super::{read_handle::ReadSession, ReadAdmissionError, Store};
 use layerfs_content::{AuthenticatedObjects, ContentError, ContentResult, ObjectId};
 use layerfs_history::{HistoryError, ReserveRequest, WorkspaceId};
-use layerfs_storage::StorageError;
+use layerfs_storage::{read::CapturedLocators, StorageError};
 use layerfs_workspace::{
     CanonicalClient, FileLengths, InodeSerials, Workspace, WorkspaceError, WorkspaceResult,
 };
@@ -75,20 +75,30 @@ pub struct StorePorts {
     store: Arc<Store>,
     scope: ObjectId,
     reader: Result<Arc<ReadSession>, Arc<PortError>>,
+    captured_reads: Option<Arc<CapturedLocators>>,
     failure: Mutex<Option<Arc<PortError>>>,
     attempting: AtomicBool,
 }
 impl Store {
     pub fn ports(self: &Arc<Self>, scope: ObjectId) -> Arc<StorePorts> {
-        self.ports_in(scope, None)
+        self.ports_in(scope, None, None)
     }
     pub fn ports_for(self: &Arc<Self>, scope: ObjectId, workspace: WorkspaceId) -> Arc<StorePorts> {
-        self.ports_in(scope, Some(workspace))
+        self.ports_in(scope, Some(workspace), None)
+    }
+    pub(super) fn captured_ports_for(
+        self: &Arc<Self>,
+        scope: ObjectId,
+        workspace: WorkspaceId,
+        captured_reads: Option<Arc<CapturedLocators>>,
+    ) -> Arc<StorePorts> {
+        self.ports_in(scope, Some(workspace), captured_reads)
     }
     fn ports_in(
         self: &Arc<Self>,
         scope: ObjectId,
         workspace: Option<WorkspaceId>,
+        captured_reads: Option<Arc<CapturedLocators>>,
     ) -> Arc<StorePorts> {
         Arc::new(StorePorts {
             store: self.clone(),
@@ -100,6 +110,7 @@ impl Store {
                     .reader(workspace)
                     .map_err(|e| Arc::new(PortError::ReadAdmission(e))),
             },
+            captured_reads,
             failure: Mutex::new(None),
             attempting: AtomicBool::new(false),
         })
@@ -120,6 +131,7 @@ impl StorePorts {
             store: self.store.clone(),
             scope: self.scope,
             reader: self.reader.clone(),
+            captured_reads: self.captured_reads.clone(),
             failure: Mutex::new(None),
             attempting: AtomicBool::new(false),
         })
@@ -199,7 +211,7 @@ impl AuthenticatedObjects for StorePorts {
     fn read_canonical_batch(&self, ids: &[ObjectId]) -> ContentResult<Vec<Vec<u8>>> {
         self.attempt(|| {
             let reader = self.reader()?;
-            reader.objects(ids)
+            reader.objects(ids, self.captured_reads.as_ref())
         })
         .map_err(|error| error.object_demand())
     }

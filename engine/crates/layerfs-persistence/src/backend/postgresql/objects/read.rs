@@ -5,7 +5,7 @@ use layerfs_storage::{
     location::PackInfo,
     policy,
     port::{
-        AcquiredPackRead, PackRange, PackReadPlan, PersistedPack, PersistedPackRead,
+        AcquiredPackRead, GroupRead, PackRange, PackReadPlan, PersistedPack, PersistedPackRead,
         PersistenceError,
     },
 };
@@ -396,6 +396,77 @@ pub(crate) fn ranges(
     requests: &[(i64, Vec<PackRange>)],
     out: &mut Vec<Vec<Vec<u8>>>,
 ) -> Result<(), PersistenceError> {
+    let rows = range_rows(tx, requests, false)?;
+    if rows.len() != requests.iter().map(|(_, ranges)| ranges.len()).sum() {
+        return Err(PersistenceError::Missing);
+    }
+    let mut rows = rows.into_iter();
+    for (_, ranges) in requests {
+        let mut bodies = Vec::with_capacity(ranges.len());
+        for (range, row) in ranges.iter().zip(rows.by_ref()) {
+            let body: Vec<u8> = row.try_get(0).map_err(|e| rows::error(&e))?;
+            if body.len() != range.length {
+                return Err(PersistenceError::Malformed);
+            }
+            bodies.push(body);
+        }
+        out.push(bodies);
+    }
+    Ok(())
+}
+
+/// The classified reply keeps one row per requested range. A missing
+/// pack or malformed body has its own pack's position. Invalid result
+/// shape is a failure of the entire reply.
+pub(crate) fn classified_ranges(
+    tx: &Transaction<'_>,
+    requests: &[(i64, Vec<PackRange>)],
+    reads: &[GroupRead],
+) -> Result<Vec<ClassifiedRanges>, PersistenceError> {
+    let rows = range_rows(tx, requests, true)?;
+    if rows.len() != requests.iter().map(|(_, ranges)| ranges.len()).sum() {
+        return Err(PersistenceError::Malformed);
+    }
+    let mut rows = rows.into_iter().enumerate();
+    requests
+        .iter()
+        .zip(reads)
+        .map(|((id, ranges), read)| {
+            let mut pack = Ok(Vec::with_capacity(ranges.len()));
+            for (range, (index, row)) in ranges.iter().zip(rows.by_ref()) {
+                let ordinal: i32 = row.try_get(0).map_err(|e| rows::error(&e))?;
+                let pack_id: Option<i64> = row.try_get(1).map_err(|e| rows::error(&e))?;
+                if ordinal as usize != index + 1 || pack_id.is_some_and(|actual| actual != *id) {
+                    return Err(PersistenceError::Malformed);
+                }
+                let width: Option<i32> = row.try_get(2).map_err(|e| rows::error(&e))?;
+                let body: Option<&[u8]> = row.try_get(3).map_err(|e| rows::error(&e))?;
+                match (pack_id, width, body, &mut pack) {
+                    (None, None, None, Ok(_)) => pack = Err(PersistenceError::Missing),
+                    (None, Some(_), _, _) | (None, _, Some(_), _) => {
+                        return Err(PersistenceError::Malformed);
+                    }
+                    (Some(_), Some(width), Some(body), Ok(bodies))
+                        if width as usize == read.pack.length && body.len() == range.length =>
+                    {
+                        bodies.push(body.to_vec());
+                    }
+                    (Some(_), _, _, Ok(_)) => pack = Err(PersistenceError::Malformed),
+                    (_, _, _, Err(_)) => {}
+                }
+            }
+            Ok(pack)
+        })
+        .collect()
+}
+
+pub(crate) type ClassifiedRanges = Result<Vec<Vec<u8>>, PersistenceError>;
+
+fn range_rows(
+    tx: &Transaction<'_>,
+    requests: &[(i64, Vec<PackRange>)],
+    classified: bool,
+) -> Result<Vec<Row>, PersistenceError> {
     let total = requests.iter().map(|(_, ranges)| ranges.len()).sum();
     let int = |value: usize| i32::try_from(value).map_err(|_| PersistenceError::Malformed);
     // One row per span: its pack, 1-based start, length, and the 1-based
@@ -437,41 +508,35 @@ pub(crate) fn ranges(
             count.push(int(range.length)?);
         }
     }
-    let rows = if total == 0 {
-        Vec::new()
-    } else {
-        tx.typed(
-            &ranges_sql(tx.schema),
-            &[&ids, &starts, &lengths, &firsts, &counts, &from, &count],
-            ids.len() as u64 * 24 + total as u64 * 8,
-        )?
-    };
-    if rows.len() != total {
-        return Err(PersistenceError::Missing);
+    if total == 0 {
+        return Ok(Vec::new());
     }
-    let mut rows = rows.iter();
-    for (_, ranges) in requests {
-        let mut bodies = Vec::with_capacity(ranges.len());
-        for (range, row) in ranges.iter().zip(rows.by_ref()) {
-            let body: Vec<u8> = row.try_get(0).map_err(|e| rows::error(&e))?;
-            if body.len() != range.length {
-                return Err(PersistenceError::Malformed);
-            }
-            bodies.push(body);
-        }
-        out.push(bodies);
-    }
-    Ok(())
+    let sql = range_query(tx.schema, classified);
+    tx.typed(
+        &sql,
+        &[&ids, &starts, &lengths, &firsts, &counts, &from, &count],
+        ids.len() as u64 * 24 + total as u64 * 8,
+    )
+    .map_err(Into::into)
 }
 
 /// The multi-range reader's text ([`ranges`]): `OFFSET 0` keeps the span a
 /// value computed once per span row; the ranges are then cut from that value
 /// in memory.
 pub(crate) fn ranges_sql(schema: &str) -> String {
+    range_query(schema, false)
+}
+
+fn range_query(schema: &str, classified: bool) -> String {
+    let (columns, join) = if classified {
+        ("k,p.pack_id,octet_length(p.body),", "LEFT JOIN")
+    } else {
+        ("", "JOIN")
+    };
     format!(
-        "SELECT substring(s.span FROM ($6::int4[])[k] FOR ($7::int4[])[k]) \
+        "SELECT {columns}substring(s.span FROM ($6::int4[])[k] FOR ($7::int4[])[k]) \
          FROM unnest($1::bigint[],$2::int4[],$3::int4[],$4::int4[],$5::int4[]) AS g(pack_id,o,l,first,n) \
-         JOIN {schema}.pack p ON p.pack_id=g.pack_id \
+         {join} {schema}.pack p ON p.pack_id=g.pack_id \
          CROSS JOIN LATERAL (SELECT substring(p.body FROM g.o FOR g.l) AS span OFFSET 0) s \
          CROSS JOIN LATERAL generate_series(g.first,g.first+g.n-1) AS k ORDER BY k"
     )

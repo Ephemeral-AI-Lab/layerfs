@@ -255,6 +255,54 @@ impl PackPersistence for PostgresStorage {
         }
         Ok(())
     }
+    fn read_groups_classified(
+        &self,
+        reads: &[GroupRead],
+        out: &mut Vec<Result<GroupReadAnswer, PersistenceError>>,
+    ) -> Result<(), PersistenceError> {
+        out.clear();
+        let mut bytes: usize = 0;
+        for read in reads {
+            let requested = if read.ranges.is_empty() {
+                Some(read.pack.length)
+            } else {
+                read.ranges
+                    .iter()
+                    .try_fold(0_usize, |sum, range| sum.checked_add(range.length))
+            };
+            bytes = requested
+                .and_then(|length| bytes.checked_add(length))
+                .filter(|bytes| *bytes <= layerfs_storage::policy::DEPENDENCY_PACK_CACHE_BYTES)
+                .ok_or(PersistenceError::Malformed)?;
+        }
+        let requests = reads
+            .iter()
+            .map(|read| {
+                let ranges = if read.ranges.is_empty() {
+                    vec![PackRange {
+                        offset: 0,
+                        length: read.pack.length,
+                    }]
+                } else {
+                    read.ranges.clone()
+                };
+                (read.pack.pack_id, ranges)
+            })
+            .collect::<Vec<_>>();
+        let bodies = self
+            .session
+            .read_immutable(|tx| objects::read::classified_ranges(tx, &requests, reads))?;
+        out.extend(reads.iter().zip(bodies).map(|(read, body)| {
+            let mut body = body?;
+            if read.ranges.is_empty() {
+                let body = body.pop().ok_or(PersistenceError::Malformed)?;
+                PersistedPack::authenticate(read.pack, body).map(GroupReadAnswer::Whole)
+            } else {
+                Ok(GroupReadAnswer::Ranges(body))
+            }
+        }));
+        Ok(())
+    }
     fn read_packs(
         &self,
         ids: &[i64],
@@ -289,6 +337,43 @@ impl PackPersistence for PostgresStorage {
         self.session
             .read_immutable(|tx| metadata::values::read(tx, ordinals, out))
     }
+    fn inode_values_pair(
+        &self,
+        ordinals: [&[u32]; 2],
+        out: &mut [Vec<InodeValueRow>; 2],
+    ) -> Result<bool, PersistenceError> {
+        use layerfs_storage::policy::{POOLED_VALUE_CACHE_BYTES, READ_OBJECT_LIMIT};
+        const VALUES: usize =
+            POOLED_VALUE_CACHE_BYTES / layerfs_content::inode_leaf::INODE_VALUE_BYTES;
+        // One packed block per ordinal at worst: in each run, the predecessor
+        // either starts at its first ordinal, or replaces that possible start.
+        // The existing query caps each body at 4,000 bytes. Allow another 64
+        // per row for its fields and wire framing, including malformed replies.
+        const _: () = assert!(VALUES * (crate::blocks::BODY_LIMIT + 64) < 32 * 1024 * 1024);
+        let [first, last] = ordinals;
+        if !self.session.paired_immutable_reads
+            || self
+                .session
+                .incarnation
+                .load(std::sync::atomic::Ordering::SeqCst)
+                == 0
+            || first.len() != READ_OBJECT_LIMIT
+            || last.is_empty()
+            || last.len() > VALUES - READ_OBJECT_LIMIT
+        {
+            return Ok(false);
+        }
+        metadata::values::check_request(first)?;
+        metadata::values::check_request(last)?;
+        if first.last() >= last.first() {
+            return Err(PersistenceError::Malformed);
+        }
+        out.iter_mut().for_each(Vec::clear);
+        self.session.read_immutable(|tx| {
+            super::super::metadata::reads::inode_values_pair(tx, ordinals, out)
+        })?;
+        Ok(true)
+    }
     fn signatures(&self, out: &mut Vec<SignatureRow>) -> Result<(), PersistenceError> {
         out.clear();
         self.session
@@ -308,6 +393,13 @@ impl PackPersistence for PostgresStorage {
     fn batched_chain_reads(&self) -> bool {
         true
     }
+    fn captured_locator_generation(&self) -> Option<u64> {
+        let generation = self
+            .session
+            .incarnation
+            .load(std::sync::atomic::Ordering::SeqCst);
+        (self.session.paired_immutable_reads && generation != 0).then_some(generation)
+    }
     /// Each statement is a round trip and a publication costs about seven
     /// of them whatever its size, so PostgreSQL publishes up to 16 MiB at
     /// once (owner decision, layerfs-project #61); SQLite keeps 4 MiB.
@@ -326,5 +418,21 @@ impl PackPersistence for PostgresStorage {
             .run_as::<_, PersistenceError>(Mode::Publish, |tx| {
                 objects::publish::run(tx, batch).map_err(Into::into)
             })
+    }
+
+    fn publish_captured(&self, batch: &Publication) -> Result<Published, PersistenceError> {
+        publication::validate(batch, self.publication_bytes())?;
+        match objects::publish_flight::eligible(&self.session, batch)? {
+            true => objects::publish_flight::run(&self.session, batch).map_err(Into::into),
+            false => self.publish(batch),
+        }
+    }
+
+    fn publish_captured_tail(&self, batch: &Publication) -> Result<Published, PersistenceError> {
+        publication::validate(batch, self.publication_bytes())?;
+        match objects::publish_flight::eligible(&self.session, batch)? {
+            true => objects::publish_flight::run_tail(&self.session, batch).map_err(Into::into),
+            false => self.publish(batch),
+        }
     }
 }

@@ -197,6 +197,21 @@ pub trait PackPersistence: Send + Sync {
         }
         Ok(())
     }
+    /// Same bounded group demand, with missing or malformed bodies reported
+    /// for the particular pack that failed. Transport and invalid reply
+    /// framing fail the whole call. A provider without classified replies
+    /// returns its original call-level result, which cannot soften a hint.
+    fn read_groups_classified(
+        &self,
+        reads: &[GroupRead],
+        out: &mut Vec<Result<GroupReadAnswer, PersistenceError>>,
+    ) -> Result<(), PersistenceError> {
+        out.clear();
+        let mut answers = Vec::new();
+        self.read_groups(reads, &mut answers)?;
+        out.extend(answers.into_iter().map(Ok));
+        Ok(())
+    }
     /// Reads complete packs totalling at most DEPENDENCY_PACK_CACHE_BYTES,
     /// or one separately bounded singleton up to SINGLETON_PACK_LIMIT.
     /// Results use `PersistedPack::authenticate`: length/digest verified once,
@@ -232,6 +247,16 @@ pub trait PackPersistence: Send + Sync {
         ordinals: &[u32],
         out: &mut Vec<InodeValueRow>,
     ) -> Result<(), PersistenceError>;
+    /// Optional single flight for two ordinary inode-value requests. Each
+    /// slice obeys the same bound and ordering as `inode_values`. False means
+    /// the provider declined before issuing either request.
+    fn inode_values_pair(
+        &self,
+        _ordinals: [&[u32]; 2],
+        _out: &mut [Vec<InodeValueRow>; 2],
+    ) -> Result<bool, PersistenceError> {
+        Ok(false)
+    }
     /// Reads at most 8,192 signature rows, in insertion order, once per handle.
     fn signatures(&self, out: &mut Vec<SignatureRow>) -> Result<(), PersistenceError>;
     /// Allocates one block of pack ids and/or pooled ordinals.
@@ -250,6 +275,11 @@ pub trait PackPersistence: Send + Sync {
     /// reads each level when the walk reaches it.
     fn batched_chain_reads(&self) -> bool {
         false
+    }
+
+    /// The checked catalog generation for captured immutable locator sharing.
+    fn captured_locator_generation(&self) -> Option<u64> {
+        None
     }
     /// Canonical bytes one preparation wave holds and one publication carries,
     /// and the sealed bytes it publishes. The default is the shared
@@ -274,4 +304,14 @@ pub trait PackPersistence: Send + Sync {
     /// byte budget, with first-wins object insertion. All sealed bodies, inode
     /// value rows, signature changes and ordinal changes belong to this unit.
     fn publish(&self, batch: &Publication) -> Result<Published, PersistenceError>;
+    /// Publishes a wave while accepting captured Commit output, before the
+    /// history lane and before finish. Providers may select a bounded flight.
+    fn publish_captured(&self, batch: &Publication) -> Result<Published, PersistenceError> {
+        self.publish(batch)
+    }
+    /// Publishes the held tail of captured Commit before binding continuation,
+    /// with the ordinary standalone publication's outcome and custody.
+    fn publish_captured_tail(&self, batch: &Publication) -> Result<Published, PersistenceError> {
+        self.publish(batch)
+    }
 }

@@ -2,8 +2,12 @@
 use super::{Store, StorePorts};
 use crate::OwnerClient;
 use layerfs_history::{BranchSnapshot, WorkspaceId};
+use layerfs_storage::read::CapturedLocators;
 use layerfs_workspace::{CanonicalClient, Workspace, WorkspaceResult};
-use std::sync::{atomic::AtomicBool, Arc, Mutex};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, Mutex,
+};
 
 pub struct BoundWorkspace {
     pub(crate) store: Arc<Store>,
@@ -13,6 +17,8 @@ pub struct BoundWorkspace {
     pub(super) workspace: Arc<Workspace>,
     /// The mount admission intent this Workspace must delete on unmount.
     pub(crate) gc_op: Option<[u8; 16]>,
+    /// Remains true until terminal close starts to release admission.
+    pub(super) admitted: Option<Arc<AtomicBool>>,
     pub(super) committing: AtomicBool,
     pub(super) producer: super::producer::Producer,
     /// A conflicted merge installed locally and not yet committed.
@@ -57,6 +63,9 @@ impl BoundWorkspace {
             self.producer.release_ordinals();
             return Err(super::CloseError::Owner(error));
         }
+        if let Some(admitted) = &self.admitted {
+            admitted.store(false, Ordering::Release);
+        }
         self.producer.hand_to(&self.store.idle_producer);
         let reader = self.store.close_reader(self.identity);
         let intent = match self.gc_op {
@@ -68,6 +77,18 @@ impl BoundWorkspace {
     }
     pub fn operation(&self) -> WorkspaceResult<StoreOperation> {
         let ports = self.store.ports_for(self.snapshot()?.scope, self.identity);
+        self.operation_with_ports(ports)
+    }
+    pub(super) fn captured_operation(
+        &self,
+        reads: Option<Arc<CapturedLocators>>,
+    ) -> WorkspaceResult<StoreOperation> {
+        let ports = self
+            .store
+            .captured_ports_for(self.snapshot()?.scope, self.identity, reads);
+        self.operation_with_ports(ports)
+    }
+    fn operation_with_ports(&self, ports: Arc<StorePorts>) -> WorkspaceResult<StoreOperation> {
         let client = ports.client();
         let workspace = self.workspace.scoped(client.clone())?;
         Ok(StoreOperation {

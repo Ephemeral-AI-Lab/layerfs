@@ -23,6 +23,7 @@ use std::{
 
 type Edit = Box<dyn FnMut(&mut LocatedChains) + Send>;
 type Step = Box<dyn FnOnce() + Send>;
+type ClassifiedFault = Result<Vec<(i64, PersistenceError)>, PersistenceError>;
 
 /// Chains follow the `base` the memory engine stored with each published row.
 pub struct ChainProvider {
@@ -41,6 +42,8 @@ pub struct ChainProvider {
     pub reverse: bool,
     /// Every `read_groups` request.
     pub requests: Mutex<Vec<Vec<GroupRead>>>,
+    /// Group pack failures in reply order, or a failure of the entire call.
+    pub classified_fault: Mutex<Option<ClassifiedFault>>,
     /// Answers chain locates at all; else `locate` and no chains.
     pub chains: bool,
     /// The `batched_chain_reads` knob.
@@ -61,6 +64,7 @@ impl ChainProvider {
             corrupt_range: Mutex::new(None),
             reverse: false,
             requests: Mutex::new(Vec::new()),
+            classified_fault: Mutex::new(None),
             chains: true,
             batched: false,
             asked: Mutex::new(Vec::new()),
@@ -193,6 +197,41 @@ impl PackPersistence for ChainProvider {
     }
     fn batched_chain_reads(&self) -> bool {
         self.batched
+    }
+    fn read_groups_classified(
+        &self,
+        reads: &[GroupRead],
+        out: &mut Vec<Result<GroupReadAnswer, PersistenceError>>,
+    ) -> Result<(), PersistenceError> {
+        let fault = self.classified_fault.lock().unwrap().take();
+        let Some(fault) = fault else {
+            let mut answers = Vec::new();
+            self.read_groups(reads, &mut answers)?;
+            out.extend(answers.into_iter().map(Ok));
+            return Ok(());
+        };
+        self.requests.lock().unwrap().push(reads.to_vec());
+        let mut faults = fault?.into_iter().peekable();
+        let state = self.inner.state.lock().unwrap();
+        for read in reads {
+            assert!(read.ranges.is_empty(), "fixture requests whole packs");
+            let answer = if faults
+                .peek()
+                .is_some_and(|(id, _)| *id == read.pack.pack_id)
+            {
+                Err(faults.next().unwrap().1)
+            } else {
+                let pack = &state.packs[&read.pack.pack_id];
+                PersistedPack::authenticate(pack.info, pack.body.as_ref().clone())
+                    .map(GroupReadAnswer::Whole)
+            };
+            out.push(answer);
+        }
+        assert!(
+            faults.next().is_none(),
+            "all injected faults were exercised"
+        );
+        Ok(())
     }
     fn read_packs(
         &self,

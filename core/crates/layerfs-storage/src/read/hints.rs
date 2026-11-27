@@ -121,6 +121,7 @@ impl Fetch {
     pub(super) fn install_chains(
         &self,
         located: &BTreeMap<ObjectId, ObjectRole>,
+        rows: &[LocatedObject],
         answer: LocatedChains,
     ) -> StorageResult<()> {
         const BAD: StorageError = StorageError::Integrity("port chain locator");
@@ -143,6 +144,7 @@ impl Fetch {
         for directory in &answer.directories {
             check_directory(directory.pack, &directory.prefix).map_err(|_| BAD)?;
         }
+        self.remember_captured_locators(rows, &answer);
         let rows = answer.chains.len() as u64;
         self.note(|c| {
             c.chain_rows += rows;
@@ -477,7 +479,12 @@ impl Fetch {
         locations: &[ObjectLocation],
         packs: &mut PackCache,
     ) -> StorageResult<()> {
-        self.fetch_page([locations], packs, true).map(drop)
+        let compact_inode_packs = self.compact_inode_packs.get()
+            && locations
+                .iter()
+                .all(|row| matches!(row.role, ObjectRole::InodeLeaf | ObjectRole::InodeBranch));
+        self.fetch_page([locations], packs, true, compact_inode_packs)
+            .map(drop)
     }
     /// Pages a demand (#758): fetches the uncached groups of the longest
     /// leading run of `consumers` (each the rows one consumer reads next) and
@@ -493,7 +500,7 @@ impl Fetch {
         consumers: impl IntoIterator<Item = &'a [ObjectLocation]>,
         packs: &mut PackCache,
     ) -> StorageResult<usize> {
-        self.fetch_page(consumers, packs, false)
+        self.fetch_page(consumers, packs, false, false)
     }
     /// [`Self::page`]; with `chained`, nothing is read unless a member or a
     /// local chain is involved.
@@ -508,6 +515,7 @@ impl Fetch {
         consumers: impl IntoIterator<Item = &'a [ObjectLocation]>,
         packs: &mut PackCache,
         chained: bool,
+        compact_inode_packs: bool,
     ) -> StorageResult<usize> {
         let batched = self.metadata.batched_chain_reads();
         if !self.trust_hints.get() || !batched && self.hints.borrow().chains.is_empty() {
@@ -519,6 +527,16 @@ impl Fetch {
         for rows in consumers {
             let mut needs = Vec::new();
             members |= self.needs(rows, batched, &mut needs);
+            // A retained unit can serve an authoritative group while another
+            // group needs the whole pack. Its read still has pack authority.
+            let authoritative: BTreeSet<_> = if compact_inode_packs {
+                needs
+                    .iter()
+                    .filter_map(|(info, _, own)| own.then_some(info.pack_id))
+                    .collect()
+            } else {
+                BTreeSet::new()
+            };
             // This consumer's packs, each with the page's groups and its own,
             // and the cached entries it adds to the page.
             let mut trial: Vec<Planned> = Vec::new();
@@ -550,7 +568,7 @@ impl Fetch {
                         trial.len() - 1
                     }
                 };
-                trial[at].own |= own;
+                trial[at].own |= own || authoritative.contains(&info.pack_id);
                 if let Err(slot) = trial[at].groups.binary_search(&group) {
                     trial[at].groups.insert(slot, group);
                 }
@@ -563,7 +581,7 @@ impl Fetch {
             let mut next = bytes + keep.values().sum::<usize>();
             for planned in &mut trial {
                 next -= cost(&page, planned.info.pack_id);
-                planned.read = self.plan_read(planned.info, &planned.groups);
+                planned.read = self.plan_read(planned.info, &planned.groups, compact_inode_packs);
                 next += planned.cost();
             }
             if next > DEPENDENCY_PACK_CACHE_BYTES && covered > 0 {
@@ -601,14 +619,20 @@ impl Fetch {
         if reads.is_empty() {
             return Ok(covered);
         }
-        let hinted_only = planned.iter().any(|(_, own)| !own);
         let mut answers = Vec::new();
-        match self.metadata.read_groups(&reads, &mut answers) {
-            Err(PersistenceError::Missing | PersistenceError::Malformed) if hinted_only => {
-                self.forget_hints();
-                return self.stale().map(|()| covered);
+        if compact_inode_packs {
+            self.metadata.read_groups_classified(&reads, &mut answers)?;
+        } else {
+            let hinted_only = planned.iter().any(|(_, own)| !own);
+            let mut ordinary = Vec::new();
+            match self.metadata.read_groups(&reads, &mut ordinary) {
+                Err(PersistenceError::Missing | PersistenceError::Malformed) if hinted_only => {
+                    self.forget_hints();
+                    return self.stale().map(|()| covered);
+                }
+                other => other?,
             }
-            other => other?,
+            answers.extend(ordinary.into_iter().map(Ok));
         }
         if answers.len() != reads.len() {
             return Err(StorageError::Integrity("group read reply"));
@@ -621,6 +645,13 @@ impl Fetch {
         });
         let mut stale = false;
         for ((read, answer), (groups, own)) in reads.iter().zip(answers).zip(&planned) {
+            let answer = match answer {
+                Err(PersistenceError::Missing | PersistenceError::Malformed) if !own => {
+                    stale = true;
+                    continue;
+                }
+                answer => answer?,
+            };
             let wanted = groups.iter().copied().collect();
             let admitted = self.admit(read, answer, groups).and_then(|acquisition| {
                 packs.admit_groups(self, read.pack.pack_id, &wanted, groups, acquisition)
@@ -698,7 +729,12 @@ impl Fetch {
     /// One pack's request and its returned-byte cost: the planned ranges where
     /// a directory is known, else the whole pack; `None` when the request
     /// would not fit one call.
-    fn plan_read(&self, info: PackInfo, groups: &[usize]) -> Option<(GroupRead, usize)> {
+    fn plan_read(
+        &self,
+        info: PackInfo,
+        groups: &[usize],
+        compact_inode_packs: bool,
+    ) -> Option<(GroupRead, usize)> {
         let hints = self.hints.borrow();
         let whole = Some((
             GroupRead {
@@ -716,6 +752,12 @@ impl Fetch {
             Ok(PackReadChoice::Ranges(ranges))
                 if crate::port::check_ranges(info, prefix.len(), &ranges).is_ok() =>
             {
+                if compact_inode_packs
+                    && info.domain == crate::location::PackDomain::Metadata
+                    && info.length <= crate::policy::PACK_LIMIT / 2
+                {
+                    return whole;
+                }
                 let cost = ranges.iter().map(|range| range.length).sum();
                 Some((GroupRead { pack: info, ranges }, cost))
             }

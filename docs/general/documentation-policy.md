@@ -24,6 +24,11 @@
   alters a component's boundary, format, algorithm or named limit updates its
   page in the same commit.
 - `docs/general/` contains maintained project practices and concepts.
+- `docs/lesson/<category>/` contains lessons: one short rule per file, learned
+  in merged work or a measured finding (open ones marked open) and indexed by
+  category and symptom in
+  [the lesson index](../lesson/README.md). Lessons are informative, never
+  override AGENTS.md or a policy, and are not product contracts.
 - `docs/plugins/` contains the plugin listing guide, its template and checker;
   the listings themselves are `plugins/<plugin-id>/` at the repository root.
 - `docs/research/` contains informative studies and historical design material.
@@ -45,6 +50,7 @@ Status: Current architecture guide for LayerFS <release>; maintained with the so
 Status: Outline; planned architecture page, not yet written. Not a product contract.
 Status: Proposal; target LayerFS <release>; not a released contract.
 Status: Research; informative and not a product contract.
+Status: Lesson; distilled from merged work, informative and not a product contract.
 Status: Archived; retained for historical evidence only.
 ```
 

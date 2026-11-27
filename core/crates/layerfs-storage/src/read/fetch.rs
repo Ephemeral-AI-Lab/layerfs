@@ -16,18 +16,19 @@ use std::{
     sync::Arc,
 };
 
-/// Metadata pack bodies the Saves of this handle published, newest last, so
-/// a later Save's own reads and the readers that continue a Save
+/// Pack bodies the Saves of this handle published, newest last, so a later
+/// Save's own reads and the readers that continue a Save
 /// ([`crate::Storage::reader_after_save`]: a Commit's logical count and
 /// binding hints) need not fetch them back. Bounded by
-/// [`DEPENDENCY_PACK_CACHE_BYTES`], oldest evicted first; the bodies are the
-/// published `Arc`s themselves, added only after an acknowledged publication.
+/// [`DEPENDENCY_PACK_CACHE_BYTES`], with metadata retained before payloads.
+/// The bodies are the published `Arc`s, added after acknowledged publication.
 /// A Save that does not finish clears them (#768): the next Save starts from
 /// the Store. Any other reader still acquires every body it needs.
 #[derive(Default)]
 struct Published {
     bodies: VecDeque<(PackInfo, Arc<Vec<u8>>)>,
     bytes: usize,
+    payload_bytes: usize,
     /// Pooled inode values it published, oldest first, at most
     /// [`PUBLISHED_VALUES`] of them.
     values: BTreeMap<u32, [u8; INODE_VALUE_BYTES]>,
@@ -56,16 +57,33 @@ impl Published {
         // A body is kept once: a held tail's bodies live only in `Held`
         // until its publication is acknowledged (#768), and a later
         // acknowledgement of the same pack adds no second copy.
-        if body.len() > DEPENDENCY_PACK_CACHE_BYTES || self.get(info.pack_id).is_some() {
+        let payload = info.domain == PackDomain::Payload;
+        let reserved = if payload {
+            self.bytes - self.payload_bytes
+        } else {
+            0
+        };
+        if body.len() > DEPENDENCY_PACK_CACHE_BYTES - reserved || self.get(info.pack_id).is_some() {
             return;
         }
         while self.bytes + body.len() > DEPENDENCY_PACK_CACHE_BYTES {
-            let Some((_, old)) = self.bodies.pop_front() else {
+            let at = self
+                .bodies
+                .iter()
+                .position(|(info, _)| info.domain == PackDomain::Payload)
+                .unwrap_or(0);
+            let Some((removed, old)) = self.bodies.remove(at) else {
                 break;
             };
             self.bytes -= old.len();
+            if removed.domain == PackDomain::Payload {
+                self.payload_bytes -= old.len();
+            }
         }
         self.bytes += body.len();
+        if payload {
+            self.payload_bytes += body.len();
+        }
         self.bodies.push_back((info, body));
     }
 }
@@ -91,6 +109,11 @@ pub(crate) struct Fetch {
     pub(super) held: RefCell<Option<super::held::Held>>,
     /// Set while a Save, or a reader that continues one, reads.
     pub(super) serve_published: Cell<bool>,
+    /// Set only during a remote Save's canonical reads.
+    pub(super) compact_inode_packs: Cell<bool>,
+    /// Remote value requests may share a flight while a captured Save runs.
+    paired_inode_values: Cell<bool>,
+    pub(super) captured_locators: RefCell<Option<super::LocatorMode>>,
     counters: Cell<Diagnostics>,
     /// Chain hints from chain locates (#758).
     pub(super) hints: RefCell<super::hints::Hints>,
@@ -110,6 +133,35 @@ pub(crate) struct Fetch {
     pub(super) trust_hints: Cell<bool>,
 }
 impl Fetch {
+    pub(crate) fn retain_inode_locators(&mut self) {
+        if self.metadata.batched_chain_reads() {
+            self.locators.get_mut().retain_inodes();
+        }
+    }
+
+    /// Gives non-lost FULL files just admitted to the similarity ring one
+    /// extra clock pass without retaining new entries or private locators.
+    pub(crate) fn keep_captured_ring_winners(
+        &self,
+        batch: &crate::port::Publication,
+        lost: &BTreeSet<ObjectId>,
+    ) {
+        let cache = self.locators.borrow();
+        if !cache.keeps_ring_winners() || batch.signatures.is_empty() {
+            return;
+        }
+        let indexed: BTreeSet<_> = batch.signatures.iter().map(|row| row.object_id).collect();
+        for row in &batch.objects {
+            if row.role == layerfs_content::ObjectRole::WholeFile
+                && row.base.is_none()
+                && indexed.contains(&row.object_id)
+                && !lost.contains(&row.object_id)
+            {
+                cache.keep_ring_winner(*row);
+            }
+        }
+    }
+
     pub(crate) fn new(metadata: Arc<dyn PackPersistence>) -> Self {
         Self {
             metadata,
@@ -120,6 +172,9 @@ impl Fetch {
             published: RefCell::new(Published::default()),
             held: RefCell::new(None),
             serve_published: Cell::new(false),
+            compact_inode_packs: Cell::new(false),
+            paired_inode_values: Cell::new(false),
+            captured_locators: RefCell::new(None),
             counters: Cell::new(Diagnostics::default()),
             hints: RefCell::default(),
             capacities: Cell::new(None),
@@ -149,17 +204,20 @@ impl Fetch {
     /// After an acknowledged publication: the locations this Save won are
     /// the Store's winners, so they are kept instead of located again; lost
     /// ones were invalidated by the caller and are located again. Its
-    /// metadata pack bodies are kept for its own later reads (bounded).
+    /// metadata pack bodies are kept for its own later reads. A remote
+    /// captured Save may also keep payload packs with acknowledged winners.
     pub(crate) fn published(
         &self,
         batch: &crate::port::Publication,
         lost: &BTreeSet<ObjectId>,
+        keep_payloads: bool,
     ) -> StorageResult<()> {
         let infos: BTreeMap<i64, PackInfo> = batch
             .packs
             .iter()
             .map(|pack| (pack.info().pack_id, pack.info()))
             .collect();
+        let mut winner_packs = BTreeSet::new();
         for row in &batch.objects {
             let id = row.object_id;
             self.absent.borrow_mut().remove(&id);
@@ -173,14 +231,18 @@ impl Fetch {
             };
             check_info(pack)?;
             self.remember_pack(pack)?;
+            if keep_payloads && pack.domain == PackDomain::Payload {
+                winner_packs.insert(pack.pack_id);
+            }
             let location = *row;
             self.keep_locator(crate::location::LocatedObject { location, pack }, false);
         }
         self.published_directories(&batch.packs);
         let mut published = self.published.borrow_mut();
         for pack in &batch.packs {
-            if pack.info().domain == PackDomain::Metadata {
-                published.insert(pack.info(), pack.body().clone());
+            let info = pack.info();
+            if info.domain == PackDomain::Metadata || winner_packs.contains(&info.pack_id) {
+                published.insert(info, pack.body().clone());
             }
         }
         for row in &batch.inode_values {
@@ -197,6 +259,19 @@ impl Fetch {
     /// Serves the published bodies and values until the guard drops.
     pub(crate) fn serving_published(&self) -> Restore<'_> {
         Restore(&self.serve_published, self.serve_published.replace(true))
+    }
+    /// Keeps nearby inode groups together for a remote Save's canonical read.
+    pub(crate) fn compact_inode_packs(&self, enabled: bool) -> Restore<'_> {
+        Restore(
+            &self.compact_inode_packs,
+            self.compact_inode_packs.replace(enabled),
+        )
+    }
+    pub(crate) fn pairing_inode_values(&self, enabled: bool) -> Restore<'_> {
+        Restore(
+            &self.paired_inode_values,
+            self.paired_inode_values.replace(enabled),
+        )
     }
     /// Holds every demand to a Save's rule (no binding) until the guard drops.
     pub(crate) fn save_reads(&self) -> Restore<'_> {
@@ -329,9 +404,11 @@ impl Fetch {
         for page in missing.chunks(READ_OBJECT_LIMIT) {
             let mut rows = Vec::new();
             let mut chains = crate::location::LocatedChains::default();
-            self.note(|c| c.locate += 1);
             let mut bodies = Vec::new();
-            if let Some(packs) = packs.as_deref().filter(|_| page.len() > 1) {
+            if let Some((kept, closure)) = self.retained_locators(page) {
+                (rows, chains) = (kept, closure);
+            } else if let Some(packs) = packs.as_deref().filter(|_| page.len() > 1) {
+                self.note(|c| c.locate += 1);
                 let published = self.published.borrow();
                 let resident: Vec<_> = packs
                     .resident_ids()
@@ -356,6 +433,7 @@ impl Fetch {
                 }
                 self.note(|c| c.joined_pack_locates += 1);
             } else {
+                self.note(|c| c.locate += 1);
                 self.metadata.locate_chains(page, &mut rows, &mut chains)?;
             }
             if rows.len() > page.len() {
@@ -397,7 +475,7 @@ impl Fetch {
                     .ok_or(StorageError::Integrity("unsolicited packs"))?;
                 self.admit_joined_packs(packs, &rows, bodies)?;
             }
-            self.install_chains(&seen, chains)?;
+            self.install_chains(&seen, &rows, chains)?;
             for row in rows {
                 self.remember_pack(row.pack)?;
                 let mut cache = self.locators.borrow_mut();
@@ -765,13 +843,34 @@ impl Source for Fetch {
         } else {
             wanted
         };
-        let mut rows = Vec::new();
-        for page in wanted.chunks(READ_OBJECT_LIMIT) {
+        // A paired read answers exactly the two pages `chunks` makes below,
+        // and its second half stays within one provider page.
+        const _: () = assert!(
+            crate::policy::POOLED_VALUE_CACHE_BYTES / INODE_VALUE_BYTES <= 2 * READ_OBJECT_LIMIT
+        );
+        let mut batches = [Vec::new(), Vec::new()];
+        let paired = if self.paired_inode_values.get()
+            && wanted.len() > READ_OBJECT_LIMIT
+            && wanted.len() <= crate::policy::POOLED_VALUE_CACHE_BYTES / INODE_VALUE_BYTES
+        {
+            let (first, last) = wanted.split_at(READ_OBJECT_LIMIT);
+            self.metadata
+                .inode_values_pair([first, last], &mut batches)?
+        } else {
+            false
+        };
+        let mut ordinary = Vec::new();
+        for (index, page) in wanted.chunks(READ_OBJECT_LIMIT).enumerate() {
             self.note(|c| c.value_groups += 1);
-            self.metadata.inode_values(page, &mut rows)?;
+            let rows = if paired {
+                &batches[index]
+            } else {
+                self.metadata.inode_values(page, &mut ordinary)?;
+                &ordinary
+            };
             // The reply may omit an ordinal but never add, repeat or reorder one.
             let mut asked = page.iter();
-            for row in &rows {
+            for row in rows {
                 if !asked.any(|ordinal| *ordinal == row.ordinal) {
                     return Err(StorageError::Integrity("unrequested inode value"));
                 }
@@ -784,7 +883,7 @@ impl Source for Fetch {
             // values once (#768 stage 2).
             if self.serve_published.get() {
                 let mut published = self.published.borrow_mut();
-                for row in &rows {
+                for row in rows {
                     published.value(row.ordinal, row.value);
                 }
             }

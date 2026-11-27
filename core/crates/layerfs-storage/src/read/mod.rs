@@ -1,5 +1,6 @@
 //! Authenticated bounded reads over the persistence ports.
 
+mod captured;
 mod counters;
 mod fetch;
 mod held;
@@ -12,6 +13,8 @@ pub(crate) mod prefetch;
 mod provider;
 mod units;
 
+pub use captured::CapturedLocators;
+pub(crate) use captured::LocatorMode;
 pub use counters::Diagnostics;
 pub(crate) use fetch::Fetch;
 pub(crate) use hints::hint_failure;

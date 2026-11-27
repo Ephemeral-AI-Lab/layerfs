@@ -34,4 +34,5 @@ AND NOT EXISTS (SELECT 1 FROM {s}.object_location x WHERE ('x'||encode(substring
 o AS (SELECT count(object_id) AS n, count(*)-count(object_id) AS r FROM out) 
 SELECT CASE WHEN current_setting('layerfs.attempt',true) IS DISTINCT FROM $23::text THEN (1/(o.n-o.n))::text 
 WHEN o.r>0 THEN (32768+o.r)::smallint::text 
-WHEN o.n<>cardinality($1::bytea[]) THEN (1/(o.n-o.n))::text ELSE o.n::text END FROM o
+WHEN NOT $24::boolean AND o.n<>cardinality($1::bytea[]) THEN (1/(o.n-o.n))::text ELSE o.n::text END,
+CASE WHEN $24::boolean THEN ARRAY(SELECT object_id FROM out WHERE object_id IS NOT NULL) END FROM o

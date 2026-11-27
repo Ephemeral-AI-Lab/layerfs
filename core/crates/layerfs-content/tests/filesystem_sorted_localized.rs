@@ -842,6 +842,209 @@ fn a_three_leaf_change_in_an_eighty_leaf_page_demands_three_leaves() {
 }
 
 #[test]
+fn planned_inode_leaf_reads_preserve_emission_and_batch_only_touched_leaves() {
+    let (tree, children, firsts) = page_of_eighty();
+    let changed: Vec<_> = [10, 40, 70]
+        .into_iter()
+        .map(|child| (firsts[child], Some(7)))
+        .collect();
+    let apply = |planned| {
+        let reader = Counted {
+            store: &tree.store,
+            demands: RefCell::new(Vec::new()),
+        };
+        let mut emitted = TreeStore::new();
+        let (root, work) = Inodes::apply(
+            &mut FilesystemObjects::new(&reader, &mut emitted).with_inode_read_ahead(planned),
+            Some(tree.root),
+            changed.clone(),
+            &mut Vec::new(),
+        )
+        .unwrap();
+        (root, work, reader.demands.into_inner(), emitted)
+    };
+    let (ordinary, ordinary_work, _, ordinary_emitted) = apply(false);
+    let (planned, work, demands, planned_emitted) = apply(true);
+    assert_eq!(ordinary, planned);
+    assert_eq!(ordinary_emitted.order(), planned_emitted.order());
+    assert_eq!(work.pages_read, ordinary_work.pages_read);
+    assert_eq!(work.untouched_subtrees, ordinary_work.untouched_subtrees);
+    assert_eq!(work.read_waves, 2);
+    assert_eq!(work.prefetched_waves, 1);
+    assert_eq!(work.prefetched_bytes, work.prefetched_consumed);
+    assert_eq!(
+        demands,
+        [
+            vec![tree.root],
+            vec![children[10], children[40], children[70]]
+        ]
+    );
+}
+
+struct ResidentLeaf<'a> {
+    store: &'a TreeStore,
+    retained: ObjectId,
+}
+impl AuthenticatedObjects for ResidentLeaf<'_> {
+    fn read_canonical_batch(&self, _: &[ObjectId]) -> ContentResult<Vec<Vec<u8>>> {
+        panic!("the resident cache performs no provider read");
+    }
+
+    fn cached_canonical_batch(
+        &self,
+        ids: &[ObjectId],
+        bytes: usize,
+    ) -> ContentResult<Vec<Option<Vec<u8>>>> {
+        let value = self.store.canonical(self.retained).unwrap();
+        assert!(value.len() <= bytes);
+        Ok(ids
+            .iter()
+            .map(|id| (*id == self.retained).then(|| value.to_vec()))
+            .collect())
+    }
+}
+
+#[test]
+fn a_resident_base_leaf_is_removed_from_the_planned_provider_demand() {
+    let (tree, children, firsts) = page_of_eighty();
+    let reader = Counted {
+        store: &tree.store,
+        demands: RefCell::new(Vec::new()),
+    };
+    let cache = ResidentLeaf {
+        store: &tree.store,
+        retained: children[40],
+    };
+    let mut emitted = TreeStore::new();
+    let base_reader = layerfs_content::filesystem::objects::BasePageReader::new(&cache, &reader);
+    let mut objects = FilesystemObjects::new(&reader, &mut emitted)
+        .with_inode_read_ahead(true)
+        .with_base_reader(Some(&base_reader));
+    let (_, work) = Inodes::apply(
+        &mut objects,
+        Some(tree.root),
+        [10, 40, 70]
+            .into_iter()
+            .map(|child| (firsts[child], Some(7)))
+            .collect(),
+        &mut Vec::new(),
+    )
+    .unwrap();
+    assert_eq!(work.prefetched_bytes, work.prefetched_consumed);
+    assert_eq!(
+        reader.demands.into_inner(),
+        [vec![tree.root], vec![children[10], children[70]]]
+    );
+}
+
+struct RefuseFirstBatch<'a> {
+    store: &'a TreeStore,
+    demands: RefCell<Vec<Vec<ObjectId>>>,
+}
+impl AuthenticatedObjects for RefuseFirstBatch<'_> {
+    fn read_canonical_batch(&self, ids: &[ObjectId]) -> ContentResult<Vec<Vec<u8>>> {
+        let mut demands = self.demands.borrow_mut();
+        demands.push(ids.to_vec());
+        if demands.len() == 2 {
+            return Err(ContentError::ProviderFailure {
+                what: "planned inode leaves",
+            });
+        }
+        self.store.read_canonical_batch(ids)
+    }
+}
+
+#[test]
+fn a_refused_change_window_stops_before_a_further_fetch_or_emission() {
+    let (tree, _, firsts) = page_of_eighty();
+    let reader = RefuseFirstBatch {
+        store: &tree.store,
+        demands: RefCell::new(Vec::new()),
+    };
+    let mut emitted = TreeStore::new();
+    let mut objects = FilesystemObjects::new(&reader, &mut emitted).with_inode_read_ahead(true);
+    let original = ContentError::InvalidRecord("operation rows refused");
+    let changes = [
+        Ok((Inodes::key(firsts[10]), Some(Inodes::value(7)))),
+        Ok((Inodes::key(firsts[40]), Some(Inodes::value(7)))),
+        Err(original.clone()),
+    ];
+    let result = apply_inode_values(
+        &mut objects,
+        Some(tree.root),
+        changes.into_iter(),
+        MAXIMUM_SCRATCH_BYTES,
+    );
+    assert_eq!(result.unwrap_err(), original);
+    assert_eq!(reader.demands.into_inner(), [vec![tree.root]]);
+    assert!(emitted.is_empty());
+}
+
+#[test]
+fn tight_scratch_leaves_the_inode_read_ahead_unused() {
+    let (tree, _, firsts) = page_of_eighty();
+    let changes = || {
+        [10, 40]
+            .into_iter()
+            .map(|at| Ok((Inodes::key(firsts[at]), Some(Inodes::value(7)))))
+    };
+    let mut ordinary = TreeStore::new();
+    let (expected, work) = apply_inode_values(
+        &mut FilesystemObjects::new(&tree.store, &mut ordinary),
+        Some(tree.root),
+        changes(),
+        MAXIMUM_SCRATCH_BYTES,
+    )
+    .unwrap();
+    assert!(work.peak_scratch_bytes < 1024 * 1024);
+
+    let mut emitted = TreeStore::new();
+    let (root, planned_work) = apply_inode_values(
+        &mut FilesystemObjects::new(&tree.store, &mut emitted).with_inode_read_ahead(true),
+        Some(tree.root),
+        changes(),
+        work.peak_scratch_bytes,
+    )
+    .unwrap();
+    assert_eq!(root, expected);
+    assert_eq!(planned_work, work);
+}
+
+#[test]
+fn a_failed_planned_leaf_batch_keeps_its_error_without_a_second_attempt() {
+    let (tree, children, firsts) = page_of_eighty();
+    let reader = RefuseFirstBatch {
+        store: &tree.store,
+        demands: RefCell::new(Vec::new()),
+    };
+    let mut emitted = TreeStore::new();
+    let mut objects = FilesystemObjects::new(&reader, &mut emitted).with_inode_read_ahead(true);
+    let result = Inodes::apply(
+        &mut objects,
+        Some(tree.root),
+        [10, 40, 70]
+            .into_iter()
+            .map(|child| (firsts[child], Some(7)))
+            .collect(),
+        &mut Vec::new(),
+    );
+    assert_eq!(
+        result.unwrap_err(),
+        ContentError::ProviderFailure {
+            what: "planned inode leaves",
+        }
+    );
+    assert_eq!(
+        reader.demands.into_inner(),
+        [
+            vec![tree.root],
+            vec![children[10], children[40], children[70]]
+        ]
+    );
+    assert!(emitted.order().is_empty());
+}
+
+#[test]
 fn a_leaf_that_underflows_demands_one_neighbour_and_no_other() {
     // Every leaf of the built page holds the minimum, so one removal underflows.
     let (mut tree, children, firsts) = page_of_eighty();

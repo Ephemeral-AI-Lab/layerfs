@@ -7,7 +7,9 @@
 //! 1. `BEGIN READ COMMITTED`; `SET LOCAL` search_path, synchronous_commit and
 //!    lock_timeout; `set_config('layerfs.attempt', nonce, true)` and the
 //!    generation fence `1/(catalog_incarnation = G)` (simple text).
-//! 2. The pack bodies: `INSERT ... FROM unnest`, binary (only with packs).
+//! 2. The pack bodies: `INSERT ... FROM unnest`, binary (only with packs),
+//!    one statement per run of at most one ordinary pack's bytes
+//!    ([`pack_statements`]).
 //! 3. The attempt check; `store_lane FOR UPDATE`; the barrier lock and
 //!    unlock (simple text).
 //! 4. The Branch at the expected head and base (the `branch_snapshot`
@@ -66,15 +68,18 @@ use crate::blocks::hints::Block;
 use crate::history::Fused;
 use layerfs_history::error::HistoryError;
 use layerfs_history::records::{CommitOutcome, CommitRecord, CommitRequest};
-use layerfs_storage::{location::PackDomain, port::Publication};
+use layerfs_storage::{
+    location::PackDomain,
+    port::{Publication, PublishedPack},
+};
 use postgres::error::SqlState;
 use postgres::types::ToSql;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-const PACK: &str = include_str!("../../../../sql/postgresql/fused/pack.sql");
+pub(crate) const PACK: &str = include_str!("../../../../sql/postgresql/fused/pack.sql");
 const HEAD: &str = include_str!("../../../../sql/postgresql/fused/head.sql");
-const ROWS: &str = include_str!("../../../../sql/postgresql/fused/rows.sql");
-const HINTS: &str = include_str!("../../../../sql/postgresql/fused/hints.sql");
+pub(crate) const ROWS: &str = include_str!("../../../../sql/postgresql/fused/rows.sql");
+pub(crate) const HINTS: &str = include_str!("../../../../sql/postgresql/fused/hints.sql");
 const COMMIT: &str = include_str!("../../../../sql/postgresql/fused/commit.sql");
 const LINEAGE_PARENT: &str = include_str!("../../../../sql/postgresql/fused/lineage_parent.sql");
 const LINEAGE_BASE: &str = include_str!("../../../../sql/postgresql/fused/lineage_base.sql");
@@ -98,23 +103,23 @@ enum Step {
 }
 
 /// One value bound in binary.
-type Value = Box<dyn ToSql + Sync>;
+type Value<'a> = Box<dyn ToSql + Sync + 'a>;
 
 /// The requests of one message: each one's step, and for a statement its
 /// text, values and bound bytes.
 #[derive(Default)]
-struct Message {
+struct Message<'a> {
     steps: Vec<Step>,
     order: Vec<Option<usize>>,
-    statements: Vec<(String, Vec<Value>, u64)>,
+    statements: Vec<(String, Vec<Value<'a>>, u64)>,
 }
 
-impl Message {
+impl<'a> Message<'a> {
     fn simple(&mut self, step: Step) {
         self.steps.push(step);
         self.order.push(None);
     }
-    fn statement(&mut self, step: Step, sql: String, values: Vec<Value>, bound: u64) {
+    fn statement(&mut self, step: Step, sql: String, values: Vec<Value<'a>>, bound: u64) {
         self.steps.push(step);
         self.order.push(Some(self.statements.len()));
         self.statements.push((sql, values, bound));
@@ -124,7 +129,7 @@ impl Message {
 /// A token no other transaction of this process holds: the process, a
 /// counter and the clock, hashed. It only tells this transaction from an
 /// implicit one; it is not a secret.
-pub(super) fn nonce() -> String {
+pub(crate) fn nonce() -> String {
     static NEXT: AtomicU64 = AtomicU64::new(0);
     let mut hasher = blake3::Hasher::new();
     hasher.update(b"layerfs/fused-commit/v1\0");
@@ -137,11 +142,11 @@ pub(super) fn nonce() -> String {
     hasher.finalize().to_hex()[..32].to_owned()
 }
 
-fn bytes(value: &[u8]) -> Value {
+fn bytes(value: &[u8]) -> Value<'static> {
     Box::new(value.to_vec())
 }
 
-fn optional(value: Option<&[u8]>) -> Value {
+fn optional(value: Option<&[u8]>) -> Value<'static> {
     Box::new(value.map(<[u8]>::to_vec))
 }
 
@@ -170,7 +175,7 @@ pub(crate) fn commit(
         "SELECT 1/(current_setting('layerfs.attempt',true) IS NOT DISTINCT FROM '{nonce}')::int; {}",
         crate::backend::postgresql::session::profile::Settings::lane_row(schema)
     );
-    let attempt: Value = Box::new(nonce.clone());
+    let attempt: Value<'static> = Box::new(nonce.clone());
     let mut message = Message::default();
     message.simple(Step::Begin);
     let tail = tail.filter(|batch| {
@@ -181,8 +186,9 @@ pub(crate) fn commit(
             && batch.release_ordinals.is_none())
     });
     if let Some(batch) = tail.filter(|batch| !batch.packs.is_empty()) {
-        let (values, bound) = pack_values(batch)?;
-        message.statement(Step::Packs, qualified(PACK), with(values, &nonce), bound);
+        for (values, bound) in pack_statements(&batch.packs)? {
+            message.statement(Step::Packs, qualified(PACK), with(values, &nonce), bound);
+        }
     }
     message.simple(Step::Lane);
     let (branch, stack, base) = (
@@ -206,7 +212,9 @@ pub(crate) fn commit(
     );
     if let Some(batch) = tail {
         let (values, bound) = row_values(batch)?;
-        message.statement(Step::Rows, qualified(ROWS), with(values, &nonce), bound);
+        let mut values = with(values, &nonce);
+        values.push(Box::new(false));
+        message.statement(Step::Rows, qualified(ROWS), values, bound);
     }
     if !blocks.is_empty() {
         let groups: Vec<i64> = blocks.iter().map(|block| block.group).collect();
@@ -226,7 +234,7 @@ pub(crate) fn commit(
         .pop()
         .ok_or(HistoryError::Integrity("Commit row values"))?;
     row.truncate(17);
-    let mut values: Vec<Value> = row.into_iter().map(boxed).collect();
+    let mut values: Vec<Value<'static>> = row.into_iter().map(boxed).collect();
     values.push(boxed(commit_attempt));
     values.push(Box::new(nonce.clone()));
     message.statement(Step::Commit, qualified(COMMIT), values, 512);
@@ -320,12 +328,12 @@ fn decided(outcome: Result<(), Decision>, trusted: bool) -> Result<(), Decision>
 }
 
 /// The values of one statement followed by the attempt token.
-fn with(mut values: Vec<Value>, nonce: &str) -> Vec<Value> {
+fn with<'a>(mut values: Vec<Value<'a>>, nonce: &str) -> Vec<Value<'a>> {
     values.push(Box::new(nonce.to_owned()));
     values
 }
 
-fn boxed(param: crate::backend::records::Param) -> Value {
+fn boxed(param: crate::backend::records::Param) -> Value<'static> {
     use crate::backend::records::Param;
     match param {
         Param::I64(value) => Box::new(value),
@@ -336,8 +344,42 @@ fn boxed(param: crate::backend::records::Param) -> Value {
     }
 }
 
-/// The pack rows of `batch`, as `objects::publish::packs` writes them.
-fn pack_values(batch: &Publication) -> Result<(Vec<Value>, u64), Fused> {
+/// Pack bytes bound by one pack insert statement. The driver encodes each
+/// statement into a buffer and copies it into the connection's write
+/// buffer, and both keep their grown capacity for the connection's life.
+/// Splitting keeps the pack statements' share of that capacity near one
+/// ordinary pack, however many packs the batch holds; they stay in the same
+/// message and transaction. A singleton pack, up to `SINGLETON_PACK_LIMIT`,
+/// cannot be split and is sent alone. The retained capacity is therefore
+/// the largest single statement: a singleton pack, or the rows or hint
+/// statement at their limits (`TRANSACTION_ROW_LIMIT` rows, `ARRAY_ROWS`
+/// hint blocks).
+const STATEMENT_PACK_BYTES: usize = layerfs_storage::policy::PACK_LIMIT;
+
+/// The pack insert parameters of `packs`, one entry per statement: the
+/// contiguous runs of at most [`STATEMENT_PACK_BYTES`] body bytes, each
+/// holding at least one pack, in order. None for no packs.
+pub(crate) fn pack_statements(
+    packs: &[PublishedPack],
+) -> Result<Vec<(Vec<Value<'_>>, u64)>, Fused> {
+    let mut statements = Vec::new();
+    let (mut start, mut bytes) = (0, 0);
+    for (index, pack) in packs.iter().enumerate() {
+        let length = pack.body().len();
+        if index > start && bytes + length > STATEMENT_PACK_BYTES {
+            statements.push(pack_values(&packs[start..index])?);
+            (start, bytes) = (index, 0);
+        }
+        bytes += length;
+    }
+    if start < packs.len() {
+        statements.push(pack_values(&packs[start..])?);
+    }
+    Ok(statements)
+}
+
+/// The pack rows of `packs`, as `objects::publish::packs` writes them.
+fn pack_values(packs: &[PublishedPack]) -> Result<(Vec<Value<'_>>, u64), Fused> {
     let mut columns = (
         Vec::new(),
         Vec::new(),
@@ -347,7 +389,7 @@ fn pack_values(batch: &Publication) -> Result<(Vec<Value>, u64), Fused> {
         Vec::new(),
     );
     let mut bound = 0;
-    for pack in &batch.packs {
+    for pack in packs {
         let info = pack.info();
         let body = pack.body();
         let header = layerfs_storage::pack::layout::parse_header(body)
@@ -361,8 +403,8 @@ fn pack_values(batch: &Publication) -> Result<(Vec<Value>, u64), Fused> {
             .push(i64::from(info.domain == PackDomain::Payload));
         columns.2.push(info.key.as_bytes().to_vec());
         columns.3.push(info.length as i64);
-        columns.4.push(body.as_slice().to_vec());
-        columns.5.push(directory.to_vec());
+        columns.4.push(body.as_slice());
+        columns.5.push(directory);
         bound += 56 + body.len() as u64 + directory.len() as u64;
     }
     Ok((
@@ -379,7 +421,7 @@ fn pack_values(batch: &Publication) -> Result<(Vec<Value>, u64), Fused> {
 }
 
 /// The 22 columns of `publish_rows`, as `objects::publish::rows` binds them.
-fn row_values(batch: &Publication) -> Result<(Vec<Value>, u64), Fused> {
+pub(crate) fn row_values(batch: &Publication) -> Result<(Vec<Value<'static>>, u64), Fused> {
     use crate::backend::postgresql::objects::publish::prefix;
     let objects = &batch.objects;
     let column = |f: fn(&layerfs_storage::location::ObjectLocation) -> i64| -> Vec<i64> {
@@ -407,7 +449,7 @@ fn row_values(batch: &Publication) -> Result<(Vec<Value>, u64), Fused> {
         + values.iter().map(|b| b.body.len() as u64 + 16).sum::<u64>()
         + signatures.len() as u64 * 80
         + 48;
-    let out: Vec<Value> = vec![
+    let out: Vec<Value<'static>> = vec![
         Box::new(ids),
         Box::new(column(|o| i64::from(o.role.code()))),
         Box::new(column(|o| o.canonical_length as i64)),

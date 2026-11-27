@@ -1,9 +1,12 @@
 //! C1's authenticated provider over a two-port Storage handle.
 
-use super::objects::{Decoder, ReadState};
+use super::{
+    objects::{Decoder, ReadState},
+    CapturedLocators, LocatorMode,
+};
 use crate::{error::StorageResult, storage::Storage};
 use layerfs_content::{AuthenticatedObjects, ContentResult, ObjectId};
-use std::cell::RefCell;
+use std::{cell::RefCell, sync::Arc};
 
 /// One operation's decode arena and bounded group/pooled-value caches.
 pub struct Reader<'a> {
@@ -100,6 +103,20 @@ impl Storage {
         let mut workspace = Decoder::new()?;
         kept.0
             .read(&mut workspace, &self.source, &self.capacities(), ids)
+    }
+    /// A captured construction demand can pair two ready, bounded ordinal
+    /// reads through its existing read-only Store session.
+    pub fn read_captured_kept(
+        &self,
+        kept: &mut KeptReads,
+        ids: &[ObjectId],
+        locators: &Arc<CapturedLocators>,
+    ) -> StorageResult<Vec<Vec<u8>>> {
+        let _paired = self.source.pairing_inode_values(true);
+        let _locators = self
+            .source
+            .scoped_locators(Some(LocatorMode::Record(locators.clone())));
+        self.read_kept(kept, ids)
     }
     /// [`Reader::file_lengths`] through kept caches and a fresh arena.
     pub fn lengths_kept(&self, kept: &mut KeptReads, ids: &[ObjectId]) -> StorageResult<Vec<u64>> {

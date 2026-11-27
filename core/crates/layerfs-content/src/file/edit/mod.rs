@@ -26,6 +26,7 @@ pub use apply::{
 };
 pub use backing::{
     EditRecordApply, EditRecordChange, EditRecordExpected, EditRecordKey, IndexedEditBacking,
+    IndexedRecordPage,
 };
 pub use compare::{NoOpVerdict, COMPARE_WINDOW_BYTES};
 pub use concat::coalesce_adjacent;

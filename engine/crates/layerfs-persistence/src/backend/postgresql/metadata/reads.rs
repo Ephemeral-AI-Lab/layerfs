@@ -219,6 +219,31 @@ pub(crate) fn inode_values(
     Ok(())
 }
 
+/// The same two bounded immutable statements, sent on one writer turn.
+pub(crate) fn inode_values_pair(
+    tx: &Transaction<'_>,
+    ordinals: [&[u32]; 2],
+    out: &mut [Vec<InodeValueRow>; 2],
+) -> Result<(), PersistenceError> {
+    let [(left_lo, left_hi), (right_lo, right_hi)] = ordinals.map(value_ranges);
+    let skip: [i64; 0] = [];
+    let sql = values_sql(tx.schema);
+    let replies = tx.typed_pair(
+        &sql,
+        [
+            &[&left_lo, &left_hi, &skip.as_slice()],
+            &[&right_lo, &right_hi, &skip.as_slice()],
+        ],
+        [(left_lo.len() * 16) as u64, (right_lo.len() * 16) as u64],
+    )?;
+    for ((asked, out), answer) in ordinals.into_iter().zip(out).zip(replies) {
+        let rows = answer?;
+        crate::blocks::values::pick(asked, rows.iter().map(value_block), out)?;
+        crate::metadata::values::check_answer(asked, out)?;
+    }
+    Ok(())
+}
+
 /// Bytes of value-block bodies one transaction keeps between
 /// [`inode_values_ahead`] calls, in two generations: when the young one
 /// has reached half of this, the next call drops the old one. A call never
@@ -370,6 +395,20 @@ fn value_blocks(
     ahead: u32,
     held: &[i64],
 ) -> Result<Vec<ValueBlock>, PersistenceError> {
+    let (lows, mut highs) = value_ranges(ordinals);
+    let sql = values_sql(tx.schema);
+    if let Some(high) = highs.last_mut() {
+        *high += i64::from(ahead);
+    }
+    let rows = tx.typed(
+        &sql,
+        &[&lows, &highs, &held],
+        (lows.len() as u64 * 2 + held.len() as u64) * 8,
+    )?;
+    Ok(rows.iter().map(value_block).collect())
+}
+
+fn value_ranges(ordinals: &[u32]) -> (Vec<i64>, Vec<i64>) {
     let (mut lows, mut highs) = (Vec::new(), Vec::new());
     for &ordinal in ordinals {
         match highs.last_mut() {
@@ -380,25 +419,19 @@ fn value_blocks(
             }
         }
     }
-    let sql = values_sql(tx.schema);
-    if let Some(high) = highs.last_mut() {
-        *high += i64::from(ahead);
-    }
-    let rows = tx.typed(
-        &sql,
-        &[&lows, &highs, &held],
-        (lows.len() as u64 * 2 + held.len() as u64) * 8,
-    )?;
-    let ordinal = |v: i64| u32::try_from(v).map_err(|_| BackendError::Integrity);
-    Ok(rows
-        .iter()
-        .map(|row| {
-            let first: i64 = row.try_get(0).map_err(|_| BackendError::Integrity)?;
-            let last: i64 = row.try_get(1).map_err(|_| BackendError::Integrity)?;
-            let body: Vec<u8> = row.try_get(2).map_err(|_| BackendError::Integrity)?;
-            Ok((ordinal(first)?, ordinal(last)?, body))
-        })
-        .collect())
+    (lows, highs)
+}
+
+fn value_block(row: &postgres::Row) -> Result<(u32, u32, Vec<u8>), BackendError> {
+    let ordinal = |value| u32::try_from(value).map_err(|_| BackendError::Integrity);
+    let first = row
+        .try_get::<_, i64>(0)
+        .map_err(|_| BackendError::Integrity)?;
+    let last = row
+        .try_get::<_, i64>(1)
+        .map_err(|_| BackendError::Integrity)?;
+    let body = row.try_get(2).map_err(|_| BackendError::Integrity)?;
+    Ok((ordinal(first)?, ordinal(last)?, body))
 }
 
 /// The signature ring in insertion (stamp) order.

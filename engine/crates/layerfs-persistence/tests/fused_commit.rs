@@ -64,12 +64,17 @@ fn bytes(seed: u32, len: usize) -> Vec<u8> {
 
 /// One Save of one file of `seed`, its last publication held.
 fn held(storage: &Storage, seed: u32) -> (PreparedTail<'_>, ObjectId) {
+    held_bytes(storage, seed, 5000)
+}
+
+/// One Save of one file of `len` bytes of `seed`, its last publication held.
+fn held_bytes(storage: &Storage, seed: u32, len: usize) -> (PreparedTail<'_>, ObjectId) {
     let save = storage.begin_save().unwrap();
     let root = Timing::disabled("construct", |scope| {
         construct_bytes(
             storage.policy().construction(),
             &storage.policy().construction().capacities(),
-            &bytes(seed, 5000),
+            &bytes(seed, len),
             &mut save.sink(),
             scope.child("content"),
         )
@@ -526,6 +531,72 @@ fn postgresql_fused_commit_is_one_round_trip() {
         over.branch.head_commit
     );
     assert!(fixture.history.commit(record.id).unwrap().is_some());
+}
+
+/// The pack statements a held tail's packs make: contiguous runs of at most
+/// one ordinary pack's bytes, each holding at least one pack.
+fn pack_runs(batch: &Publication) -> usize {
+    let (mut runs, mut bytes) = (0, 0);
+    for pack in &batch.packs {
+        let length = pack.body().len();
+        if runs == 0 || bytes + length > layerfs_storage::policy::PACK_LIMIT {
+            (runs, bytes) = (runs + 1, 0);
+        }
+        bytes += length;
+    }
+    runs
+}
+
+/// A tail wider than one ordinary pack is sent as several pack statements
+/// that stay in the Commit's one message: one round trip, one transaction,
+/// every held object published and the Branch advanced.
+#[test]
+fn postgresql_fused_commit_splits_a_wide_tail() {
+    let Some(pg) = Pg::new("wide") else { return };
+    let handles = pg.open(30_000);
+    let fixture = Fixture::new(
+        handles.storage.clone(),
+        &handles.history,
+        Box::new(|| handles.diagnostics().unwrap()),
+    );
+    // Prepares every statement of a Commit with a parent.
+    three_commits(&fixture);
+    let commit = |seed: u32, len: usize| {
+        let over = fixture.snapshot();
+        let (tail, candidate) = held_bytes(&fixture.storage, seed, len);
+        let batch = tail.publication().unwrap();
+        let (runs, ids) = (pack_runs(batch), ids(&tail));
+        let before = (fixture.work)();
+        let outcome = fixture
+            .fused(Some(batch), &fixture.request(&over, candidate), &[hint()])
+            .unwrap();
+        let after = (fixture.work)();
+        assert!(
+            matches!(outcome, CommitOutcome::Committed { .. }),
+            "{outcome:?}"
+        );
+        tail.acknowledged().unwrap();
+        assert_eq!(fixture.snapshot().effective_root, candidate);
+        assert!(fixture.stored(&ids), "the held objects are published");
+        let fresh = Storage::new(fixture.persistence.clone()).unwrap();
+        fresh.reader().unwrap().read_objects(&[candidate]).unwrap();
+        (
+            runs,
+            delta(&before, &after),
+            after.statements - before.statements,
+        )
+    };
+    let (narrow_runs, narrow, narrow_statements) = commit(80, 5000);
+    let (wide_runs, wide, wide_statements) = commit(81, 1024 * 1024);
+    assert_eq!(narrow_runs, 1);
+    assert!(wide_runs >= 3, "a 1 MiB tail needs several statements");
+    assert_eq!(narrow, [1, 0, 1, 1], "warm narrow: {narrow:?}");
+    assert_eq!(wide, [1, 0, 1, 1], "warm wide: {wide:?}");
+    assert_eq!(
+        wide_statements - narrow_statements,
+        (wide_runs - narrow_runs) as u64,
+        "one more statement per extra run"
+    );
 }
 
 /// A refused message on a fresh Store: `refuse` changes the Store (or holds

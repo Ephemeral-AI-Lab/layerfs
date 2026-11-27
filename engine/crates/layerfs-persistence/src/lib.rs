@@ -47,7 +47,7 @@ pub use config::{
 pub use history::admission::{has_place_view, with_place_view};
 pub use history::{
     Committer, Fused, HistoryProvider, KeptHistory, KeptNode, KeptNodeId, KeptObjects, KeptWaste,
-    MarkResult, Sequence, Spans, FIXED_ROWS as FUSED_FIXED_ROWS,
+    MarkResult, Sequence, Spans, FIXED_ROWS as FUSED_FIXED_ROWS, HINT_BATCH_ROWS,
 };
 /// The PostgreSQL client's own reading of a connection URL (its `FromStr`
 /// is tokio-postgres's `UrlParser`), the one every Store session dials

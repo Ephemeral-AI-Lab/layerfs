@@ -2,7 +2,7 @@
 use super::{open::Counts, PortError, ReadAdmissionError};
 use layerfs_content::ObjectId;
 use layerfs_history::{BranchId, BranchSnapshot, HistoryCatalog};
-use layerfs_storage::{Diagnostics, KeptReads, ReadCache, Storage};
+use layerfs_storage::{read::CapturedLocators, Diagnostics, KeptReads, ReadCache, Storage};
 use std::{
     sync::{
         atomic::{AtomicU64, Ordering},
@@ -127,15 +127,22 @@ impl ReadSession {
             }
         })
     }
-    pub fn objects(&self, ids: &[ObjectId]) -> Result<Vec<Vec<u8>>, Arc<PortError>> {
+    pub fn objects(
+        &self,
+        ids: &[ObjectId],
+        captured: Option<&Arc<CapturedLocators>>,
+    ) -> Result<Vec<Vec<u8>>, Arc<PortError>> {
         self.attempt(|handle, cache, counts| {
             counts.objects.fetch_add(1, Ordering::Relaxed);
             counts
                 .object_ids
                 .fetch_add(ids.len() as u64, Ordering::Relaxed);
-            self.cached(cache, |cache| match cache {
-                Some(cache) => handle.storage.read_kept(cache, ids),
-                None => handle.storage.reader()?.read_objects(ids),
+            self.cached(cache, |cache| match (cache, captured) {
+                (Some(cache), Some(locators)) => {
+                    handle.storage.read_captured_kept(cache, ids, locators)
+                }
+                (Some(cache), None) => handle.storage.read_kept(cache, ids),
+                (None, _) => handle.storage.reader()?.read_objects(ids),
             })
         })
     }

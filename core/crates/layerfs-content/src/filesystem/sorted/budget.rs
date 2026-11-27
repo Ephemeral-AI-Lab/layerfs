@@ -58,6 +58,11 @@ impl Budget {
     pub fn used(&self) -> usize {
         self.used.get()
     }
+
+    /// Scratch remaining for an optional lookahead.
+    pub(crate) fn remaining(&self) -> usize {
+        self.limit - self.used.get()
+    }
 }
 
 /// One live reservation; the bytes return to the budget when it drops.

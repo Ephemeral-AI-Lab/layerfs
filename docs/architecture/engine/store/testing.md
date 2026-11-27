@@ -248,7 +248,7 @@ the SQLite Store suites still run and still need the supported filesystem.
 
 The T9 PostgreSQL compaction suite (`postgresql_compact.rs`) gives every test
 its own catalog binding, `postgresql-compact-<tag>`. PostgreSQL advisory locks
-are server-wide, not schema-scoped, so two tests that shared a binding would
+are scoped to the database, not the schema, so two tests that shared a binding would
 exclude each other while running in parallel even though each owns its schema.
 The per-test binding fix is already in place; keep it when adding a case. Those
 tests need only `LAYERFS_TEST_POSTGRES_URL`, `amcheck` and the supported
@@ -260,16 +260,16 @@ tests need only `LAYERFS_TEST_POSTGRES_URL`, `amcheck` and the supported
 runs this harness in the repository's report-only CI. It adds no test
 selection: every target it runs is already in the push or nightly lane that
 [`tools/ci_tests.py`](../../../../tools/ci_tests.py) chooses; it runs them where
-their guard admits a Store. It runs for pull requests into `main` or
-`layerfs_v2_0_0`, the 2.0 release base; every other lane runs only for `main`,
-so a PR into the 2.0 base carries this Store evidence and no other lane.
+their guard admits a Store. Like every other lane it runs only for `main`:
+pushes to it and pull requests into it (owner, 2026-11-16 and 2026-11-24). A
+pull request into `layerfs_v2_0_0` runs no lane.
 Like the other lanes it is not a required check, an
 agent does not wait for it, and a green run is not verification of a change
 ([AGENTS.md](../../../../AGENTS.md) §4).
 
 | Job | Trigger | Command | PostgreSQL |
 | --- | --- | --- | --- |
-| `store ext4 (--quick)` | push to `main`; pull requests into `main` or `layerfs_v2_0_0` (the 2.0 release base), touching `core/**`, `engine/**`, `control/**`, `api/crates/**` (not `layerfs-node`), `Cargo.*`, `.config/**`, `tools/ci/**`, `.cargo/**`; a markdown-only change does not run it | `tools/ci/test_store_ext4.sh --quick` | off |
+| `store ext4 (--quick)` | push to `main`; pull requests into `main`, touching `core/**`, `engine/**`, `control/**`, `api/crates/**` (not `layerfs-node`), `Cargo.*`, `.config/**`, `tools/ci/**`, `.cargo/**`; a markdown-only change does not run it | `tools/ci/test_store_ext4.sh --quick` | off |
 | `store ext4 (--full, PostgreSQL 17)` | `schedule` (04:47 UTC) and manual dispatch | `tools/ci/test_store_ext4.sh --full` | a `postgres:17` service container |
 
 Both jobs set `LAYERFS_TEST_TMPDIR=/mnt/layerfs-store-tests`. On the

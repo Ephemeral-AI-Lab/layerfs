@@ -1,7 +1,7 @@
 //! One synchronous Content/Save/history producer and exact paired local install.
 use super::{
-    bind::checked_base, BoundWorkspace, CommitError, CommitFailure, CommitOptions, CommitPhase,
-    CommitSuccess, MergeReport,
+    bind::checked_base, captured::Candidate, BoundWorkspace, CommitError, CommitFailure,
+    CommitOptions, CommitPhase, CommitSuccess, MergeReport,
 };
 use crate::telemetry::phase;
 use layerfs_content::compare::ChangedDirectories;
@@ -114,7 +114,12 @@ impl BoundWorkspace {
         let mut admission = self.admit_commit()?;
         let result = crate::telemetry::timed("commit", |timing| {
             self.commit_admitted(
-                construct,
+                |save, capture, snapshot| {
+                    construct(save, capture, snapshot).map(|root| Candidate {
+                        root,
+                        logical: None,
+                    })
+                },
                 || None,
                 || (),
                 &CommitOptions::default(),
@@ -163,11 +168,7 @@ impl BoundWorkspace {
     /// read back from the Store.
     pub(super) fn commit_admitted(
         &self,
-        construct: impl FnOnce(
-            &Save<'_>,
-            Capture,
-            &BranchSnapshot,
-        ) -> Result<FilesystemRootId, CommitError>,
+        construct: impl FnOnce(&Save<'_>, Capture, &BranchSnapshot) -> Result<Candidate, CommitError>,
         staged: impl Fn() -> Option<Arc<ConstructedObjects>>,
         published: impl FnOnce(),
         options: &CommitOptions,
@@ -259,19 +260,21 @@ impl BoundWorkspace {
                         .map_err(CommitError::Storage)
                 })?;
                 retained.phase = CommitPhase::Construct;
-                let candidate =
-                    match phase(timing, "construct", || construct(&save, capture, &snapshot)) {
-                        Ok(root) => root,
-                        Err(original) => {
-                            return Err(match save.take_failure() {
-                                Some(storage) => CommitError::Construction {
-                                    original: Box::new(original),
-                                    storage,
-                                },
-                                None => original,
-                            })
-                        }
-                    };
+                let Candidate {
+                    root: candidate,
+                    logical: captured_logical,
+                } = match phase(timing, "construct", || construct(&save, capture, &snapshot)) {
+                    Ok(built) => built,
+                    Err(original) => {
+                        return Err(match save.take_failure() {
+                            Some(storage) => CommitError::Construction {
+                                original: Box::new(original),
+                                storage,
+                            },
+                            None => original,
+                        })
+                    }
+                };
                 // §4.3: the candidate is a new node above the frontier, so
                 // an entry inherited unchanged from the bound base must be
                 // removed explicitly; a re-creation keeps its new inode. The
@@ -366,24 +369,37 @@ impl BoundWorkspace {
                 // One reader continues the Save for both phases, so they
                 // share its caches and the bodies and values it published.
                 let reader = storage.reader_after_save().map_err(CommitError::Storage)?;
-                // One difference walk counts the logical size and notes the
-                // directories whose listing changed; the hints then read
-                // only those directories (#810).
-                let mut directories = ChangedDirectories::default();
-                let logical = phase(timing, "logical.count", || {
-                    self.logical_after(
-                        &reader,
-                        current.effective_root,
-                        root,
-                        known,
-                        Some(&mut directories),
-                    )
-                })?;
-                let collected = phase(timing, "bindings", || match fused {
-                    true => {
+                // Use the canonical construction transitions only if the chosen
+                // comparison has exactly those roots. A merge or whiteout
+                // rewrite can require the ordinary inode-table difference.
+                let (logical, directories, prepared_bindings) =
+                    phase(timing, "logical.count", || {
+                        if let Some(changes) = captured_logical.filter(|changes| {
+                            changes.matches(FilesystemRootId(current.effective_root), root)
+                        }) {
+                            let (logical, directories, bindings) =
+                                changes.count(&self.owner, &reader, known)?;
+                            return Ok::<_, CommitError>((logical, directories, bindings));
+                        }
+                        let mut directories = ChangedDirectories::default();
+                        let logical = self.logical_after(
+                            &reader,
+                            current.effective_root,
+                            root,
+                            known,
+                            Some(&mut directories),
+                        )?;
+                        Ok((logical, directories, None))
+                    })?;
+                let collected = phase(timing, "bindings", || match (fused, prepared_bindings) {
+                    (true, Some(plan)) => plan.collect(&self.owner).map(Some),
+                    (false, Some(plan)) => {
+                        plan.record(&self.owner, &*self.store.history).map(|_| None)
+                    }
+                    (true, None) => {
                         super::hints::collect_directory_bindings(&reader, &directories).map(Some)
                     }
-                    false => super::hints::record_directory_bindings(
+                    (false, None) => super::hints::record_directory_bindings(
                         &reader,
                         &*self.store.history,
                         &directories,
@@ -411,13 +427,19 @@ impl BoundWorkspace {
                         let tail = tail
                             .ok_or(CommitError::Context("binding overflow without a held Save"))?;
                         let saved = phase(timing, "finish.tail", || {
-                            tail.publish().map_err(CommitError::Storage)
+                            tail.publish_captured_overflow()
+                                .map_err(CommitError::Storage)
                         })?;
                         self.store.note_save(&saved);
                         retained.saved = Some(saved);
                         let reader = storage.reader_after_save().map_err(CommitError::Storage)?;
                         phase(timing, "bindings", || {
-                            overflow.record(&reader, &*self.store.history, &directories)
+                            overflow.record(
+                                &self.owner,
+                                &reader,
+                                &*self.store.history,
+                                &directories,
+                            )
                         })?;
                         (None, None)
                     }
@@ -858,27 +880,40 @@ impl BoundWorkspace {
         known: u64,
         directories: Option<&mut ChangedDirectories>,
     ) -> Result<u64, CommitError> {
-        let mut refused = None;
-        let counted = layerfs_content::filesystem::statistics::logical_size_and_directories(
-            reader,
-            FilesystemRootId(before),
-            after,
-            known,
-            &mut |roots| {
-                reader.file_lengths(roots).map_err(|error| {
-                    refused = Some(error);
-                    layerfs_content::ContentError::OutputRejected
-                })
-            },
-            directories,
-        );
-        match (counted, refused) {
-            (Ok(size), _) => Ok(size),
-            (Err(_), Some(error)) => Err(CommitError::Storage(error)),
-            (Err(error), None) => Err(CommitError::Content {
-                error,
-                provider: None,
-            }),
-        }
+        with_file_lengths(reader, |lengths| {
+            layerfs_content::filesystem::statistics::logical_size_and_directories(
+                reader,
+                FilesystemRootId(before),
+                after,
+                known,
+                lengths,
+                directories,
+            )
+        })
+    }
+}
+
+/// Gives both logical-count routes authoritative catalogue lengths while
+/// retaining the original Storage failure across Content's callback boundary.
+pub(super) fn with_file_lengths<T>(
+    reader: &layerfs_storage::Reader<'_>,
+    count: impl FnOnce(
+        &mut dyn FnMut(&[layerfs_content::ObjectId]) -> layerfs_content::ContentResult<Vec<u64>>,
+    ) -> layerfs_content::ContentResult<T>,
+) -> Result<T, CommitError> {
+    let mut refused = None;
+    let counted = count(&mut |roots| {
+        reader.file_lengths(roots).map_err(|error| {
+            refused = Some(error);
+            layerfs_content::ContentError::OutputRejected
+        })
+    });
+    match (counted, refused) {
+        (Ok(size), _) => Ok(size),
+        (Err(_), Some(error)) => Err(CommitError::Storage(error)),
+        (Err(error), None) => Err(CommitError::Content {
+            error,
+            provider: None,
+        }),
     }
 }

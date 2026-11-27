@@ -90,6 +90,105 @@ Before its rows are built, each captured inode page (at most `PAGE_ROWS` =
 | Failures | One attempt. A failed overlay question is that file's custody (as a failed preparation keeps it); a failed length demand or batch is the namespace's original failure | [`namespace/files.rs`](../../../../engine/crates/layerfs-workspace/src/construction/namespace/files.rs) |
 | Memory | One page's lengths and at most one batch in flight; fetched roots live in the existing bounded cache allowance | [`base/batch.rs`](../../../../engine/crates/layerfs-workspace/src/base/batch.rs) |
 
+### Acknowledged Save bodies
+
+While a PostgreSQL captured Commit accepts output, payload packs with
+acknowledged winning locators may occupy the unused portion of the existing
+2 MiB published-body cache. Metadata keeps its existing priority. Save
+reads authenticate a retained body through the same complete-pack checks as
+a fetched body. A missing or evicted body is fetched by its winning locator. For
+single-group reads of a multi-group whole-file pack, the Save retains the
+authenticated requested group in its existing dependency pack allowance.
+Once the retained groups of a pack cover half its bytes, the next read keeps
+the whole authenticated pack instead, so its remaining groups are served from
+the cache. Other pack formats and multi-group demands keep their ordinary
+admission.
+
+[Published body admission and eviction](../../../../core/crates/layerfs-storage/src/read/fetch.rs)
+
+### Batched inode leaf reads
+
+On captured Commits whose provider supports batched chain reads, the sorted
+inode merge uses the next 1,024 checked final serials to identify stored
+leaf siblings that the edit reaches. It requests up to 64 leaves through
+the existing authenticated read port. Canonical pages, IDs, inline
+change records and one decode slot fit within 1 MiB. The pages also
+charge the existing sorted scratch budget. The merge consumes the
+pages in serial order and fetches newly required neighbours on demand.
+Once the sealed input exceeds one 64-row record job, validation, reference
+reduction, and the inode-leaf and directory-root cohorts consult the
+captured base's existing authenticated cache, reusing up to 2 MiB of
+resident canonical bytes per demand. Only missing pages go
+through the Save read port. Reads of newly accepted Save objects keep
+their separate capability. A failed group returns its original provider
+error. A failed captured PostgreSQL construction drops its unsent
+producer batch. Earlier acknowledged Save batches remain registered
+under the normal Save custody rules.
+
+[Read planning and consumption](../../../../core/crates/layerfs-content/src/filesystem/sorted/read_ahead.rs)
+
+### Pooled values on the PostgreSQL writer
+
+When a captured Save needs more than 4,096 stored ordinals for one existing
+512 KiB pooled-value window, the writer sends the first 4,096 and the
+remainder as two ordinary immutable statements in one flight. The
+published, held, and Save-private values stay on their existing paths.
+Each statement checks the Store generation. Replies are decoded in order
+through the existing checked packed-block reader.
+
+The flight asks for at most 7,182 values, or 524,286 bytes of decoded
+payload. Each requested ordinal can select at most one packed-block row,
+counting the predecessor at the start of each run. The existing 4,000-byte
+body cap and wire framing bound both replies below 32 MiB even for sparse
+requests or malformed block contents. Retained caches and publication
+are unchanged. SQLite, Init, and a demand of at most 4,096 ordinals
+keep one ordinary statement per slice.
+
+### Logical accounting after construction
+
+For a captured PostgreSQL Commit whose sealed headers and values exceed
+one record job, the sorted inode merge observes each changed serial's
+original and final canonical values. That includes link-count changes,
+fresh values and removals released with a dropped directory. It records
+the same file roots and signed weights as the inode-table difference.
+Full windows of 1,024 weighted roots occupy 48 KiB each in the existing
+operation record scope. Its partial window is resident, together with
+the existing bounded changed-directory hints. The count reads one
+window at a time.
+
+After Save finish, the Commit uses these observations only when the
+selected before and after roots match the construction roots. It resolves
+lengths through the authoritative Storage reader, including for a held
+Save. Merge and whiteout rewrites with different roots use the immutable
+inode-table difference. Small captured Commits, SQLite, and Namespace
+Init retain their existing count paths. The Commit retains the operation
+owner through accounting and its existing outcome and release boundaries.
+A record or length refusal ends that attempt before history publication.
+
+### Captured directory binding hints
+
+The wide PostgreSQL capture route records each new or changed name binding
+as the canonical directory merge consumes it. The final inode merge checks
+each contributing parent's rebuilt root against its surviving directory
+value. A parent with a final tombstone contributes no binding hints. A mismatched proof fails the capture. If a final inode replaces a
+directory listing without an observed directory merge, Commit uses the
+canonical binding comparison for that root pair. The operation owner keeps the provisional and certified records in
+its existing Overlay database until reclamation.
+
+One record holds at most 64 events and 17,408 bytes of encoded payload.
+A binding uses 17 bytes plus the full name in each stream. A provisional
+end-of-parent marker uses 41 bytes. The reader checks order across records
+and carries one write batch of at most 4,096 hints. An indexed keyset
+read holds up to 64 record blocks and 64 KiB of encoded bytes. Writes group
+up to three record blocks under the existing operation envelope. An exact root-pair match
+allows Commit to use the certified rows after Save completion. For a larger
+batch, Commit acknowledges the held Save before opening the ordered record
+reader. A different root pair selects the canonical directory comparison.
+A failed record job returns the original error with any acknowledged writes
+in their existing custody.
+
+[Record format and proof](../../../../core/crates/layerfs-content/src/filesystem/binding_changes.rs)
+
 ### Base directory reads (#810 F3)
 
 Step 6 rewrites every changed base directory from its stored root page, and
@@ -102,13 +201,25 @@ one page at a time:
 | Chains of a grouped demand's stored objects | The Save's read (`Save::read_objects`) locates the chains of the stored objects of a demand of more than one a level at a time, one locate per level for all of them (`read::prefetch::chains`, as the Store's own reads do), before rebuilding each object | The Save's pack cache | [`save/provider.rs`](../../../../core/crates/layerfs-storage/src/save/provider.rs) |
 | Remembered directories' new root pages (step 7) | One grouped demand (`directory::root_shapes`) | `REMEMBERED_DIRECTORIES` = 256 pages | [`base/links.rs`](../../../../engine/crates/layerfs-workspace/src/base/links.rs) |
 
-One grouped demand is one attempt. Its failure is the provider's original
-error and ends the operation at the group's first row. Save reads begin
-with locator hint binding disabled. The pooled leaf preparation reuses the
-grouped chain walk for the same demand and prepares another window when
-it reaches the first unresolved leaf outside the current one. The retained
-value budget stays 512 KiB. Wave selection walks the chains of
+A grouped demand runs once. On failure it returns the provider's original
+error at the group's first row and ends construction before history
+publication. Earlier acknowledged Save batches remain in the Store. Each
+batch uses a transaction separate from history publication. See
+[Save wave registration](../../../../core/crates/layerfs-storage/src/save/wave.rs)
+and the [Commit driver](../../../../engine/crates/layerfs-store-service/src/store/commit.rs).
+Save reads begin with locator hint binding disabled. The pooled leaf
+preparation reuses the grouped chain walk for the same demand and prepares
+another window at the first unresolved leaf outside the current one. The
+retained value budget stays 512 KiB. Wave selection walks the chains of
 its own stored leaf bases after the guarded base verification has ended.
+The captured PostgreSQL Save's canonical inode chain reads may keep complete
+metadata packs up to 128 KiB each. The same 2 MiB dependency cache pays for
+their full encoded length and holds nearby groups for subsequent chain steps.
+Promotion checks the range plan's directory first, and complete bodies use
+the existing pack authentication. The grouped PostgreSQL reply identifies
+each pack's result. A missing or malformed pack named only by a chain hint
+can invalidate that hint. The same failure on a pack named by an
+authoritative locator, or an error of the whole query, ends the read.
 The reads preserve the resulting roots and stored objects. `commit_batched_directories.rs` pins the counts and
 `commit_fault_directories.rs` faults every message of a grouped read
 ([Demonstration](README.md#demonstration)).
