@@ -213,40 +213,30 @@ fn incomplete_header_obeys_the_transfer_deadline() {
     assert!(Instant::now() >= end);
 }
 
-/// An ordinary caller that takes the startup lock but starts nothing (here
-/// the socket is not private yet while a worker holds the lifetime lock;
-/// a full listen queue takes the same branch) reached a running worker: it
-/// waits for its hello as any queued caller does, 30 s from its connect,
-/// and its refusal names the load, with nothing sent. Runs about 31 s.
+/// An ordinary call that finds a socket not private yet while a worker
+/// holds the lifetime lock (a starting worker, or one exiting) has no ready
+/// worker: it goes direct at once (#833), sends nothing, starts nothing and
+/// leaves no start failure behind.
 #[test]
-fn a_caller_that_started_nothing_waits_as_a_queued_caller() {
+fn a_worker_not_ready_routes_the_call_direct_with_nothing_sent() {
     let fixture = Fixture::new();
     let paths = fixture.paths();
     let guard = paths.try_hold().unwrap().unwrap();
     let listener = paths.bind(false, &guard).unwrap();
     // between bind and chmod, as a starting worker is
     fs::set_permissions(&paths.socket, fs::Permissions::from_mode(0o755)).unwrap();
-    let socket = paths.socket.clone();
-    let private = std::thread::spawn(move || {
-        std::thread::sleep(Duration::from_millis(500));
-        fs::set_permissions(&socket, fs::Permissions::from_mode(0o600)).unwrap();
-    });
     let began = Instant::now();
-    let refusal = paths.call("ping", SdkValue::map([])).unwrap_err();
-    let waited = began.elapsed();
-    private.join().unwrap();
-    assert_eq!(refusal.code, "Unavailable", "{refusal:?}");
-    assert!(
-        refusal.message.contains("no call thread was free"),
-        "{refusal:?}"
+    let routed = paths.call("ping", SdkValue::map([]));
+    assert!(routed.is_none(), "{routed:?}");
+    assert!(began.elapsed() < DEADLINE, "{:?}", began.elapsed());
+    // nothing dialled the socket
+    listener.set_nonblocking(true).unwrap();
+    assert_eq!(
+        listener.accept().map(|_| ()).unwrap_err().kind(),
+        io::ErrorKind::WouldBlock
     );
-    assert!(waited >= Duration::from_secs(30), "{waited:?}");
-    // nothing was sent: the caller closed a connection that holds no bytes
-    let mut stream = accept(&listener);
-    match stream.read(&mut [0; 1]) {
-        Ok(0) => {}
-        Err(error) if error.kind() == io::ErrorKind::ConnectionReset => {}
-        other => panic!("the caller sent bytes: {other:?}"),
-    }
+    // the lifetime lock still has its one owner, and no start failed
+    assert!(paths.try_hold().unwrap().is_none());
+    assert!(layerfs_machine::route::start_failure(&fixture.0).is_none());
     paths.remove_endpoints(&guard).unwrap();
 }

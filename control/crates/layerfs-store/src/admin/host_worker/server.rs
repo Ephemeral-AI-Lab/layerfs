@@ -1,7 +1,7 @@
 //! Host worker on the real home, with separate admission for management
 //! and for streamed writes.
 use layerfs_home::reply::outcome::{failed, refused, Outcome};
-use layerfs_machine::route::{HostHello, HostPaths, HOST_HELD_WRITES};
+use layerfs_machine::route::{record_worker_start_failure, HostHello, HostPaths, HOST_HELD_WRITES};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use nix::poll::{poll, PollFd, PollFlags};
 use std::collections::VecDeque;
@@ -9,7 +9,8 @@ use std::io::{self, Read, Write};
 use std::os::fd::{AsFd, AsRawFd};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
-use std::sync::{Condvar, Mutex, MutexGuard};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
 pub(super) use super::write_queue::Held;
@@ -729,32 +730,75 @@ fn run(
     Ok(layerfs_machine::route::accept::Served { requests })
 }
 
+/// Points stdin at `/dev/null` once every endpoint is published: a caller
+/// that started this worker in the background handed it the startup lock
+/// as its stdin (#833), and other callers may now start a worker again
+/// (which finds this one ready). Any other stdin is dropped the same way.
+fn release_startup_lock() {
+    let released = std::fs::File::open("/dev/null")
+        .and_then(|null| nix::unistd::dup2_stdin(&null).map_err(io::Error::from));
+    if let Err(error) = released {
+        log(&format!("startup lock kept until exit: {error}"));
+    }
+}
+
+/// Records a panic before this worker publishes its endpoints as its failed
+/// start (#833), for doctor, then panics as before; the flag it answers is
+/// set once they are published, after which a panic is not a start's.
+fn record_startup_panics(home: &Path) -> Arc<AtomicBool> {
+    let published = Arc::new(AtomicBool::new(false));
+    let (flag, home) = (published.clone(), home.to_owned());
+    let previous = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        if !flag.load(Ordering::Acquire) {
+            record_worker_start_failure(&home, &format!("the worker {info}"));
+        }
+        previous(info);
+    }));
+    published
+}
+
 /// Runs the host worker with the real home and its lifetime lock.
 /// This entry runs in its own process, above the Store and machine crates.
 pub fn serve_host(home: &Path) -> Result<layerfs_machine::route::accept::Served, SdkRefusal> {
     // before any request, which may carry a PostgreSQL password, is read
     crate::admin::host_worker::postgresql::limit_core_dumps();
-    let paths = HostPaths::new(home)?;
-    let guard = paths.try_hold()?.ok_or_else(|| {
-        refused(
-            "Unavailable",
-            "another host worker owns the endpoint for this home",
-        )
-    })?;
+    let started = record_startup_panics(home);
+    let paths = HostPaths::new(home)
+        .inspect_err(|error| record_worker_start_failure(home, &error.message))?;
+    let guard = paths
+        .try_hold()
+        .inspect_err(|error| paths.record_start_failure(&error.message))?
+        .ok_or_else(|| {
+            refused(
+                "Unavailable",
+                "another host worker owns the endpoint for this home",
+            )
+        })?;
     let run = (|| {
-        let hello = HostHello::own(&paths)?;
-        let listeners = {
+        let published = (|| {
+            let hello = HostHello::own(&paths)?;
             let _home = layerfs_home::lock::home::take(home)?;
             layerfs_machine::record::machine::MachineRecord::admit_host(
                 home,
                 layerfs_home::names::HOST_MACHINE,
             )?;
-            [
-                paths.bind(false, &guard)?,
-                paths.bind_writes(&guard)?,
-                paths.bind(true, &guard)?,
-            ]
-        };
+            Ok::<_, SdkRefusal>((
+                hello,
+                [
+                    paths.bind(false, &guard)?,
+                    paths.bind_writes(&guard)?,
+                    paths.bind(true, &guard)?,
+                ],
+            ))
+        })();
+        let (hello, listeners) = published.inspect_err(|error| {
+            // a background start's caller has gone: doctor reads it here
+            paths.record_start_failure(&error.message);
+        })?;
+        paths.clear_start_failure();
+        started.store(true, Ordering::Release);
+        release_startup_lock();
         run(
             listeners,
             hello,

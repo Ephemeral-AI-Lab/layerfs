@@ -4650,6 +4650,12 @@
    "new": "control/crates/layerfs-store/tests/postgresql/held_sessions.rs",
    "change": "rename",
    "note": "test added at #818/#835"
+  },
+  {
+   "old": "control/crates/layerfs-machine/src/worker/host/start.rs",
+   "new": "control/crates/layerfs-machine/src/route/host/start.rs",
+   "change": "move",
+   "note": "added by #837 (merged into layerfs_v2_0_0 after the plan); ported to its #828 place"
   }
  ]
 }

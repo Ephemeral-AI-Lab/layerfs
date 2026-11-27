@@ -2444,6 +2444,12 @@
    "new": "api/crates/layerfs-cli/tests/host_worker_writes/streamed.rs",
    "change": "rename",
    "note": "test added at #818/#835"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/host_worker_first_call.rs",
+   "new": "api/crates/layerfs-cli/tests/host_worker/first_call.rs",
+   "change": "move",
+   "note": "added by #837 (merged into layerfs_v2_0_0 after the plan); ported to its #828 place"
   }
  ]
 }

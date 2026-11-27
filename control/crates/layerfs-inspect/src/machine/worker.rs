@@ -1,7 +1,9 @@
 //! Read-only host worker health and evidence for management calls.
 use super::super::doctor::budget::{Budget, Checks};
-use layerfs_home::disk::paths;
-use layerfs_machine::route::{HostObservation, HostPaths, HostProbe};
+use layerfs_home::disk::{paths, with_field};
+use layerfs_machine::route::{
+    start_failure, HostObservation, HostPaths, HostProbe, LAUNCH_MACHINE_START,
+};
 use layerfs_machine::status::worker::{evidence, observe};
 use layerfs_protocol::sdk::SdkValue;
 use std::path::Path;
@@ -37,7 +39,25 @@ pub(super) fn diagnose(home: &Path, budget: &Budget, checks: &mut Checks) {
     };
     let compatible =
         |checks: &mut Checks| checks.pass(COMPAT, "the worker build and protocol match");
+    // a background start that failed (#833) left its reason: the calls
+    // went direct meanwhile, so this is where it shows, while no worker
+    // listens (a worker that publishes its endpoints removes it)
+    let failed = matches!(&probe, Absent | Stale)
+        .then(|| start_failure(home))
+        .flatten();
     match &probe {
+        Absent | Stale if failed.is_some() => {
+            let record = failed.unwrap_or_default();
+            checks.warning(ENDPOINT, start_failed(home, &record));
+            checks.fix(
+                ENDPOINT,
+                format!(
+                    "layerfs machine start {}",
+                    layerfs_home::names::HOST_MACHINE
+                ),
+            );
+            checks.evidence(ENDPOINT, with_field(evidence(), "start_failure", record));
+        }
         Absent => checks.pass_evidence(ENDPOINT, "no worker endpoint is published", evidence()),
         Stale => {
             checks.notice(
@@ -91,6 +111,31 @@ pub(super) fn diagnose(home: &Path, budget: &Budget, checks: &mut Checks) {
             };
             checks.pass_evidence(PING, message, evidence());
         }
+    }
+}
+
+/// The endpoint finding for a recorded failed start, worded by its cause:
+/// a stopped host machine refuses calls; a failed `machine start` was
+/// answered to its caller; a failed background start left calls direct.
+fn start_failed(home: &Path, record: &SdkValue) -> String {
+    let message = record.get_text("message").unwrap_or("unknown");
+    let host = layerfs_home::names::HOST_MACHINE;
+    let stopped = layerfs_machine::record::machine::MachineRecord::read(home, host)
+        .ok()
+        .flatten()
+        .is_some_and(|machine| machine.recorded_state() == Some("stopped"));
+    if stopped {
+        return format!(
+            "host machine {host} is stopped: calls are refused until `layerfs machine start {host}` (the last host worker start failed: {message})"
+        );
+    }
+    match record.get_text("launch") {
+        Some(LAUNCH_MACHINE_START) => format!(
+            "the last `layerfs machine start {host}` failed before its worker published its endpoints: {message} (see log/worker.log)"
+        ),
+        _ => format!(
+            "the last background start of the host worker failed: {message}; calls run directly until a worker starts (see log/worker.log)"
+        ),
     }
 }
 

@@ -2,6 +2,7 @@ mod calls;
 mod crash;
 mod doctor;
 mod drain;
+mod first_call;
 #[path = "../support/host_worker.rs"]
 mod fixture;
 mod idle_ping;

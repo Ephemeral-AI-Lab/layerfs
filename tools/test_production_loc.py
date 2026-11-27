@@ -84,7 +84,7 @@ class CounterTests(unittest.TestCase):
         self.assertEqual(production_loc.scan(self.root), before)
         # #101: connect/ became control/ and layerfs-control moved into it.
         shutil.move(self.root / "connect", self.root / "control")
-        shutil.move(self.root / "api/crates/layerfs-control", self.root / "control/crates/layerfs-inspect")
+        shutil.move(self.root / "api/crates/layerfs-control", self.root / "control/crates/layerfs-control")
         self.assertEqual(production_loc.scan(self.root), before)
         for name in (
             "layerfs-home",
@@ -106,7 +106,7 @@ class CounterTests(unittest.TestCase):
         for name in ("layerfs-protocol", "layerfs-os", "layerfs-vfs", "layerfs-bridge", "layerfs-mount-ports"):
             self.assertEqual(production_loc.crate_layer(name), "engine")
         self.assertEqual(production_loc.crate_layer("layerfs-inspect"), "control")
-        engine = Path("/r/engine/crates/layerfs-vfs")
+        engine = Path("/r/engine/crates/layerfs-workspace")
         control = Path("/r/control/crates/layerfs-workspace")
         self.assertEqual(production_loc.crate_layer("layerfs-workspace", engine), "engine")
         self.assertEqual(production_loc.crate_layer("layerfs-workspace", control), "control")

@@ -9,6 +9,8 @@ license.workspace = true
 [dependencies]
 libc = "=0.2.189"
 layerfs-protocol = { path = "../../../engine/crates/layerfs-protocol" }
+# The worker spawn keeps the caller's descriptors out (`process::close_inherited`, #833).
+layerfs-os = { path = "../../../engine/crates/layerfs-os" }
 layerfs-home = { path = "../layerfs-home" }
 # The platform adapters and VM setup (host builds only).
 nix = { version = "=0.31.3", optional = true, features = [

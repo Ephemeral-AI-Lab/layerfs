@@ -177,7 +177,8 @@ files are not removed. Source:
 | --- | --- | --- |
 | `LocalProcess` | `observe` reads pid, kernel start time and boot once; `alive` needs all three to match and the process not a zombie; `signal` sends once, only to an observed live process, never to one recorded without a boot | [`process/identity.rs`](../../../../engine/crates/layerfs-os/src/process/identity.rs) |
 | Linux | `/proc/<pid>/stat`, `/proc/sys/kernel/random/boot_id`, the `/proc` table | [`process/linux.rs`](../../../../engine/crates/layerfs-os/src/process/linux.rs) |
-| macOS | `proc_pidinfo` and `proc_listallpids` (not `ps`, which Seatbelt may refuse); `kern.bootsessionuuid`, else `kern.boottime`, read with `sysctlbyname` (no `sysctl` process is started). The crate's only `unsafe` | [`process/darwin.rs`](../../../../engine/crates/layerfs-os/src/process/darwin.rs), [`lib.rs`](../../../../engine/crates/layerfs-os/src/lib.rs) |
+| macOS | `proc_pidinfo` and `proc_listallpids` (not `ps`, which Seatbelt may refuse); `kern.bootsessionuuid`, else `kern.boottime`, read with `sysctlbyname` (no `sysctl` process is started). One of the crate's two `unsafe` files | [`process/darwin.rs`](../../../../engine/crates/layerfs-os/src/process/darwin.rs), [`lib.rs`](../../../../engine/crates/layerfs-os/src/lib.rs) |
+| `close_inherited` | marks every descriptor above stderr close-on-exec in a spawned child between fork and exec (Linux `close_range(3, ~0, CLOSE_RANGE_CLOEXEC)`, else `fcntl` over the descriptors `/proc/self/fd` or `/dev/fd` listed before the fork), so a long-lived host worker keeps no pipe its starter was given (#833). The crate's other `unsafe` file | [`process/inherit.rs`](../../../../engine/crates/layerfs-os/src/process/inherit.rs) |
 
 It lives here so `layerfs-home` and the Sandbox driver share it without
 either reaching the other.

@@ -264,7 +264,15 @@ pub(crate) fn routed(
     // An input that is not a regular file (a pipe, FIFO or terminal) is
     // first copied into a private unnamed file: the worker then reads it at
     // disk speed, never at its producer's, and a list is checked before
-    // anything is sent. When that copy cannot be made the call runs direct.
+    // anything is sent. When that copy cannot be made the call runs direct,
+    // and so does a write whose worker is not ready, before any copy (#833).
+    if input.as_ref().is_some_and(|held| held.file.is_none()) {
+        match paths.direct_unless_published(OP) {
+            Ok(true) => return direct(args, input),
+            Ok(false) => {}
+            Err(refusal) => return Some(Err(refusal)),
+        }
+    }
     if let Some(held) = input.as_mut().filter(|held| held.file.is_none()) {
         let source = std::mem::replace(&mut held.source, Box::new(std::io::empty()));
         let (source, file) = crate::admin::host_worker::stream::spool(home, source);
@@ -287,7 +295,9 @@ pub(crate) fn routed(
         }
     }
     let header = header.take();
-    Some(match input {
+    // None from the worker: none was ready, nothing was sent, and the
+    // write goes direct with its input unread (#833)
+    match input {
         None => paths.call_validated(OP, header, valid_answer),
         Some(Input { kind, source, file }) => {
             // the source alone reads the input from here: the spool's
@@ -298,9 +308,20 @@ pub(crate) fn routed(
             let mut send = |sender: &mut layerfs_machine::route::StreamSender<'_>| {
                 crate::admin::host_worker::stream::send(kind, &mut source, sender)
             };
-            paths.call_streamed(OP, header, &mut send, valid_answer)
+            let routed = paths.call_streamed(OP, header, &mut send, valid_answer);
+            match (routed, source) {
+                (None, Some(source)) => {
+                    let input = Input {
+                        kind,
+                        source,
+                        file: None,
+                    };
+                    direct(args, Some(input))
+                }
+                (routed, _) => routed,
+            }
         }
-    })
+    }
 }
 
 #[cfg(not(any(target_os = "macos", target_os = "linux")))]

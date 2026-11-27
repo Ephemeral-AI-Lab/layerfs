@@ -127,7 +127,9 @@ pub(crate) fn routed(
         layerfs_home::secret::wipe::value(args);
         return None;
     }
-    Some(paths.call_validated(OP, args, |value| checked.valid_answer(value)))
+    // None: no ready worker, so the read goes direct (#833); the copy of
+    // the password the request held went with it
+    paths.call_validated(OP, args, |value| checked.valid_answer(value))
 }
 
 #[cfg(not(any(target_os = "macos", target_os = "linux")))]

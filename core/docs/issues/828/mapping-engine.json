@@ -10182,6 +10182,12 @@
    "new": "engine/crates/layerfs-store-service/tests/support/verify/round_trips.rs",
    "change": "move",
    "note": "test added at #818/#835"
+  },
+  {
+   "old": "engine/crates/layerfs-bridge/src/process/inherit.rs",
+   "new": "engine/crates/layerfs-os/src/process/inherit.rs",
+   "change": "move",
+   "note": "added by #837 (merged into layerfs_v2_0_0 after the plan); ported to its #828 place"
   }
  ]
 }

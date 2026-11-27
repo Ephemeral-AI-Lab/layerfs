@@ -140,6 +140,13 @@ pub fn prepare_in(home: Fixture, branches: &[&str]) -> Fixture {
     home
 }
 
+/// Starts the host worker and waits for it, so the writes after it reach
+/// it: since #833 a first call that finds no ready worker runs direct.
+pub fn warm(home: &Fixture) {
+    ok(&home.paths.home, &["machine", "start", host()], b"");
+    home.ping();
+}
+
 pub fn commits(home: &Path, project: &str, branch: &str) -> usize {
     let listed = ok(
         home,

@@ -5,4 +5,5 @@ pub(crate) mod diagnostic;
 pub(crate) mod endpoint;
 pub(crate) mod frame;
 pub(crate) mod hello;
+pub(crate) mod start;
 pub(crate) mod stream;

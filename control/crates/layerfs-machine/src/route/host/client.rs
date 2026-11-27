@@ -20,7 +20,11 @@ use std::time::{Duration, Instant};
 
 const READY_WAIT: Duration = Duration::from_secs(10);
 const TRANSFER_WAIT: Duration = Duration::from_secs(10);
-const READY_POLL: Duration = Duration::from_millis(15);
+/// How often a caller that waits for a starting worker probes its socket:
+/// a probe is one `lstat` and at most one `connect`, and a worker binds a
+/// few milliseconds after its spawn (#833 attribution), so a longer pause
+/// is only waiting.
+const READY_POLL: Duration = Duration::from_millis(2);
 /// How long an ordinary call waits for its hello once connected to a
 /// running worker: three times the start and management deadline, so a call
 /// queued behind 8 calls of ordinary length still gets a pool thread (§16.1
@@ -60,6 +64,32 @@ pub(super) struct Greeted {
     pub(super) began: Instant,
 }
 
+/// What a call does when no worker accepts on its endpoint yet.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum Start {
+    /// Nothing: no accepting endpoint is `None`, nothing sent.
+    No,
+    /// Starts a worker if none owns the home and waits for it (management
+    /// and `machine start`).
+    Wait,
+    /// An ordinary call (#833): a worker that is not ready yet is `None`,
+    /// the caller's direct route, chosen before anything is sent; it is
+    /// started in the background unless another caller is starting it.
+    Background,
+}
+
+/// What [`HostPaths::acquire`] reached.
+pub(super) enum Reached {
+    /// The connected stream, the startup lock if this caller took it, and
+    /// whether this caller spawned the worker it reached.
+    Stream(UnixStream, Option<File>, bool),
+    /// No accepting endpoint and nothing started ([`Start::No`]).
+    Absent,
+    /// No ready worker: the call goes direct, for this reason
+    /// ([`Start::Background`]).
+    Direct(String),
+}
+
 impl HostPaths {
     /// Whether an intended request fits before selecting the host route.
     /// A trial frame that carries a login, and its copy of `args`, are
@@ -89,31 +119,28 @@ impl HostPaths {
 
     /// Starts the host worker if needed and verifies its management endpoint.
     pub fn start(&self) -> Outcome {
-        self.exchange(true, true, "ping", SdkValue::map([]), None, |_| true)?
+        self.exchange(true, Start::Wait, "ping", SdkValue::map([]), None, |_| true)?
             .ok_or_else(|| unavailable("start", "no accepting host endpoint"))
     }
 
-    /// Makes one ordinary call, launching a worker only if the home has
-    /// no live owner. Callers choose this route before invoking it.
-    pub fn call(&self, op: &str, args: SdkValue) -> Outcome {
+    /// Makes one ordinary call on a ready worker. None when no worker is
+    /// ready (#833): nothing was sent, the caller runs the call on its
+    /// direct route, and the worker is being started in the background
+    /// for the next call. Callers choose this route before invoking it.
+    pub fn call(&self, op: &str, args: SdkValue) -> Option<Outcome> {
         self.call_validated(op, args, |_| true)
     }
 
-    /// Makes one ordinary call whose success payload must satisfy `valid`.
-    /// An invalid payload after the send is correlated to the original request.
+    /// [`Self::call`] whose success payload must satisfy `valid`. An
+    /// invalid payload after the send is correlated to the original request.
     pub fn call_validated(
         &self,
         op: &str,
         args: SdkValue,
         valid: impl FnOnce(&SdkValue) -> bool,
-    ) -> Outcome {
-        self.exchange(false, true, op, args, None, valid)?
-            .ok_or_else(|| {
-                refused(
-                    "Unavailable",
-                    "host worker did not become ready; wait for it and try a new call",
-                )
-            })
+    ) -> Option<Outcome> {
+        self.exchange(false, Start::Background, op, args, None, valid)
+            .transpose()
     }
 
     /// Calls an existing endpoint without starting a worker. None means
@@ -124,7 +151,7 @@ impl HostPaths {
         op: &str,
         args: SdkValue,
     ) -> Result<Option<SdkValue>, SdkRefusal> {
-        self.exchange(control, false, op, args, None, |_| true)
+        self.exchange(control, Start::No, op, args, None, |_| true)
     }
 
     /// Calls a management endpoint only if it still has the generation
@@ -135,13 +162,13 @@ impl HostPaths {
         args: SdkValue,
         generation: &str,
     ) -> Result<Option<SdkValue>, SdkRefusal> {
-        self.exchange(true, false, op, args, Some(generation), |_| true)
+        self.exchange(true, Start::No, op, args, Some(generation), |_| true)
     }
 
     fn exchange(
         &self,
         control: bool,
-        start: bool,
+        start: Start,
         op: &str,
         args: SdkValue,
         expected_generation: Option<&str>,
@@ -172,19 +199,20 @@ impl HostPaths {
         Ok(Some(answer))
     }
 
-    /// Connects to `endpoint` (starting a worker when `start`), checks the
+    /// Connects to `endpoint` (see [`Start`]), checks the
     /// peer and reads the hello under one rule for every call: starting a
     /// worker and management wait [`READY_WAIT`]; an ordinary call or a
     /// streamed write to a running worker waits [`CALL_HELLO_WAIT`] for a
     /// pool thread or a write place, then is refused `Unavailable` naming
-    /// that load before anything was sent. None when no
-    /// worker accepts and `start` is false. A request carrying a login
+    /// that load before anything was sent. None when no worker accepts
+    /// ([`Start::No`]) or none is ready ([`Start::Background`]: the direct
+    /// route, its reason in the trace). A request carrying a login
     /// (#819 P-B) is overwritten on every path, the early returns included;
     /// the caller's [`Greeted::request`] guard overwrites it after sending.
     pub(super) fn greet(
         &self,
         endpoint: Endpoint,
-        start: bool,
+        start: Start,
         op: &str,
         args: SdkValue,
         expected_generation: Option<&str>,
@@ -206,9 +234,17 @@ impl HostPaths {
             None => build_identity()?,
         };
         trace::step("route");
-        let Some((stream, startup, started)) = self.acquire(path, start, end)? else {
-            trace::connection(&path.to_string_lossy(), op, false, began);
-            return Ok(None);
+        let (stream, startup, started) = match self.acquire(path, start, end)? {
+            Reached::Stream(stream, startup, started) => (stream, startup, started),
+            Reached::Absent => {
+                trace::connection(&path.to_string_lossy(), op, false, began);
+                return Ok(None);
+            }
+            Reached::Direct(reason) => {
+                trace::step("background_start");
+                trace::route(&path.to_string_lossy(), op, "direct", &reason);
+                return Ok(None);
+            }
         };
         trace::step("connect");
         // Only the caller that started the worker keeps the startup lock to
@@ -295,20 +331,16 @@ impl HostPaths {
         )
     }
 
-    /// The connected stream, the startup lock if this caller took it, and
-    /// whether this caller spawned the worker it reached.
-    fn acquire(
-        &self,
-        path: &Path,
-        start: bool,
-        end: Instant,
-    ) -> Result<Option<(UnixStream, Option<File>, bool)>, SdkRefusal> {
-        if start {
+    /// Connects to the worker at `path`, starting one as `start` says. A
+    /// stopped host machine is refused before anything starts, as today.
+    fn acquire(&self, path: &Path, start: Start, end: Instant) -> Result<Reached, SdkRefusal> {
+        if start != Start::No {
             crate::record::machine::MachineRecord::admit_host(
                 &self.home,
                 layerfs_home::names::HOST_MACHINE,
             )?;
         }
+        let waits = start == Start::Wait;
         let mut observed = probe(path, end)?;
         let startup_path = paths::host_worker_startup_lock(&self.home);
         let mut startup = None;
@@ -316,9 +348,14 @@ impl HostPaths {
         loop {
             match observed {
                 Probe::Connected(stream) => {
-                    return Ok(Some((stream, startup, child.is_some())));
+                    return Ok(Reached::Stream(stream, startup, child.is_some()));
                 }
-                Probe::Absent if !start => return Ok(None),
+                // not ready (#833): this call goes direct, and the worker
+                // starts in the background unless another caller starts it
+                Probe::Absent | Probe::Unready if start == Start::Background => {
+                    return self.start_detached(path, end);
+                }
+                Probe::Absent if !waits => return Ok(Reached::Absent),
                 _ => {}
             }
             if Instant::now() >= end {
@@ -327,14 +364,14 @@ impl HostPaths {
                     "listen queue or worker startup deadline expired",
                 ));
             }
-            if startup.is_none() && (start || matches!(observed, Probe::Unready)) {
+            if startup.is_none() && (waits || matches!(observed, Probe::Unready)) {
                 startup = hold(&startup_path)?;
                 if startup.is_some() {
                     // Another caller may have completed startup while this
                     // caller waited for the lock.
                     observed = probe(path, end)?;
                     if let Probe::Connected(stream) = observed {
-                        return Ok(Some((stream, startup, false)));
+                        return Ok(Reached::Stream(stream, startup, false));
                     }
                 }
             }
@@ -346,8 +383,8 @@ impl HostPaths {
                 && child.is_none()
                 && self.try_hold()?.is_some()
             {
-                if !start {
-                    return Ok(None);
+                if !waits {
+                    return Ok(Reached::Absent);
                 }
                 observed = Probe::Absent;
             }
@@ -368,7 +405,8 @@ impl HostPaths {
                         &self.home,
                         layerfs_home::names::HOST_MACHINE,
                     )?;
-                    child = Some(self.spawn()?);
+                    self.forget_pending_start();
+                    child = Some(self.spawn(None)?);
                 }
             }
             std::thread::sleep(READY_POLL.min(end.saturating_duration_since(Instant::now())));
@@ -376,7 +414,15 @@ impl HostPaths {
         }
     }
 
-    fn spawn(&self) -> Result<Child, SdkRefusal> {
+    /// Launches `layerfs worker --host` in its own process group with its
+    /// output in `log/worker.log`. A background start hands it the startup
+    /// lock it holds as its stdin (`startup`): the worker keeps it until
+    /// its endpoints are published, so no other caller starts a second
+    /// worker meanwhile, and a worker that dies first releases it. It
+    /// inherits no other descriptor: one this caller was given without
+    /// close-on-exec (a pipe its own caller waits on) would stay open for
+    /// the worker's lifetime.
+    pub(super) fn spawn(&self, startup: Option<File>) -> Result<Child, SdkRefusal> {
         let folder = paths::log_dir(&self.home);
         disk::private_dir(&folder)?;
         private_directory(&folder)?;
@@ -415,16 +461,19 @@ impl HostPaths {
         command
             .args(["worker", "--host"])
             .env("LAYERFS_HOME", &self.home)
-            .stdin(Stdio::null())
+            .stdin(startup.map_or_else(Stdio::null, Stdio::from))
             .stdout(log)
             .stderr(stderr)
-            .process_group(0)
+            .process_group(0);
+        layerfs_os::process::close_inherited(&mut command)
+            .map_err(|error| unavailable("startup descriptors", error))?;
+        command
             .spawn()
             .map_err(|error| unavailable("startup", error))
     }
 }
 
-enum Probe {
+pub(super) enum Probe {
     Connected(UnixStream),
     Absent,
     /// A socket that does not have the private mode yet.
@@ -432,7 +481,7 @@ enum Probe {
     Waiting,
 }
 
-fn probe(path: &Path, end: Instant) -> Result<Probe, SdkRefusal> {
+pub(super) fn probe(path: &Path, end: Instant) -> Result<Probe, SdkRefusal> {
     let Some(metadata) = existing_socket(path)? else {
         return Ok(Probe::Absent);
     };

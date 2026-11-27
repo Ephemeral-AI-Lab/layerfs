@@ -627,6 +627,12 @@ a Store connected before this release stays direct until `store connect` is
 run again. So do the CLI's file writes on such a PostgreSQL Store (below).
 SDK local calls and other CLI PostgreSQL calls run in the caller, and a SQLite Store on another machine runs through that machine's
 worker. See [routes](machines-and-stores.md#routes).
+A call that finds no ready worker (none running yet, one exiting after
+its idle minute, or one still starting) runs directly in the CLI, chosen
+before anything is sent, and starts the worker in the background without
+waiting, so the next call uses it; `LAYERFS_TRACE` records the reason
+(`worker.route`). A start that fails does not fail the call; `machine
+doctor` names it.
 
 The CLI's writes on the same local SQLite Stores (`write`, `edit`, `mkdir`,
 `rm`, `cp`, `mv`, `apply`) also run in the host worker, each one call

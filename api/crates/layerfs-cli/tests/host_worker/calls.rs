@@ -65,6 +65,25 @@ fn read_cli(home: &Path, words: &[&str]) -> SdkValue {
     json::parse(&text(&out.stdout)).unwrap()
 }
 
+/// The first CLI call on a home with no worker runs direct and starts the
+/// worker in the background (#833); waits until that worker answers, so the
+/// calls after it reach it.
+fn warm(home: &Fixture) {
+    let path = &home.paths.home;
+    let trace = path.join("warm.jsonl");
+    let mut command = layerfs(path, &["file", "stat", "shop/api", "main", "/docs/a.txt"]);
+    command.env("LAYERFS_TRACE", &trace);
+    let out = run(&mut command);
+    assert!(out.status.success(), "{}", text(&out.stderr));
+    let routes: Vec<_> = lines(&trace)
+        .into_iter()
+        .filter(|line| line.get_text("event") == Some("worker.route"))
+        .collect();
+    assert_eq!(routes.len(), 1, "{routes:?}");
+    assert_eq!(routes[0].get_text("reason"), Some("worker started"));
+    home.ping();
+}
+
 fn cleanup(home: &Fixture) {
     home.drain();
     let end = Instant::now() + Duration::from_secs(5);
@@ -80,6 +99,7 @@ fn cold_cli_launches_and_warm_reads_match_the_direct_results() {
     let path = &home.paths.home;
     prepare(path);
     assert!(!home.paths.socket.exists());
+    warm(&home);
     for (method, at) in [
         ("read", "/docs/a.txt"),
         ("stat", "/docs/a.txt"),
@@ -328,6 +348,7 @@ fn real_warm_worker_releases_its_lease_before_store_remove() {
     let home = Fixture::new();
     let path = &home.paths.home;
     prepare(path);
+    warm(&home);
     let _ = read_cli(path, &["file", "read", "shop/api", "main", "/docs/a.txt"]);
     let before = home.ping();
     assert_eq!(before.get_int("stores"), Some(1));
@@ -399,6 +420,7 @@ fn a_failed_stdout_reports_the_known_result_and_one_audit() {
     let home = Fixture::new();
     let path = &home.paths.home;
     prepare(path);
+    warm(&home);
     let mut sinks = failing_sinks("native-result");
     sinks.push(("text pipe", broken_pipe("native-text-result")));
     let attempts = sinks.len();

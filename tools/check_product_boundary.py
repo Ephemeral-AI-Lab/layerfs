@@ -33,7 +33,9 @@ UNSAFE = re.compile(r"\bunsafe\b")
 # FFI module (encoding/codec.rs); Persistence has the owner-authorized macOS
 # seal file-control module; layerfs-os reads macOS process facts through
 # proc_pidinfo in process/darwin.rs (moved with LocalProcess from the Sandbox
-# backend, layerfs-project#112, so the home and the drivers share it); the
+# backend, layerfs-project#112, so the home and the drivers share it) and
+# marks a spawned child's descriptors close-on-exec in process/inherit.rs
+# (#833 review); the
 # Sandbox installs the namespaces command filter (two prctl calls, D-8, after
 # emptying the command's signal mask) and forks the helper and its command
 # into their cgroups (one clone3, #113) in backend/namespaces/seccomp.rs.
@@ -42,7 +44,7 @@ UNSAFE = re.compile(r"\bunsafe\b")
 UNSAFE_AUDITED_MODULE = {
     "layerfs-storage": ("src/encoding/codec.rs",),
     "layerfs-persistence": ("src/backend/sqlite/lifecycle/file_control.rs",),
-    "layerfs-os": ("src/process/darwin.rs",),
+    "layerfs-os": ("src/process/darwin.rs", "src/process/inherit.rs"),
     "layerfs-sandbox": ("src/backend/namespaces/seccomp.rs",),
 }
 UNSAFE_FREE_CRATES = (
@@ -167,7 +169,7 @@ ALLOWED_DEPENDENCIES = {
     # Machine records, lifecycle, the worker client and the platform adapters
     # (#104; the adapters only with the `machine` feature). What a machine
     # holds comes from the caller (`MachineUsers`).
-    "layerfs-machine": {"layerfs-protocol", "layerfs-home"},
+    "layerfs-machine": {"layerfs-protocol", "layerfs-os", "layerfs-home"},
     # Store records and calls (#105): its backends, backups and their bucket
     # drivers, projects, placement and leases, and the host worker's Store
     # side. Who uses a Store comes from the caller (`StoreUsers`).

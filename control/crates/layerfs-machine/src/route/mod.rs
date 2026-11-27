@@ -48,6 +48,11 @@ pub use host::frame::{
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 pub use host::hello::{set_host_build, HostHello, HOST_PROTOCOL};
 #[cfg(any(target_os = "macos", target_os = "linux"))]
+pub use host::start::{
+    record_worker_start_failure, start_failure, LAUNCH_BACKGROUND, LAUNCH_MACHINE_START,
+    START_FAILURE_LIMIT,
+};
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 pub use host::stream::{
     StreamFrame, StreamReader, StreamSender, STREAM_KEEPALIVE, STREAM_PIECE, STREAM_PROGRESS,
     STREAM_WAIT,
