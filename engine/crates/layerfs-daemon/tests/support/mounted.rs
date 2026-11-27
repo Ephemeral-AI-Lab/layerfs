@@ -1,7 +1,7 @@
 //! One real kernel serving assembly over an installed Store, for mounted proofs.
 use layerfs_daemon::{
-    control::{Failure, KernelConfig, KernelServing, Service, Success},
     store::Store,
+    workspace::{Failure, KernelConfig, KernelServing, Service, Success},
     Owner, OwnerConfig,
 };
 use layerfs_history::{BranchId, WorkspaceId};

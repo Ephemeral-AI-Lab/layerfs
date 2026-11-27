@@ -1,0 +1,191 @@
+//! Authenticated one-time file installation and concrete Store bootstrap.
+use crate::{
+    bootstrap::open_store_observed,
+    install::{
+        file,
+        outcome::{InstallError, InstallFailure, InstallWork, InstalledStore, StoreSettings},
+    },
+    shared_install::{check_initial, InitialCheck},
+};
+use layerfs_persistence::{PersistenceConfig, SqlitePersistenceProfile};
+use layerfs_protocol::{
+    duplex::Connection,
+    provision::{
+        install::{ControlError, InstallPhase, InstallReply, INSTALL_FINISH},
+        manifest::{StoreManifest, StoreProfile},
+    },
+};
+use std::{fs, path::Path};
+
+/// Installs into the explicitly provisioned local destination. No caller-supplied
+/// locator can select another file. Every failure retains partial/output custody.
+pub fn receive_install(
+    connection: &mut Connection,
+    destination: &Path,
+    settings: StoreSettings,
+) -> Result<InstalledStore, Box<InstallFailure>> {
+    let manifest = (|| {
+        StoreManifest::decode(
+            connection
+                .receive
+                .receive()
+                .map_err(InstallError::Channel)?,
+        )
+        .map_err(InstallError::Protocol)
+    })();
+    install_manifest(connection, destination, settings, manifest)
+}
+/// Installs the original manifest already decoded by an authenticated application router.
+/// This enters the same single installer; it never reads a second request record.
+pub fn receive_install_manifest(
+    connection: &mut Connection,
+    destination: &Path,
+    settings: StoreSettings,
+    manifest: StoreManifest,
+) -> Result<InstalledStore, Box<InstallFailure>> {
+    install_manifest(connection, destination, settings, Ok(manifest))
+}
+fn install_manifest(
+    connection: &mut Connection,
+    destination: &Path,
+    settings: StoreSettings,
+    manifest: Result<StoreManifest, InstallError>,
+) -> Result<InstalledStore, Box<InstallFailure>> {
+    let mut retained = InstallFailure {
+        destination: destination.to_owned(),
+        temporary: None,
+        claim_acknowledged: false,
+        manifest: None,
+        phase: InstallPhase::Request,
+        published: false,
+        opened: None,
+        work: InstallWork::default(),
+        error: InstallError::Protocol(ControlError("incomplete install")),
+        reply_error: None,
+        fence_error: None,
+    };
+    let result = (|| {
+        let mut manifest = manifest?;
+        retained.manifest = Some(manifest.clone());
+        if manifest.profile != StoreProfile::Normal {
+            return Err(InstallError::Protocol(ControlError(
+                "explicit Normal Store profile required",
+            )));
+        }
+        if Path::new(&manifest.locator) != destination || manifest.daemon_sqlite.is_some() {
+            return Err(InstallError::Protocol(ControlError(
+                "provisioned install destination",
+            )));
+        }
+        settings
+            .reservations
+            .validate()
+            .map_err(InstallError::Store)?;
+        if settings.workspace_capacity == 0 {
+            return Err(InstallError::Protocol(ControlError("empty Store read set")));
+        }
+        let (target, temporary) = file::paths(destination).map_err(InstallError::Io)?;
+        retained.destination = target.clone();
+        retained.phase = InstallPhase::Claim;
+        // Record the exact claim name before attempting create_new; existence is
+        // never interpreted as evidence that this attempt created that file.
+        retained.temporary = Some(temporary.clone());
+        let mut file = file::claim(&target, &temporary).map_err(InstallError::Io)?;
+        retained.claim_acknowledged = true;
+        // A previous owner may have renamed before our create_new. While this
+        // acknowledged temporary name exists, another installer cannot own it.
+        file::absent(&target).map_err(InstallError::Io)?;
+        send(connection, InstallReply::Ready)?;
+        retained.phase = InstallPhase::Transfer;
+        while retained.work.written < manifest.bytes {
+            let bytes = connection
+                .receive
+                .receive()
+                .map_err(InstallError::Channel)?;
+            if bytes.is_empty() || bytes.len() as u64 > manifest.bytes - retained.work.written {
+                return Err(InstallError::Protocol(ControlError(
+                    "install stream length",
+                )));
+            }
+            retained.work.records = retained.work.records.saturating_add(1);
+            retained.work.peak_record_bytes = retained.work.peak_record_bytes.max(bytes.len());
+            file::write(&mut file, bytes, &mut retained.work).map_err(InstallError::Io)?;
+        }
+        if connection
+            .receive
+            .receive()
+            .map_err(InstallError::Channel)?
+            != INSTALL_FINISH
+        {
+            return Err(InstallError::Protocol(ControlError(
+                "install finish marker",
+            )));
+        }
+        if manifest.profile == StoreProfile::Durable {
+            retained.work.sync_calls += 1;
+            file.sync_all().map_err(InstallError::Io)?;
+        }
+        drop(file);
+        retained.phase = InstallPhase::Publish;
+        fs::rename(&temporary, &target).map_err(InstallError::Io)?;
+        retained.published = true;
+        if manifest.profile == StoreProfile::Durable {
+            retained.work.sync_calls += 1;
+            fs::File::open(target.parent().expect("checked parent"))
+                .and_then(|parent| parent.sync_all())
+                .map_err(InstallError::Io)?;
+        }
+        retained.phase = InstallPhase::Open;
+        let profile = match manifest.profile {
+            StoreProfile::Durable => SqlitePersistenceProfile::Durable,
+            // The manifest's non-durable label; its connections open Normal.
+            StoreProfile::Normal => SqlitePersistenceProfile::Normal,
+        };
+        retained.opened = Some(
+            open_store_observed(
+                PersistenceConfig::sqlite(target).with_sqlite_profile(profile),
+                &manifest.binding,
+                manifest.cursor_key,
+                settings.workspace_capacity,
+                settings.cache_bytes,
+                settings.reservations,
+            )
+            .map_err(InstallError::Store)?,
+        );
+        let opened = retained.opened.as_ref().expect("opened Store");
+        check_initial(opened, &manifest).map_err(|check| match check {
+            InitialCheck::History(error) => InstallError::History(error),
+            InitialCheck::Mismatch(what) => InstallError::Protocol(ControlError(what)),
+            InitialCheck::Content { error, provider } => InstallError::Content { error, provider },
+        })?;
+        manifest.daemon_sqlite = Some(opened.sqlite_version.clone());
+        retained.manifest = Some(manifest.clone());
+        retained.phase = InstallPhase::Reply;
+        send(connection, InstallReply::Installed(manifest))?;
+        Ok(())
+    })();
+    match result {
+        Ok(()) => Ok(InstalledStore {
+            manifest: retained.manifest.expect("acknowledged manifest"),
+            opened: retained.opened.expect("opened Store"),
+            work: retained.work,
+        }),
+        Err(error) => {
+            retained.error = error;
+            if !matches!(retained.error, InstallError::Channel(_)) {
+                retained.reply_error =
+                    send(connection, InstallReply::Refused(retained.refusal())).err();
+                if !matches!(retained.reply_error, Some(InstallError::Channel(_))) {
+                    retained.fence_error = connection.send.close().err();
+                }
+            }
+            Err(Box::new(retained))
+        }
+    }
+}
+fn send(connection: &mut Connection, reply: InstallReply) -> Result<(), InstallError> {
+    connection
+        .send
+        .send(&reply.encode().map_err(InstallError::Protocol)?)
+        .map_err(InstallError::Channel)
+}

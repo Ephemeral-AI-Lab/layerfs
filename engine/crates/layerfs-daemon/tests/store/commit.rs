@@ -1,0 +1,1174 @@
+//! Store-half Commit over real saved Content and the real local owner.
+#[path = "../support/gate/held_writer.rs"]
+mod held_writer;
+#[path = "../support/gate/history_boundary.rs"]
+mod history_boundary;
+use crate::installed as support;
+use layerfs_content::filesystem::{
+    FilesystemInput, FilesystemObjects, FilesystemRead, FilesystemResources, FilesystemRoot,
+    FilesystemRootId, InodeScope, InodeUpdate, PathName,
+};
+use layerfs_content::{
+    AuthenticatedObjects, ConstructionPolicy, FinalizedObject, ObjectId, ObjectRole,
+};
+use layerfs_history::{BranchSnapshot, CommitOutcome, HistoryError, WorkspaceId};
+use layerfs_overlay::ProfileConfig;
+use layerfs_storage::{ReservationBlocks, Save, StorageError};
+use layerfs_store_service::{
+    bootstrap::open_store,
+    store::{BindRequest, BoundWorkspace, CommitError, CommitPhase, Store},
+    Owner, OwnerClient, OwnerConfig,
+};
+use layerfs_telemetry::timer::Timing;
+use layerfs_vfs::Route;
+use layerfs_vfs::{Operation, Outcome, Position, Time};
+use std::{
+    cell::Cell,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        mpsc, Arc,
+    },
+    time::Duration,
+};
+
+fn job<T>(
+    owner: &OwnerClient,
+    route: Route,
+    command: impl FnOnce(
+        &layerfs_store_service::OwnerClient,
+        layerfs_vfs::Route,
+    ) -> Result<T, layerfs_store_service::OwnerError>,
+) -> T {
+    command(owner, route).unwrap_or_else(|error| panic!("{error:?}"))
+}
+fn bind(store: &Arc<Store>, owner: &Owner, f: &support::Fixture, tag: u8) -> Arc<BoundWorkspace> {
+    Arc::new(
+        store
+            .bind(
+                owner.client(),
+                BindRequest {
+                    branch: f.branch,
+                    workspace: WorkspaceId::from_authority([tag; 32]).unwrap(),
+                },
+            )
+            .unwrap()
+            .workspace,
+    )
+}
+fn setup(label: &str) -> (support::Fixture, Arc<Store>, Owner) {
+    let f = support::Fixture::new(8, label);
+    println!("STORE_COMMIT_FIXTURE case={label} files={}", f.count);
+    let store = open_store(
+        f.config.clone(),
+        support::BINDING,
+        support::CURSOR,
+        OwnerConfig::default().namespaces,
+        2 * 1024 * 1024,
+        ReservationBlocks::default(),
+    )
+    .unwrap();
+    let owner = Owner::start(
+        &f.directory.join("overlay.sqlite"),
+        ProfileConfig::default(),
+        OwnerConfig::default(),
+    )
+    .unwrap();
+    (f, store, owner)
+}
+fn bytes(tag: u8) -> Vec<u8> {
+    let mut bytes = support::bytes(0);
+    bytes[0] = tag;
+    bytes
+}
+fn window<T>(
+    workspace: &BoundWorkspace,
+    f: impl FnOnce(&layerfs_store_service::store::StoreOperation, &layerfs_vfs::SourceView) -> T,
+) -> T {
+    static NEXT: AtomicU64 = AtomicU64::new(100);
+    let operation = workspace.operation().unwrap();
+    let acquired = job(
+        operation.overlay(),
+        workspace.route(),
+        |job_client: &layerfs_store_service::OwnerClient, job_route| {
+            job_client.acquire_base_source(job_route, NEXT.fetch_add(1, Ordering::Relaxed))
+        },
+    );
+    let source = acquired;
+    let view = operation.workspace().view_for_source(source).unwrap();
+    let value = f(&operation, &view);
+    drop(view);
+    job(
+        operation.overlay(),
+        workspace.route(),
+        |job_client: &layerfs_store_service::OwnerClient, job_route| {
+            job_client.release_base_source(job_route, source)
+        },
+    );
+    value
+}
+fn write(workspace: &BoundWorkspace, value: &[u8]) {
+    window(workspace, |operation, view| {
+        let stat = view
+            .lookup(
+                operation.overlay(),
+                view.root_serial(),
+                &PathName::new("file-000000").unwrap(),
+            )
+            .unwrap();
+        assert_eq!(stat.logical_len, value.len() as u64);
+        let outcome = operation
+            .workspace()
+            .mutate(
+                operation.overlay(),
+                operation.ports(),
+                view,
+                Operation::Write {
+                    serial: stat.serial,
+                    position: Position::At(0),
+                    data: value.into(),
+                },
+                Time {
+                    seconds: stat.metadata.mtime_seconds,
+                    nanoseconds: stat.metadata.mtime_nanoseconds,
+                },
+            )
+            .unwrap();
+        let publication = match outcome {
+            Outcome::Applied { publication, .. } => publication,
+            other => panic!("{other:?}"),
+        };
+        job(
+            operation.overlay(),
+            workspace.route(),
+            |job_client: &layerfs_store_service::OwnerClient, _| {
+                job_client.reply_attempted(publication)
+            },
+        );
+    });
+}
+fn read(workspace: &BoundWorkspace) -> Vec<u8> {
+    window(workspace, |operation, view| {
+        let stat = view
+            .lookup(
+                operation.overlay(),
+                view.root_serial(),
+                &PathName::new("file-000000").unwrap(),
+            )
+            .unwrap();
+        let mut bytes = Vec::new();
+        view.read(operation.overlay(), stat.serial, 0, 1024, &mut bytes)
+            .unwrap();
+        bytes
+    })
+}
+fn construct(
+    save: &Save<'_>,
+    snapshot: &BranchSnapshot,
+    value: &[u8],
+    policy: ConstructionPolicy,
+) -> Result<FilesystemRootId, CommitError> {
+    let mut reader = FilesystemRead::new(save, FilesystemRootId(snapshot.effective_root))?;
+    let root = reader.root();
+    let mut file =
+        reader.resolve_child(root.root_inode().serial(), &PathName::new("file-000000")?)?;
+    let mut sink = save.sink();
+    let built = Timing::disabled("commit.file", |scope| {
+        layerfs_content::construct_bytes(
+            policy,
+            &policy.capacities(),
+            value,
+            &mut sink,
+            scope.child("construct"),
+        )
+    })
+    .0?;
+    file.value.content_root = built.root;
+    let input = FilesystemInput {
+        base: Some(FilesystemRootId(snapshot.effective_root)),
+        scope: root.scope(),
+        root_serial: root.root_inode().serial(),
+        directories: &[],
+        inodes: &[InodeUpdate {
+            serial: file.serial,
+            value: file.value,
+        }],
+        new_inodes: &[],
+        resources: FilesystemResources::default(),
+    };
+    let mut objects = FilesystemObjects::new_with_accepted(save, &mut sink, save);
+    Ok(layerfs_content::filesystem::update_filesystem(&mut objects, &input, None)?.root)
+}
+fn close(_owner: &Owner, workspace: &BoundWorkspace) {
+    workspace.close().unwrap();
+}
+
+#[test]
+fn busy_missing_dependency_and_read_failure_leave_no_stage_or_local_data_loss() {
+    let (f, store, owner) = setup("commit-refusals");
+    let workspace = bind(&store, &owner, &f, 1);
+    let original = workspace.snapshot().unwrap();
+    write(&workspace, &bytes(b'C'));
+    let held = held_writer::HeldWriter::acquire(&f.config.path);
+    let called = Cell::new(false);
+    let busy = workspace
+        .commit(|_, _, snapshot| {
+            called.set(true);
+            Ok(FilesystemRootId(snapshot.effective_root))
+        })
+        .unwrap_err();
+    assert!(!called.get());
+    assert!(matches!(
+        busy.error,
+        CommitError::Storage(StorageError::Busy)
+    ));
+    assert_eq!(busy.phase, CommitPhase::Begin);
+    assert!(busy.locally_settled && busy.published.is_none());
+    assert_eq!(read(&workspace), bytes(b'C'));
+    assert_eq!(workspace.snapshot().unwrap(), original);
+    held.release();
+    drop(busy);
+    let absent = ObjectId::for_bytes(b"absent inode dependency");
+    let missing = workspace
+        .commit(|save, _, snapshot| {
+            let root = FilesystemRoot::new(
+                snapshot.profile,
+                InodeScope::from_object(snapshot.scope),
+                1,
+                absent,
+            )?;
+            let object = FinalizedObject::new(ObjectRole::FilesystemRoot, root.encode()?)?
+                .with_references(vec![absent]);
+            let id = object.id();
+            save.accept(object)?;
+            Ok(FilesystemRootId(id))
+        })
+        .unwrap_err();
+    assert!(
+        matches!(&missing.error, CommitError::Storage(StorageError::MissingDependency { reference, .. }) if *reference == absent),
+        "{missing:?}"
+    );
+    assert!(missing.locally_settled && missing.published.is_none());
+    drop(missing);
+    let missing_read = workspace
+        .commit(|save, _, _| {
+            save.read_canonical(absent)?;
+            unreachable!()
+        })
+        .unwrap_err();
+    assert!(
+        matches!(&missing_read.error, CommitError::Construction { storage: StorageError::ObjectMissing(id), .. } if *id == absent)
+    );
+    assert!(missing_read.locally_settled);
+    assert_eq!(read(&workspace), bytes(b'C'));
+    drop(missing_read);
+    let later = workspace
+        .commit(|save, _, snapshot| {
+            construct(save, snapshot, &bytes(b'C'), store.policy().construction())
+        })
+        .unwrap();
+    assert!(matches!(
+        later.history,
+        Some(CommitOutcome::Committed { .. })
+    ));
+    assert_eq!(read(&workspace), bytes(b'C'));
+    println!("STORE_COMMIT_REFUSALS busy_before_construction=true no_new_stage=true effective_bytes_preserved=true original_missing_dependency=true original_read_failure=true later_explicit_call=Committed");
+    drop(later);
+    close(&owner, &workspace);
+    drop((workspace, store));
+    owner.stop().unwrap();
+    f.cleanup();
+}
+
+#[test]
+fn known_publication_survives_an_unattempted_local_install() {
+    let (f, store, owner) = setup("commit-install-refusal");
+    let workspace = bind(&store, &owner, &f, 1);
+    let original = workspace.snapshot().unwrap();
+    write(&workspace, &bytes(b'D'));
+    let mut owner = Some(owner);
+    let failed = workspace
+        .commit(|save, _, snapshot| {
+            let root = construct(save, snapshot, &bytes(b'D'), store.policy().construction())?;
+            owner.take().unwrap().stop().unwrap();
+            Ok(root)
+        })
+        .unwrap_err();
+    assert_eq!(failed.phase, CommitPhase::Install);
+    assert!(matches!(
+        &failed.error,
+        CommitError::Owner(layerfs_store_service::OwnerError::Unattempted { .. })
+    ));
+    assert!(matches!(
+        failed.published,
+        Some(CommitOutcome::Committed { .. })
+    ));
+    assert_eq!(workspace.snapshot().unwrap(), original);
+    assert!(failed.capture.is_some());
+    assert!(matches!(
+        workspace
+            .commit(|_, _, _| unreachable!())
+            .unwrap_err()
+            .error,
+        CommitError::InFlight
+    ));
+    // Each daemon keeps its Workspace files beside its own path.
+    std::fs::create_dir(f.directory.join("next")).unwrap();
+    let next_owner = Owner::start(
+        &f.directory.join("next").join("overlay.sqlite"),
+        ProfileConfig::default(),
+        OwnerConfig::default(),
+    )
+    .unwrap();
+    let next = bind(&store, &next_owner, &f, 2);
+    assert_eq!(read(&next), bytes(b'D'));
+    println!("STORE_COMMIT_INSTALL_FAILURE history=known-Committed install=unattempted original_capture=retained next_commit=InFlight new_workspace=published-bytes");
+    close(&next_owner, &next);
+    drop((failed, next, workspace, store));
+    next_owner.stop().unwrap();
+    f.cleanup();
+}
+
+#[test]
+fn a_held_producer_does_not_hold_workspace_metadata_or_read_capacity() {
+    let (f, store, owner) = setup("commit-admission");
+    let workspace = bind(&store, &owner, &f, 1);
+    // A changed Workspace, so the Commit runs its producer (an unchanged one
+    // answers UpToDate before capture).
+    write(&workspace, &bytes(b'A'));
+    let (ready, entered) = mpsc::channel();
+    let (release, proceed) = mpsc::channel();
+    let active = workspace.clone();
+    let worker = std::thread::spawn(move || {
+        active.commit(|_, _, snapshot| {
+            ready
+                .send(())
+                .map_err(|_| CommitError::Context("peer ended"))?;
+            proceed
+                .recv_timeout(Duration::from_secs(3))
+                .map_err(|_| CommitError::Context("bounded producer hold"))?;
+            Ok(FilesystemRootId(snapshot.effective_root))
+        })
+    });
+    entered.recv_timeout(Duration::from_secs(3)).unwrap();
+    assert!(matches!(
+        workspace
+            .commit(|_, _, _| unreachable!())
+            .unwrap_err()
+            .error,
+        CommitError::InFlight
+    ));
+    assert_eq!(read(&workspace), bytes(b'A'));
+    release.send(()).unwrap();
+    let done = worker.join().unwrap().unwrap();
+    assert!(matches!(done.history, Some(CommitOutcome::UpToDate { .. })));
+    drop(done);
+    close(&owner, &workspace);
+    drop((workspace, store));
+    owner.stop().unwrap();
+    f.cleanup();
+}
+
+#[test]
+fn an_unchanged_workspace_answers_uptodate_without_capture_or_save() {
+    let (f, store, owner) = setup("commit-unchanged");
+    let workspace = bind(&store, &owner, &f, 1);
+    let original = workspace.snapshot().unwrap();
+    let done = workspace.commit(|_, _, _| unreachable!()).unwrap();
+    assert!(
+        matches!(done.history, Some(CommitOutcome::UpToDate { head, root })
+            if head == original.branch.head_commit && root == original.effective_root),
+        "{:?}",
+        done.history
+    );
+    assert!(done.capture.is_none() && done.merge.is_none());
+    assert_eq!(done.saved, Default::default());
+    assert_eq!(workspace.snapshot().unwrap(), original);
+    // The Workspace still captures and publishes its next change.
+    write(&workspace, &bytes(b'U'));
+    let next = workspace
+        .commit(|save, _, snapshot| {
+            construct(save, snapshot, &bytes(b'U'), store.policy().construction())
+        })
+        .unwrap();
+    assert!(matches!(
+        next.history,
+        Some(CommitOutcome::Committed { .. })
+    ));
+    assert!(next.capture.is_some());
+    drop((done, next));
+    close(&owner, &workspace);
+    drop((workspace, store));
+    owner.stop().unwrap();
+    f.cleanup();
+}
+
+#[test]
+fn captured_rows_or_a_moved_head_never_take_the_uptodate_shortcut() {
+    let (f, store, owner) = setup("commit-unchanged-refused");
+    let workspace = bind(&store, &owner, &f, 1);
+    // Rows in the active generation: the producer runs over a capture.
+    write(&workspace, &bytes(b'R'));
+    let called = Cell::new(false);
+    let done = workspace
+        .commit(|save, _, snapshot| {
+            called.set(true);
+            construct(save, snapshot, &bytes(b'R'), store.policy().construction())
+        })
+        .unwrap();
+    assert!(called.get() && done.capture.is_some());
+    assert!(matches!(
+        done.history,
+        Some(CommitOutcome::Committed { .. })
+    ));
+    drop(done);
+    // Unchanged, but another Workspace moved the head: the shortcut is not
+    // taken; the Commit captures and follows the head.
+    let other = bind(&store, &owner, &f, 2);
+    write(&other, &bytes(b'S'));
+    let moved = other
+        .commit(|save, _, snapshot| {
+            construct(save, snapshot, &bytes(b'S'), store.policy().construction())
+        })
+        .unwrap();
+    assert!(matches!(
+        moved.history,
+        Some(CommitOutcome::Committed { .. })
+    ));
+    called.set(false);
+    let followed = workspace
+        .commit(|_, _, snapshot| {
+            called.set(true);
+            Ok(FilesystemRootId(snapshot.effective_root))
+        })
+        .unwrap();
+    assert!(called.get() && followed.capture.is_some());
+    assert_eq!(read(&workspace), bytes(b'S'));
+    drop((moved, followed));
+    for view in [&workspace, &other] {
+        close(&owner, view);
+    }
+    drop((workspace, other, store));
+    owner.stop().unwrap();
+    f.cleanup();
+}
+
+#[test]
+fn a_mutation_racing_an_unchanged_commit_is_never_lost() {
+    let (f, store, owner) = setup("commit-unchanged-race");
+    let workspace = bind(&store, &owner, &f, 1);
+    let mut shortcuts = 0;
+    for (round, tag) in (b'a'..=b'p').enumerate() {
+        let barrier = Arc::new(std::sync::Barrier::new(2));
+        let racer = {
+            let (workspace, barrier) = (workspace.clone(), barrier.clone());
+            std::thread::spawn(move || {
+                barrier.wait();
+                write(&workspace, &bytes(tag));
+            })
+        };
+        barrier.wait();
+        let done = workspace
+            .commit_captured(&Default::default())
+            .unwrap_or_else(|failure| panic!("round {round}: {failure:?}"));
+        racer.join().unwrap();
+        let captured = done.capture.is_some();
+        match (&done.history, captured) {
+            // Answered before capture: the write is a later mutation, still
+            // dirty, and the next Commit publishes it.
+            (Some(CommitOutcome::UpToDate { .. }), false) => {
+                shortcuts += 1;
+                let next = workspace.commit_captured(&Default::default()).unwrap();
+                assert!(
+                    matches!(next.history, Some(CommitOutcome::Committed { .. })),
+                    "round {round}: {:?}",
+                    next.history
+                );
+            }
+            (Some(CommitOutcome::Committed { .. }), true) => {}
+            // Captured before the write was published: nothing to publish
+            // yet, and the next Commit publishes it.
+            (Some(CommitOutcome::UpToDate { .. }), true) => {
+                let next = workspace.commit_captured(&Default::default()).unwrap();
+                assert!(matches!(
+                    next.history,
+                    Some(CommitOutcome::Committed { .. })
+                ));
+            }
+            other => panic!("round {round}: {other:?}"),
+        }
+        // Whatever the order, the write is published and nothing is left:
+        // the next Commit is answered before capture.
+        assert_eq!(read(&workspace), bytes(tag), "round {round}");
+        let settled = workspace.commit_captured(&Default::default()).unwrap();
+        assert!(
+            matches!(settled.history, Some(CommitOutcome::UpToDate { .. }))
+                && settled.capture.is_none(),
+            "round {round}: {:?}",
+            settled.history
+        );
+    }
+    let fresh = bind(&store, &owner, &f, 2);
+    assert_eq!(read(&fresh), bytes(b'p'), "the Branch holds the last write");
+    close(&owner, &fresh);
+    println!("STORE_COMMIT_UNCHANGED_RACE rounds=16 shortcuts={shortcuts}");
+    close(&owner, &workspace);
+    drop((workspace, store));
+    owner.stop().unwrap();
+    f.cleanup();
+}
+
+#[test]
+fn later_mutation_survives_capture_publication_and_known_install() {
+    let (f, store, owner) = setup("commit-later-mutation");
+    let workspace = bind(&store, &owner, &f, 1);
+    write(&workspace, &bytes(b'G'));
+    let first = workspace
+        .commit(|save, _, snapshot| {
+            let root = construct(save, snapshot, &bytes(b'G'), store.policy().construction())?;
+            write(&workspace, &bytes(b'H'));
+            Ok(root)
+        })
+        .unwrap();
+    let first_record = match first.history {
+        Some(CommitOutcome::Committed { ref record, .. }) => record.clone(),
+        ref other => panic!("{other:?}"),
+    };
+    assert_eq!(read(&workspace), bytes(b'H'));
+    let old_view = bind(&store, &owner, &f, 2);
+    assert_eq!(read(&old_view), bytes(b'G'));
+    drop(first);
+    let second = workspace
+        .commit(|save, _, snapshot| {
+            construct(save, snapshot, &bytes(b'H'), store.policy().construction())
+        })
+        .unwrap();
+    assert!(
+        matches!(&second.history, Some(CommitOutcome::Committed { record, .. }) if record.parent == Some(first_record.id))
+    );
+    assert_eq!(read(&workspace), bytes(b'H'));
+    assert_eq!(
+        read(&old_view),
+        bytes(b'G'),
+        "an existing Workspace retains its own base"
+    );
+    let latest = bind(&store, &owner, &f, 3);
+    assert_eq!(read(&latest), bytes(b'H'));
+    let op = latest.operation().unwrap();
+    let base = op.workspace().base().unwrap();
+    assert_eq!(
+        base.list(base.root().root_inode().serial(), None, 64, 65536)
+            .unwrap()
+            .entries
+            .len(),
+        f.count
+    );
+    println!("STORE_LATER_MUTATION captured=G first_published=G live_after_install=H next_published=H old_workspace=G namespace_entries=8");
+    drop((second, op, base));
+    for view in [&workspace, &old_view, &latest] {
+        close(&owner, view);
+    }
+    drop((workspace, old_view, latest, store));
+    owner.stop().unwrap();
+    f.cleanup();
+}
+
+fn observed_store(
+    f: &support::Fixture,
+    boundary: history_boundary::Boundary,
+) -> (Arc<Store>, Arc<layerfs_persistence::SqliteHandles>) {
+    use layerfs_persistence::SqliteHandles;
+    let handles = Arc::new(
+        SqliteHandles::open_writable(f.config.clone(), support::BINDING, support::CURSOR).unwrap(),
+    );
+    let config = f.config.clone();
+    let factory: layerfs_daemon::store::ReaderFactory = Arc::new(move |_| {
+        let read =
+            SqliteHandles::open_read_only(config.clone(), support::BINDING, support::CURSOR)?;
+        Ok(layerfs_daemon::store::StoreReader::new(
+            layerfs_storage::Storage::new(read.storage)?,
+            Arc::new(read.history),
+        ))
+    });
+    let control = factory(0).unwrap();
+    let history = history_boundary::ObservedHistory {
+        handles: handles.clone(),
+        database: f.config.path.clone(),
+        boundary,
+        once: std::sync::atomic::AtomicBool::new(true),
+    };
+    let store = Store::new(
+        handles.storage.clone(),
+        Arc::new(history),
+        control,
+        factory,
+        2 * 1024 * 1024,
+        ReservationBlocks::default(),
+        16,
+    )
+    .unwrap();
+    (Arc::new(store), handles)
+}
+
+#[test]
+fn history_busy_after_save_has_no_stage_and_counts_only_acknowledged_save_writes() {
+    let f = support::Fixture::new(8, "commit-history-busy");
+    let (store, handles) = observed_store(&f, history_boundary::Boundary::HeldWriter);
+    let owner = Owner::start(
+        &f.directory.join("overlay.sqlite"),
+        ProfileConfig::default(),
+        OwnerConfig::default(),
+    )
+    .unwrap();
+    let workspace = bind(&store, &owner, &f, 1);
+    let original = workspace.snapshot().unwrap();
+    write(&workspace, &bytes(b'E'));
+    let before = handles.diagnostics().unwrap();
+    let failed = workspace
+        .commit(|save, _, snapshot| {
+            construct(save, snapshot, &bytes(b'E'), store.policy().construction())
+        })
+        .unwrap_err();
+    assert_eq!(failed.phase, CommitPhase::Publish);
+    assert!(matches!(
+        failed.error,
+        CommitError::History(HistoryError::Busy)
+    ));
+    assert!(failed.saved.is_some() && failed.prepared.is_some());
+    assert!(failed.locally_settled && failed.published.is_none());
+    let counts = failed.storage.unwrap();
+    let after = handles.diagnostics().unwrap();
+    assert_eq!(
+        after.write_commits - before.write_commits,
+        counts.reserve + counts.publish
+    );
+    assert_eq!(
+        after.write_transactions - before.write_transactions,
+        counts.reserve + counts.publish
+    );
+    assert_eq!(workspace.snapshot().unwrap(), original);
+    assert_eq!(read(&workspace), bytes(b'E'));
+    drop(failed);
+    let before = handles.diagnostics().unwrap();
+    let later = workspace
+        .commit(|save, _, snapshot| {
+            construct(save, snapshot, &bytes(b'E'), store.policy().construction())
+        })
+        .unwrap();
+    let actual = handles.diagnostics().unwrap().write_transactions - before.write_transactions;
+    assert_eq!(actual, later.storage.reserve + later.storage.publish + 1);
+    println!("STORE_HISTORY_BUSY save_writes={} failed_history_statements=1 new_stage_rows=0 local_bytes=preserved later_explicit_call_writes={actual}", counts.reserve + counts.publish);
+    drop(later);
+    close(&owner, &workspace);
+    drop((workspace, store, handles));
+    owner.stop().unwrap();
+    f.cleanup();
+}
+
+#[test]
+fn unknown_history_acknowledgement_retains_original_intent_and_capture() {
+    use layerfs_history::HistoryCatalog;
+    let f = support::Fixture::new(8, "commit-unknown-ack");
+    let (store, handles) = observed_store(&f, history_boundary::Boundary::LostAcknowledgement);
+    let owner = Owner::start(
+        &f.directory.join("overlay.sqlite"),
+        ProfileConfig::default(),
+        OwnerConfig::default(),
+    )
+    .unwrap();
+    let workspace = bind(&store, &owner, &f, 1);
+    let original = workspace.snapshot().unwrap();
+    write(&workspace, &bytes(b'F'));
+    let failed = workspace
+        .commit(|save, _, snapshot| {
+            construct(save, snapshot, &bytes(b'F'), store.policy().construction())
+        })
+        .unwrap_err();
+    assert_eq!(failed.phase, CommitPhase::Publish);
+    assert!(matches!(
+        failed.error,
+        CommitError::History(HistoryError::UnknownOutcome)
+    ));
+    assert!(failed.capture.is_some() && failed.intent.is_some() && failed.prepared.is_some());
+    assert!(failed.published.is_none() && !failed.locally_settled && failed.local_error.is_none());
+    assert_eq!(workspace.snapshot().unwrap(), original);
+    assert!(matches!(
+        workspace
+            .commit(|_, _, _| unreachable!())
+            .unwrap_err()
+            .error,
+        CommitError::InFlight
+    ));
+    let observer = layerfs_persistence::SqliteHandles::open_read_only(
+        f.config.clone(),
+        support::BINDING,
+        support::CURSOR,
+    )
+    .unwrap();
+    let observed = observer.history.branch_snapshot(f.branch).unwrap().unwrap();
+    assert_eq!(
+        observed.effective_root,
+        failed.intent.as_ref().unwrap().candidate_root
+    );
+    println!("STORE_UNKNOWN_ACK original=UnknownOutcome capture_and_intent=retained local_resolution=not-attempted install=not-attempted observer_does_not_resolve=true fixture_teardown=explicit-after-owner-stop");
+    owner.stop().unwrap();
+    drop((observer, failed, workspace, store, handles));
+    f.cleanup();
+}
+
+/// A Storage outcome before publication, nested unknowns included, is
+/// definite: nothing was published, so the capture folds back and a later
+/// explicit Commit runs (finding #4; an unknown before the publication's
+/// own attempt cannot have published).
+#[test]
+fn nested_storage_unknown_before_publication_folds_back() {
+    let (f, store, owner) = setup("nested-unknown");
+    let missing = || StorageError::ObjectMissing(ObjectId::for_bytes(b"nested unknown dependency"));
+    let unknown = || StorageError::UnknownOutcome {
+        original: Box::new(missing()),
+    };
+    let cases = [
+        StorageError::CleanupFailed {
+            original: Box::new(unknown()),
+            cleanup: Box::new(StorageError::Busy),
+        },
+        StorageError::CleanupFailed {
+            original: Box::new(missing()),
+            cleanup: Box::new(unknown()),
+        },
+        StorageError::CleanupFailed {
+            original: Box::new(StorageError::CleanupFailed {
+                original: Box::new(unknown()),
+                cleanup: Box::new(StorageError::Busy),
+            }),
+            cleanup: Box::new(missing()),
+        },
+        StorageError::CleanupFailed {
+            original: Box::new(missing()),
+            cleanup: Box::new(StorageError::Busy),
+        },
+    ];
+    for (index, error) in cases.into_iter().enumerate() {
+        let workspace = bind(&store, &owner, &f, 61 + index as u8);
+        let original = workspace.snapshot().unwrap();
+        let value = bytes(b'J' + index as u8);
+        write(&workspace, &value);
+        let failed = workspace
+            .commit(|_, _, _| Err(CommitError::Storage(error)))
+            .unwrap_err();
+        assert_eq!(failed.phase, CommitPhase::Construct);
+        assert!(failed.capture.is_some());
+        assert!(failed.intent.is_none() && failed.published.is_none());
+        assert!(matches!(
+            &failed.error,
+            CommitError::Storage(StorageError::CleanupFailed { .. })
+        ));
+        assert!(!failed.uncertain(), "case {index}");
+        assert!(failed.locally_settled, "case {index}: {failed:?}");
+        assert_eq!(workspace.snapshot().unwrap(), original);
+        assert_eq!(read(&workspace), value);
+        drop(failed);
+        let later = workspace
+            .commit(|save, _, snapshot| {
+                construct(save, snapshot, &value, store.policy().construction())
+            })
+            .unwrap();
+        assert!(matches!(
+            later.history,
+            Some(CommitOutcome::Committed { .. })
+        ));
+        drop(later);
+        close(&owner, &workspace);
+    }
+    owner.stop().unwrap();
+    drop(store);
+    f.cleanup();
+}
+
+/// An unknown publication outcome in one Workspace of an observed Store:
+/// the Commit of `value` fails in the Publish phase and keeps custody.
+fn unknown_publication(
+    label: &str,
+    boundary: history_boundary::Boundary,
+    value: &[u8],
+) -> (
+    support::Fixture,
+    Arc<Store>,
+    Owner,
+    Arc<BoundWorkspace>,
+    Box<layerfs_daemon::store::CommitFailure>,
+) {
+    let f = support::Fixture::new(8, label);
+    let (store, _handles) = observed_store(&f, boundary);
+    let owner = Owner::start(
+        &f.directory.join("overlay.sqlite"),
+        ProfileConfig::default(),
+        OwnerConfig::default(),
+    )
+    .unwrap();
+    let workspace = bind(&store, &owner, &f, 1);
+    write(&workspace, value);
+    let failed = workspace
+        .commit(|save, _, snapshot| construct(save, snapshot, value, store.policy().construction()))
+        .unwrap_err();
+    assert_eq!(failed.phase, CommitPhase::Publish);
+    assert!(matches!(
+        failed.error,
+        CommitError::History(HistoryError::UnknownOutcome)
+    ));
+    assert!(!failed.locally_settled && failed.published.is_none());
+    assert!(workspace.has_retained(), "custody kept for its resolution");
+    (f, store, owner, workspace, failed)
+}
+
+/// Finding #5: the head shows the Commit whose acknowledgement was lost, so
+/// its one resolution installs it and releases the custody; the next Commit
+/// is admitted and publishes.
+#[test]
+fn a_lost_acknowledgement_is_resolved_by_installing_the_commit() {
+    let (f, store, owner, workspace, failed) = unknown_publication(
+        "resolve-landed",
+        history_boundary::Boundary::LostAcknowledgement,
+        &bytes(b'R'),
+    );
+    let candidate = failed.intent.as_ref().unwrap().candidate_root;
+    let resolved = workspace.resolve_retained().unwrap().expect("retained");
+    let Some(CommitOutcome::Committed { record, displaced }) = resolved.outcome else {
+        panic!("{resolved:?}");
+    };
+    assert_eq!((record.root, displaced), (candidate, None));
+    let bound = workspace.snapshot().unwrap();
+    assert_eq!(bound.branch.head_commit, Some(record.id));
+    assert_eq!(bound.effective_root, candidate);
+    assert!(!workspace.has_retained());
+    assert_eq!(read(&workspace), bytes(b'R'));
+    // The record is used once: nothing is left to resolve.
+    assert!(workspace.resolve_retained().unwrap().is_none());
+    write(&workspace, &bytes(b'S'));
+    let later = workspace
+        .commit(|save, _, snapshot| {
+            construct(save, snapshot, &bytes(b'S'), store.policy().construction())
+        })
+        .unwrap();
+    let Some(CommitOutcome::Committed { record: next, .. }) = &later.history else {
+        panic!("{:?}", later.history);
+    };
+    assert_eq!(
+        next.parent,
+        Some(record.id),
+        "published over the resolved Commit"
+    );
+    drop((later, failed));
+    close(&owner, &workspace);
+    owner.stop().unwrap();
+    drop(store);
+    f.cleanup();
+}
+
+/// The head is still the one the Commit was published against: nothing was
+/// published, so the capture folds back, the change stays and the next
+/// Commit publishes it.
+#[test]
+fn a_lost_request_is_resolved_by_folding_the_capture_back() {
+    let (f, store, owner, workspace, failed) = unknown_publication(
+        "resolve-lost",
+        history_boundary::Boundary::LostRequest,
+        &bytes(b'T'),
+    );
+    let original = failed.binding.clone().unwrap();
+    let resolved = workspace.resolve_retained().unwrap().expect("retained");
+    assert!(resolved.outcome.is_none() && resolved.replaced.is_none());
+    assert_eq!(workspace.snapshot().unwrap(), original);
+    assert_eq!(read(&workspace), bytes(b'T'));
+    let later = workspace
+        .commit(|save, _, snapshot| {
+            construct(save, snapshot, &bytes(b'T'), store.policy().construction())
+        })
+        .unwrap();
+    assert!(matches!(
+        later.history,
+        Some(CommitOutcome::Committed { .. })
+    ));
+    drop((later, failed));
+    close(&owner, &workspace);
+    owner.stop().unwrap();
+    drop(store);
+    f.cleanup();
+}
+
+/// Another Commit moved the head after the lost request. Its first-parent
+/// chain reaches the head this Commit was published against through no Commit
+/// of ours, so nothing was published (#776 R1): the capture folds back, the
+/// custody is released and the next Commit merges over the landed one. Until
+/// #776 the attempt left the custody with no record, refusing every Commit.
+#[test]
+fn a_lost_request_under_a_moved_head_folds_back() {
+    let (f, store, owner, workspace, failed) = unknown_publication(
+        "resolve-moved",
+        history_boundary::Boundary::LostRequest,
+        &bytes(b'U'),
+    );
+    let original = failed.binding.clone().unwrap();
+    let other = bind(&store, &owner, &f, 2);
+    write(&other, &bytes(b'V'));
+    let landed = other
+        .commit(|save, _, snapshot| {
+            construct(save, snapshot, &bytes(b'V'), store.policy().construction())
+        })
+        .unwrap();
+    let Some(CommitOutcome::Committed { record: theirs, .. }) = &landed.history else {
+        panic!("{:?}", landed.history);
+    };
+    let resolved = workspace.resolve_retained().unwrap().expect("retained");
+    assert!(resolved.outcome.is_none(), "{resolved:?}");
+    assert!(!workspace.has_retained());
+    assert_eq!(workspace.snapshot().unwrap(), original);
+    assert_eq!(read(&workspace), bytes(b'U'));
+    // The next Commit is admitted again: it no longer meets `InFlight` and
+    // constructs from the binding the capture folded back to.
+    let reached = Cell::new(None);
+    let later = workspace.commit(|_, _, snapshot| {
+        reached.set(Some(snapshot.branch.head_commit));
+        Ok(FilesystemRootId(snapshot.effective_root))
+    });
+    if let Err(failure) = &later {
+        assert!(
+            !matches!(failure.error, CommitError::InFlight),
+            "{failure:?}"
+        );
+    }
+    assert_eq!(
+        reached.get(),
+        Some(original.branch.head_commit),
+        "{later:?}"
+    );
+    assert_ne!(original.branch.head_commit, Some(theirs.id));
+    drop((later, landed, failed));
+    close(&owner, &other);
+    close(&owner, &workspace);
+    owner.stop().unwrap();
+    drop(store);
+    f.cleanup();
+}
+
+/// The acknowledgement was lost and another Workspace then committed over our
+/// Commit: the head is theirs, and our Commit is its first parent, so the
+/// publication is proven and installed (#776 R1).
+#[test]
+fn a_lost_acknowledgement_under_a_later_commit_is_installed() {
+    let (f, store, owner, workspace, failed) = unknown_publication(
+        "resolve-under",
+        history_boundary::Boundary::LostAcknowledgement,
+        &bytes(b'W'),
+    );
+    let candidate = failed.intent.as_ref().unwrap().candidate_root;
+    let other = bind(&store, &owner, &f, 2);
+    write(&other, &bytes(b'X'));
+    let landed = other
+        .commit(|save, _, snapshot| {
+            construct(save, snapshot, &bytes(b'X'), store.policy().construction())
+        })
+        .unwrap();
+    let resolved = workspace.resolve_retained().unwrap().expect("retained");
+    let Some(CommitOutcome::Committed { record, .. }) = resolved.outcome else {
+        panic!("{resolved:?}");
+    };
+    assert_eq!(record.root, candidate);
+    let Some(CommitOutcome::Committed { record: theirs, .. }) = &landed.history else {
+        panic!("{:?}", landed.history);
+    };
+    assert_eq!(theirs.parent, Some(record.id), "theirs landed over ours");
+    assert_eq!(
+        workspace.snapshot().unwrap().branch.head_commit,
+        Some(record.id)
+    );
+    assert!(!workspace.has_retained());
+    drop((landed, failed));
+    close(&owner, &other);
+    close(&owner, &workspace);
+    owner.stop().unwrap();
+    drop(store);
+    f.cleanup();
+}
+
+/// Forced over `original`'s head through the Store's history, displacing
+/// whatever head the Branch has now; the forced Commit's root is
+/// `original`'s, so it publishes nothing of ours.
+fn force_over(store: &Store, original: &BranchSnapshot) -> CommitOutcome {
+    let forced = store
+        .history()
+        .commit_branch(&layerfs_history::CommitRequest {
+            branch: original.branch.id,
+            expected_head: original.branch.head_commit,
+            expected_base: original.branch.base_layer,
+            expected_root: original.effective_root,
+            candidate_root: original.effective_root,
+            profile: original.profile,
+            scope: original.scope,
+            second_parent: None,
+            meta: layerfs_history::records::CommitMeta::new(
+                layerfs_history::records::CommitVia::Files,
+            ),
+            force: true,
+            required_head: None,
+        })
+        .unwrap();
+    let CommitOutcome::Committed { displaced, .. } = &forced else {
+        panic!("{forced:?}");
+    };
+    assert!(displaced.is_some(), "the forced Commit displaced a head");
+    forced
+}
+
+/// The request was lost, another Workspace committed, and a forced Commit
+/// then displaced theirs. No Commit carries our attempt while the Branch
+/// exists, so nothing was published (#776 R1): the capture folds back, the
+/// custody is released and the next Commit is admitted. Before the attempt
+/// the first-parent walk could not follow the forced Commit, so the custody
+/// stayed and every later Commit was refused until a force unmount.
+#[test]
+fn a_lost_request_under_a_forced_commit_folds_back() {
+    let (f, store, owner, workspace, failed) = unknown_publication(
+        "resolve-forced-lost",
+        history_boundary::Boundary::LostRequest,
+        &bytes(b'Y'),
+    );
+    let original = failed.binding.clone().unwrap();
+    let other = bind(&store, &owner, &f, 2);
+    write(&other, &bytes(b'Z'));
+    let landed = other
+        .commit(|save, _, snapshot| {
+            construct(save, snapshot, &bytes(b'Z'), store.policy().construction())
+        })
+        .unwrap();
+    let forced = force_over(&store, &original);
+    let resolved = workspace.resolve_retained().unwrap().expect("retained");
+    assert!(
+        resolved.outcome.is_none() && resolved.replaced.is_none(),
+        "{resolved:?}"
+    );
+    assert!(!workspace.has_retained());
+    assert_eq!(workspace.snapshot().unwrap(), original);
+    assert_eq!(read(&workspace), bytes(b'Y'));
+    // The next Commit is admitted again: it no longer meets `InFlight` and
+    // constructs from the binding the capture folded back to.
+    let reached = Cell::new(None);
+    let later = workspace.commit(|_, _, snapshot| {
+        reached.set(Some(snapshot.branch.head_commit));
+        Ok(FilesystemRootId(snapshot.effective_root))
+    });
+    if let Err(failure) = &later {
+        assert!(
+            !matches!(failure.error, CommitError::InFlight),
+            "{failure:?}"
+        );
+    }
+    assert_eq!(
+        reached.get(),
+        Some(original.branch.head_commit),
+        "{later:?}"
+    );
+    drop((later, landed, forced, failed));
+    close(&owner, &other);
+    close(&owner, &workspace);
+    owner.stop().unwrap();
+    drop(store);
+    f.cleanup();
+}
+
+/// The acknowledgement was lost, another Workspace committed over our
+/// Commit, and a forced Commit over the head we published against then
+/// displaced theirs: our Commit is reachable only through the displaced
+/// edge. Its attempt finds it, so the publication is proven and installed
+/// (#776 R1); the first-parent walk before the attempt left it undetermined.
+#[test]
+fn a_lost_acknowledgement_under_a_forced_commit_is_installed() {
+    let (f, store, owner, workspace, failed) = unknown_publication(
+        "resolve-forced-landed",
+        history_boundary::Boundary::LostAcknowledgement,
+        &bytes(b'Q'),
+    );
+    let original = failed.binding.clone().unwrap();
+    let candidate = failed.intent.as_ref().unwrap().candidate_root;
+    let other = bind(&store, &owner, &f, 2);
+    write(&other, &bytes(b'P'));
+    let landed = other
+        .commit(|save, _, snapshot| {
+            construct(save, snapshot, &bytes(b'P'), store.policy().construction())
+        })
+        .unwrap();
+    let Some(CommitOutcome::Committed { record: theirs, .. }) = &landed.history else {
+        panic!("{:?}", landed.history);
+    };
+    let forced = force_over(&store, &original);
+    let CommitOutcome::Committed {
+        record: head,
+        displaced,
+    } = &forced
+    else {
+        panic!("{forced:?}");
+    };
+    assert_eq!(
+        *displaced,
+        Some(theirs.id),
+        "the forced Commit displaced theirs"
+    );
+    assert_eq!(head.parent, original.branch.head_commit);
+    let resolved = workspace.resolve_retained().unwrap().expect("retained");
+    let Some(CommitOutcome::Committed { record, .. }) = resolved.outcome else {
+        panic!("{resolved:?}");
+    };
+    assert_eq!(record.root, candidate);
+    assert_eq!(theirs.parent, Some(record.id), "theirs landed over ours");
+    assert_eq!(
+        workspace.snapshot().unwrap().branch.head_commit,
+        Some(record.id)
+    );
+    assert!(!workspace.has_retained());
+    assert_eq!(read(&workspace), bytes(b'Q'));
+    drop((landed, forced, failed));
+    close(&owner, &other);
+    close(&owner, &workspace);
+    owner.stop().unwrap();
+    drop(store);
+    f.cleanup();
+}
+
+/// The product Commit keeps its captured reader and operation owner with an
+/// unknown outcome; the resolution releases them with the custody, and the
+/// next product Commit is admitted.
+#[test]
+fn resolving_a_product_commit_releases_its_captured_owners() {
+    let f = support::Fixture::new(8, "resolve-captured");
+    let (store, _handles) = observed_store(&f, history_boundary::Boundary::LostAcknowledgement);
+    let owner = Owner::start(
+        &f.directory.join("overlay.sqlite"),
+        ProfileConfig::default(),
+        OwnerConfig::default(),
+    )
+    .unwrap();
+    let workspace = bind(&store, &owner, &f, 1);
+    write(&workspace, &bytes(b'W'));
+    let failed = workspace.commit_captured(&Default::default()).unwrap_err();
+    assert_eq!(failed.phase, CommitPhase::Publish);
+    assert!(failed
+        .namespace
+        .as_ref()
+        .is_some_and(|held| held.retained()));
+    let resolved = workspace.resolve_retained().unwrap().expect("retained");
+    assert!(matches!(
+        resolved.outcome,
+        Some(CommitOutcome::Committed { .. })
+    ));
+    assert_eq!(read(&workspace), bytes(b'W'));
+    write(&workspace, &bytes(b'X'));
+    let later = workspace.commit_captured(&Default::default()).unwrap();
+    assert!(matches!(
+        later.history,
+        Some(CommitOutcome::Committed { .. })
+    ));
+    drop((later, failed));
+    close(&owner, &workspace);
+    owner.stop().unwrap();
+    drop(store);
+    f.cleanup();
+}

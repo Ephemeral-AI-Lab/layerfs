@@ -1,7 +1,7 @@
 //! The daemon's half of a traced reply: Commit storage and construction
 //! receipts and kernel opcode counts. Phase timing and SQL work are the Store
 //! service's ([`layerfs_store_service::telemetry`]).
-use crate::control::{Failure, Success};
+use crate::workspace::{Failure, Success};
 use layerfs_protocol::sdk::SdkValue;
 pub(crate) use layerfs_store_service::telemetry::{delta, sql, sql_values};
 use layerfs_store_service::telemetry::{named, timing};

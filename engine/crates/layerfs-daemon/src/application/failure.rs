@@ -1,7 +1,7 @@
 //! Original application operation custody, with credential-free diagnostics.
 use crate::{
-    control::{ServeFailure, Served},
-    install_types::{InstallFailure, InstalledStore},
+    install::outcome::{InstallFailure, InstalledStore},
+    workspace::{ServeFailure, Served},
 };
 use layerfs_protocol::{duplex::ChannelError, provision::install::ControlError};
 use std::{fmt, io};

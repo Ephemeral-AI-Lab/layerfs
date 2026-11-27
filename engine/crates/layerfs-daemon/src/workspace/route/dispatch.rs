@@ -1,0 +1,461 @@
+//! Explicit control operations with short local admission and original receipts.
+use super::super::{
+    receipts::KernelFailure,
+    registry::{bound_mut, Binding, Entry},
+    Failure, Service, Success,
+};
+use layerfs_content::filesystem::FilesystemRootId;
+use layerfs_content::merge::{Conflict, ConflictKind};
+use layerfs_history::BranchSnapshot;
+use layerfs_overlay::Capture;
+use layerfs_protocol::daemon::{
+    Activity, ConflictReport, ControlCode, MergedCommit, MountPlace, Reply, Request, WorkspaceToken,
+};
+use layerfs_storage::Save;
+use layerfs_store_service::history::lookup::{
+    no_branch as missing_branch, no_project as missing_project,
+};
+use layerfs_store_service::store::{
+    BindError, BindIntent, BindPhase, BindRequest, BoundWorkspace, CapturedConstruction,
+    CommitError, CommitFailure, CommitOptions, CommitSuccess, NamedBindRequest,
+};
+use std::sync::Arc;
+/// The reply of a Commit with a known result.
+fn committed(commit: &CommitSuccess) -> Reply {
+    match (&commit.history, &commit.merge) {
+        (Some(outcome), None) => Reply::Committed(outcome.clone()),
+        (Some(outcome), Some(merge)) => Reply::MergeCommitted(Box::new(MergedCommit {
+            outcome: outcome.clone(),
+            from: merge.from,
+            head: merge.head,
+            lww: merge.lww.clone(),
+        })),
+        (None, merge) => Reply::Conflict(Box::new(ConflictReport {
+            head: merge.as_ref().and_then(|merge| merge.head),
+            base: merge.as_ref().and_then(|merge| merge.from),
+            markers: false,
+            conflicts: merge
+                .as_ref()
+                .map(|m| m.conflicts.clone())
+                .unwrap_or_default(),
+            lww: merge.as_ref().map(|m| m.lww.clone()).unwrap_or_default(),
+            written: merge
+                .as_ref()
+                .map(|m| m.written.clone())
+                .unwrap_or_default(),
+            truncated: merge.as_ref().is_some_and(|m| m.written_truncated),
+        })),
+    }
+}
+impl Service {
+    /// Runs one explicit command with a caller-owned Content producer for
+    /// Commit, over the original capture. The product route is
+    /// `execute_control`, whose Commit uses the captured namespace producer.
+    pub fn execute(
+        &self,
+        request: &Request,
+        construct: impl FnOnce(
+            &Save<'_>,
+            Capture,
+            &BranchSnapshot,
+        ) -> Result<FilesystemRootId, CommitError>,
+    ) -> Result<Success, Failure> {
+        match request {
+            Request::Commit(control) => layerfs_persistence::one_call(|| {
+                self.commit(control.token, |workspace| workspace.commit(construct))
+            }),
+            other => self.execute_control(other),
+        }
+    }
+    /// Runs one control operation. Commit captures the shared published
+    /// frontier and constructs it with the captured namespace producer on
+    /// this caller's thread; retained original custody refuses it first.
+    /// One request is one public call: its Store sessions reopen at most once
+    /// in it, across a Commit's custody resolution and its own Commit
+    /// (`layerfs_persistence::one_call`).
+    pub fn execute_control(&self, request: &Request) -> Result<Success, Failure> {
+        layerfs_persistence::one_call(|| self.control(request))
+    }
+    fn control(&self, request: &Request) -> Result<Success, Failure> {
+        match request {
+            Request::Observed { .. } => Err(Failure::Rejected(
+                ControlCode::Invalid,
+                "observed control requires application diagnostic owner",
+            )),
+            Request::EndSession => Ok(Success::reply(Reply::SessionEnded)),
+            Request::Sdk(call) if crate::operator::admits(&call.method) => {
+                Ok(Success::reply(crate::operator::dispatch(self, call)))
+            }
+            // Store calls run in the SDK's process (#352 F-020): one route.
+            // Bodies a refused call declared are drained by the connection.
+            Request::Sdk(call) => Ok(Success::reply(Reply::SdkRefused(
+                layerfs_protocol::sdk::SdkRefusal {
+                    code: "UnknownMethod".into(),
+                    message: format!(
+                        "{}: Store calls are not served by the daemon; they run in the SDK's process",
+                        call.method
+                    ),
+                    detail: layerfs_protocol::sdk::SdkValue::Null,
+                },
+            ))),
+            Request::Hello(_) => Err(Failure::Rejected(
+                ControlCode::Invalid,
+                "daemon Hello requires application startup owner",
+            )),
+            Request::Mount { workspace, branch } => {
+                crate::telemetry::timed("sandbox.mount.bind", |timing| {
+                    let request = BindRequest {
+                        workspace: *workspace,
+                        branch: *branch,
+                    };
+                    self.mount(BindIntent::Id(request), MountPlace::default(), timing)
+                })
+            }
+            Request::MountPlaced {
+                workspace,
+                branch,
+                place,
+            } => crate::telemetry::timed("sandbox.mount.bind", |timing| {
+                let request = BindRequest {
+                    workspace: *workspace,
+                    branch: *branch,
+                };
+                self.mount(BindIntent::Id(request), place.clone(), timing)
+            }),
+            Request::MountNamed {
+                workspace,
+                project,
+                branch,
+            } => crate::telemetry::timed("sandbox.mount.bind", |timing| {
+                let request = NamedBindRequest {
+                    workspace: *workspace,
+                    project: project.clone(),
+                    branch: branch.clone(),
+                };
+                self.mount(BindIntent::Named(request), MountPlace::default(), timing)
+            }),
+            Request::MountNamedPlaced {
+                workspace,
+                project,
+                branch,
+                place,
+            } => crate::telemetry::timed("sandbox.mount.bind", |timing| {
+                let request = NamedBindRequest {
+                    workspace: *workspace,
+                    project: project.clone(),
+                    branch: branch.clone(),
+                };
+                self.mount(BindIntent::Named(request), place.clone(), timing)
+            }),
+            Request::Status(token) => self.status(*token),
+            Request::Cleanup(token) => self.cleanup(*token),
+            Request::Commit(control) => self.commit(control.token, |workspace| {
+                workspace.commit_captured(&CommitOptions {
+                    force: control.force,
+                    message: control.message.clone(),
+                    expected: control.expected,
+                })
+            }),
+            Request::Unmount(control) => self.unmount(*control),
+            Request::ForceUnmount {
+                token,
+                relinquish_unknown,
+            } => self.force_unmount(*token, *relinquish_unknown),
+            Request::Attach(token) => crate::telemetry::timed("sandbox.mount.attach", |timing| {
+                self.attach(*token, timing)
+            }),
+            Request::Locate(workspace) => self.locate(*workspace),
+            // History calls are Store calls: they run in the SDK's process.
+            Request::Fork(_) | Request::Branches { .. } | Request::History(_) => Err(
+                Failure::Rejected(ControlCode::Invalid, "Store calls are not served by the daemon"),
+            ),
+        }
+    }
+    /// Binds one new Workspace of the Branch `intent` selects. A named bind
+    /// whose project or Branch does not exist is answered with the Store
+    /// service lookup's refusal (#64), after its admission is withdrawn.
+    pub(crate) fn mount(
+        &self,
+        intent: BindIntent,
+        place: MountPlace,
+        timing: &layerfs_telemetry::timer::TimingScope<'_, layerfs_telemetry::timer::Active>,
+    ) -> Result<Success, Failure> {
+        let workspace = intent.workspace();
+        {
+            let mut entries = self.entries.lock().map_err(|_| Failure::Poisoned)?;
+            if entries.contains_key(&workspace) {
+                return Err(Failure::Rejected(
+                    ControlCode::Busy,
+                    "Workspace incarnation already admitted",
+                ));
+            }
+            if entries.len() == self.capacity {
+                return Err(Failure::Rejected(
+                    ControlCode::Capacity,
+                    "daemon Workspace capacity",
+                ));
+            }
+            // Stopped maintenance reclaims nothing further, so no new
+            // Workspace is admitted. The retained first failure is read
+            // here; no owner job is submitted and no entry is created.
+            if let Some(stopped) = self.owner.maintenance_failure().map_err(Failure::Owner)? {
+                return Err(Failure::Kernel(Box::new(KernelFailure {
+                    code: ControlCode::Capacity,
+                    phase: "mount:debt",
+                    detail: stopped.to_string(),
+                    evidence: Some(Box::new(stopped)),
+                })));
+            }
+            entries.insert(workspace, Entry::Binding);
+        }
+        let bound = match crate::telemetry::phase(timing, "store.bind", || match intent {
+            BindIntent::Id(request) => self.store.bind_placed(self.owner.clone(), request, place),
+            BindIntent::Named(request) => {
+                self.store
+                    .bind_named_placed(self.owner.clone(), request, place)
+            }
+        }) {
+            Ok(value) => value,
+            Err(value) => {
+                let phase = value.phase;
+                let missing = match &value.error {
+                    BindError::NoSuchProject(name) => Some(missing_project(name)),
+                    BindError::NoSuchBranch(name) => Some(missing_branch(name)),
+                    _ => None,
+                };
+                let failure = Failure::Bind(Box::new(value));
+                let mut withdrawn = false;
+                if phase != BindPhase::Open || !failure.uncertain() {
+                    // The original bind proves no local ownership was created.
+                    // If the registry is poisoned, its retained entry stays put.
+                    if let Ok(mut entries) = self.entries.lock() {
+                        entries.remove(&workspace);
+                        withdrawn = true;
+                    }
+                }
+                // a lookup refusal is the answer only once nothing stays admitted
+                if let (Some(refusal), true) = (missing, withdrawn && !failure.uncertain()) {
+                    return Ok(Success::reply(Reply::SdkRefused(refusal)));
+                }
+                return Err(failure);
+            }
+        };
+        let token = WorkspaceToken {
+            workspace,
+            namespace: bound.workspace.route().namespace(),
+        };
+        // This newly returned binding has never been shared with another caller.
+        let snapshot = bound
+            .workspace
+            .snapshot()
+            .expect("new unshared binding metadata");
+        let success = Success {
+            reply: Reply::Bound {
+                token,
+                binding: snapshot.clone(),
+            },
+            commit: None,
+            observation_failure: None,
+            kernel: None,
+        };
+        let installed = self.entries.lock().map(|mut entries| {
+            entries.insert(
+                workspace,
+                Entry::Bound(Box::new(Binding {
+                    kernel: super::super::kernel::Kernel::Unattached,
+                    workspace: Arc::new(bound.workspace),
+                    snapshot,
+                    activity: Activity::Idle,
+                    phase: "",
+                    since_ms: super::super::registry::now_ms(),
+                    epoch: 1,
+                    published: None,
+                })),
+            )
+        });
+        if installed.is_err() {
+            return Err(Failure::After {
+                cause: Box::new(Failure::Poisoned),
+                original: Box::new(success),
+            });
+        }
+        Ok(success)
+    }
+    fn commit(
+        &self,
+        token: WorkspaceToken,
+        run: impl FnOnce(&BoundWorkspace) -> Result<CommitSuccess, Box<CommitFailure>>,
+    ) -> Result<Success, Failure> {
+        // Retained custody of an earlier Commit gets its one resolution
+        // first; unresolved, it refuses this Commit as admission would.
+        self.resolve_custody(token)?;
+        let workspace = self.admit(token, Activity::Committing)?;
+        // NFS route: what the client buffered is written back first, as a
+        // FUSE write has already reached the Workspace when it returned.
+        if let Err(failure) = self.flush_export(token) {
+            self.settle_activity(token, Activity::Idle);
+            return Err(failure);
+        }
+        // capture, construction, Save and publication, then the install
+        self.phase(token, "publish");
+        let result = run(&workspace);
+        // An install that replaced what the Workspace showed is invalidated
+        // in the kernel before the answer.
+        let invalidated = match &result {
+            Ok(CommitSuccess {
+                replaced: Some((shown, installed)),
+                ..
+            }) => {
+                self.phase(token, "invalidate");
+                self.invalidate(token, &workspace, *shown, *installed)
+            }
+            _ => Ok(()),
+        };
+        // A Commit whose reader or operation owner could not be released
+        // keeps that custody, published or settled: nothing later is admitted
+        // past it.
+        let unreleased = match &result {
+            Ok(commit) => &commit.namespace,
+            Err(failed) => &failed.namespace,
+        }
+        .as_ref()
+        .is_some_and(CapturedConstruction::retained);
+        let update = (|| {
+            let mut entries = self.entries.lock().map_err(|_| Failure::Poisoned)?;
+            let binding = bound_mut(&mut entries, token)?;
+            binding.epoch = binding.epoch.saturating_add(1);
+            match &result {
+                Ok(commit) => {
+                    binding.snapshot = workspace.snapshot().map_err(Failure::Workspace)?;
+                    binding.enter(if unreleased {
+                        Activity::LocalFailure
+                    } else {
+                        Activity::Idle
+                    });
+                    binding.published = if unreleased {
+                        commit.history.clone()
+                    } else {
+                        None
+                    };
+                }
+                Err(failed) => {
+                    binding.published = failed.published.clone();
+                    binding.enter(if failed.locally_settled && !unreleased {
+                        Activity::Idle
+                    } else if failed.published.is_some() {
+                        Activity::LocalFailure
+                    } else {
+                        Activity::Uncertain
+                    });
+                }
+            }
+            Ok(())
+        })();
+        match result {
+            Ok(commit) => {
+                let mut success = Success::reply(committed(&commit));
+                success.commit = Some(commit);
+                if let Err(cause) = update.and(invalidated) {
+                    return Err(Failure::After {
+                        cause: Box::new(cause),
+                        original: Box::new(success),
+                    });
+                }
+                if unreleased {
+                    return Err(Failure::After {
+                        cause: Box::new(Failure::Rejected(
+                            ControlCode::Unknown,
+                            "captured namespace custody retained after Commit",
+                        )),
+                        original: Box::new(success),
+                    });
+                }
+                Ok(success)
+            }
+            Err(failed) => match (&failed.error, failed.locally_settled, update) {
+                // A definite refusal for unresolved markers is this Commit's
+                // answer, not a failure: nothing was published.
+                (CommitError::Markers(paths), true, Ok(())) => {
+                    Ok(Success::reply(Reply::Conflict(Box::new(ConflictReport {
+                        head: failed.binding.as_ref().and_then(|b| b.branch.head_commit),
+                        base: failed.binding.as_ref().and_then(|b| b.branch.head_commit),
+                        markers: true,
+                        conflicts: paths
+                            .iter()
+                            .map(|path| Conflict {
+                                path: path.clone(),
+                                kind: ConflictKind::Markers,
+                                hunks: Vec::new(),
+                            })
+                            .collect(),
+                        lww: Vec::new(),
+                        written: Vec::new(),
+                        truncated: false,
+                    }))))
+                }
+                _ => Err(Failure::Commit(failed)),
+            },
+        }
+    }
+    /// Poison recovery stores this exact owner only; a poisoned registry never
+    /// authorizes another product operation.
+    pub(crate) fn settle(
+        &self,
+        token: WorkspaceToken,
+        kernel: super::super::kernel::Kernel,
+        activity: Activity,
+    ) {
+        let mut entries = self.entries.lock().unwrap_or_else(|e| e.into_inner());
+        if let Ok(binding) = bound_mut(&mut entries, token) {
+            binding.kernel = kernel;
+            binding.enter(activity);
+            binding.epoch = binding.epoch.saturating_add(1);
+        }
+    }
+    /// After a Commit's answer, drains on the calling thread (the daemon
+    /// application's `layerfs-reclaim` thread) the overlay reclamation its
+    /// releases left queued: one bounded step per hold of the Workspace lock, yielding to
+    /// waiting jobs, so requests interleave with it and unmount stops it. A Workspace no longer bound has nothing to drain here. A failed
+    /// step is retained as the maintenance failure that refuses new mounts.
+    /// An unmount that leaves its Workspace bound calls it too (#679).
+    pub fn reclaim_after_commit(&self, token: WorkspaceToken) {
+        let workspace = match self.entries.lock() {
+            Ok(entries) => match super::super::registry::bound(&entries, token) {
+                Ok(binding) => binding.workspace.clone(),
+                Err(_) => return,
+            },
+            Err(_) => return,
+        };
+        // Only a route that no longer resolves fails here: nothing to drain.
+        let _ = workspace.reclaim();
+    }
+    /// Returns an admitted entry to `activity` when its operation stopped
+    /// before any effect.
+    fn settle_activity(&self, token: WorkspaceToken, activity: Activity) {
+        if let Ok(mut entries) = self.entries.lock() {
+            if let Ok(binding) = bound_mut(&mut entries, token) {
+                binding.enter(activity);
+                binding.epoch = binding.epoch.saturating_add(1);
+            }
+        }
+    }
+    /// Names the phase an admitted operation of `token` is in, for status.
+    fn phase(&self, token: WorkspaceToken, phase: &'static str) {
+        if let Ok(mut entries) = self.entries.lock() {
+            if let Ok(binding) = bound_mut(&mut entries, token) {
+                binding.phase = phase;
+            }
+        }
+    }
+    pub(crate) fn job<T>(
+        &self,
+        route: layerfs_vfs::Route,
+        command: impl FnOnce(
+                &layerfs_store_service::OwnerClient,
+                layerfs_vfs::Route,
+            ) -> Result<T, layerfs_store_service::OwnerError>
+            + Send,
+    ) -> Result<T, Failure> {
+        command(&self.owner, route).map_err(Failure::Owner)
+    }
+}

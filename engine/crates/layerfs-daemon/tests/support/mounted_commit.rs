@@ -23,8 +23,8 @@ use super::{
 use layerfs_content::ObjectId;
 use layerfs_daemon::{
     bootstrap::open_store,
-    control::{Failure, Success},
     store::{CapturedConstruction, ReleasedOwner, Store},
+    workspace::{Failure, Success},
 };
 use layerfs_history::{
     CommitHistoryRequest, CommitId, CommitOutcome, CommitRecord, PageResult, WorkspaceId,

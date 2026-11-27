@@ -1,0 +1,806 @@
+//! Real kernel mounts: forced teardown against what callers hold (FP-33 held
+//! case, FP-19-FS, FP-22-FS and the terminal half of FP-34).
+//!
+//! Staging, hook-free. The control filesystem is mounted by the test before
+//! Attach, so each connection's abort control is bound. A reference is an
+//! external python3 process of the command identity whose working directory,
+//! or one open descriptor, is in the mount; it answers one line for each line
+//! it is sent, so the test decides when it makes its next filesystem call. A
+//! parked request is a cold `O_DIRECT` open of a base file while the test
+//! leases every reader of the Store through its public admission
+//! (`support/holds.rs`): nothing is blocked inside a provider call.
+//!
+//! What is observed: the product's own reply and stored custody, the mount
+//! table row of this mount namespace, the test's own connection entry in the
+//! control filesystem (stat only), control Status, the Store's read-admission
+//! counters, and each external process's own answers and exit status. There
+//! is no syscall trace: "one abort write, one detach" is the product's
+//! receipt and its unchanged mount row, not an independent count. A process
+//! counts as not signalled when it exits by its own status and its handlers
+//! for the catchable termination signals saw none.
+//!
+//! A forced teardown that stops aborted and still mounted, its detach
+//! refused `EBUSY`, keeps that custody: each later terminal call asks again
+//! for the detach only, and the kernel refuses it while the holder lives
+//! (#538). Once the holder has exited, a later call finishes the teardown.
+//! Where the product leaves a mount, the test reaps its own processes and
+//! detaches it with one plain umount(8); a drop guard does a lazy one if the
+//! test unwinds. Nothing is timed.
+//!
+//! The safety rule of `support/fusectl.rs` binds this file: nothing here
+//! writes under `/sys/fs/fuse/connections` or reads another connection.
+#![cfg(target_os = "linux")]
+use crate::fusectl;
+use crate::mounted;
+use crate::rig;
+use layerfs_daemon::workspace::Failure;
+use layerfs_protocol::daemon::{
+    AbortDisposition, Activity, CommitKnowledge, ControlCode, DetachDisposition, ForcedOutcome,
+    MountPhase, MountWork, Reply, Request, TeardownCustody, TeardownStage, WorkspaceToken,
+};
+use mounted::{mount_entry, Harness, COMMAND};
+use rig::{bash_in, passed, root, Rig};
+use std::{
+    fmt::Debug,
+    fs,
+    io::{BufRead, BufReader, Read, Write},
+    os::unix::process::{CommandExt, ExitStatusExt},
+    path::Path,
+    process::{Child, ChildStdin, Command as Process, ExitStatus, Stdio},
+    sync::mpsc::{self, Receiver},
+    thread,
+    time::{Duration, Instant},
+};
+
+/// Every bounded readiness or completion observation of the test.
+const WAIT: Duration = Duration::from_secs(5);
+
+/// The errnos Linux gives a caller of an aborted connection.
+const ABORTED: [&str; 2] = ["ENOTCONN", "ECONNABORTED"];
+
+/// Counts the catchable termination signals it receives, takes the reference
+/// its first argument names, then answers one line for each line it is sent:
+/// `probe` makes one filesystem call that needs the daemon (a lookup of a
+/// name never looked up before, or an `O_DIRECT` read of the held
+/// descriptor) and reports its result; `exit` reports the signals seen and
+/// leaves with status 0.
+const HOLDER: &str = r#"
+import errno, os, signal, sys
+seen = []
+for number in (signal.SIGHUP, signal.SIGINT, signal.SIGQUIT, signal.SIGTERM,
+               signal.SIGUSR1, signal.SIGUSR2, signal.SIGALRM):
+    signal.signal(number, lambda n, frame: seen.append(n))
+mode, mount = sys.argv[1], sys.argv[2]
+fd = -1
+if mode == "cwd":
+    os.chdir(mount)
+else:
+    fd = os.open(os.path.join(mount, "README.md"), os.O_RDONLY | os.O_DIRECT)
+def say(text):
+    os.write(1, (text + "\n").encode())
+say("held")
+probes = 0
+while True:
+    word = sys.stdin.readline().strip()
+    if word == "probe":
+        probes += 1
+        try:
+            if mode == "cwd":
+                os.stat("holder-probe-%d" % probes)
+                say("ok")
+            else:
+                say("ok %d" % len(os.pread(fd, 4096, 0)))
+        except OSError as error:
+            say("errno %d %s" % (error.errno, errno.errorcode.get(error.errno, "?")))
+    else:
+        break
+say("signals %d" % len(seen))
+sys.exit(0)
+"#;
+
+fn within(what: &str, mut condition: impl FnMut() -> bool) {
+    let deadline = Instant::now() + WAIT;
+    while !condition() {
+        assert!(
+            Instant::now() < deadline,
+            "bounded observation expired: {what}"
+        );
+        thread::sleep(Duration::from_millis(2));
+    }
+}
+/// A bounded description of an original value for an evidence line.
+fn brief(value: &impl Debug) -> String {
+    let mut text = format!("{value:?}");
+    let mut end = text.len().min(700);
+    while !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    text.truncate(end);
+    text
+}
+/// Product expectations that did not hold. Reported after every process is
+/// reaped and every mount is gone, so a deviation leaves its whole evidence.
+#[derive(Default)]
+struct Checks(Vec<String>);
+impl Checks {
+    fn that(&mut self, holds: bool, what: impl FnOnce() -> String) {
+        if !holds {
+            let what = what();
+            println!("FORCED_DEVIATION {what}");
+            self.0.push(what);
+        }
+    }
+    fn done(self, name: &str) {
+        assert!(
+            self.0.is_empty(),
+            "{name}: {} product expectations did not hold: {:#?}",
+            self.0.len(),
+            self.0
+        );
+    }
+}
+/// Never leaves a kernel mount behind: if the test unwinds, one lazy
+/// umount(8) launched and reaped by the test detaches what is still there.
+struct Mounted(String);
+impl Drop for Mounted {
+    fn drop(&mut self) {
+        if mount_entry(&self.0).is_some() {
+            let done = Process::new("umount").arg("-l").arg(&self.0).output();
+            println!(
+                "FORCED_GUARD lazy umount of {} by the test: {:?}",
+                self.0,
+                done.map(|output| output.status)
+            );
+        }
+    }
+}
+/// The child's exit status, or `None` if it has not exited within `wait`.
+fn exited(child: &mut Child, wait: Duration) -> Option<ExitStatus> {
+    let deadline = Instant::now() + wait;
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => return Some(status),
+            Ok(None) if Instant::now() < deadline => thread::sleep(Duration::from_millis(2)),
+            _ => return None,
+        }
+    }
+}
+/// Guard path only: kill, then a bounded reap.
+fn reap(child: &mut Child, what: &str) {
+    let _ = child.kill();
+    if exited(child, Duration::from_secs(3)).is_none() {
+        println!(
+            "FORCED_GUARD {what} (pid {}) was killed and is not reaped",
+            child.id()
+        );
+    }
+}
+/// One external process of the command identity, launched by plain exec and
+/// registered with nothing. Killed and reaped, bounded, on drop.
+struct Proc {
+    child: Option<Child>,
+    what: String,
+}
+impl Proc {
+    fn start(what: impl Into<String>, mut command: Process, directory: &Path) -> Self {
+        let child = command
+            .uid(COMMAND)
+            .gid(COMMAND)
+            .current_dir(directory)
+            .env("LC_ALL", "C")
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .spawn()
+            .unwrap();
+        Self {
+            child: Some(child),
+            what: what.into(),
+        }
+    }
+
+    /// `bash -c` with the given working directory.
+    fn bash(what: impl Into<String>, directory: &Path, script: &str) -> Self {
+        let mut command = Process::new("bash");
+        command.arg("-c").arg(script);
+        Self::start(what, command, directory)
+    }
+
+    /// Its exit status and whole standard output, or `None` if it has not
+    /// exited within `wait`; it then stays owned and is reaped on drop.
+    fn wait(&mut self, wait: Duration) -> Option<(ExitStatus, Vec<u8>)> {
+        let child = self.child.as_mut().expect("process already collected");
+        let status = exited(child, wait)?;
+        let mut output = Vec::new();
+        child
+            .stdout
+            .take()
+            .unwrap()
+            .read_to_end(&mut output)
+            .unwrap();
+        self.child = None;
+        Some((status, output))
+    }
+}
+impl Drop for Proc {
+    fn drop(&mut self) {
+        if let Some(mut child) = self.child.take() {
+            reap(&mut child, &self.what);
+        }
+    }
+}
+/// One `HOLDER` process. Killed and reaped, bounded, on drop.
+struct Holder {
+    child: Option<Child>,
+    input: Option<ChildStdin>,
+    lines: Receiver<String>,
+    what: String,
+}
+impl Holder {
+    /// `mode` is `cwd` or `descriptor`. Returns once the reference is held.
+    fn spawn(mode: &str, mount: &Path) -> Self {
+        let mut child = Process::new("python3")
+            .arg("-c")
+            .arg(HOLDER)
+            .arg(mode)
+            .arg(mount)
+            .uid(COMMAND)
+            .gid(COMMAND)
+            .current_dir("/")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let input = child.stdin.take();
+        let output = child.stdout.take().unwrap();
+        let (send, lines) = mpsc::channel();
+        // Ends at the pipe's end of file, which the process's exit or the
+        // guard's kill brings; it waits for no other thread.
+        thread::spawn(move || {
+            for line in BufReader::new(output).lines() {
+                let Ok(line) = line else { break };
+                if send.send(line).is_err() {
+                    break;
+                }
+            }
+        });
+        let mut holder = Self {
+            child: Some(child),
+            input,
+            lines,
+            what: format!("holder ({mode})"),
+        };
+        assert_eq!(holder.line(), "held", "{}", holder.what);
+        holder
+    }
+    fn line(&mut self) -> String {
+        self.lines
+            .recv_timeout(WAIT)
+            .unwrap_or_else(|error| panic!("{}: no answer within {WAIT:?}: {error}", self.what))
+    }
+    /// One line sent, one answer read, bounded.
+    fn ask(&mut self, word: &str) -> String {
+        writeln!(self.input.as_mut().unwrap(), "{word}").unwrap();
+        self.line()
+    }
+    fn pid(&self) -> u32 {
+        self.child.as_ref().unwrap().id()
+    }
+    fn alive(&mut self) -> bool {
+        matches!(self.child.as_mut().unwrap().try_wait(), Ok(None))
+    }
+    /// Told to leave: its last answer and the status it exited with by itself.
+    fn leave(mut self) -> (String, ExitStatus) {
+        let last = self.ask("exit");
+        drop(self.input.take());
+        let mut child = self.child.take().unwrap();
+        match exited(&mut child, WAIT) {
+            Some(status) => (last, status),
+            None => {
+                reap(&mut child, &self.what);
+                panic!("{}: did not exit when told to", self.what)
+            }
+        }
+    }
+}
+impl Drop for Holder {
+    fn drop(&mut self) {
+        drop(self.input.take());
+        if let Some(mut child) = self.child.take() {
+            reap(&mut child, &self.what);
+        }
+    }
+}
+/// The errno name of a `probe` answer that failed.
+fn errno(answer: &str) -> Option<&str> {
+    let mut words = answer.split(' ');
+    (words.next() == Some("errno"))
+        .then(|| words.nth(1))
+        .flatten()
+}
+
+/// This mount namespace's whole mount-table row of `directory`: mount id,
+/// parent, device, root, options and filesystem.
+fn row(directory: &str) -> Option<String> {
+    let table = fs::read_to_string("/proc/self/mountinfo").unwrap();
+    table
+        .lines()
+        .rev()
+        .find(|line| {
+            line.split_once(" - ")
+                .is_some_and(|(before, _)| before.split(' ').nth(4) == Some(directory))
+        })
+        .map(str::to_owned)
+}
+fn work(rig: &Rig, token: WorkspaceToken) -> MountWork {
+    rig.harness.status(token).kernel.unwrap().work.unwrap()
+}
+/// Two consecutive observations with nothing received or admitted and no
+/// request completed in between. A readiness wait before one attempt.
+fn quiet(rig: &Rig, token: WorkspaceToken) {
+    let mut last = None;
+    within("connection quiescent", || {
+        let now = work(rig, token);
+        let settled = now.active == 0 && last == Some(now.completed);
+        last = Some(now.completed);
+        thread::sleep(Duration::from_millis(10));
+        settled
+    });
+}
+/// What one forced unmount ended as.
+enum Ended {
+    Unmounted(Box<ForcedOutcome>),
+    /// Stopped after an effect; the registry keeps the exact owner.
+    Retained(Box<TeardownCustody>),
+}
+/// One forced terminal unmount, attempted once.
+fn force(harness: &Harness, token: WorkspaceToken) -> Ended {
+    match harness.try_force(token, false) {
+        Ok(done) => match &done.reply {
+            Reply::ForceUnmounted(closed) => {
+                assert_eq!(closed.token, token);
+                Ended::Unmounted(Box::new(closed.outcome.clone()))
+            }
+            other => panic!("forced unmount replied {other:?}"),
+        },
+        Err(Failure::Retained(custody)) => Ended::Retained(custody),
+        Err(other) => panic!("forced unmount: {}", brief(&other)),
+    }
+}
+/// Every later terminal or attach call on a retained entry, each once.
+fn later(harness: &Harness, token: WorkspaceToken) -> Vec<(&'static str, TeardownCustody)> {
+    [
+        (
+            "ForceUnmount",
+            Request::ForceUnmount {
+                token,
+                relinquish_unknown: false,
+            },
+        ),
+        (
+            "ForceUnmount(relinquish_unknown)",
+            Request::ForceUnmount {
+                token,
+                relinquish_unknown: true,
+            },
+        ),
+        (
+            "Unmount",
+            Request::Unmount(layerfs_protocol::daemon::UnmountControl {
+                token,
+                discard: true,
+            }),
+        ),
+        ("Attach", Request::Attach(token)),
+    ]
+    .into_iter()
+    .map(
+        |(name, request)| match harness.service.execute_control(&request) {
+            Err(Failure::Retained(custody)) => (name, *custody),
+            other => panic!("{name} on a retained entry: {}", brief(&other)),
+        },
+    )
+    .collect()
+}
+/// A custody stopped at the one detach: aborted and still mounted.
+fn aborted_and_mounted(custody: &TeardownCustody, token: WorkspaceToken) -> bool {
+    custody.token == token
+        && custody.stage == TeardownStage::Detach
+        && !custody.detached
+        && custody.forced.as_ref().is_some_and(|facts| {
+            facts.abort == AbortDisposition::Written
+                && facts.detach == DetachDisposition::Busy
+                && facts.commit == CommitKnowledge::Absent
+        })
+}
+/// One plain umount(8) of an aborted mount, launched and reaped by the test.
+fn plain_umount(directory: &str) -> ExitStatus {
+    let mut child = Process::new("umount")
+        .arg(directory)
+        .stdin(Stdio::null())
+        .spawn()
+        .unwrap();
+    match exited(&mut child, WAIT) {
+        Some(status) => status,
+        None => {
+            reap(&mut child, "umount");
+            panic!("umount {directory} did not return within {WAIT:?}")
+        }
+    }
+}
+/// The registry still owns a retained session that nothing can settle. The
+/// kernel mount was detached by the test; the assembly is dropped with that
+/// custody, as `mounted_commit_failures.rs` drops its retained Commits.
+fn abandon(rig: Rig) {
+    let Rig {
+        fixture,
+        store,
+        harness,
+        ..
+    } = rig;
+    let Harness {
+        owner,
+        serving,
+        service,
+        ..
+    } = harness;
+    drop(service);
+    drop(serving);
+    owner.stop().unwrap();
+    drop(store);
+    fixture.cleanup();
+}
+
+/// FP-33, held case. An external process holds `mode` (its working
+/// directory, or one open descriptor) in the mount; Force aborts the
+/// connection and its one plain detach is refused by the kernel. Later
+/// calls ask for the detach again; after the holder exits, force (descriptor
+/// case) or a normal unmount (working-directory case) finishes it.
+fn held_reference(name: &'static str, label: &str, mode: &str) {
+    fusectl::mount();
+    let rig = Rig::new(label);
+    let ready = rig.mount(1);
+    let _guard = Mounted(ready.directory.clone());
+    let token = ready.token;
+    let mut checks = Checks::default();
+    assert!(ready.receipt.abort_bound, "{:?}", ready.receipt);
+    let connection = fusectl::own(&ready);
+    let mount = root(&ready).to_owned();
+    let mut holder = Holder::spawn(mode, &mount);
+    let pid = holder.pid();
+    // The mount serves the holder's own call before the teardown.
+    let served = holder.ask("probe");
+    assert!(
+        served == "errno 2 ENOENT" || served.starts_with("ok "),
+        "{name}: the holder's call before the teardown: {served}"
+    );
+    quiet(&rig, token);
+    let before = rig.harness.status(token);
+    assert_eq!(before.activity, Activity::Idle);
+    let before_row = row(&ready.directory).expect("mount row");
+    println!(
+        "{name} before: holder_pid={pid} holds={mode} holder_call={served:?} abort_bound={} minor={} own_connection={} phase={:?} epoch={}",
+        ready.receipt.abort_bound,
+        connection.minor,
+        connection.exists(),
+        before.kernel.as_ref().unwrap().phase,
+        before.epoch
+    );
+
+    let custody = match force(&rig.harness, token) {
+        Ended::Retained(custody) => *custody,
+        Ended::Unmounted(outcome) => {
+            panic!("{name}: forced past a held {mode}: {outcome:?}")
+        }
+    };
+    println!("{name} custody={custody:?}");
+    println!(
+        "{name} retained_owner={}",
+        brief(&rig.harness.service.retained_kernel(token))
+    );
+    checks.that(aborted_and_mounted(&custody, token), || {
+        format!("{name}: not Retained at Detach with abort Written and detach Busy: {custody:?}")
+    });
+    // The local drain held before the one detach: every loop joined and no
+    // request left.
+    checks.that(
+        custody.work.is_some_and(|work| {
+            work.active == 0
+                && work.retained == 0
+                && work.loops_joined == work.loops_configured
+                && work.loops_configured != 0
+        }),
+        || {
+            format!(
+                "{name}: the local drain did not hold before the detach: {:?}",
+                custody.work
+            )
+        },
+    );
+    let after_row = row(&ready.directory);
+    checks.that(after_row.as_deref() == Some(before_row.as_str()), || {
+        format!("{name}: the mount row changed: {before_row:?} -> {after_row:?}")
+    });
+    let status = rig.harness.status(token);
+    let kernel = status.kernel.as_ref().unwrap();
+    checks.that(
+        kernel.phase == MountPhase::Retained
+            && !kernel.detached
+            && status.activity == Activity::Closing,
+        || {
+            format!(
+                "{name}: status after the stop: phase={:?} detached={} activity={:?}",
+                kernel.phase, kernel.detached, status.activity
+            )
+        },
+    );
+    // The holder is alive and its next call on the mount fails by the
+    // kernel's own answer for an aborted connection.
+    let alive = holder.alive();
+    let refused = holder.ask("probe");
+    checks.that(alive, || format!("{name}: the holder did not survive"));
+    checks.that(errno(&refused).is_some_and(|errno| ABORTED.contains(&errno)), || {
+        format!("{name}: the holder's call after the abort answered {refused:?}, not one of {ABORTED:?}")
+    });
+    println!(
+        "{name} after_force: stage={:?} abort={:?} detach={:?} detached={} fenced={:?} mount_row=unchanged:{} own_connection={} phase={:?} activity={:?} holder_alive={alive} holder_call={refused:?}",
+        custody.stage,
+        custody.forced.as_ref().map(|facts| facts.abort),
+        custody.forced.as_ref().map(|facts| facts.detach),
+        custody.detached,
+        custody.forced.as_ref().map(|facts| facts.fenced),
+        after_row.as_deref() == Some(before_row.as_str()),
+        connection.exists(),
+        kernel.phase,
+        status.activity
+    );
+
+    // Every later terminal call re-attempts the one detach while the holder
+    // is still there: the kernel refuses it `EBUSY` again, so the exact
+    // aborted-and-mounted custody is re-reported (`Attach` does not retry).
+    let again = later(&rig.harness, token);
+    for (call, repeated) in &again {
+        checks.that(aborted_and_mounted(repeated, token), || {
+            format!("{name}: {call} returned another custody: {repeated:?}")
+        });
+    }
+    let repeated_status = rig.harness.status(token);
+    let repeated_row = row(&ready.directory);
+    checks.that(
+        repeated_row.as_deref() == Some(before_row.as_str())
+            && repeated_status.epoch > status.epoch
+            && repeated_status.kernel.as_ref().map(|kernel| kernel.phase)
+                == Some(MountPhase::Retained),
+        || {
+            format!(
+                "{name}: a later call had an effect: row {repeated_row:?}, epoch {} -> {}",
+                status.epoch, repeated_status.epoch
+            )
+        },
+    );
+    let still = holder.ask("probe");
+    println!(
+        "{name} later_calls={:?} aborted_and_mounted={} mount_row=unchanged:{} epoch_advanced={} holder_call={still:?}",
+        again.iter().map(|(call, _)| *call).collect::<Vec<_>>(),
+        again
+            .iter()
+            .all(|(_, repeated)| aborted_and_mounted(repeated, token)),
+        repeated_row.as_deref() == Some(before_row.as_str()),
+        repeated_status.epoch > status.epoch
+    );
+
+    // The holder leaves by itself; nothing signalled it.
+    let (signals, exit) = holder.leave();
+    checks.that(
+        exit.code() == Some(0) && exit.signal().is_none() && signals == "signals 0",
+        || format!("{name}: the holder ended {exit:?} after {signals:?}"),
+    );
+    // Once the holder is gone, a later unmount re-attempts the detach and
+    // completes the teardown: the mount row and the connection's own
+    // directory are removed and the Workspace answers Unmounted.
+    // The descriptor case recovers by force, answered `ForceUnmounted`; the
+    // working-directory case by a normal unmount, answered `Unmounted`.
+    let by_force = mode == "descriptor";
+    let recovered = if by_force {
+        rig.harness.try_force(token, false)
+    } else {
+        rig.harness.try_unmount(token)
+    };
+    let unmounted = match &recovered {
+        Ok(done) if by_force => matches!(
+            &done.reply,
+            Reply::ForceUnmounted(closed)
+                if closed.token == token
+                    && closed.outcome.facts.abort == AbortDisposition::Written
+                    && closed.outcome.facts.detach == DetachDisposition::Detached
+        ),
+        Ok(done) => done.reply == Reply::Unmounted(token),
+        Err(failure) => {
+            println!("{name}: recovery failure: {}", brief(failure));
+            false
+        }
+    };
+    checks.that(unmounted, || {
+        format!("{name}: terminal call after the holder exited: {recovered:?}")
+    });
+    checks.that(mount_entry(&ready.directory).is_none(), || {
+        format!(
+            "{name}: the mount row survived the recovery: {:?}",
+            row(&ready.directory)
+        )
+    });
+    within("own connection directory removed", || !connection.exists());
+    println!(
+        "{name} after_holder_exit: holder_exit={:?} {signals:?} recovery={} mount_row=None own_connection={}",
+        exit.code(),
+        if by_force { "ForceUnmounted" } else { "Unmounted" },
+        connection.exists()
+    );
+    abandon(rig);
+    checks.done(name);
+}
+
+#[test]
+fn fp33_a_held_working_directory_leaves_the_mount_aborted_and_retained() {
+    held_reference("FP-33 cwd", "fp33-cwd", "cwd");
+}
+
+#[test]
+fn fp33_a_held_descriptor_leaves_the_mount_aborted_and_retained() {
+    held_reference("FP-33 descriptor", "fp33-descriptor", "descriptor");
+}
+
+/// `count` cold readers parked behind a fully leased read set, then Force.
+/// Each is parked in its first READ, after an OPEN that needed no reader.
+/// With more readers than handoff slots the mount is saturated: sixteen
+/// READs admitted and parked, the receive unit held by a callback waiting
+/// for a slot, and the rest queued in the kernel.
+///
+/// The staging does not fix how the teardown ends. The kernel's abort returns
+/// every reader's call, but a reader that has not yet dropped the path
+/// reference of that call when the product makes its one detach keeps the
+/// mount busy, and the teardown then stops `Retained` at `Detach`. Both ends
+/// FP-22-FS, in this container's single mount namespace: a reference in A
+/// gives the truthful normal Busy on A and never holds sibling B; Force on A
+/// leaves A aborted and mounted, the holder alive and B serving.
+#[test]
+fn fp22_a_reference_in_a_never_holds_b_and_force_on_a_signals_no_process() {
+    let name = "FP-22-FS";
+    fusectl::mount();
+    let rig = Rig::new("fp22");
+    let a = rig.mount(1);
+    let b = rig.mount(2);
+    let _guards = [Mounted(a.directory.clone()), Mounted(b.directory.clone())];
+    let mut checks = Checks::default();
+    assert!(a.receipt.abort_bound && b.receipt.abort_bound);
+    let (on_a, on_b) = (fusectl::own(&a), fusectl::own(&b));
+    assert_ne!(on_a.minor, on_b.minor, "two connections");
+    for (ready, bytes) in [(&a, "a"), (&b, "b")] {
+        passed(
+            &bash_in(
+                COMMAND,
+                root(ready),
+                &format!("printf '{bytes}\\n' > own.txt"),
+            ),
+            "before the holder",
+        );
+    }
+    let mut holder = Holder::spawn("cwd", root(&a));
+    assert_eq!(holder.ask("probe"), "errno 2 ENOENT");
+    quiet(&rig, a.token);
+    quiet(&rig, b.token);
+    let a_row = row(&a.directory).expect("A's mount row");
+    let b_row = row(&b.directory).expect("B's mount row");
+
+    // Normal Unmount of A: the kernel's reversible answer, nothing else.
+    let busy = match rig.harness.try_unmount(a.token) {
+        Err(Failure::Kernel(refusal)) => (refusal.code, refusal.phase),
+        other => panic!("{name}: Unmount of A beside its holder: {}", brief(&other)),
+    };
+    let probed = rig.harness.status(a.token);
+    let served = holder.ask("probe");
+    checks.that(
+        busy == (ControlCode::Busy, "unmount:kernel")
+            && probed.kernel.as_ref().map(|kernel| kernel.phase) == Some(MountPhase::Ready)
+            && probed.activity == Activity::Idle
+            && served == "errno 2 ENOENT",
+        || {
+            format!(
+                "{name}: normal Unmount of A: {busy:?}, then phase {:?}, activity {:?}, holder call {served:?}",
+                probed.kernel.as_ref().map(|kernel| kernel.phase),
+                probed.activity
+            )
+        },
+    );
+    println!(
+        "{name} normal_unmount_of_a={busy:?} a_phase_after={:?} holder_call={served:?}",
+        probed.kernel.as_ref().map(|kernel| kernel.phase)
+    );
+
+    let b_before = work(&rig, b.token);
+    let custody = match force(&rig.harness, a.token) {
+        Ended::Retained(custody) => *custody,
+        Ended::Unmounted(outcome) => panic!("{name}: forced past A's holder: {outcome:?}"),
+    };
+    println!("{name} custody_of_a={custody:?}");
+    checks.that(aborted_and_mounted(&custody, a.token), || {
+        format!("{name}: A is not aborted and mounted at Detach: {custody:?}")
+    });
+    let alive = holder.alive();
+    let refused = holder.ask("probe");
+    checks.that(
+        alive && errno(&refused).is_some_and(|errno| ABORTED.contains(&errno)),
+        || format!("{name}: the holder after Force on A: alive={alive}, call {refused:?}"),
+    );
+    checks.that(row(&a.directory).as_deref() == Some(a_row.as_str()), || {
+        format!("{name}: A's mount row changed")
+    });
+
+    // B is another connection: untouched by A's abort, still serving an
+    // ordinary process, and its normal unmount succeeds beside A's holder.
+    let mut writer = Proc::bash(
+        "write on B after Force on A",
+        root(&b),
+        "set -eu; printf 'after\\n' >> own.txt; cat own.txt",
+    );
+    let wrote = writer.wait(WAIT);
+    let b_after = work(&rig, b.token);
+    let b_status = rig.harness.status(b.token);
+    checks.that(
+        wrote
+            .as_ref()
+            .is_some_and(|(status, output)| status.success() && output == b"b\nafter\n")
+            && b_after.completed > b_before.completed
+            && b_after.terminal == 0
+            && b_status.kernel.as_ref().map(|kernel| kernel.phase) == Some(MountPhase::Ready)
+            && row(&b.directory).as_deref() == Some(b_row.as_str())
+            && on_b.exists(),
+        || {
+            format!(
+                "{name}: B after Force on A: write {wrote:?}, {b_before:?} -> {b_after:?}, phase {:?}",
+                b_status.kernel.as_ref().map(|kernel| kernel.phase)
+            )
+        },
+    );
+    assert_eq!(fs::read(root(&b).join("own.txt")).unwrap(), b"b\nafter\n");
+    println!(
+        "{name} after_force_on_a: a_stage={:?} a_detach={:?} a_mount_row=unchanged holder_alive={alive} holder_call={refused:?} b_write={:?} b_completed={}->{} b_terminal={} b_phase={:?} b_own_connection={}",
+        custody.stage,
+        custody.forced.as_ref().map(|facts| facts.detach),
+        wrote.as_ref().map(|(status, _)| status.code()),
+        b_before.completed,
+        b_after.completed,
+        b_after.terminal,
+        b_status.kernel.as_ref().map(|kernel| kernel.phase),
+        on_b.exists()
+    );
+    drop(writer);
+    let receipt = rig.unmount(&b);
+    let still = holder.alive();
+    checks.that(
+        receipt.contains("Drained")
+            && still
+            && row(&a.directory).as_deref() == Some(a_row.as_str()),
+        || format!("{name}: after B's unmount: holder alive={still}, {receipt}"),
+    );
+    println!(
+        "{name} normal_unmount_of_b=Unmounted drained={} holder_alive={still} a_mount_row=unchanged:{}",
+        receipt.contains("Drained"),
+        row(&a.directory).as_deref() == Some(a_row.as_str())
+    );
+
+    let (signals, exit) = holder.leave();
+    checks.that(
+        exit.code() == Some(0) && exit.signal().is_none() && signals == "signals 0",
+        || format!("{name}: the holder ended {exit:?} after {signals:?}"),
+    );
+    let detached = plain_umount(&a.directory);
+    assert!(detached.success(), "{name}: umount: {detached:?}");
+    println!(
+        "{name} teardown: holder_exit={:?} {signals:?} by_test=plain umount(8) of A status={:?} scope=single mount namespace of the test container deviations={}",
+        exit.code(),
+        detached.code(),
+        checks.0.len()
+    );
+    abandon(rig);
+    checks.done(name);
+}
