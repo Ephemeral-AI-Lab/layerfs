@@ -210,10 +210,25 @@ fn root_of(service: &StoreService, reply: &SdkValue) -> Vec<u8> {
         .to_vec()
 }
 
-#[test]
-fn a_damaged_version_refuses_only_where_the_walk_reaches_it() {
+/// How a test damages the Store: the location row of one object, the
+/// bytes of the pack that holds it after its directory (a refused pack,
+/// #818 M3 review), or that whole pack row.
+#[derive(Clone, Copy)]
+enum Damage {
+    Location,
+    PackBody,
+    Pack,
+}
+
+/// `/hist/kept.txt` written once, then 20 Commits that change only
+/// `/hist/a.txt` (one line, new each time); then the tree root of the 10th
+/// Commit from the head is damaged as `damage` says. Blame of `a.txt` and a
+/// one-item revision page stop at the head's parent, before it, and answer
+/// as before; blame of `kept.txt` walks every version, reaches it and
+/// refuses as before; each with the product's windows and walked alone.
+fn damaged_version(label: &str, damage: Damage) {
     let _turn = rt::postgresql_turn();
-    let Some(mut store) = Store::postgresql("versions_damage_rh") else {
+    let Some(mut store) = Store::postgresql(label) else {
         return;
     };
     let source = store.dir.join("source");
@@ -233,8 +248,6 @@ fn a_damaged_version_refuses_only_where_the_walk_reaches_it() {
             )
             .unwrap()
     };
-    // `/hist/kept.txt` is written once, then 20 Commits change only
-    // `/hist/a.txt` (one line, new each time).
     write("/hist/kept.txt", "kept\n".to_owned());
     let mut roots = Vec::new();
     for n in 0..20 {
@@ -244,21 +257,49 @@ fn a_damaged_version_refuses_only_where_the_walk_reaches_it() {
         ));
     }
     opened.stop();
-    // The tree root of the 10th Commit from the head: blame of `a.txt` and
-    // a one-item revision page stop at the head's parent, before it; blame
-    // of `kept.txt` walks every version and reaches it.
     let damaged = roots[roots.len() - 10].clone();
     let mut admin = postgres::Client::connect(&store.url, postgres::NoTls).unwrap();
     admin
         .batch_execute(&format!("SET search_path TO {}", store.schema))
         .unwrap();
-    let removed = admin
-        .execute(
-            "DELETE FROM object_location WHERE object_id = $1",
-            &[&damaged],
-        )
-        .unwrap();
-    assert_eq!(removed, 1, "the damaged root's location");
+    match damage {
+        Damage::Location => {
+            let removed = admin
+                .execute(
+                    "DELETE FROM object_location WHERE object_id = $1",
+                    &[&damaged],
+                )
+                .unwrap();
+            assert_eq!(removed, 1, "the damaged root's location");
+        }
+        Damage::PackBody | Damage::Pack => {
+            // A published pack is immutable and its locations reference it:
+            // the test lifts both guards for its own session.
+            let pack: i64 = admin
+                .query_one(
+                    "SELECT pack_id FROM object_location WHERE object_id = $1",
+                    &[&damaged],
+                )
+                .unwrap()
+                .get(0);
+            admin
+                .batch_execute("SET session_replication_role = replica")
+                .unwrap();
+            let changed = match damage {
+                // Every byte after the pack's directory becomes 0xff; the
+                // row keeps its length and directory.
+                Damage::PackBody => admin.execute(
+                    "UPDATE pack SET body = directory || decode(repeat('ff', \
+                     (length - octet_length(directory))::int), 'hex') \
+                     WHERE pack_id = $1",
+                    &[&pack],
+                ),
+                _ => admin.execute("DELETE FROM pack WHERE pack_id = $1", &[&pack]),
+            }
+            .unwrap();
+            assert_eq!(changed, 1, "the damaged root's pack");
+        }
+    }
 
     let opened = store.open("damaged");
     let service = &opened.service;
@@ -276,7 +317,32 @@ fn a_damaged_version_refuses_only_where_the_walk_reaches_it() {
         blame(service, rt::BRANCH, "/hist/kept.txt", b)
     });
     assert!(reached.is_err(), "the walk reaches the damage: {reached:?}");
+    let listed = alike("revision reaches it", |b| {
+        revisions(service, rt::BRANCH, "/hist/kept.txt", None, b)
+    });
+    assert!(listed.is_err(), "the list reaches the damage: {listed:?}");
     opened.stop();
+}
+
+#[test]
+fn a_damaged_version_refuses_only_where_the_walk_reaches_it() {
+    damaged_version("versions_damage_rh", Damage::Location);
+}
+
+#[test]
+fn a_damaged_pack_refuses_only_where_the_walk_reaches_it() {
+    damaged_version("versions_pack_body_rh", Damage::PackBody);
+}
+
+/// Open (#818 M3 review): with the pack row gone, the storage reader's
+/// locate step (`Fetch::locate`, through the persistence locate of the
+/// window's whole page) fails the per-object demand as a whole
+/// (`Io(Malformed)`), so the window refuses where the lone walk answers.
+/// The fix belongs to the storage reader's per-object locate.
+#[test]
+#[ignore = "storage locate fails a per-object demand whole on a missing pack row"]
+fn a_missing_pack_refuses_only_where_the_walk_reaches_it() {
+    damaged_version("versions_pack_rh", Damage::Pack);
 }
 
 /// The object id of `file`'s content in the tree of the Commit a `fs.write`

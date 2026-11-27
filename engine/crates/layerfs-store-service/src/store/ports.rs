@@ -61,20 +61,18 @@ impl PortError {
     }
 }
 impl PortError {
-    /// Whether this failure is the requested object's own (#818 H5): it is
-    /// missing, or its stored bytes do not authenticate or decode. Anything
-    /// else (the session, admission, transport, a bound) fails the demand.
+    /// Whether this failure is the requested object's own (#818 H5): a
+    /// storage failure the storage reader reports per object, exactly the
+    /// complement of its whole-demand failures
+    /// ([`layerfs_storage::read::call_failure`]: the session, transport,
+    /// admission, an unknown outcome). A refused or malformed pack, a missing
+    /// dependency, a collision or a bound met by one object is that
+    /// object's; anything outside storage fails the demand.
     pub fn object_owned(&self) -> bool {
-        matches!(
-            self,
-            Self::Storage(
-                StorageError::ObjectMissing(_)
-                    | StorageError::Content(_)
-                    | StorageError::Integrity(_)
-                    | StorageError::Unpublished(_)
-                    | StorageError::VisibilityCeiling { .. }
-            )
-        )
+        match self {
+            Self::Storage(error) => !layerfs_storage::read::call_failure(error),
+            _ => false,
+        }
     }
 }
 impl std::error::Error for PortError {

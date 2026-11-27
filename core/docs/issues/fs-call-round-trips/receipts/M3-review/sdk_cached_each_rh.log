@@ -1,0 +1,7 @@
+
+running 1 test
+test each_object_is_read_once_with_its_own_result_and_the_record_is_bounded ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+
+run_bounded: exit 0 after 0.9 s
