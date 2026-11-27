@@ -393,3 +393,57 @@ while statements fell 31,882 → 2,502. Diagnosed once, from the plans:
   `method_refusal_order`, `acquisition_placement`,
   `sqlite_reference_acquisition`, `acquisition_batching`, `init_sqlite`,
   `backed_acquisition`: pass.
+
+## I3c — Init's Saves in fenced flights (D12)
+
+### Prediction (the numbers are the I3 table's, written before coding)
+
+From the per-phase table above: each of the 8 (10k) or 3 (1k) Save
+publications costs 1 round trip instead of 4 (5 with packs): −25 at 10k,
+−10 at 1k; nested_10k 339 → ~314, flat_10k 378 → ~353, nested_1k 158 →
+~148, flat_1k 168 → ~158. Statements +3 per publication (the flight counts
+each request). Entry (decided with the implementation): `publish_captured` keeps no payloads by itself
+(payload retention is `settle`'s `captured_output && batched_chain_reads`),
+so the flag can reuse the flight entries without lane W's provider change.
+`publish_captured_tail` is chosen over `publish_captured`: both are the same
+flight; `_tail` answers an untrusted completion `Unknown`, which is the
+ordinary publication's custody (spec: "failure custody of the ordinary
+path"); `publish_captured` would answer a definite refusal there.
+
+### Measured (PostgreSQL; test profile, one sample)
+
+| Shape | after I3a | Predicted | Measured | Within 15% |
+|---|---|---|---|---|
+| `nested_10k` | 339 / 226 / 33 | ~314 | **303 / 250 / 33** | yes (−3.5%) |
+| `flat_10k` | 378 / 257 / 36 | ~353 | **342 / 281 / 36** | yes (−3.1%) |
+| `nested_1k` | 158 / 79 / 18 | ~148 | **145 / 88 / 18** | yes |
+| `flat_1k`, `dir_600` | 168 / 85 / 19 | ~158 | **155 / 94 / 19** | yes |
+| `hardlink_window` | 507 / 424 / 18 | ~497 | **494 / 433 / 18** | yes |
+| `wide_hardlinks` | 1,073 / 986 / 19 | ~1,063 | **1,060 / 995 / 19** | yes |
+| `mixed` | 189 / 105 / 18 | ~179 | **173 / 116 / 18** | yes |
+
+- The saving per publication was larger than predicted (−36, not −25, at
+  10k): diagnosed from the flat_10k templates (nested_10k's window was
+  evicted, `evicted: true`, so its templates are not used). The flight
+  inserted packs in 6 of the 8 publications, while `pg_stat_statements`
+  had shown one `COPY` call for the ordinary path; and a `COPY` costs 2
+  round trips (`copy_in`: the start and the finish). Ordinary: 6 × 6 + 2 ×
+  4 = 44 trips; flights 8: −36 exactly. 1k: 2 of 3 with packs, −13.
+- Statements +3 per publication (8 → +24), transactions unchanged (a flight
+  counts its own), prepares unchanged (the fused `PACK`/`ROWS` texts replace
+  `publish_rows.sql`). Roots, logical, canonical and stored bytes identical.
+- Release, same load, one sample each (`FS818_ARM=pg`, M1 binary
+  `db76b87011816739` vs this tree with I3a+I3c): flat_10k 8,920 → 8,668 ms,
+  nested_10k 9,187 → 8,593 ms (726 → 342 and 624 → 303 round trips). Local
+  PostgreSQL Init time is server work; the trips pay at a network distance.
+  The test-profile drift seen at I3a (6.2 → 7.8 → 9.1 s) is host load: the
+  M1 binary itself took 8.9 s in this window against 6.4 s at the M1 bench.
+- New test `postgresql_save_flight_fault.rs`: a Save with the flag stores
+  the same rows as an ordinary Save in 8 round trips instead of 14; drop at
+  every server message of its finish (68): always an error, the
+  publication atomic; kill (68): 50 errors and 18 successes whose rows equal
+  the clean finish's; never a reconnect or replay.
+- Check set (once): init pins 1k/10k, `sdk_round_trip_equivalence_seeded`,
+  `method_refusal_order`, `postgresql_captured_save_fault` (the shared
+  flight), `layerfs-storage` `captured_payload_retention` and
+  `kept_ids_pooled_chains`, every `layerfs-project` test binary: pass.

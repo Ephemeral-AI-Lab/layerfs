@@ -162,6 +162,10 @@ pub(super) struct State<'a> {
     /// tail past the prefix the handle keeps.
     pub(super) finishing: bool,
     pub(super) captured_output: bool,
+    /// Every publication of this Save goes through the provider's fenced
+    /// flight where it is eligible, with the ordinary publication's custody
+    /// (`Save::publishing_in_flights`, #818 I3c). Keeps no payloads.
+    pub(super) flights: bool,
     pub(super) depths: DepthCache,
     pub(super) losing: LosingBases,
     pub(super) chain: ChainCounters,
@@ -208,6 +212,7 @@ impl<'a> State<'a> {
             ordinal_end: 0,
             finishing: false,
             captured_output: false,
+            flights: false,
             depths: DepthCache::new(),
             losing: LosingBases::new(),
             chain: ChainCounters::default(),

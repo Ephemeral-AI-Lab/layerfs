@@ -1364,8 +1364,18 @@ A captured Commit whose binding blocks overflow one transaction may also
 publish its held Save tail through this flight before recording the
 bindings. That tail settles through the ordinary Save path. Untrusted
 completion or rollback and lane cleanup withhold unused allocations. Save
-finish, final fused history publication and Namespace Init use their
-respective existing registration paths.
+finish and final fused history publication use their respective existing
+registration paths.
+
+**Namespace Init's Saves (#818 I3c).** Init's three Saves (prerequisite,
+files, tree) are built with `Save::publishing_in_flights`, a flag of their
+own apart from captured output: every publication, finish included, goes
+through the same flight where eligible (`publish_captured_tail`: an
+untrusted completion is uncertain, the ordinary publication's custody) and
+through ordinary publication otherwise. No payload is kept, as for any
+non-captured Save. A publication then costs one round trip instead of
+`BEGIN`, the pack `COPY` (two), the lane and the rows and `COMMIT` (Init
+10k: 8 publications, 36 round trips fewer).
 
 After the tail acknowledges, each eligible overflow binding batch can send
 its existing sorted block append in one fenced write flight. The continuation
@@ -1741,6 +1751,7 @@ reuses an operation id
 | [`postgresql_acquisition_compaction.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_acquisition_compaction.rs) | `LAYERFS_TEST_POSTGRES_URL=… cargo +1.85.1 test --locked -p layerfs-persistence --test postgresql_acquisition_compaction` | Compaction after the last release, never touching a live operation |
 | [`acquisition_placement.rs`](../../../../engine/crates/layerfs-persistence/tests/acquisition_placement.rs) | `LAYERFS_TEST_POSTGRES_URL=… cargo +1.85.1 test --locked -p layerfs-persistence --test acquisition_placement` | Set-window placement gives the per-row loop's first refusal, rows and charges (repeated names and positions, unsigned positions, stored-row dependencies, all-hardlink and large mixed directories), both backends |
 | [`postgresql_placement_fault.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_placement_fault.rs) | same, `--test postgresql_placement_fault` | Drop and kill at every server message of a placement unit (84 + 84): the unit is atomic, never replayed |
+| [`postgresql_save_flight_fault.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_save_flight_fault.rs) | same, `--test postgresql_save_flight_fault` | A Save publishing in flights stores the ordinary Save's rows in fewer round trips; drop and kill at every server message of its finish (68 + 68): atomic, a dropped reply never a success, never replayed |
 | [`postgresql_acquisition_reads.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_acquisition_reads.rs) | same, `--test postgresql_acquisition_reads` | Every read window, paged under row and byte limits, equals SQLite's; empty, released, missing and foreign owners stay distinct; drop and kill at every server message of each read kind (78 + 78): never a wrong answer, no row changed, never replayed |
 
 Without `LAYERFS_TEST_POSTGRES_URL` these tests print `NOT_RUN` and check

@@ -1,0 +1,12 @@
+# load 9.33 8.52 7.90
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.06s
+     Running tests/captured_payload_retention.rs (target/debug/deps/captured_payload_retention-9ed23e09b66935fc)
+
+running 3 tests
+test captured_save_uses_the_first_winner_and_releases_the_losing_pack ... ok
+test captured_network_save_keeps_recent_payload_and_preserves_metadata_under_pressure ... ok
+test captured_base_reads_keep_a_dense_shared_pack_whole ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.39s
+
+run_bounded: exit 0 after 1.1 s

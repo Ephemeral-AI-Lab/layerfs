@@ -244,7 +244,10 @@ fn acquire<'a>(
 ) -> ProjectResult<(ObjectId, u64, u64, u128, Save<'a>)> {
     let scanned = {
         let provider = store.reader().map_err(storage)?;
-        let save = store.begin_save().map_err(storage)?;
+        // Init's three Saves publish through the provider's fenced flight
+        // where eligible: one message per publication on PostgreSQL, with
+        // the ordinary publication's custody (#818 I3c).
+        let save = store.begin_save().map_err(storage)?.publishing_in_flights();
         let built = timer.child("history.import_scan").run(|_| {
             let mut sink = save.sink();
             let mut objects = FilesystemObjects::new(&provider, &mut sink);
@@ -260,7 +263,7 @@ fn acquire<'a>(
             .run(|_| save.finish().map_err(storage))?;
         scanned
     };
-    let save = store.begin_save().map_err(storage)?;
+    let save = store.begin_save().map_err(storage)?.publishing_in_flights();
     let logical = timer
         .child("history.import_files")
         .run(|_| files::save_files(backing, scanned.aliases, store, &save, progress))?;

@@ -65,10 +65,11 @@ const SQLITE_FLAT: InitPin = pin(
 // probe init.nested_10k at 056e920166 (`pg.log`): [0, 10,955, 10,666, 120];
 // after I1 [0, 624, 335, 120]; after I3a (87 read units, each one fenced
 // statement instead of a transaction with an owner select and one or two
-// reads) [0, 339, 226, 33]
+// reads) [0, 339, 226, 33]; after I3c (8 Save publications, each one
+// fenced flight; 6 carry packs) [0, 303, 250, 33]
 const POSTGRESQL_NESTED: InitPin = pin(
     "nested_10k",
-    [0, 339, 226, 33],
+    [0, 303, 250, 33],
     108000,
     1379418,
     "a68d83d36cfcc6aa",
@@ -76,10 +77,11 @@ const POSTGRESQL_NESTED: InitPin = pin(
 // probe init.flat_10k at 056e920166 (`pg.log`): [0, 31,039, 30,700, 144];
 // after I1 [0, 20,720, 20,381, 144]; after I2a (three placement units, each
 // one dependency check and one placement statement) [0, 726, 387, 144];
-// after I3a (108 read units, each one fenced statement) [0, 378, 257, 36]
+// after I3a (108 read units, each one fenced statement) [0, 378, 257, 36];
+// after I3c (8 Save publications in fenced flights) [0, 342, 281, 36]
 const POSTGRESQL_FLAT: InitPin = pin(
     "flat_10k",
-    [0, 378, 257, 36],
+    [0, 342, 281, 36],
     118890,
     1380691,
     "a0b8d9600c933c0a",

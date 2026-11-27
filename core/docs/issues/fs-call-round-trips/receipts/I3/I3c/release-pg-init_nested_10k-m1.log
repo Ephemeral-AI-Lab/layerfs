@@ -1,0 +1,9 @@
+# m1 db76b87011816739 load 8.92 8.03 7.63
+
+running 1 test
+FS_RT {"arm":"pg","case":"init.nested_10k","method":"project.init","entries":10101,"ms":9186.8,"client_storage":{"connects":0,"round_trips":624,"prepares":47,"statements":335,"transactions":120,"returned_rows":91169},"server":{"toplevel_calls":1138,"nested_calls":30415,"evicted":false,"distinct":65,"top":[[120,"COMMIT"],[120,"SET LOCAL search_path TO lfs818_init_87762"],[119,"SELECT $1"],[119,"SELECT catalog_incarnation::text FROM lfs818_init_87762.history_meta WHERE id=$1"],[101,"SELECT phase,held_rows,held_bytes,peak_rows,peak_bytes,removed_rows,removed_bytes FROM init_operation WHERE op"],[89,"BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY"]]},"logical":108000,"walked":108000,"stored":225969,"canonical":1379418,"load1":"8.27"}
+test init_nested_10k ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 16.33s
+
+run_bounded: exit 0 after 16.4 s

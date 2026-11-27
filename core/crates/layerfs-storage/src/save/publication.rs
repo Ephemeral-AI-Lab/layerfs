@@ -285,7 +285,7 @@ impl State<'_> {
         let result = {
             let _work = self.storage.work.span(super::Stage::Metadata);
             let provider = &self.storage.source.metadata;
-            if captured_tail {
+            if captured_tail || (self.flights && !self.captured_output) {
                 provider.publish_captured_tail(batch)
             } else if self.captured_output {
                 provider.publish_captured(batch)

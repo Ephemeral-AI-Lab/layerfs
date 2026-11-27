@@ -1,0 +1,9 @@
+# m1 db76b87011816739 load 9.23 7.97 7.59
+
+running 1 test
+FS_RT {"arm":"pg","case":"init.flat_10k","method":"project.init","entries":10002,"ms":8920.2,"client_storage":{"connects":0,"round_trips":726,"prepares":49,"statements":387,"transactions":144,"returned_rows":110553},"server":{"toplevel_calls":1343,"nested_calls":30264,"evicted":false,"distinct":67,"top":[[144,"COMMIT"],[144,"SET LOCAL search_path TO lfs818_init_87582"],[143,"SELECT $1"],[143,"SELECT catalog_incarnation::text FROM lfs818_init_87582.history_meta WHERE id=$1"],[125,"SELECT phase,held_rows,held_bytes,peak_rows,peak_bytes,removed_rows,removed_bytes FROM init_operation WHERE op"],[110,"BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY"]]},"logical":118890,"walked":118890,"stored":253444,"canonical":1380691,"load1":"9.12"}
+test init_flat_10k ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 15.55s
+
+run_bounded: exit 0 after 15.6 s
