@@ -76,6 +76,28 @@ pub trait AuthenticatedObjects {
         })
     }
 
+    /// Reads every requested object, each into its own result, in request
+    /// order (#818 H5). A missing, mismatched or undecodable object is that
+    /// object's error, so a caller that reads ahead (a window of versions)
+    /// meets it only where it reaches that object, as it would reading the
+    /// object alone. A failure the provider cannot tie to one object (its
+    /// session, its transport, a demand over its bounds) fails the call.
+    ///
+    /// This default reads the objects one by one, each a point read, so each
+    /// read's failure is its own object's; no object is read twice and no
+    /// failed read is attempted again. A provider that serves the objects in
+    /// one demand overrides it and says so in [`Self::reads_each_at_once`].
+    fn read_canonical_each(&self, ids: &[ObjectId]) -> ContentResult<Vec<ContentResult<Vec<u8>>>> {
+        Ok(ids.iter().map(|id| self.read_canonical(*id)).collect())
+    }
+
+    /// Whether [`Self::read_canonical_each`] serves its objects in one
+    /// demand. The default reads them one by one: a caller batches across
+    /// versions only where this is true.
+    fn reads_each_at_once(&self) -> bool {
+        false
+    }
+
     /// Decoded pages this provider keeps for reuse (#364): a read that
     /// finds a page there skips its copy and decode, never a check that
     /// depends on where the page was found. None keeps nothing.
@@ -100,5 +122,58 @@ pub trait AuthenticatedObjects {
             requested: 1,
             returned: 0,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::cell::RefCell;
+
+    /// Serves `present`; any other object is missing. Records each demand.
+    struct Objects {
+        present: Vec<ObjectId>,
+        demands: RefCell<Vec<Vec<ObjectId>>>,
+    }
+
+    impl AuthenticatedObjects for Objects {
+        fn read_canonical_batch(&self, ids: &[ObjectId]) -> ContentResult<Vec<Vec<u8>>> {
+            self.demands.borrow_mut().push(ids.to_vec());
+            ids.iter()
+                .map(|id| {
+                    if self.present.contains(id) {
+                        Ok(id.as_bytes().to_vec())
+                    } else {
+                        Err(ContentError::MissingObject)
+                    }
+                })
+                .collect()
+        }
+    }
+
+    /// The default reads each object alone: a missing one is its own error,
+    /// the others are served, and nothing is read twice.
+    #[test]
+    fn each_object_is_its_own_result() {
+        let ids: Vec<ObjectId> = (0..4u8).map(|n| ObjectId::for_bytes(&[n])).collect();
+        let objects = Objects {
+            present: vec![ids[0], ids[1], ids[3]],
+            demands: RefCell::new(Vec::new()),
+        };
+        let each = objects.read_canonical_each(&ids).unwrap();
+        assert_eq!(each[0].as_deref().unwrap(), ids[0].as_bytes());
+        assert_eq!(each[2], Err(ContentError::MissingObject));
+        assert_eq!(each[3].as_deref().unwrap(), ids[3].as_bytes());
+        let demands = objects.demands.into_inner();
+        assert_eq!(demands, ids.iter().map(|id| vec![*id]).collect::<Vec<_>>());
+        assert!(!objects_at_once());
+    }
+
+    fn objects_at_once() -> bool {
+        Objects {
+            present: Vec::new(),
+            demands: RefCell::new(Vec::new()),
+        }
+        .reads_each_at_once()
     }
 }

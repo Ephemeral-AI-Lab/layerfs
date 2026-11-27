@@ -1,0 +1,20 @@
+#818 lane S, S2: store-service pins and equivalence, one run each at the S2
+working tree (parent dec2216e23), PostgreSQL rt818_s on lfs818-rt-pg:55818,
+run_bounded.py --limit 120, cargo +1.85.1 test --locked --offline -j 6
+-p layerfs-store-service --test <name> (result lines as printed).
+
+== sdk_read_round_trips
+test sqlite_read_counts ... ok
+test postgresql_read_counts ... ok
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.08s
+run_bounded: exit 0 after 3.9 s
+== sdk_history_round_trips
+test sqlite_history_counts ... ok
+test postgresql_history_counts ... ok
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.92s
+run_bounded: exit 0 after 3.7 s
+== sdk_round_trip_equivalence_seeded
+test fs_calls_answer_alike_on_both_backends ... ok
+test init_past_the_write_window_answers_alike_on_both_backends ... ok
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.01s
+run_bounded: exit 0 after 4.8 s
