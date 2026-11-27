@@ -2,10 +2,13 @@
 //! or a readable form (`--text`, the default on a terminal); a refusal on
 //! stderr in the same form, exit 125.
 use crate::run::REFUSED;
-use layerfs_api::{json, Form, Part};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::io::{self, Write};
 use std::process::ExitCode;
+use {
+    layerfs_api::{Form, Part},
+    layerfs_home::json,
+};
 
 /// Prints `refusal` on stderr: one line of JSON, `{"error","message"}`,
 /// `fix` when there is one and the fields the next call needs; with
@@ -100,7 +103,7 @@ pub fn doctor_text(report: &SdkValue) -> String {
             open.len()
         ),
     };
-    let mut printed = format!("{}\n", crate::banner::bold(&summary));
+    let mut printed = format!("{}\n", crate::style::bold(&summary));
     let width = if open.is_empty() { 8 } else { 11 };
     let pad = " ".repeat(width + 1);
     // worst first (the frozen `doctor.worst_first`), report order within one severity
@@ -422,7 +425,7 @@ fn block(fields: &[(String, SdkValue)], form: Option<&Form>, indent: usize, out:
                     out.push('\n');
                 }
                 if name != "items" {
-                    out.push_str(&format!("{pad}{}\n", crate::banner::bold(&label(name))));
+                    out.push_str(&format!("{pad}{}\n", crate::style::bold(&label(name))));
                 }
                 out.push_str(&table(rows, declared, &pad));
             }
@@ -572,7 +575,7 @@ fn table(rows: &[SdkValue], declared: Option<&Form>, pad: &str) -> String {
             .join("  ");
         format!("{pad}{}", text.trim_end())
     };
-    let mut out = format!("{}\n", crate::banner::bold(&line(&headers)));
+    let mut out = format!("{}\n", crate::style::bold(&line(&headers)));
     for row in &cells {
         out.push_str(&format!("{}\n", line(row)));
     }

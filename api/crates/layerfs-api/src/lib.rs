@@ -15,35 +15,31 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
-mod backup;
-mod branch;
-pub mod calls;
-mod commit;
-mod file;
+pub mod dispatch;
 // the `home` family's folder; `home` itself names the re-exported home module below
-#[path = "home/mod.rs"]
+pub(crate) mod families;
+#[path = "families/home/mod.rs"]
 mod home_family;
-mod machine;
-mod project;
-mod sandbox;
-mod store;
 pub mod worker;
-mod workspace;
 
-use calls as machinery;
+use dispatch as machinery;
 // the six doctors' shared answer (`calls/doctor/`), which each
 // family's doctor entry names
-use calls::doctor;
+use dispatch::answer;
 use layerfs_home::outcome::Outcome;
 use layerfs_protocol::sdk::SdkValue;
 use std::path::Path;
 
-pub use calls::{
-    asks_detail, close, guide, home, json, keys, refusal, shape, size, Arg, Asked, Call, CallRef,
-    Calls, Client, Context, Families, Family, Form, Kind, Paging, Part, Place, Policy, Profile,
-    Redact, Run, Scope, Section, DETAIL, WITH,
-};
 pub use layerfs_home::names;
+pub use {
+    dispatch::{
+        answer::{keys, refusal, shape},
+        asks_detail, close, guide, home, size, Arg, Asked, Call, CallRef, Calls, Client, Context,
+        Families, Family, Form, Kind, Paging, Part, Place, Policy, Profile, Redact, Run, Scope,
+        Section, DETAIL, WITH,
+    },
+    layerfs_home::json,
+};
 /// The home (`layerfs-home`) and the Store leases, for the front ends and
 /// their tests.
 pub mod home {
@@ -78,39 +74,39 @@ pub fn families() -> Families {
         },
         Family {
             name: "project",
-            list: project::calls,
+            list: families::project::calls,
         },
         Family {
             name: "branch",
-            list: branch::calls,
+            list: families::branch::calls,
         },
         Family {
             name: "commit",
-            list: commit::calls,
+            list: families::commit::calls,
         },
         Family {
             name: "file",
-            list: file::calls,
+            list: families::file::calls,
         },
         Family {
             name: "sandbox",
-            list: sandbox::calls,
+            list: families::sandbox::calls,
         },
         Family {
             name: "workspace",
-            list: workspace::calls,
+            list: families::workspace::calls,
         },
         Family {
             name: "machine",
-            list: machine::calls,
+            list: families::machine::calls,
         },
         Family {
             name: "store",
-            list: store::calls,
+            list: families::store::calls,
         },
         Family {
             name: "backup",
-            list: backup::calls,
+            list: families::backup::calls,
         },
     ]
 }
@@ -187,3 +183,7 @@ pub fn call_json(
 ) -> String {
     machinery::call_json(families(), home, scope, name, args, events, client)
 }
+
+// #828 compat: old public module paths, removed in wave 3.
+#[doc(hidden)]
+pub use crate::dispatch as calls; // #828 compat

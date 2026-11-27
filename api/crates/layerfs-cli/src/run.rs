@@ -20,7 +20,7 @@ pub fn main(words: Vec<String>) -> ExitCode {
         }
         Some("--version") => match &words[1..] {
             [] => output::print(&format!("layerfs {}\n", env!("CARGO_PKG_VERSION"))),
-            [flag] if flag == "--json" => crate::capabilities::version(),
+            [flag] if flag == "--json" => crate::discovery::version(),
             _ => wrong("use layerfs --version [--json]".to_owned()),
         },
         #[cfg(all(feature = "machine", any(target_os = "macos", target_os = "linux")))]

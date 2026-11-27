@@ -39,3 +39,19 @@ layerfs-os = { path = "../../../engine/crates/layerfs-os" }
 # crate already locks, no new version.
 postgres = "=0.19.14"
 layerfs-os = { path = "../../../engine/crates/layerfs-os" }
+
+[[test]]
+name = "exec_cancel_forwarded"
+path = "tests/standalone/exec_cancel_forwarded.rs"
+
+[[test]]
+name = "disabled_platforms"
+path = "tests/standalone/disabled_platforms.rs"
+
+[[test]]
+name = "machine_unreadable_record"
+path = "tests/standalone/machine_unreadable_record.rs"
+
+[[test]]
+name = "worker"
+path = "tests/standalone/worker.rs"

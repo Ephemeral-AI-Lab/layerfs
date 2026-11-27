@@ -68,7 +68,10 @@ fn inspect(server: &Server, args: SdkValue) -> Outcome {
 /// `inspect::in_worker` does, with the switch met first, under the permit.
 #[cfg(feature = "worker-fault")]
 fn inspect(server: &Server, args: SdkValue) -> Outcome {
-    use layerfs_inspect::{admit, serve, Side};
+    use {
+        layerfs_inspect::serve,
+        layerfs_sandbox::{deploy::Side, inspect::owner::admit},
+    };
     let args = layerfs_home::home::with_field(args, "worker", about(server));
     let (root, faults) = (server.root.clone(), server.faults.clone());
     admit(move |budget| {
@@ -140,7 +143,7 @@ pub(super) fn run(
             let place = layerfs_store_service::history::admission::decode_place_view(
                 call.fields.get("place_view"),
             );
-            layerfs_store_service::history::admission::with_place_view(place, || {
+            layerfs_persistence::with_place_view(place, || {
                 layerfs_store::open::run(&call.method, &open, call.fields, Some(lease))
             })
         }
@@ -175,7 +178,7 @@ pub(super) fn run(
             let place = layerfs_store_service::history::admission::decode_place_view(
                 args.get("place_view"),
             );
-            layerfs_store_service::history::admission::with_place_view(place, || {
+            layerfs_persistence::with_place_view(place, || {
                 layerfs_store::service::with_service(&open, |service| {
                     layerfs_store_service::history::admission::reconcile_machine(
                         service.store.history(),
@@ -213,7 +216,7 @@ pub(super) fn run(
             let place = layerfs_store_service::history::admission::decode_place_view(
                 args.get("place_view"),
             );
-            layerfs_store_service::history::admission::with_place_view(place, || {
+            layerfs_persistence::with_place_view(place, || {
                 layerfs_store::repair::repair_at(&open, &request)
             })
         }
@@ -271,7 +274,7 @@ pub(super) fn run(
             let place = layerfs_store_service::history::admission::decode_place_view(
                 args.get("place_view"),
             );
-            layerfs_store_service::history::admission::with_place_view(place, || {
+            layerfs_persistence::with_place_view(place, || {
                 delete_project(&root, &DeleteFrame::decode(&args)?)
             })
         }
@@ -282,7 +285,7 @@ pub(super) fn run(
             let place = layerfs_store_service::history::admission::decode_place_view(
                 args.get("place_view"),
             );
-            layerfs_store_service::history::admission::with_place_view(place, || {
+            layerfs_persistence::with_place_view(place, || {
                 admit_project(&root, &DeleteAdmitFrame::decode(&args)?)
             })
         }
@@ -293,7 +296,7 @@ pub(super) fn run(
             let place = layerfs_store_service::history::admission::decode_place_view(
                 args.get("place_view"),
             );
-            layerfs_store_service::history::admission::with_place_view(place, || {
+            layerfs_persistence::with_place_view(place, || {
                 release_project(&root, &DeleteReleaseFrame::decode(&args)?)
             })
         }
