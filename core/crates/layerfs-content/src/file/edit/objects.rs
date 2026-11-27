@@ -1,7 +1,7 @@
 //! Public memory-profile compatibility over the shared fallible tagged engine.
-use super::{
+use super::super::draft::{
     engine::Engine,
-    references::{EditRef, Node, Summary},
+    node::{EditRef, Node, Summary},
     state::{Memory, State},
 };
 use crate::file::mapping::{ExtentNode, NodeSummary, PageCache};
@@ -99,15 +99,27 @@ impl<'a> EditObjects<'a> {
             ))
             .map_err(|_| ContentError::LengthOverflow)?;
             let draft = EditRef::Node(number);
-            if self.core.state.contains(super::engine::key(draft, 0)?)?
-                || self.core.state.contains(super::engine::key(draft, 6)?)?
+            if self
+                .core
+                .state
+                .contains(super::super::draft::engine::key(draft, 0)?)?
+                || self
+                    .core
+                    .state
+                    .contains(super::super::draft::engine::key(draft, 6)?)?
             {
                 return Ok(draft);
             }
         }
         let page = EditRef::Page(id);
-        if self.core.state.contains(super::engine::key(page, 0)?)?
-            || self.core.state.contains(super::engine::key(page, 6)?)?
+        if self
+            .core
+            .state
+            .contains(super::super::draft::engine::key(page, 0)?)?
+            || self
+                .core
+                .state
+                .contains(super::super::draft::engine::key(page, 6)?)?
         {
             return Ok(page);
         }

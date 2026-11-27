@@ -4,19 +4,13 @@
 
 mod apply;
 mod backing;
-mod compare;
-mod concat;
-mod draft_codec;
-mod engine;
+pub(crate) mod coalesce;
 mod finish;
 mod input;
+pub(crate) mod noop;
 mod objects;
-mod references;
-mod resolution;
 mod runs;
 mod source;
-mod split;
-mod state;
 mod tree;
 mod zero;
 
@@ -28,9 +22,9 @@ pub use backing::{
     EditRecordApply, EditRecordChange, EditRecordExpected, EditRecordKey, IndexedEditBacking,
     IndexedRecordPage,
 };
-pub use compare::{NoOpVerdict, COMPARE_WINDOW_BYTES};
-pub use concat::coalesce_adjacent;
+pub use coalesce::coalesce_adjacent;
 pub use finish::{emit_empty_representation, EmittedRoot};
 pub use input::{Edit, EditSequence, EditSource, IndexedEditSource, ReplacementReader};
 pub use input::{Plan, Segment};
+pub use noop::{NoOpVerdict, COMPARE_WINDOW_BYTES};
 pub use objects::{EditCounters, EditObjects, EDIT_DEFERRED_LIMIT};

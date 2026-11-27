@@ -10,14 +10,14 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 
-use super::sorted::{difference, DifferenceWork};
+use super::pages::{difference, DifferenceWork};
 use crate::error::{ContentError, ContentResult};
-use crate::filesystem::directory::read::{list_after, DirectoryReadWork};
-use crate::filesystem::inode::read::{lookup_many, InodeReadWork, InodeTable};
-use crate::filesystem::path::PathName;
+use crate::filesystem::name::path::PathName;
 use crate::filesystem::root::{FilesystemRoot, FilesystemRootId};
-use crate::filesystem::sorted::format::{CompactDirectory, CompactInodes};
-use crate::filesystem::sorted::DirectoryRoot;
+use crate::filesystem::tree::directory::read::{list_after, DirectoryReadWork};
+use crate::filesystem::tree::inode::read::{lookup_many, InodeReadWork, InodeTable};
+use crate::filesystem::tree::pages::format::{CompactDirectory, CompactInodes};
+use crate::filesystem::tree::pages::DirectoryRoot;
 use crate::object::inode_leaf::{InodeKind, InodeValue};
 use crate::object::{AuthenticatedObjects, ObjectId};
 
@@ -84,7 +84,7 @@ impl TreeTable {
     ) -> ContentResult<Option<u64>> {
         match self.value(reader, directory)? {
             Some(value) if value.kind == InodeKind::Directory => {
-                crate::filesystem::directory::read::lookup(
+                crate::filesystem::tree::directory::read::lookup(
                     reader,
                     DirectoryRoot(value.content_root),
                     name,
@@ -109,7 +109,7 @@ pub fn same_inode(
     reader: &dyn AuthenticatedObjects,
     left: &InodeValue,
     right: &InodeValue,
-    work: &mut crate::filesystem::attributes::AttributeReadWork,
+    work: &mut crate::filesystem::tree::attribute::AttributeReadWork,
 ) -> ContentResult<bool> {
     if same_value(left, right) {
         return Ok(true);
@@ -117,15 +117,17 @@ pub fn same_inode(
     if left.kind != right.kind || left.content_root != right.content_root {
         return Ok(false);
     }
-    Ok(
-        crate::filesystem::attributes::read_portable(reader, left.metadata_root, left.kind, work)?
-            == crate::filesystem::attributes::read_portable(
-                reader,
-                right.metadata_root,
-                right.kind,
-                work,
-            )?,
-    )
+    Ok(crate::filesystem::tree::attribute::read_portable(
+        reader,
+        left.metadata_root,
+        left.kind,
+        work,
+    )? == crate::filesystem::tree::attribute::read_portable(
+        reader,
+        right.metadata_root,
+        right.kind,
+        work,
+    )?)
 }
 
 /// Whether two metadata fields decode to the same portable value, with the
@@ -136,14 +138,14 @@ pub fn same_metadata(
     kind: crate::object::inode_leaf::InodeKind,
     left: crate::object::inode_leaf::InodeMetadata,
     right: crate::object::inode_leaf::InodeMetadata,
-    work: &mut crate::filesystem::attributes::AttributeReadWork,
+    work: &mut crate::filesystem::tree::attribute::AttributeReadWork,
 ) -> ContentResult<bool> {
     if left == right {
         return Ok(true);
     }
     Ok(
-        crate::filesystem::attributes::read_portable(reader, left, kind, work)?
-            == crate::filesystem::attributes::read_portable(reader, right, kind, work)?,
+        crate::filesystem::tree::attribute::read_portable(reader, left, kind, work)?
+            == crate::filesystem::tree::attribute::read_portable(reader, right, kind, work)?,
     )
 }
 
@@ -155,7 +157,7 @@ pub fn inode_changes(
     work: &mut DifferenceWork,
     mut visit: impl FnMut(u64, Option<&InodeValue>, Option<&InodeValue>) -> ContentResult<()>,
 ) -> ContentResult<()> {
-    let mut metadata = crate::filesystem::attributes::AttributeReadWork::default();
+    let mut metadata = crate::filesystem::tree::attribute::AttributeReadWork::default();
     difference::<CompactInodes>(
         reader,
         Some(left.table.root),
@@ -703,7 +705,7 @@ pub fn root_changes(
             );
         }
     }
-    let mut metadata = crate::filesystem::attributes::AttributeReadWork::default();
+    let mut metadata = crate::filesystem::tree::attribute::AttributeReadWork::default();
     let mut kept = Vec::new();
     for entry in entries.into_values() {
         let keep = match (entry.left, entry.right) {

@@ -9,8 +9,8 @@ use layerfs_content::file::mapping::{
     encode_chunk_object, encode_file_state, encode_node, profile_id, ExtentNode, ExtentSlice,
     FileState,
 };
-use layerfs_content::filesystem::attributes::codec::{row_bytes, LEAF_ROW_OVERHEAD};
-use layerfs_content::filesystem::attributes::{
+use layerfs_content::filesystem::tree::attribute::codec::{row_bytes, LEAF_ROW_OVERHEAD};
+use layerfs_content::filesystem::tree::attribute::{
     encode_attribute_page, AttributeEntry, AttributeKey, AttributePage,
 };
 use layerfs_content::filesystem::{scope_for_seed, InodeScope};

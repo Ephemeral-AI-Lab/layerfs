@@ -15,7 +15,7 @@ use crate::file::cdc::FastCdc;
 use crate::file::mapping::codec::{
     encode_chunk_object, encode_file_state, encode_node, profile_id,
 };
-use crate::file::mapping::types::{
+use crate::file::mapping::node::{
     ChildDescriptor, ExtentNode, ExtentSlice, FileState, NodeSummary, MAX_ENTRIES, MAX_LEVEL,
 };
 use crate::object::{

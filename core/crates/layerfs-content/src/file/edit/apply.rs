@@ -14,9 +14,9 @@ use super::runs::{PlanRuns, ReplacementRuns};
 use super::source::Source;
 use crate::error::{ContentError, ContentResult};
 use crate::file::content::{begin_whole_file_object, ConstructedFile, WHOLE_VALUE_HEADER};
-use crate::file::edit::compare::{compare_source, NoOpVerdict};
 use crate::file::edit::finish::{emit_empty_representation, emit_file_state};
 use crate::file::edit::input::{EditSequence, EditSource, IndexedEditSource, Plan, Segment};
+use crate::file::edit::noop::{compare_source, NoOpVerdict};
 use crate::file::view::FileView;
 use crate::file::{FileRun, FileRuns};
 use crate::object::{
@@ -372,8 +372,8 @@ fn replace_chunked(
 ) -> ContentResult<ConstructedFile> {
     // One read of the base root per edit, not two: the state the view decoded is
     // the state this route starts from, and the summary is derived from it.
-    let mut summary = super::references::Summary {
-        id: super::references::EditRef::Stored(state.mapping_root),
+    let mut summary = super::super::draft::node::Summary {
+        id: super::super::draft::node::EditRef::Stored(state.mapping_root),
         bytes: state.logical_len,
         extents: state.extent_count,
         level: state.tree_level,
@@ -384,8 +384,10 @@ fn replace_chunked(
     let mut result_len = state.logical_len;
     let base = state;
     let state = match backing {
-        Some(backing) => super::state::State::Backed(backing),
-        None => super::state::State::Memory(super::state::Memory::default()),
+        Some(backing) => super::super::draft::state::State::Backed(backing),
+        None => {
+            super::super::draft::state::State::Memory(super::super::draft::state::Memory::default())
+        }
     };
     let mut objects = crate::file::edit::tree::EditObjects::new(reader, consumer, pages, state);
     // Every page the result publishes is offered the base's page at its level
@@ -446,7 +448,7 @@ fn replace_chunked(
                     crate::file::chunk_runs::build(capacities, &mut source, &mut hint, &mut sink)?;
                 Ok(build
                     .root
-                    .map(|root| super::references::Summary::from_canonical(root, true)))
+                    .map(|root| super::super::draft::node::Summary::from_canonical(root, true)))
             })?
         };
         shift = shift + i128::from(replacement_len) - i128::from(declared.removed_len());

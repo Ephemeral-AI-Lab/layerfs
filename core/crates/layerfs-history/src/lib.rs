@@ -17,18 +17,19 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
-mod contract;
-pub use contract::authority::{
+pub(crate) mod admission;
+pub(crate) mod catalog;
+pub mod error;
+pub mod identity;
+pub mod records;
+pub use admission::authority::{
     compare_place, ordered_token_parts, Liveness, PlaceAuthority, PlaceOrder, PlaceRecord,
     PlaceView, SandboxPlace, ORDERED_TOKEN_PREFIX,
 };
-pub use contract::catalog;
-pub use contract::error;
-pub use contract::holder::MountHolderView;
-pub use contract::identity;
-pub use contract::path;
-pub use contract::query;
-pub use contract::records;
+pub use admission::holder::MountHolderView;
+pub use catalog::contract as catalog;
+pub use catalog::path;
+pub use catalog::query;
 
 pub use catalog::{
     ChainRow, ContextTarget, HistoryCatalog, HistoryCatalogConfig, MountMarkers, NamedSnapshot,

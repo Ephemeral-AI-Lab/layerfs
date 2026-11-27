@@ -7,7 +7,7 @@
 
 use crate::error::{ContentError, ContentResult};
 use crate::file::cdc;
-use crate::file::mapping::types::{
+use crate::file::mapping::node::{
     ChildDescriptor, ExtentNode, ExtentSlice, FileState, MAX_ENTRIES, MAX_LEVEL,
     MAX_NODE_OBJECT_BYTES, MINIMUM_ROOT_ENTRIES, MINIMUM_ROOT_LEAF_ENTRIES, MIN_ENTRIES,
 };
@@ -342,7 +342,7 @@ pub fn decode_node_with_context(canonical: &[u8], root: bool) -> ContentResult<E
 
 /// Encodes a file-state root after validating it against the frozen profile.
 pub fn encode_file_state(state: FileState) -> ContentResult<Vec<u8>> {
-    if state.profile_id != profile_id() || state.tree_level > crate::file::mapping::types::MAX_LEVEL
+    if state.profile_id != profile_id() || state.tree_level > crate::file::mapping::node::MAX_LEVEL
     {
         return Err(ContentError::InvalidRecord("file state profile"));
     }
@@ -393,7 +393,7 @@ pub fn decode_file_state(canonical: &[u8]) -> ContentResult<FileState> {
     if state.profile_id != profile_id() {
         return Err(ContentError::InvalidRecord("file state profile"));
     }
-    if state.tree_level > crate::file::mapping::types::MAX_LEVEL {
+    if state.tree_level > crate::file::mapping::node::MAX_LEVEL {
         return Err(ContentError::MappingDepthExceeded);
     }
     Ok(state)
