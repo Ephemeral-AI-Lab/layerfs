@@ -1,0 +1,2449 @@
+{
+ "layer": "api",
+ "exceptions": [
+  {
+   "folder": "api/crates/layerfs-node/src",
+   "reason": "Cargo needs src/; call.rs cannot fold into declaration-only lib.rs"
+  },
+  {
+   "folder": "api/crates/layerfs-python/src",
+   "reason": "Cargo needs src/; call.rs cannot fold into declaration-only lib.rs"
+  },
+  {
+   "folder": "api/cli/bin",
+   "reason": "published npm bin path bin/layerfs"
+  },
+  {
+   "folder": "api/cli/test",
+   "reason": "the package's own npm test; one file"
+  },
+  {
+   "folder": "api/node/examples",
+   "reason": "npm convention; README links it"
+  },
+  {
+   "folder": "api/crates/layerfs-api/tests/support",
+   "reason": "sanctioned shared test support folder (2 files + mod.rs)"
+  },
+  {
+   "folder": "api/crates/layerfs-cli/tests/support",
+   "reason": "sanctioned shared test support folder (1 file + mod.rs)"
+  },
+  {
+   "folder": "api/node/test/cells",
+   "reason": "pending owner: #516 runner must stay out of the test glob; delete if unused"
+  },
+  {
+   "folder": "api/crates/layerfs-api/src/families/file/",
+   "reason": "file family: flat, one file per call, no count limit (owner 2026-11-27)"
+  }
+ ],
+ "rows": [
+  {
+   "old": "api/cli/LICENSE",
+   "new": "api/cli/LICENSE",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "api/cli/README.md",
+   "new": "api/cli/README.md",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "api/cli/package.json",
+   "new": "api/cli/package.json",
+   "change": "keep",
+   "note": "edited: test glob"
+  },
+  {
+   "old": "api/cli/bin/layerfs",
+   "new": "api/cli/bin/layerfs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "api/cli/test/package.mjs",
+   "new": "api/cli/test/package.test.mjs",
+   "change": "rename",
+   "note": ".test suffix (folder kept as exception)"
+  },
+  {
+   "old": "api/crates/layerfs-api/Cargo.toml",
+   "new": "api/crates/layerfs-api/Cargo.toml",
+   "change": "keep",
+   "note": "edited: 11 [[test]] entries for tests/standalone/"
+  },
+  {
+   "old": "api/crates/layerfs-api/build.rs",
+   "new": "api/crates/layerfs-api/build.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "api/crates/layerfs-api/src/lib.rs",
+   "new": "api/crates/layerfs-api/src/lib.rs",
+   "change": "keep",
+   "note": "edited: crate doc and `use calls::answer::doctor`"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/backup/connect.rs",
+   "new": "api/crates/layerfs-api/src/families/backup/connect.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/backup/create.rs",
+   "new": "api/crates/layerfs-api/src/families/backup/create.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/backup/disconnect.rs",
+   "new": "api/crates/layerfs-api/src/families/backup/disconnect.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/backup/doctor.rs",
+   "new": "api/crates/layerfs-api/src/families/backup/doctor.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/backup/list.rs",
+   "new": "api/crates/layerfs-api/src/families/backup/list.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/backup/mod.rs",
+   "new": "api/crates/layerfs-api/src/families/backup/mod.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/backup/restore.rs",
+   "new": "api/crates/layerfs-api/src/families/backup/restore.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/branch/fork.rs",
+   "new": "api/crates/layerfs-api/src/families/branch/fork.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/branch/get.rs",
+   "new": "api/crates/layerfs-api/src/families/branch/get.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/branch/list.rs",
+   "new": "api/crates/layerfs-api/src/families/branch/list.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/branch/merge.rs",
+   "new": "api/crates/layerfs-api/src/families/branch/merge.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/branch/mod.rs",
+   "new": "api/crates/layerfs-api/src/families/branch/mod.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/branch/publish.rs",
+   "new": "api/crates/layerfs-api/src/families/branch/publish.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/branch/remove.rs",
+   "new": "api/crates/layerfs-api/src/families/branch/remove.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/calls/check.rs",
+   "new": "api/crates/layerfs-api/src/dispatch/guard/arguments.rs",
+   "change": "rename",
+   "note": "every guard checks (rule 12); this one checks a call's arguments"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/calls/context.rs",
+   "new": "api/crates/layerfs-api/src/dispatch/context.rs",
+   "change": "move",
+   "note": "dispatch/ (owner 2026-11-27): the machinery under the call table: look up, guard, run, shape, log"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/calls/dispatch.rs",
+   "new": "api/crates/layerfs-api/src/dispatch/run/call.rs",
+   "change": "rename",
+   "note": "entry.rs rejected (rule 12); the file is the library's one `call`"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/calls/form.rs",
+   "new": "api/crates/layerfs-api/src/dispatch/answer/form.rs",
+   "change": "move",
+   "note": "dispatch/ (owner 2026-11-27): the machinery under the call table: look up, guard, run, shape, log; answer leaf: what a call answers"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/calls/guide.rs",
+   "new": "api/crates/layerfs-api/src/dispatch/guide.rs",
+   "change": "move",
+   "note": "dispatch/ (owner 2026-11-27): the machinery under the call table: look up, guard, run, shape, log"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/calls/host_only.rs",
+   "new": "api/crates/layerfs-api/src/dispatch/guard/host_only.rs",
+   "change": "move",
+   "note": "dispatch/ (owner 2026-11-27): the machinery under the call table: look up, guard, run, shape, log; guard leaf: refused before any effect"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/calls/keys.rs",
+   "new": "api/crates/layerfs-api/src/dispatch/answer/keys.rs",
+   "change": "move",
+   "note": "dispatch/ (owner 2026-11-27): the machinery under the call table: look up, guard, run, shape, log; answer leaf: what a call answers"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/calls/mod.rs",
+   "new": "api/crates/layerfs-api/src/dispatch/mod.rs",
+   "change": "move",
+   "note": "dispatch/ (owner 2026-11-27): the machinery under the call table: look up, guard, run, shape, log; edited: declares answer/, dispatch/, guard/; pub use keeps public paths"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/calls/platform_policy.rs",
+   "new": "api/crates/layerfs-api/src/dispatch/guard/platform_policy.rs",
+   "change": "move",
+   "note": "dispatch/ (owner 2026-11-27): the machinery under the call table: look up, guard, run, shape, log; guard leaf: refused before any effect"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/calls/refusal.rs",
+   "new": "api/crates/layerfs-api/src/dispatch/answer/refusal.rs",
+   "change": "move",
+   "note": "dispatch/ (owner 2026-11-27): the machinery under the call table: look up, guard, run, shape, log; answer leaf: what a call answers"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/calls/render.rs",
+   "new": "api/crates/layerfs-api/src/dispatch/run/call_log.rs",
+   "change": "rename",
+   "note": "run/ (owner 2026-11-27): the one dispatcher with its call log and calls.json line"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/calls/scope.rs",
+   "new": "api/crates/layerfs-api/src/dispatch/guard/scope.rs",
+   "change": "move",
+   "note": "dispatch/ (owner 2026-11-27): the machinery under the call table: look up, guard, run, shape, log; guard leaf: refused before any effect"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/calls/shape.rs",
+   "new": "api/crates/layerfs-api/src/dispatch/answer/shape.rs",
+   "change": "move",
+   "note": "dispatch/ (owner 2026-11-27): the machinery under the call table: look up, guard, run, shape, log; answer leaf: what a call answers"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/calls/table.rs",
+   "new": "api/crates/layerfs-api/src/dispatch/table.rs",
+   "change": "move",
+   "note": "dispatch/ (owner 2026-11-27): the machinery under the call table: look up, guard, run, shape, log"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/calls/text.rs",
+   "new": "api/crates/layerfs-api/src/dispatch/run/call_json.rs",
+   "change": "rename",
+   "note": "run/ (owner 2026-11-27): the one dispatcher with its call log and calls.json line"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/calls/doctor/answer.rs",
+   "new": "api/crates/layerfs-api/src/dispatch/answer/doctor.rs",
+   "change": "rename",
+   "note": "dispatch/ (owner 2026-11-27): the machinery under the call table: look up, guard, run, shape, log; one-file folder; the six doctors' shared answer"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/calls/doctor/mod.rs",
+   "new": null,
+   "change": "remove",
+   "note": "1-LOC root of a one-file folder; answer/mod.rs declares doctor"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/commit/diff.rs",
+   "new": "api/crates/layerfs-api/src/families/commit/diff.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/commit/get.rs",
+   "new": "api/crates/layerfs-api/src/families/commit/get.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/commit/list.rs",
+   "new": "api/crates/layerfs-api/src/families/commit/list.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/commit/mod.rs",
+   "new": "api/crates/layerfs-api/src/families/commit/mod.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/file/apply.rs",
+   "new": "api/crates/layerfs-api/src/families/file/apply.rs",
+   "change": "move",
+   "note": "file family, flat, one file per call (file-family exception, owner 2026-11-27)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/file/blame.rs",
+   "new": "api/crates/layerfs-api/src/families/file/blame.rs",
+   "change": "move",
+   "note": "file family, flat, one file per call (file-family exception, owner 2026-11-27)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/file/cp.rs",
+   "new": "api/crates/layerfs-api/src/families/file/cp.rs",
+   "change": "move",
+   "note": "file family, flat, one file per call (file-family exception, owner 2026-11-27)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/file/edit.rs",
+   "new": "api/crates/layerfs-api/src/families/file/edit.rs",
+   "change": "move",
+   "note": "file family, flat, one file per call (file-family exception, owner 2026-11-27)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/file/glob.rs",
+   "new": "api/crates/layerfs-api/src/families/file/glob.rs",
+   "change": "move",
+   "note": "file family, flat, one file per call (file-family exception, owner 2026-11-27)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/file/grep.rs",
+   "new": "api/crates/layerfs-api/src/families/file/grep.rs",
+   "change": "move",
+   "note": "file family, flat, one file per call (file-family exception, owner 2026-11-27)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/file/history.rs",
+   "new": "api/crates/layerfs-api/src/families/file/history.rs",
+   "change": "move",
+   "note": "file family, flat, one file per call (file-family exception, owner 2026-11-27)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/file/list.rs",
+   "new": "api/crates/layerfs-api/src/families/file/list.rs",
+   "change": "move",
+   "note": "file family, flat, one file per call (file-family exception, owner 2026-11-27)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/file/mkdir.rs",
+   "new": "api/crates/layerfs-api/src/families/file/mkdir.rs",
+   "change": "move",
+   "note": "file family, flat, one file per call (file-family exception, owner 2026-11-27)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/file/mod.rs",
+   "new": "api/crates/layerfs-api/src/families/file/mod.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/file/mv.rs",
+   "new": "api/crates/layerfs-api/src/families/file/mv.rs",
+   "change": "move",
+   "note": "file family, flat, one file per call (file-family exception, owner 2026-11-27)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/file/read.rs",
+   "new": "api/crates/layerfs-api/src/families/file/read.rs",
+   "change": "move",
+   "note": "file family, flat, one file per call (file-family exception, owner 2026-11-27)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/file/rm.rs",
+   "new": "api/crates/layerfs-api/src/families/file/rm.rs",
+   "change": "move",
+   "note": "file family, flat, one file per call (file-family exception, owner 2026-11-27)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/file/stat.rs",
+   "new": "api/crates/layerfs-api/src/families/file/stat.rs",
+   "change": "move",
+   "note": "file family, flat, one file per call (file-family exception, owner 2026-11-27)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/file/write.rs",
+   "new": "api/crates/layerfs-api/src/families/file/write.rs",
+   "change": "move",
+   "note": "file family, flat, one file per call (file-family exception, owner 2026-11-27)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/home/clear_log.rs",
+   "new": "api/crates/layerfs-api/src/families/home/clear_log.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/home/doctor.rs",
+   "new": "api/crates/layerfs-api/src/families/home/doctor.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/home/get.rs",
+   "new": "api/crates/layerfs-api/src/families/home/get.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/home/init.rs",
+   "new": "api/crates/layerfs-api/src/families/home/init.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/home/log.rs",
+   "new": "api/crates/layerfs-api/src/families/home/log.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/home/mod.rs",
+   "new": "api/crates/layerfs-api/src/families/home/mod.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/machine/create.rs",
+   "new": "api/crates/layerfs-api/src/families/machine/lifecycle/create.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/machine/doctor.rs",
+   "new": "api/crates/layerfs-api/src/families/machine/status/doctor.rs",
+   "change": "move",
+   "note": "machine reads: control word status/ (rule 19); inspect is a crate (rule 13)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/machine/files.rs",
+   "new": "api/crates/layerfs-api/src/families/machine/status/files.rs",
+   "change": "move",
+   "note": "machine reads: control word status/ (rule 19); inspect is a crate (rule 13)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/machine/get.rs",
+   "new": "api/crates/layerfs-api/src/families/machine/status/get.rs",
+   "change": "move",
+   "note": "machine reads: control word status/ (rule 19); inspect is a crate (rule 13)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/machine/images.rs",
+   "new": "api/crates/layerfs-api/src/families/machine/status/images.rs",
+   "change": "move",
+   "note": "machine.images only reads; images/images.rs repeated its folder (rule 14)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/machine/list.rs",
+   "new": "api/crates/layerfs-api/src/families/machine/status/list.rs",
+   "change": "move",
+   "note": "machine reads: control word status/ (rule 19); inspect is a crate (rule 13)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/machine/load_image.rs",
+   "new": "api/crates/layerfs-api/src/families/machine/load_image.rs",
+   "change": "move",
+   "note": "no thin image/ folder (rule 4); loose beside status/ and lifecycle/"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/machine/log.rs",
+   "new": "api/crates/layerfs-api/src/families/machine/status/log.rs",
+   "change": "move",
+   "note": "machine reads: control word status/ (rule 19); inspect is a crate (rule 13)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/machine/mod.rs",
+   "new": "api/crates/layerfs-api/src/families/machine/mod.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/machine/prune.rs",
+   "new": "api/crates/layerfs-api/src/families/machine/prune.rs",
+   "change": "move",
+   "note": "no thin image/ folder (rule 4); loose beside status/ and lifecycle/"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/machine/remove.rs",
+   "new": "api/crates/layerfs-api/src/families/machine/lifecycle/remove.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/machine/start.rs",
+   "new": "api/crates/layerfs-api/src/families/machine/lifecycle/start.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/machine/stats.rs",
+   "new": "api/crates/layerfs-api/src/families/machine/status/stats.rs",
+   "change": "move",
+   "note": "machine reads: control word status/ (rule 19); inspect is a crate (rule 13)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/machine/stop.rs",
+   "new": "api/crates/layerfs-api/src/families/machine/lifecycle/stop.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/machine/update.rs",
+   "new": "api/crates/layerfs-api/src/families/machine/update.rs",
+   "change": "move",
+   "note": "update changes settings, not exist/run (rule 20); loose as in layerfs-machine"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/project/delete.rs",
+   "new": "api/crates/layerfs-api/src/families/project/delete.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/project/doctor.rs",
+   "new": "api/crates/layerfs-api/src/families/project/doctor.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/project/export.rs",
+   "new": "api/crates/layerfs-api/src/families/project/export.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/project/get.rs",
+   "new": "api/crates/layerfs-api/src/families/project/get.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/project/hide_path.rs",
+   "new": "api/crates/layerfs-api/src/families/project/hide_path.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/project/init.rs",
+   "new": "api/crates/layerfs-api/src/families/project/init.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/project/list.rs",
+   "new": "api/crates/layerfs-api/src/families/project/list.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/project/mod.rs",
+   "new": "api/crates/layerfs-api/src/families/project/mod.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/project/stats.rs",
+   "new": "api/crates/layerfs-api/src/families/project/stats.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/sandbox/create.rs",
+   "new": "api/crates/layerfs-api/src/families/sandbox/create.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/sandbox/doctor.rs",
+   "new": "api/crates/layerfs-api/src/families/sandbox/doctor.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/sandbox/files.rs",
+   "new": "api/crates/layerfs-api/src/families/sandbox/files.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/sandbox/get.rs",
+   "new": "api/crates/layerfs-api/src/families/sandbox/get.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/sandbox/list.rs",
+   "new": "api/crates/layerfs-api/src/families/sandbox/list.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/sandbox/log.rs",
+   "new": "api/crates/layerfs-api/src/families/sandbox/log.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/sandbox/mod.rs",
+   "new": "api/crates/layerfs-api/src/families/sandbox/mod.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/sandbox/remove.rs",
+   "new": "api/crates/layerfs-api/src/families/sandbox/remove.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/store/attach.rs",
+   "new": "api/crates/layerfs-api/src/families/store/lifecycle/attach.rs",
+   "change": "move",
+   "note": "connect/disconnect/attach/detach change where a Store exists or runs (rule 20)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/store/compact.rs",
+   "new": "api/crates/layerfs-api/src/families/store/maintenance/compact.rs",
+   "change": "move",
+   "note": "control store's own word admin/maintenance/ (rule 19); a noun (rule 11)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/store/connect.rs",
+   "new": "api/crates/layerfs-api/src/families/store/lifecycle/connect.rs",
+   "change": "move",
+   "note": "connect/disconnect/attach/detach change where a Store exists or runs (rule 20)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/store/create.rs",
+   "new": "api/crates/layerfs-api/src/families/store/lifecycle/create.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/store/detach.rs",
+   "new": "api/crates/layerfs-api/src/families/store/lifecycle/detach.rs",
+   "change": "move",
+   "note": "connect/disconnect/attach/detach change where a Store exists or runs (rule 20)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/store/disconnect.rs",
+   "new": "api/crates/layerfs-api/src/families/store/lifecycle/disconnect.rs",
+   "change": "move",
+   "note": "connect/disconnect/attach/detach change where a Store exists or runs (rule 20)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/store/doctor.rs",
+   "new": "api/crates/layerfs-api/src/families/store/status/doctor.rs",
+   "change": "move",
+   "note": "Store reads: control word status/ (rule 19); inspect is a crate (rule 13)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/store/get.rs",
+   "new": "api/crates/layerfs-api/src/families/store/status/get.rs",
+   "change": "move",
+   "note": "Store reads: control word status/ (rule 19); inspect is a crate (rule 13)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/store/list.rs",
+   "new": "api/crates/layerfs-api/src/families/store/status/list.rs",
+   "change": "move",
+   "note": "Store reads: control word status/ (rule 19); inspect is a crate (rule 13)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/store/mod.rs",
+   "new": "api/crates/layerfs-api/src/families/store/mod.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/store/move.rs",
+   "new": "api/crates/layerfs-api/src/families/store/lifecycle/move.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/store/remove.rs",
+   "new": "api/crates/layerfs-api/src/families/store/lifecycle/remove.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/store/repair_mount_holders.rs",
+   "new": "api/crates/layerfs-api/src/families/store/maintenance/repair_mount_holders.rs",
+   "change": "move",
+   "note": "control store's own word admin/maintenance/ (rule 19); a noun (rule 11)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/store/upgrade.rs",
+   "new": "api/crates/layerfs-api/src/families/store/maintenance/upgrade.rs",
+   "change": "move",
+   "note": "control store's own word admin/maintenance/ (rule 19); a noun (rule 11)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/workspace/cancel.rs",
+   "new": "api/crates/layerfs-api/src/families/workspace/cancel.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/workspace/commit.rs",
+   "new": "api/crates/layerfs-api/src/families/workspace/commit.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/workspace/exec.rs",
+   "new": "api/crates/layerfs-api/src/families/workspace/exec.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/workspace/list.rs",
+   "new": "api/crates/layerfs-api/src/families/workspace/list.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/workspace/mod.rs",
+   "new": "api/crates/layerfs-api/src/families/workspace/mod.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/workspace/mount.rs",
+   "new": "api/crates/layerfs-api/src/families/workspace/mount.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/workspace/status.rs",
+   "new": "api/crates/layerfs-api/src/families/workspace/status.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/src/workspace/unmount.rs",
+   "new": "api/crates/layerfs-api/src/families/workspace/unmount.rs",
+   "change": "move",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/backup_family.rs",
+   "new": "api/crates/layerfs-api/tests/backup/family.rs",
+   "change": "rename",
+   "note": "module of the backup test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/backup_not_listed.rs",
+   "new": "api/crates/layerfs-api/tests/backup/not_listed.rs",
+   "change": "rename",
+   "note": "module of the backup test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/backup_progress.rs",
+   "new": "api/crates/layerfs-api/tests/backup/progress.rs",
+   "change": "rename",
+   "note": "module of the backup test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/backup_refusals.rs",
+   "new": "api/crates/layerfs-api/tests/backup/refusals.rs",
+   "change": "rename",
+   "note": "module of the backup test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/backup_rotate.rs",
+   "new": "api/crates/layerfs-api/tests/backup/rotate.rs",
+   "change": "rename",
+   "note": "module of the backup test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/built_ins_once.rs",
+   "new": "api/crates/layerfs-api/tests/standalone/machine_built_ins_once.rs",
+   "change": "rename",
+   "note": "standalone [[test]]: once-per-process check; own binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/calls_scope.rs",
+   "new": "api/crates/layerfs-api/tests/scope/allowed.rs",
+   "change": "rename",
+   "note": "module of the scope test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/calls_table.rs",
+   "new": "api/crates/layerfs-api/tests/calls/table.rs",
+   "change": "rename",
+   "note": "module of the calls test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/commit_get_pages.rs",
+   "new": "api/crates/layerfs-api/tests/standalone/commit_get_pages.rs",
+   "change": "move",
+   "note": "standalone [[test]]: lone family file"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/contract.rs",
+   "new": "api/crates/layerfs-api/tests/calls/contract.rs",
+   "change": "move",
+   "note": "module of the calls test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/contract_pending.json",
+   "new": "api/crates/layerfs-api/tests/calls/contract_pending.json",
+   "change": "move",
+   "note": "data for the calls/contract module"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/disabled_platforms.rs",
+   "new": "api/crates/layerfs-api/tests/calls/disabled_platforms.rs",
+   "change": "move",
+   "note": "module of the calls test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/docker_default_image.rs",
+   "new": "api/crates/layerfs-api/tests/machine_power/docker_default_image.rs",
+   "change": "move",
+   "note": "module of the machine_power test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/doctor_home_machine.rs",
+   "new": "api/crates/layerfs-api/tests/doctors/home_machine.rs",
+   "change": "rename",
+   "note": "module of the doctors test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/doctor_sandbox_calls.rs",
+   "new": "api/crates/layerfs-api/tests/doctors/sandbox.rs",
+   "change": "rename",
+   "note": "module of the doctors test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/doctor_targets.rs",
+   "new": "api/crates/layerfs-api/tests/doctors/targets.rs",
+   "change": "rename",
+   "note": "module of the doctors test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/doctor_unreadable_record.rs",
+   "new": "api/crates/layerfs-api/tests/doctors/unreadable_record.rs",
+   "change": "rename",
+   "note": "module of the doctors test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/file_family.rs",
+   "new": "api/crates/layerfs-api/tests/standalone/file_family.rs",
+   "change": "move",
+   "note": "standalone [[test]]: lone family file"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/gc_calls.rs",
+   "new": "api/crates/layerfs-api/tests/calls/gc.rs",
+   "change": "rename",
+   "note": "module of the calls test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/gc_trace.rs",
+   "new": "api/crates/layerfs-api/tests/calls/log_redaction.rs",
+   "change": "rename",
+   "note": "module of the calls test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/home_calls.rs",
+   "new": "api/crates/layerfs-api/tests/standalone/home_family.rs",
+   "change": "rename",
+   "note": "standalone [[test]]: lone family file; `<family>_family` name"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/home_records.rs",
+   "new": "api/crates/layerfs-api/tests/standalone/home_records.rs",
+   "change": "move",
+   "note": "standalone [[test]]: lone family file"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/init.rs",
+   "new": "api/crates/layerfs-api/tests/project_init/close.rs",
+   "change": "rename",
+   "note": "module of the project_init test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/list_pages.rs",
+   "new": "api/crates/layerfs-api/tests/standalone/branch_list_pages.rs",
+   "change": "rename",
+   "note": "standalone [[test]]: lone family file; it pages branch.list"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/local_install.rs",
+   "new": "api/crates/layerfs-api/tests/project_init/install.rs",
+   "change": "rename",
+   "note": "module of the project_init test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/logs.rs",
+   "new": "api/crates/layerfs-api/tests/calls/log.rs",
+   "change": "rename",
+   "note": "module of the calls test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/logs_inspect.rs",
+   "new": "api/crates/layerfs-api/tests/inspect/logs.rs",
+   "change": "rename",
+   "note": "module of the inspect test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/machine_calls.rs",
+   "new": "api/crates/layerfs-api/tests/machine/family.rs",
+   "change": "rename",
+   "note": "module of the machine test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/machine_files.rs",
+   "new": "api/crates/layerfs-api/tests/inspect/files.rs",
+   "change": "rename",
+   "note": "module of the inspect test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/machine_force.rs",
+   "new": "api/crates/layerfs-api/tests/machine_power/force.rs",
+   "change": "rename",
+   "note": "module of the machine_power test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/machine_force_native.rs",
+   "new": "api/crates/layerfs-api/tests/machine_power/force_native.rs",
+   "change": "rename",
+   "note": "module of the machine_power test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/machine_images.rs",
+   "new": "api/crates/layerfs-api/tests/inspect/images.rs",
+   "change": "rename",
+   "note": "module of the inspect test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/machine_list_live.rs",
+   "new": "api/crates/layerfs-api/tests/inspect/list_live.rs",
+   "change": "rename",
+   "note": "module of the inspect test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/machine_no_start.rs",
+   "new": "api/crates/layerfs-api/tests/machine_power/no_start.rs",
+   "change": "rename",
+   "note": "module of the machine_power test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/machine_platforms_setup.rs",
+   "new": "api/crates/layerfs-api/tests/machine/platforms_setup.rs",
+   "change": "rename",
+   "note": "module of the machine test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/machine_power.rs",
+   "new": "api/crates/layerfs-api/tests/machine_power/start_stop.rs",
+   "change": "rename",
+   "note": "module of the machine_power test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/machine_refusal_order.rs",
+   "new": "api/crates/layerfs-api/tests/machine/refusal_order.rs",
+   "change": "rename",
+   "note": "module of the machine test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/machine_removed_platforms.rs",
+   "new": "api/crates/layerfs-api/tests/machine/removed_platforms.rs",
+   "change": "rename",
+   "note": "module of the machine test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/machine_stats.rs",
+   "new": "api/crates/layerfs-api/tests/inspect/stats.rs",
+   "change": "rename",
+   "note": "module of the inspect test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/machine_take_down.rs",
+   "new": "api/crates/layerfs-api/tests/machine_power/take_down.rs",
+   "change": "rename",
+   "note": "module of the machine_power test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/nameless_machine.rs",
+   "new": "api/crates/layerfs-api/tests/machine/nameless_records.rs",
+   "change": "rename",
+   "note": "module of the machine test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/postgres_connect.rs",
+   "new": "api/crates/layerfs-api/tests/postgres/connect.rs",
+   "change": "rename",
+   "note": "module of the postgres test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/postgres_login.rs",
+   "new": "api/crates/layerfs-api/tests/postgres/login.rs",
+   "change": "rename",
+   "note": "module of the postgres test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/postgres_refusals.rs",
+   "new": "api/crates/layerfs-api/tests/postgres/refusals.rs",
+   "change": "rename",
+   "note": "module of the postgres test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/postgres_sandbox_reach.rs",
+   "new": "api/crates/layerfs-api/tests/postgres/sandbox_reach.rs",
+   "change": "rename",
+   "note": "module of the postgres test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/progress_options.rs",
+   "new": "api/crates/layerfs-api/tests/calls/progress_options.rs",
+   "change": "move",
+   "note": "module of the calls test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/project_doctor_full.rs",
+   "new": "api/crates/layerfs-api/tests/project/doctor_full.rs",
+   "change": "rename",
+   "note": "module of the project test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/project_export.rs",
+   "new": "api/crates/layerfs-api/tests/project/export.rs",
+   "change": "rename",
+   "note": "module of the project test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/project_family.rs",
+   "new": "api/crates/layerfs-api/tests/project/family.rs",
+   "change": "rename",
+   "note": "module of the project test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/project_init_worker.rs",
+   "new": "api/crates/layerfs-api/tests/project_init/worker.rs",
+   "change": "rename",
+   "note": "module of the project_init test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/project_list_intersection.rs",
+   "new": "api/crates/layerfs-api/tests/project/list_intersection.rs",
+   "change": "rename",
+   "note": "module of the project test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/project_list_worker.rs",
+   "new": "api/crates/layerfs-api/tests/project/list_worker.rs",
+   "change": "rename",
+   "note": "module of the project test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/project_state.rs",
+   "new": "api/crates/layerfs-api/tests/project/state.rs",
+   "change": "rename",
+   "note": "module of the project test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/project_stats.rs",
+   "new": "api/crates/layerfs-api/tests/project/stats.rs",
+   "change": "rename",
+   "note": "module of the project test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/provider_names.rs",
+   "new": "api/crates/layerfs-api/tests/machine/provider_names.rs",
+   "change": "move",
+   "note": "module of the machine test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/sandbox_capacity.rs",
+   "new": "api/crates/layerfs-api/tests/sandbox_daemon/capacity.rs",
+   "change": "rename",
+   "note": "module of the sandbox_daemon test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/sandbox_capacity_worker.rs",
+   "new": "api/crates/layerfs-api/tests/sandbox_daemon/capacity_worker.rs",
+   "change": "rename",
+   "note": "module of the sandbox_daemon test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/sandbox_deploy.rs",
+   "new": "api/crates/layerfs-api/tests/sandbox/deploy.rs",
+   "change": "rename",
+   "note": "module of the sandbox test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/sandbox_direct.rs",
+   "new": "api/crates/layerfs-api/tests/sandbox_daemon/direct.rs",
+   "change": "rename",
+   "note": "module of the sandbox_daemon test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/sandbox_direct_live.rs",
+   "new": "api/crates/layerfs-api/tests/sandbox_daemon/direct_live.rs",
+   "change": "rename",
+   "note": "module of the sandbox_daemon test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/sandbox_family.rs",
+   "new": "api/crates/layerfs-api/tests/sandbox/family.rs",
+   "change": "rename",
+   "note": "module of the sandbox test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/sandbox_files.rs",
+   "new": "api/crates/layerfs-api/tests/inspect/sandbox_files.rs",
+   "change": "move",
+   "note": "module of the inspect test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/sandbox_get_no_lease.rs",
+   "new": "api/crates/layerfs-api/tests/sandbox/get_no_lease.rs",
+   "change": "rename",
+   "note": "module of the sandbox test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/sandbox_lost.rs",
+   "new": "api/crates/layerfs-api/tests/sandbox/lost.rs",
+   "change": "rename",
+   "note": "module of the sandbox test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/sandbox_machines.rs",
+   "new": "api/crates/layerfs-api/tests/sandbox/machines.rs",
+   "change": "rename",
+   "note": "module of the sandbox test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/sandbox_network.rs",
+   "new": "api/crates/layerfs-api/tests/sandbox_daemon/network.rs",
+   "change": "rename",
+   "note": "module of the sandbox_daemon test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/sandbox_records.rs",
+   "new": "api/crates/layerfs-api/tests/sandbox/records.rs",
+   "change": "rename",
+   "note": "module of the sandbox test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/sandbox_retired_docker.rs",
+   "new": "api/crates/layerfs-api/tests/sandbox/retired_docker.rs",
+   "change": "rename",
+   "note": "module of the sandbox test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/saved_query_scope.rs",
+   "new": "api/crates/layerfs-api/tests/scope/history.rs",
+   "change": "rename",
+   "note": "module of the scope test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/scope_references.rs",
+   "new": "api/crates/layerfs-api/tests/scope/references.rs",
+   "change": "rename",
+   "note": "module of the scope test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/store_doctor_busy.rs",
+   "new": "api/crates/layerfs-api/tests/store/doctor_busy.rs",
+   "change": "rename",
+   "note": "module of the store test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/store_family.rs",
+   "new": "api/crates/layerfs-api/tests/store/family.rs",
+   "change": "rename",
+   "note": "module of the store test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/store_idle_checkpoint.rs",
+   "new": "api/crates/layerfs-api/tests/standalone/idle_checkpoint.rs",
+   "change": "rename",
+   "note": "standalone [[test]]: process-wide open Stores; target keeps store_ name"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/store_kind.rs",
+   "new": "api/crates/layerfs-api/tests/store/kind.rs",
+   "change": "rename",
+   "note": "module of the store test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/store_lifecycle.rs",
+   "new": "api/crates/layerfs-api/tests/store/lifecycle.rs",
+   "change": "rename",
+   "note": "module of the store test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/store_oneshot_close.rs",
+   "new": "api/crates/layerfs-api/tests/standalone/oneshot_close.rs",
+   "change": "rename",
+   "note": "standalone [[test]]: one-shot process close; target keeps store_ name"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/store_open_cache.rs",
+   "new": "api/crates/layerfs-api/tests/standalone/open_cache.rs",
+   "change": "rename",
+   "note": "standalone [[test]]: process-wide open-Store cache; target keeps store_ name"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/store_projects.rs",
+   "new": "api/crates/layerfs-api/tests/store/projects.rs",
+   "change": "rename",
+   "note": "module of the store test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/store_reaper.rs",
+   "new": "api/crates/layerfs-api/tests/standalone/reaper.rs",
+   "change": "rename",
+   "note": "standalone [[test]]: process-wide reaper; target keeps store_ name"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/store_routes.rs",
+   "new": "api/crates/layerfs-api/tests/store/routes.rs",
+   "change": "rename",
+   "note": "module of the store test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/store_stats.rs",
+   "new": "api/crates/layerfs-api/tests/store/stats.rs",
+   "change": "rename",
+   "note": "module of the store test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/store_transfer_crash.rs",
+   "new": "api/crates/layerfs-api/tests/store/transfer_crash.rs",
+   "change": "rename",
+   "note": "module of the store test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/store_upgrade.rs",
+   "new": "api/crates/layerfs-api/tests/store/upgrade.rs",
+   "change": "rename",
+   "note": "module of the store test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/store_upgrade_cancel.rs",
+   "new": "api/crates/layerfs-api/tests/standalone/upgrade_cancel.rs",
+   "change": "rename",
+   "note": "standalone [[test]]: process-wide cancel flag; target keeps store_ name"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/store_upgrade_fresh.rs",
+   "new": "api/crates/layerfs-api/tests/store/upgrade_fresh.rs",
+   "change": "rename",
+   "note": "module of the store test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/sweep_points.rs",
+   "new": "api/crates/layerfs-api/tests/sandbox/sweep_points.rs",
+   "change": "move",
+   "note": "module of the sandbox test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/worker_dial.rs",
+   "new": "api/crates/layerfs-api/tests/machine_power/worker_dial.rs",
+   "change": "move",
+   "note": "module of the machine_power test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/worker_mismatch.rs",
+   "new": "api/crates/layerfs-api/tests/store/worker_mismatch.rs",
+   "change": "move",
+   "note": "module of the store test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/workspace_names.rs",
+   "new": "api/crates/layerfs-api/tests/sandbox/workspace_names.rs",
+   "change": "move",
+   "note": "module of the sandbox test binary"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/upgrade_support/mod.rs",
+   "new": "api/crates/layerfs-api/tests/support/upgrade.rs",
+   "change": "rename",
+   "note": "sanctioned support/ folder"
+  },
+  {
+   "old": "api/crates/layerfs-cli/Cargo.toml",
+   "new": "api/crates/layerfs-cli/Cargo.toml",
+   "change": "keep",
+   "note": "edited: 4 [[test]] entries for tests/standalone/"
+  },
+  {
+   "old": "api/crates/layerfs-cli/build.rs",
+   "new": "api/crates/layerfs-cli/build.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "api/crates/layerfs-cli/src/banner.rs",
+   "new": "api/crates/layerfs-cli/src/style.rs",
+   "change": "rename",
+   "note": "ANSI styling, not a banner"
+  },
+  {
+   "old": "api/crates/layerfs-cli/src/capabilities.rs",
+   "new": "api/crates/layerfs-cli/src/discovery.rs",
+   "change": "rename",
+   "note": "its own doc: machine-readable CLI discovery"
+  },
+  {
+   "old": "api/crates/layerfs-cli/src/help.rs",
+   "new": "api/crates/layerfs-cli/src/help.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "api/crates/layerfs-cli/src/lib.rs",
+   "new": "api/crates/layerfs-cli/src/lib.rs",
+   "change": "keep",
+   "note": "edited: module names"
+  },
+  {
+   "old": "api/crates/layerfs-cli/src/main.rs",
+   "new": "api/crates/layerfs-cli/src/main.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "api/crates/layerfs-cli/src/output.rs",
+   "new": "api/crates/layerfs-cli/src/output.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "api/crates/layerfs-cli/src/parse.rs",
+   "new": "api/crates/layerfs-cli/src/parse.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "api/crates/layerfs-cli/src/run.rs",
+   "new": "api/crates/layerfs-cli/src/run.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "api/crates/layerfs-cli/src/signals.rs",
+   "new": "api/crates/layerfs-cli/src/signals.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "api/crates/layerfs-cli/src/view.rs",
+   "new": "api/crates/layerfs-cli/src/view.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "api/crates/layerfs-cli/src/words.rs",
+   "new": "api/crates/layerfs-cli/src/usage_words.rs",
+   "change": "rename",
+   "note": "usage-line value words, not argv words"
+  },
+  {
+   "old": "api/crates/layerfs-cli/src/worker.rs",
+   "new": "api/crates/layerfs-cli/src/worker.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/argv.rs",
+   "new": "api/crates/layerfs-cli/tests/command_line/argv.rs",
+   "change": "move",
+   "note": "module of the command_line test binary"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/backup_connect.rs",
+   "new": "api/crates/layerfs-cli/tests/command_line/backup_connect.rs",
+   "change": "move",
+   "note": "module of the command_line test binary"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/cancel.rs",
+   "new": "api/crates/layerfs-cli/tests/exec/cancel.rs",
+   "change": "move",
+   "note": "module of the exec test binary"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/cancel_forwarded.rs",
+   "new": "api/crates/layerfs-cli/tests/standalone/exec_cancel_forwarded.rs",
+   "change": "rename",
+   "note": "standalone [[test]]: own ci_tests.py SLOW key"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/cancel_worker.rs",
+   "new": "api/crates/layerfs-cli/tests/exec/cancel_worker.rs",
+   "change": "move",
+   "note": "module of the exec test binary"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/capabilities.rs",
+   "new": "api/crates/layerfs-cli/tests/help/discovery.rs",
+   "change": "rename",
+   "note": "module of the help test binary"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/closed_streams.rs",
+   "new": "api/crates/layerfs-cli/tests/command_line/closed_streams.rs",
+   "change": "move",
+   "note": "module of the command_line test binary"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/concurrent_reads.rs",
+   "new": "api/crates/layerfs-cli/tests/store_process/concurrent_reads.rs",
+   "change": "move",
+   "note": "module of the store_process test binary"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/disabled_platforms.rs",
+   "new": "api/crates/layerfs-cli/tests/standalone/disabled_platforms.rs",
+   "change": "move",
+   "note": "standalone [[test]]: the matrix shared with the SDKs"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/doctor.rs",
+   "new": "api/crates/layerfs-cli/tests/doctor_output/report.rs",
+   "change": "rename",
+   "note": "module of the doctor_output test binary"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/doctor_targets.rs",
+   "new": "api/crates/layerfs-cli/tests/doctor_output/targets.rs",
+   "change": "rename",
+   "note": "module of the doctor_output test binary"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/doctor_text_order.rs",
+   "new": "api/crates/layerfs-cli/tests/doctor_output/text_order.rs",
+   "change": "rename",
+   "note": "module of the doctor_output test binary"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/exit_codes.rs",
+   "new": "api/crates/layerfs-cli/tests/command_line/exit_codes.rs",
+   "change": "move",
+   "note": "module of the command_line test binary"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/forms.rs",
+   "new": "api/crates/layerfs-cli/tests/command_line/global_options.rs",
+   "change": "rename",
+   "note": "module of the command_line test binary"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/gc.rs",
+   "new": "api/crates/layerfs-cli/tests/command_line/gc_calls.rs",
+   "change": "rename",
+   "note": "module of the command_line test binary"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/help.rs",
+   "new": "api/crates/layerfs-cli/tests/help/topics.rs",
+   "change": "rename",
+   "note": "module of the help test binary"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/logs.rs",
+   "new": "api/crates/layerfs-cli/tests/command_line/logs.rs",
+   "change": "move",
+   "note": "module of the command_line test binary"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/phase1_live_exec.rs",
+   "new": "api/crates/layerfs-cli/tests/exec/live.rs",
+   "change": "rename",
+   "note": "module of the exec test binary"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/progress.rs",
+   "new": "api/crates/layerfs-cli/tests/command_line/progress.rs",
+   "change": "move",
+   "note": "module of the command_line test binary"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/publish_options.rs",
+   "new": "api/crates/layerfs-cli/tests/help/branch_publish_options.rs",
+   "change": "rename",
+   "note": "module of the help test binary"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/rendering.rs",
+   "new": "api/crates/layerfs-cli/tests/command_line/text_output.rs",
+   "change": "rename",
+   "note": "module of the command_line test binary"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/sandbox_images.rs",
+   "new": "api/crates/layerfs-cli/tests/command_line/sandbox_images.rs",
+   "change": "move",
+   "note": "module of the command_line test binary"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/saved_continuation.rs",
+   "new": "api/crates/layerfs-cli/tests/command_line/saved_continuation.rs",
+   "change": "move",
+   "note": "module of the command_line test binary"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/sqlite_compact_process_kill.rs",
+   "new": "api/crates/layerfs-cli/tests/store_process/compact_kill.rs",
+   "change": "rename",
+   "note": "module of the store_process test binary"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/store_closed.rs",
+   "new": "api/crates/layerfs-cli/tests/store_process/closed.rs",
+   "change": "rename",
+   "note": "module of the store_process test binary"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/store_upgrade_signals.rs",
+   "new": "api/crates/layerfs-cli/tests/store_process/upgrade_signals.rs",
+   "change": "rename",
+   "note": "module of the store_process test binary"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/stream.rs",
+   "new": "api/crates/layerfs-cli/tests/exec/stream.rs",
+   "change": "move",
+   "note": "module of the exec test binary"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/stream_exit.rs",
+   "new": "api/crates/layerfs-cli/tests/exec/stream_exit.rs",
+   "change": "move",
+   "note": "module of the exec test binary"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/unreadable_machine.rs",
+   "new": "api/crates/layerfs-cli/tests/standalone/machine_unreadable_record.rs",
+   "change": "rename",
+   "note": "standalone [[test]]: lone file"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/usage_lines.rs",
+   "new": "api/crates/layerfs-cli/tests/help/usage_lines.rs",
+   "change": "move",
+   "note": "module of the help test binary"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/worker.rs",
+   "new": "api/crates/layerfs-cli/tests/standalone/worker.rs",
+   "change": "move",
+   "note": "standalone [[test]]: lone file: `layerfs worker`"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/common/mod.rs",
+   "new": "api/crates/layerfs-cli/tests/support/mod.rs",
+   "change": "move",
+   "note": "common/ is a catch-all name; sanctioned support/"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/common/stream_worker.rs",
+   "new": "api/crates/layerfs-cli/tests/support/stream_worker.rs",
+   "change": "move",
+   "note": "common/ is a catch-all name; sanctioned support/"
+  },
+  {
+   "old": "api/crates/layerfs-node/Cargo.toml",
+   "new": "api/crates/layerfs-node/Cargo.toml",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "api/crates/layerfs-node/build.rs",
+   "new": "api/crates/layerfs-node/build.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "api/crates/layerfs-node/src/call.rs",
+   "new": "api/crates/layerfs-node/src/call.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "api/crates/layerfs-node/src/lib.rs",
+   "new": "api/crates/layerfs-node/src/lib.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "api/crates/layerfs-python/Cargo.toml",
+   "new": "api/crates/layerfs-python/Cargo.toml",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "api/crates/layerfs-python/build.rs",
+   "new": "api/crates/layerfs-python/build.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "api/crates/layerfs-python/src/call.rs",
+   "new": "api/crates/layerfs-python/src/call.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "api/crates/layerfs-python/src/lib.rs",
+   "new": "api/crates/layerfs-python/src/lib.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "api/mcp/package-lock.json",
+   "new": "api/mcp/package-lock.json",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "api/mcp/package.json",
+   "new": "api/mcp/package.json",
+   "change": "keep",
+   "note": "edited: test glob \"test/**/*.test.mjs\""
+  },
+  {
+   "old": "api/mcp/scripts/gen-profiles.mjs",
+   "new": "api/scripts/mcp-profiles.mjs",
+   "change": "rename",
+   "note": "one-file folder; named for what it generates"
+  },
+  {
+   "old": "api/mcp/src/errors.js",
+   "new": "api/mcp/src/errors.js",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "api/mcp/src/exportroots.js",
+   "new": "api/mcp/src/export-roots.js",
+   "change": "rename",
+   "note": "kebab-case, matches its test"
+  },
+  {
+   "old": "api/mcp/src/profiles.js",
+   "new": "api/mcp/src/profiles.js",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "api/mcp/src/progress.js",
+   "new": "api/mcp/src/progress.js",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "api/mcp/src/server.js",
+   "new": "api/mcp/src/server.js",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "api/mcp/src/tools.js",
+   "new": "api/mcp/src/tools.js",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "api/mcp/src/values.js",
+   "new": "api/mcp/src/values.js",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "api/mcp/test/concurrency.test.mjs",
+   "new": "api/mcp/test/protocol/concurrency.test.mjs",
+   "change": "move",
+   "note": "test root holds areas only; protocol area"
+  },
+  {
+   "old": "api/mcp/test/errors.test.mjs",
+   "new": "api/mcp/test/tools/errors.test.mjs",
+   "change": "move",
+   "note": "test root holds areas only; tools area"
+  },
+  {
+   "old": "api/mcp/test/export-roots.test.mjs",
+   "new": "api/mcp/test/tools/export-roots.test.mjs",
+   "change": "move",
+   "note": "test root holds areas only; tools area"
+  },
+  {
+   "old": "api/mcp/test/helpers.mjs",
+   "new": "api/mcp/test/helpers.mjs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "api/mcp/test/profiles.test.mjs",
+   "new": "api/mcp/test/tools/profiles.test.mjs",
+   "change": "move",
+   "note": "test root holds areas only; tools area"
+  },
+  {
+   "old": "api/mcp/test/purity.test.mjs",
+   "new": "api/mcp/test/protocol/purity.test.mjs",
+   "change": "move",
+   "note": "test root holds areas only; protocol area"
+  },
+  {
+   "old": "api/mcp/test/values.test.mjs",
+   "new": "api/mcp/test/tools/values.test.mjs",
+   "change": "move",
+   "note": "test root holds areas only; tools area"
+  },
+  {
+   "old": "api/mcp/test/workflow.test.mjs",
+   "new": "api/mcp/test/protocol/workflow.test.mjs",
+   "change": "move",
+   "note": "test root holds areas only; protocol area"
+  },
+  {
+   "old": "api/node/LICENSE",
+   "new": "api/node/LICENSE",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "api/node/README.md",
+   "new": "api/node/README.md",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "api/node/package.json",
+   "new": "api/node/package.json",
+   "change": "keep",
+   "note": "edited: test glob \"test/**/*.test.mjs\""
+  },
+  {
+   "old": "api/node/examples/file-history.mjs",
+   "new": "api/node/examples/file-history.mjs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "api/node/src/errors.js",
+   "new": "api/node/src/errors.js",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "api/node/src/index.d.ts",
+   "new": "api/node/src/index.d.ts",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "api/node/src/index.js",
+   "new": "api/node/src/index.js",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "api/node/src/native.js",
+   "new": "api/node/src/native.js",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "api/node/src/values.js",
+   "new": "api/node/src/values.js",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "api/node/test/calls.mjs",
+   "new": "api/node/test/calls/every-call.test.mjs",
+   "change": "rename",
+   "note": "test root holds areas only; `calls` area, .test suffix"
+  },
+  {
+   "old": "api/node/test/close.mjs",
+   "new": "api/node/test/calls/close.test.mjs",
+   "change": "rename",
+   "note": "test root holds areas only; `calls` area, .test suffix"
+  },
+  {
+   "old": "api/node/test/contract.mjs",
+   "new": "api/node/test/contract/front-ends.test.mjs",
+   "change": "rename",
+   "note": "test root holds areas only; `contract` area, .test suffix"
+  },
+  {
+   "old": "api/node/test/coverage.mjs",
+   "new": "api/node/test/drift/coverage.test.mjs",
+   "change": "rename",
+   "note": "test root holds areas only; `drift` area, .test suffix"
+  },
+  {
+   "old": "api/node/test/disabled-platforms.mjs",
+   "new": "api/node/test/contract/disabled-platforms.test.mjs",
+   "change": "rename",
+   "note": "test root holds areas only; `contract` area, .test suffix"
+  },
+  {
+   "old": "api/node/test/doctor.mjs",
+   "new": "api/node/test/calls/doctor.test.mjs",
+   "change": "rename",
+   "note": "test root holds areas only; `calls` area, .test suffix"
+  },
+  {
+   "old": "api/node/test/events.mjs",
+   "new": "api/node/test/calls/events.test.mjs",
+   "change": "rename",
+   "note": "test root holds areas only; `calls` area, .test suffix"
+  },
+  {
+   "old": "api/node/test/native.mjs",
+   "new": "api/node/test/native/native.test.mjs",
+   "change": "rename",
+   "note": "test root holds areas only; `native` area, .test suffix"
+  },
+  {
+   "old": "api/node/test/package.mjs",
+   "new": "api/node/test/drift/package.test.mjs",
+   "change": "rename",
+   "note": "test root holds areas only; `drift` area, .test suffix"
+  },
+  {
+   "old": "api/node/test/progress.mjs",
+   "new": "api/node/test/calls/progress.test.mjs",
+   "change": "rename",
+   "note": "test root holds areas only; `calls` area, .test suffix"
+  },
+  {
+   "old": "api/node/test/project_export.mjs",
+   "new": "api/node/test/native/project-export.test.mjs",
+   "change": "rename",
+   "note": "test root holds areas only; `native` area, .test suffix"
+  },
+  {
+   "old": "api/node/test/shell.mjs",
+   "new": "api/node/test/contract/shell.test.mjs",
+   "change": "rename",
+   "note": "test root holds areas only; `contract` area, .test suffix"
+  },
+  {
+   "old": "api/node/test/values.mjs",
+   "new": "api/node/test/native/values.test.mjs",
+   "change": "rename",
+   "note": "test root holds areas only; `native` area, .test suffix"
+  },
+  {
+   "old": "api/node/test/branch-file/inventory.mjs",
+   "new": "api/node/test/drift/inventory.test.mjs",
+   "change": "rename",
+   "note": "test root holds areas only; `drift` area, .test suffix"
+  },
+  {
+   "old": "api/node/test/contract/cases.mjs",
+   "new": "api/node/test/contract/cases.mjs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "api/node/test/contract/driver.py",
+   "new": "api/node/test/contract/driver.py",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "api/node/test/contract/refusal.mjs",
+   "new": "api/node/test/contract/refusal.mjs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "api/node/test/types/sample.ts",
+   "new": "api/node/test/drift/types-sample.ts",
+   "change": "rename",
+   "note": "test root holds areas only; `drift` area, .test suffix"
+  },
+  {
+   "old": "api/node/test/verify/cells/cell.mjs",
+   "new": "api/node/test/cells/cell.mjs",
+   "change": "move",
+   "note": "pending owner: delete #516 runner if unused; else exception, verify/ held only cells/"
+  },
+  {
+   "old": "api/node/test/verify/cells/workloads.mjs",
+   "new": "api/node/test/cells/workloads.mjs",
+   "change": "move",
+   "note": "pending owner: delete #516 runner if unused; else exception, verify/ held only cells/"
+  },
+  {
+   "old": "api/python/LICENSE",
+   "new": "api/python/LICENSE",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "api/python/README.md",
+   "new": "api/python/README.md",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "api/python/pyproject.toml",
+   "new": "api/python/pyproject.toml",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "api/python/src/layerfs/__init__.py",
+   "new": "api/python/src/layerfs/__init__.py",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "api/python/src/layerfs/__init__.pyi",
+   "new": "api/python/src/layerfs/__init__.pyi",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "api/python/src/layerfs/_client.py",
+   "new": "api/python/src/layerfs/_client.py",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "api/python/src/layerfs/_client.pyi",
+   "new": "api/python/src/layerfs/_client.pyi",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "api/python/src/layerfs/_errors.py",
+   "new": "api/python/src/layerfs/_errors.py",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "api/python/src/layerfs/_errors.pyi",
+   "new": "api/python/src/layerfs/_errors.pyi",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "api/python/src/layerfs/_values.py",
+   "new": "api/python/src/layerfs/_values.py",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "api/python/src/layerfs/_values.pyi",
+   "new": "api/python/src/layerfs/_values.pyi",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "api/python/src/layerfs/aio.py",
+   "new": "api/python/src/layerfs/aio.py",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "api/python/src/layerfs/aio.pyi",
+   "new": "api/python/src/layerfs/aio.pyi",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "api/python/src/layerfs/py.typed",
+   "new": "api/python/src/layerfs/py.typed",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "api/python/test/test_calls.py",
+   "new": "api/python/test/calls/test_calls.py",
+   "change": "move",
+   "note": "test root holds areas only; calls area"
+  },
+  {
+   "old": "api/python/test/test_disabled_platforms.py",
+   "new": "api/python/test/calls/test_disabled_platforms.py",
+   "change": "move",
+   "note": "test root holds areas only; calls area"
+  },
+  {
+   "old": "api/python/test/test_doctor.py",
+   "new": "api/python/test/calls/test_doctor.py",
+   "change": "move",
+   "note": "test root holds areas only; calls area"
+  },
+  {
+   "old": "api/python/test/test_flow.py",
+   "new": "api/python/test/calls/test_flow.py",
+   "change": "move",
+   "note": "test root holds areas only; calls area"
+  },
+  {
+   "old": "api/python/test/test_native_missing.py",
+   "new": "api/python/test/native/test_native_missing.py",
+   "change": "move",
+   "note": "test root holds areas only; native area"
+  },
+  {
+   "old": "api/python/test/test_progress.py",
+   "new": "api/python/test/calls/test_progress.py",
+   "change": "move",
+   "note": "test root holds areas only; calls area"
+  },
+  {
+   "old": "api/python/test/test_project_export.py",
+   "new": "api/python/test/native/test_project_export.py",
+   "change": "move",
+   "note": "test root holds areas only; native area"
+  },
+  {
+   "old": "api/python/test/test_stubs.py",
+   "new": "api/python/test/stubs/test_stubs.py",
+   "change": "move",
+   "note": "test root holds areas only; stubs area"
+  },
+  {
+   "old": "api/python/test/test_values.py",
+   "new": "api/python/test/native/test_values.py",
+   "change": "move",
+   "note": "test root holds areas only; native area"
+  },
+  {
+   "old": "api/python/test/typed_samples/bad.py",
+   "new": "api/python/test/stubs/bad.py",
+   "change": "move",
+   "note": "two-file folder; joins the stubs area"
+  },
+  {
+   "old": "api/python/test/typed_samples/ok.py",
+   "new": "api/python/test/stubs/ok.py",
+   "change": "move",
+   "note": "two-file folder; joins the stubs area"
+  },
+  {
+   "old": "api/python/tools/gen_stubs.py",
+   "new": "api/scripts/python_stubs.py",
+   "change": "rename",
+   "note": "one-file folder; named for what it generates"
+  },
+  {
+   "old": "api/scripts/build-cli-dist.mjs",
+   "new": "api/scripts/cli-dist.mjs",
+   "change": "rename",
+   "note": "build-/gen- prefixes would force a folder; named for output"
+  },
+  {
+   "old": "api/scripts/build-native.mjs",
+   "new": "api/scripts/native-addon.mjs",
+   "change": "rename",
+   "note": "build-/gen- prefixes would force a folder; named for output"
+  },
+  {
+   "old": "api/scripts/gen-coverage.mjs",
+   "new": "api/scripts/coverage-doc.mjs",
+   "change": "rename",
+   "note": "build-/gen- prefixes would force a folder; named for output"
+  },
+  {
+   "old": "api/scripts/gen-node-types.mjs",
+   "new": "api/scripts/node-types.mjs",
+   "change": "rename",
+   "note": "build-/gen- prefixes would force a folder; named for output"
+  },
+  {
+   "old": "api/test/disabled-platforms.json",
+   "new": "api/crates/layerfs-api/tests/support/disabled-platforms.json",
+   "change": "move",
+   "note": "one-file folder; the platform policy's tests own the shared matrix"
+  },
+  {
+   "old": null,
+   "new": "api/crates/layerfs-api/src/dispatch/answer/mod.rs",
+   "change": "new",
+   "note": "dispatch/ (owner 2026-11-27): the machinery under the call table: look up, guard, run, shape, log; declares the answer/ leaf (what a call answers)"
+  },
+  {
+   "old": null,
+   "new": "api/crates/layerfs-api/src/dispatch/run/mod.rs",
+   "change": "new",
+   "note": "run/ (owner 2026-11-27): the one dispatcher with its call log and calls.json line"
+  },
+  {
+   "old": null,
+   "new": "api/crates/layerfs-api/src/dispatch/guard/mod.rs",
+   "change": "new",
+   "note": "dispatch/ (owner 2026-11-27): the machinery under the call table: look up, guard, run, shape, log; declares the guard/ leaf (refusals before any effect)"
+  },
+  {
+   "old": null,
+   "new": "api/crates/layerfs-api/src/families/machine/status/mod.rs",
+   "change": "new",
+   "note": "machine reads: control word status/ (rule 19); inspect is a crate (rule 13)"
+  },
+  {
+   "old": null,
+   "new": "api/crates/layerfs-api/src/families/machine/lifecycle/mod.rs",
+   "change": "new",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": null,
+   "new": "api/crates/layerfs-api/src/families/store/status/mod.rs",
+   "change": "new",
+   "note": "Store reads: control word status/ (rule 19); inspect is a crate (rule 13)"
+  },
+  {
+   "old": null,
+   "new": "api/crates/layerfs-api/src/families/store/lifecycle/mod.rs",
+   "change": "new",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": null,
+   "new": "api/crates/layerfs-api/src/families/store/maintenance/mod.rs",
+   "change": "new",
+   "note": "control store's own word admin/maintenance/ (rule 19); a noun (rule 11)"
+  },
+  {
+   "old": null,
+   "new": "api/crates/layerfs-api/tests/backup/main.rs",
+   "change": "new",
+   "note": "backup test binary root; shared ENV lock"
+  },
+  {
+   "old": null,
+   "new": "api/crates/layerfs-api/tests/calls/main.rs",
+   "change": "new",
+   "note": "calls test binary root; shared ENV lock"
+  },
+  {
+   "old": null,
+   "new": "api/crates/layerfs-api/tests/scope/main.rs",
+   "change": "new",
+   "note": "scope test binary root; shared ENV lock"
+  },
+  {
+   "old": null,
+   "new": "api/crates/layerfs-api/tests/doctors/main.rs",
+   "change": "new",
+   "note": "doctors test binary root; shared ENV lock"
+  },
+  {
+   "old": null,
+   "new": "api/crates/layerfs-api/tests/inspect/main.rs",
+   "change": "new",
+   "note": "inspect test binary root; shared ENV lock"
+  },
+  {
+   "old": null,
+   "new": "api/crates/layerfs-api/tests/machine/main.rs",
+   "change": "new",
+   "note": "machine test binary root; shared ENV lock"
+  },
+  {
+   "old": null,
+   "new": "api/crates/layerfs-api/tests/machine_power/main.rs",
+   "change": "new",
+   "note": "machine_power test binary root; shared ENV lock"
+  },
+  {
+   "old": null,
+   "new": "api/crates/layerfs-api/tests/postgres/main.rs",
+   "change": "new",
+   "note": "postgres test binary root; shared ENV lock"
+  },
+  {
+   "old": null,
+   "new": "api/crates/layerfs-api/tests/project/main.rs",
+   "change": "new",
+   "note": "project test binary root; shared ENV lock"
+  },
+  {
+   "old": null,
+   "new": "api/crates/layerfs-api/tests/project_init/main.rs",
+   "change": "new",
+   "note": "project_init test binary root; shared ENV lock"
+  },
+  {
+   "old": null,
+   "new": "api/crates/layerfs-api/tests/sandbox/main.rs",
+   "change": "new",
+   "note": "sandbox test binary root; shared ENV lock"
+  },
+  {
+   "old": null,
+   "new": "api/crates/layerfs-api/tests/sandbox_daemon/main.rs",
+   "change": "new",
+   "note": "sandbox_daemon test binary root; shared ENV lock"
+  },
+  {
+   "old": null,
+   "new": "api/crates/layerfs-api/tests/store/main.rs",
+   "change": "new",
+   "note": "store test binary root; shared ENV lock"
+  },
+  {
+   "old": null,
+   "new": "api/crates/layerfs-api/tests/support/mod.rs",
+   "change": "new",
+   "note": "declares the shared test support modules"
+  },
+  {
+   "old": null,
+   "new": "api/crates/layerfs-cli/tests/exec/main.rs",
+   "change": "new",
+   "note": "exec test binary root; shared ENV lock"
+  },
+  {
+   "old": null,
+   "new": "api/crates/layerfs-cli/tests/command_line/main.rs",
+   "change": "new",
+   "note": "command_line test binary root; shared ENV lock"
+  },
+  {
+   "old": null,
+   "new": "api/crates/layerfs-cli/tests/help/main.rs",
+   "change": "new",
+   "note": "help test binary root; shared ENV lock"
+  },
+  {
+   "old": null,
+   "new": "api/crates/layerfs-cli/tests/doctor_output/main.rs",
+   "change": "new",
+   "note": "doctor_output test binary root; shared ENV lock"
+  },
+  {
+   "old": null,
+   "new": "api/crates/layerfs-cli/tests/store_process/main.rs",
+   "change": "new",
+   "note": "store_process test binary root; shared ENV lock"
+  },
+  {
+   "old": null,
+   "new": "api/crates/layerfs-api/src/families/workspace/doctor.rs",
+   "change": "new",
+   "note": "families/: the ten call families leave the row of dispatch/ and worker/ (rules 8, 10)"
+  },
+  {
+   "old": null,
+   "new": "api/crates/layerfs-api/src/families/mod.rs",
+   "change": "new",
+   "note": "declares the ten families; families() list moves here from lib.rs"
+  },
+  {
+   "old": null,
+   "new": "api/crates/layerfs-api/src/worker/mod.rs",
+   "change": "new",
+   "note": "replaces lib.rs's pub mod worker re-export block"
+  },
+  {
+   "old": null,
+   "new": "api/crates/layerfs-api/tests/support/doctor_own.rs",
+   "change": "new",
+   "note": "split from control/crates/layerfs-control/tests/support/doctor_own.rs"
+  },
+  {
+   "old": null,
+   "new": "api/crates/layerfs-api/tests/worker/main.rs",
+   "change": "new",
+   "note": "area test binary: one module per topic"
+  },
+  {
+   "old": null,
+   "new": "api/crates/layerfs-api/tests/worker_fault/main.rs",
+   "change": "new",
+   "note": "area test binary: one module per topic"
+  },
+  {
+   "old": null,
+   "new": "api/crates/layerfs-api/tests/worker_ops/main.rs",
+   "change": "new",
+   "note": "area test binary: one module per topic"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/postgresql_one_connection.rs",
+   "new": "api/crates/layerfs-api/tests/postgres/one_connection.rs",
+   "change": "rename",
+   "note": "test added at #818/#835"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/run_root_live.rs",
+   "new": "api/crates/layerfs-api/tests/sandbox/run_root_live.rs",
+   "change": "move",
+   "note": "test added at #818/#835"
+  },
+  {
+   "old": "api/crates/layerfs-api/tests/store_call_steps.rs",
+   "new": "api/crates/layerfs-api/tests/store/call_steps.rs",
+   "change": "rename",
+   "note": "test added at #818/#835"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/common/host_worker.rs",
+   "new": "api/crates/layerfs-cli/tests/support/host_worker.rs",
+   "change": "move",
+   "note": "test added at #818/#835"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/common/host_worker_proof.rs",
+   "new": "api/crates/layerfs-cli/tests/support/host_worker_proof.rs",
+   "change": "move",
+   "note": "test added at #818/#835"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/common/host_writes.rs",
+   "new": "api/crates/layerfs-cli/tests/support/host_writes.rs",
+   "change": "move",
+   "note": "test added at #818/#835"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/common/postgresql.rs",
+   "new": "api/crates/layerfs-cli/tests/support/postgresql.rs",
+   "change": "move",
+   "note": "test added at #818/#835"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/host_machine_stop.rs",
+   "new": "api/crates/layerfs-cli/tests/host_worker/machine_stop.rs",
+   "change": "rename",
+   "note": "test added at #818/#835"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/host_worker_calls.rs",
+   "new": "api/crates/layerfs-cli/tests/host_worker/calls.rs",
+   "change": "rename",
+   "note": "test added at #818/#835"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/host_worker_crash.rs",
+   "new": "api/crates/layerfs-cli/tests/host_worker/crash.rs",
+   "change": "rename",
+   "note": "test added at #818/#835"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/host_worker_doctor.rs",
+   "new": "api/crates/layerfs-cli/tests/host_worker/doctor.rs",
+   "change": "rename",
+   "note": "test added at #818/#835"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/host_worker_drain.rs",
+   "new": "api/crates/layerfs-cli/tests/host_worker/drain.rs",
+   "change": "rename",
+   "note": "test added at #818/#835"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/host_worker_idle_ping.rs",
+   "new": "api/crates/layerfs-cli/tests/host_worker/idle_ping.rs",
+   "change": "rename",
+   "note": "test added at #818/#835"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/host_worker_idle_queue.rs",
+   "new": "api/crates/layerfs-cli/tests/host_worker/idle_queue.rs",
+   "change": "rename",
+   "note": "test added at #818/#835"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/host_worker_load.rs",
+   "new": "api/crates/layerfs-cli/tests/host_worker_load/calls.rs",
+   "change": "rename",
+   "note": "test added at #818/#835"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/host_worker_maintenance.rs",
+   "new": "api/crates/layerfs-cli/tests/host_worker/maintenance.rs",
+   "change": "rename",
+   "note": "test added at #818/#835"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/host_worker_mixed_load.rs",
+   "new": "api/crates/layerfs-cli/tests/host_worker_load/mixed.rs",
+   "change": "rename",
+   "note": "test added at #818/#835"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/host_worker_peer.rs",
+   "new": "api/crates/layerfs-cli/tests/host_worker/peer.rs",
+   "change": "rename",
+   "note": "test added at #818/#835"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/host_worker_postgresql.rs",
+   "new": "api/crates/layerfs-cli/tests/host_worker/postgresql.rs",
+   "change": "rename",
+   "note": "test added at #818/#835"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/host_worker_postgresql_writes.rs",
+   "new": "api/crates/layerfs-cli/tests/host_worker_writes/postgresql.rs",
+   "change": "rename",
+   "note": "test added at #818/#835"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/host_worker_start.rs",
+   "new": "api/crates/layerfs-cli/tests/host_worker/start.rs",
+   "change": "rename",
+   "note": "test added at #818/#835"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/host_worker_uncertain.rs",
+   "new": "api/crates/layerfs-cli/tests/host_worker/uncertain.rs",
+   "change": "rename",
+   "note": "test added at #818/#835"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/host_worker_write_bounds.rs",
+   "new": "api/crates/layerfs-cli/tests/host_worker_writes/bounds.rs",
+   "change": "rename",
+   "note": "test added at #818/#835"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/host_worker_write_load.rs",
+   "new": "api/crates/layerfs-cli/tests/host_worker_load/writes.rs",
+   "change": "rename",
+   "note": "test added at #818/#835"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/host_worker_write_queue.rs",
+   "new": "api/crates/layerfs-cli/tests/host_worker_writes/queue.rs",
+   "change": "rename",
+   "note": "test added at #818/#835"
+  },
+  {
+   "old": "api/crates/layerfs-cli/tests/host_worker_writes.rs",
+   "new": "api/crates/layerfs-cli/tests/host_worker_writes/streamed.rs",
+   "change": "rename",
+   "note": "test added at #818/#835"
+  }
+ ]
+}

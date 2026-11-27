@@ -1,0 +1,4655 @@
+{
+ "layer": "control",
+ "exceptions": [
+  {
+   "folder": "control/crates/layerfs-store/src/sqlite/",
+   "reason": "variant folder (owner 2026-11-27)"
+  },
+  {
+   "folder": "control/crates/layerfs-store/src/postgresql/",
+   "reason": "variant folder (owner 2026-11-27)"
+  },
+  {
+   "folder": "control/crates/layerfs-machine/src/platform/host/",
+   "reason": "variant folder (owner 2026-11-27)"
+  },
+  {
+   "folder": "control/crates/layerfs-machine/src/platform/docker/",
+   "reason": "variant folder (owner 2026-11-27)"
+  },
+  {
+   "folder": "control/crates/layerfs-machine/src/platform/apple_container/",
+   "reason": "variant folder (owner 2026-11-27)"
+  },
+  {
+   "folder": "control/crates/layerfs-machine/src/platform/lima/",
+   "reason": "variant folder (owner 2026-11-27)"
+  },
+  {
+   "folder": "control/crates/layerfs-sandbox/src/backend/process/",
+   "reason": "variant folder (owner 2026-11-27)"
+  },
+  {
+   "folder": "control/crates/layerfs-sandbox/src/backend/namespaces/",
+   "reason": "variant folder (owner 2026-11-27)"
+  },
+  {
+   "folder": "control/crates/layerfs-sandbox/src/bin/",
+   "reason": "Cargo binary layout: one subfolder, no loose files"
+  },
+  {
+   "folder": "control/crates/layerfs-sandbox/src/backend/namespaces/",
+   "reason": "pending owner: seccomp.rs keeps a loose slot as the one audited unsafe module (guard path changes)"
+  },
+  {
+   "folder": "control/crates/layerfs-{home,inspect,machine,store,sandbox}/tests/support/ and api/crates/layerfs-api/tests/support/",
+   "reason": "1-4 helper files; tests/support/ is allowed by the tests rule"
+  },
+  {
+   "folder": "control/crates/layerfs-{inspect,machine,sandbox}/tests/standalone/ and api/crates/layerfs-api/tests/standalone/",
+   "reason": "own-binary tests with [[test]] entries; size per the tests rule, not the leaf minimum"
+  },
+  {
+   "folder": "control/crates/layerfs-store/src/data/file",
+   "reason": "rule 1 file family: one file per call, no count limit (14 calls + requests.rs)"
+  }
+ ],
+ "rows": [
+  {
+   "old": "control/crates/layerfs-bucket/Cargo.toml",
+   "new": "control/crates/layerfs-store/Cargo.toml",
+   "change": "merge",
+   "note": "bucket crate removed"
+  },
+  {
+   "old": "control/crates/layerfs-bucket/src/lib.rs",
+   "new": "control/crates/layerfs-store/src/backup/bucket/mod.rs",
+   "change": "merge",
+   "note": "bucket crate removed: its root declarations join bucket/mod.rs; store groups (owner 2026-11-27): bucket belongs to backup"
+  },
+  {
+   "old": "control/crates/layerfs-bucket/src/words.rs",
+   "new": "control/crates/layerfs-store/src/words.rs",
+   "change": "merge",
+   "note": "rule 23: second words.rs; bucket crate gone, one plain-words file"
+  },
+  {
+   "old": "control/crates/layerfs-bucket/src/backup/copies.rs",
+   "new": "control/crates/layerfs-store/src/backup/copy/list.rs",
+   "change": "rename",
+   "note": "a Store copy's object layout in a bucket; backup/ is the store calls'; store groups (owner 2026-11-27): a Store copy on a bucket"
+  },
+  {
+   "old": "control/crates/layerfs-bucket/src/backup/create.rs",
+   "new": "control/crates/layerfs-store/src/backup/copy/object.rs",
+   "change": "rename",
+   "note": "a Store copy object layout (STORE_FILE, store_object); uploads nothing"
+  },
+  {
+   "old": "control/crates/layerfs-bucket/src/backup/heads.rs",
+   "new": "control/crates/layerfs-store/src/backup/copy/heads.rs",
+   "change": "move",
+   "note": "a Store copy's object layout in a bucket; backup/ is the store calls'; store groups (owner 2026-11-27): a Store copy on a bucket"
+  },
+  {
+   "old": "control/crates/layerfs-bucket/src/backup/link.rs",
+   "new": "control/crates/layerfs-store/src/backup/bucket/registry.rs",
+   "change": "rename",
+   "note": "provider design (local plan, 2026-11-27): the provider list, looked up by URL scheme or the record's \"provider\"; replaces enum Provider { Minio, R2 } matching; store groups (owner 2026-11-27): bucket belongs to backup"
+  },
+  {
+   "old": "control/crates/layerfs-bucket/src/backup/mod.rs",
+   "new": "control/crates/layerfs-store/src/backup/copy/mod.rs",
+   "change": "move",
+   "note": "a Store copy's object layout in a bucket; backup/ is the store calls'; store groups (owner 2026-11-27): a Store copy on a bucket"
+  },
+  {
+   "old": "control/crates/layerfs-bucket/src/backup/restore.rs",
+   "new": "control/crates/layerfs-store/src/backup/copy/load.rs",
+   "change": "rename",
+   "note": "a Store copy's object layout in a bucket; backup/ is the store calls'; store groups (owner 2026-11-27): a Store copy on a bucket"
+  },
+  {
+   "old": "control/crates/layerfs-bucket/src/bucket/credentials.rs",
+   "new": "control/crates/layerfs-store/src/backup/bucket/auth.rs",
+   "change": "rename",
+   "note": "provider design (local plan, 2026-11-27): shared auth types: the credential kinds, which fields are secret, the redacted key type; each provider's auth.rs says which kind it takes and how it checks and uses it; store groups (owner 2026-11-27): bucket belongs to backup"
+  },
+  {
+   "old": "control/crates/layerfs-bucket/src/bucket/driver.rs",
+   "new": "control/crates/layerfs-store/src/backup/bucket/driver.rs",
+   "change": "rename",
+   "note": "provider design (local plan, 2026-11-27): the provider-neutral Driver trait; driver/ was remote/; store groups (owner 2026-11-27): the Driver trait; driver/ folded into backup/bucket/"
+  },
+  {
+   "old": "control/crates/layerfs-bucket/src/bucket/error.rs",
+   "new": "control/crates/layerfs-store/src/backup/bucket/error.rs",
+   "change": "move",
+   "note": "provider design (local plan, 2026-11-27): driver errors; store groups (owner 2026-11-27): driver files folded into backup/bucket/"
+  },
+  {
+   "old": "control/crates/layerfs-bucket/src/bucket/limits.rs",
+   "new": "control/crates/layerfs-store/src/backup/bucket/limits.rs",
+   "change": "move",
+   "note": "provider design (local plan, 2026-11-27): driver limits; store groups (owner 2026-11-27): driver files folded into backup/bucket/"
+  },
+  {
+   "old": "control/crates/layerfs-bucket/src/bucket/mod.rs",
+   "new": "control/crates/layerfs-store/src/backup/bucket/mod.rs",
+   "change": "move",
+   "note": "bucket crate merged into store as bucket/; store groups (owner 2026-11-27): bucket belongs to backup"
+  },
+  {
+   "old": "control/crates/layerfs-bucket/src/bucket/pieces.rs",
+   "new": "control/crates/layerfs-store/src/backup/bucket/pieces.rs",
+   "change": "move",
+   "note": "provider design (local plan, 2026-11-27): pieces for files larger than one object; store groups (owner 2026-11-27): driver files folded into backup/bucket/"
+  },
+  {
+   "old": "control/crates/layerfs-bucket/src/bucket/progress.rs",
+   "new": "control/crates/layerfs-store/src/backup/bucket/progress.rs",
+   "change": "move",
+   "note": "provider design (local plan, 2026-11-27): transfer progress; store groups (owner 2026-11-27): driver files folded into backup/bucket/"
+  },
+  {
+   "old": "control/crates/layerfs-bucket/src/bucket/time.rs",
+   "new": "control/crates/layerfs-store/src/backup/s3_api/time.rs",
+   "change": "move",
+   "note": "used only by the S3 API client; store groups (owner 2026-11-27): shared S3 client under backup/"
+  },
+  {
+   "old": "control/crates/layerfs-bucket/src/bucket/local_folder/folder.rs",
+   "new": "control/crates/layerfs-store/src/backup/providers/local_folder/driver.rs",
+   "change": "rename",
+   "note": "provider design (local plan; owner 2026-11-27: local_folder becomes a real backup target for SQLite Store backups): the folder driver: files under <root>/objects/, metadata under <root>/metadata/, written through a .uploading file and renamed; store groups (owner 2026-11-27): providers sit beside backup/bucket/ (four-level limit)"
+  },
+  {
+   "old": "control/crates/layerfs-bucket/src/bucket/local_folder/mod.rs",
+   "new": "control/crates/layerfs-store/src/backup/providers/local_folder/mod.rs",
+   "change": "move",
+   "note": "provider design (local plan; owner 2026-11-27: local_folder becomes a real backup target for SQLite Store backups): provider module; store groups (owner 2026-11-27): providers sit beside backup/bucket/ (four-level limit)"
+  },
+  {
+   "old": "control/crates/layerfs-bucket/src/bucket/minio/mod.rs",
+   "new": "control/crates/layerfs-store/src/backup/providers/s3/mod.rs",
+   "change": "move",
+   "note": "provider design (local plan, 2026-11-27): provider module; store groups (owner 2026-11-27): providers sit beside backup/bucket/ (four-level limit)"
+  },
+  {
+   "old": "control/crates/layerfs-bucket/src/bucket/minio/provider.rs",
+   "new": "control/crates/layerfs-store/src/backup/providers/s3/settings.rs",
+   "change": "rename",
+   "note": "provider design (local plan, 2026-11-27): any S3 endpoint; recorded as \"minio\" today, renamed \"s3\" (old records show a connect-again fix under the 2.0 no-compat rule); store groups (owner 2026-11-27): providers sit beside backup/bucket/ (four-level limit)"
+  },
+  {
+   "old": "control/crates/layerfs-bucket/src/bucket/r2/mod.rs",
+   "new": "control/crates/layerfs-store/src/backup/providers/r2/mod.rs",
+   "change": "move",
+   "note": "provider design (local plan, 2026-11-27): provider module; store groups (owner 2026-11-27): providers sit beside backup/bucket/ (four-level limit)"
+  },
+  {
+   "old": "control/crates/layerfs-bucket/src/bucket/r2/provider.rs",
+   "new": "control/crates/layerfs-store/src/backup/providers/r2/settings.rs",
+   "change": "rename",
+   "note": "provider design (local plan, 2026-11-27): R2 settings: account and jurisdiction check, endpoint, limits; store groups (owner 2026-11-27): providers sit beside backup/bucket/ (four-level limit)"
+  },
+  {
+   "old": "control/crates/layerfs-bucket/src/bucket/s3_api/client.rs",
+   "new": "control/crates/layerfs-store/src/backup/s3_api/client.rs",
+   "change": "move",
+   "note": "variant folder (owner 2026-11-27); store groups (owner 2026-11-27): shared S3 client under backup/"
+  },
+  {
+   "old": "control/crates/layerfs-bucket/src/bucket/s3_api/config.rs",
+   "new": "control/crates/layerfs-store/src/backup/s3_api/config.rs",
+   "change": "move",
+   "note": "variant folder (owner 2026-11-27); store groups (owner 2026-11-27): shared S3 client under backup/"
+  },
+  {
+   "old": "control/crates/layerfs-bucket/src/bucket/s3_api/connection.rs",
+   "new": "control/crates/layerfs-store/src/backup/s3_api/connection.rs",
+   "change": "move",
+   "note": "variant folder (owner 2026-11-27); store groups (owner 2026-11-27): shared S3 client under backup/"
+  },
+  {
+   "old": "control/crates/layerfs-bucket/src/bucket/s3_api/deadline.rs",
+   "new": "control/crates/layerfs-store/src/backup/s3_api/deadline.rs",
+   "change": "move",
+   "note": "variant folder (owner 2026-11-27); store groups (owner 2026-11-27): shared S3 client under backup/"
+  },
+  {
+   "old": "control/crates/layerfs-bucket/src/bucket/s3_api/diagnostic.rs",
+   "new": "control/crates/layerfs-store/src/backup/s3_api/diagnostic.rs",
+   "change": "move",
+   "note": "variant folder (owner 2026-11-27); store groups (owner 2026-11-27): shared S3 client under backup/"
+  },
+  {
+   "old": "control/crates/layerfs-bucket/src/bucket/s3_api/http.rs",
+   "new": "control/crates/layerfs-store/src/backup/s3_api/http.rs",
+   "change": "move",
+   "note": "variant folder (owner 2026-11-27); store groups (owner 2026-11-27): shared S3 client under backup/"
+  },
+  {
+   "old": "control/crates/layerfs-bucket/src/bucket/s3_api/mod.rs",
+   "new": "control/crates/layerfs-store/src/backup/s3_api/mod.rs",
+   "change": "move",
+   "note": "variant folder (owner 2026-11-27); store groups (owner 2026-11-27): shared S3 client under backup/"
+  },
+  {
+   "old": "control/crates/layerfs-bucket/src/bucket/s3_api/multipart.rs",
+   "new": "control/crates/layerfs-store/src/backup/s3_api/multipart.rs",
+   "change": "move",
+   "note": "variant folder (owner 2026-11-27); store groups (owner 2026-11-27): shared S3 client under backup/"
+  },
+  {
+   "old": "control/crates/layerfs-bucket/src/bucket/s3_api/sign.rs",
+   "new": "control/crates/layerfs-store/src/backup/s3_api/sign.rs",
+   "change": "move",
+   "note": "variant folder (owner 2026-11-27); store groups (owner 2026-11-27): shared S3 client under backup/"
+  },
+  {
+   "old": "control/crates/layerfs-bucket/tests/copies.rs",
+   "new": "control/crates/layerfs-store/tests/backup/copies.rs",
+   "change": "move",
+   "note": "area tests/backup/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-bucket/tests/doctor_connection.rs",
+   "new": "control/crates/layerfs-store/tests/bucket/doctor_connection.rs",
+   "change": "move",
+   "note": "area tests/bucket/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-bucket/tests/doctor_deadline.rs",
+   "new": "control/crates/layerfs-store/tests/bucket/doctor_deadline.rs",
+   "change": "move",
+   "note": "area tests/bucket/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-bucket/tests/folder_pieces.rs",
+   "new": "control/crates/layerfs-store/tests/bucket/folder_pieces.rs",
+   "change": "move",
+   "note": "area tests/bucket/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-bucket/tests/keep_alive.rs",
+   "new": "control/crates/layerfs-store/tests/bucket/keep_alive.rs",
+   "change": "move",
+   "note": "area tests/bucket/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-bucket/tests/minio.rs",
+   "new": "control/crates/layerfs-store/tests/bucket/minio.rs",
+   "change": "move",
+   "note": "area tests/bucket/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-bucket/tests/minio_service.sh",
+   "new": "control/crates/layerfs-store/tests/minio_service.sh",
+   "change": "move",
+   "note": "same tests/ path in the merged crate"
+  },
+  {
+   "old": "control/crates/layerfs-bucket/tests/outcomes.rs",
+   "new": "control/crates/layerfs-store/tests/bucket/outcomes.rs",
+   "change": "move",
+   "note": "area tests/bucket/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-bucket/tests/progress_listing.rs",
+   "new": "control/crates/layerfs-store/tests/bucket/progress_listing.rs",
+   "change": "move",
+   "note": "area tests/bucket/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-bucket/tests/span_words.rs",
+   "new": "control/crates/layerfs-store/tests/bucket/span_words.rs",
+   "change": "move",
+   "note": "area tests/bucket/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-bucket/tests/support/doctor_s3.rs",
+   "new": "control/crates/layerfs-store/tests/support/doctor_s3.rs",
+   "change": "move",
+   "note": "bucket test helpers join store tests/support/"
+  },
+  {
+   "old": "control/crates/layerfs-bucket/tests/support/progress_cell.rs",
+   "new": "control/crates/layerfs-store/tests/support/progress_cell.rs",
+   "change": "move",
+   "note": "bucket test helpers join store tests/support/"
+  },
+  {
+   "old": "control/crates/layerfs-control/Cargo.toml",
+   "new": "control/crates/layerfs-inspect/Cargo.toml",
+   "change": "move",
+   "note": "control crate becomes layerfs-inspect (was layerfs-doctor in the plan); worker-fault feature moves to layerfs-api"
+  },
+  {
+   "old": "control/crates/layerfs-control/src/backup.rs",
+   "new": "control/crates/layerfs-store/src/backup/jobs/restore.rs",
+   "change": "merge",
+   "note": "jobs/ (owner 2026-11-27): backup create and restore are long jobs with progress and an end; list and heads read them"
+  },
+  {
+   "old": "control/crates/layerfs-control/src/home.rs",
+   "new": "control/crates/layerfs-inspect/src/home/get.rs",
+   "change": "split",
+   "note": "rule 12/15: home.get (and Build, native daemon facts)"
+  },
+  {
+   "old": "control/crates/layerfs-control/src/home_tree.rs",
+   "new": "control/crates/layerfs-inspect/src/home/tree.rs",
+   "change": "rename",
+   "note": "home/ leaf: home calls need doctor, machine, store and sandbox; the home kind"
+  },
+  {
+   "old": "control/crates/layerfs-control/src/inventory.rs",
+   "new": "control/crates/layerfs-sandbox/src/status/inventory.rs",
+   "change": "move",
+   "note": "rule 4/20: relationship reads; users/ would hold 2 files"
+  },
+  {
+   "old": "control/crates/layerfs-control/src/lib.rs",
+   "new": "control/crates/layerfs-inspect/src/lib.rs",
+   "change": "move",
+   "note": "control crate becomes layerfs-inspect: doctors, cross-entity monitoring reads and the home calls"
+  },
+  {
+   "old": "control/crates/layerfs-control/src/machine.rs",
+   "new": "control/crates/layerfs-machine/src/with_users.rs",
+   "change": "split",
+   "note": "every inventory/layerfs_store/layerfs_sandbox reach becomes a MachineUsers hook; the host-worker live section of machine.get moves to api/crates/layerfs-api/src/families/machine/status/get.rs (needs layerfs-inspect)"
+  },
+  {
+   "old": "control/crates/layerfs-control/src/machine_force.rs",
+   "new": "control/crates/layerfs-machine/src/lifecycle/force_stop.rs",
+   "change": "split",
+   "note": "machine.stop --force; the part that stays in machine (machine lifecycle (owner 2026-11-27): calls that change whether a machine exists or runs, one file per call)"
+  },
+  {
+   "old": "control/crates/layerfs-control/src/project.rs",
+   "new": "control/crates/layerfs-store/src/data/project/with_users.rs",
+   "change": "rename",
+   "note": "rule 12/19: project.delete with the users' Busy checks; = admin/with_users.rs"
+  },
+  {
+   "old": "control/crates/layerfs-control/src/store.rs",
+   "new": "control/crates/layerfs-store/src/admin/with_users.rs",
+   "change": "rename",
+   "note": "the call wrappers that pass the Sandbox/Store checks in (layerfs-project#104/#105); named for what they add (compact, upgrade, repair, remove, move, connect, disconnect, attach, detach)"
+  },
+  {
+   "old": "control/crates/layerfs-control/src/worker_server.rs",
+   "new": "api/crates/layerfs-api/src/worker/serve.rs",
+   "change": "rename",
+   "note": "worker server goes to api: it serves store, sandbox, workspace and doctor ops"
+  },
+  {
+   "old": "control/crates/layerfs-control/src/doctor/backup_target.rs",
+   "new": "control/crates/layerfs-inspect/src/home/bucket.rs",
+   "change": "split",
+   "note": "backup.doctor checks a bucket, a home-level record linked by several Stores; joins home/ (a bucket/ folder would hold one file)"
+  },
+  {
+   "old": "control/crates/layerfs-control/src/doctor/capacity.rs",
+   "new": "control/crates/layerfs-inspect/src/machine/room.rs",
+   "change": "rename",
+   "note": "machine kind leaf"
+  },
+  {
+   "old": "control/crates/layerfs-control/src/doctor/check_report.rs",
+   "new": "control/crates/layerfs-inspect/src/doctor/report.rs",
+   "change": "merge",
+   "note": "doctor/ (owner 2026-11-27): the one doctor runner, its kinds, report and budget; frame/ clashed with wire frames"
+  },
+  {
+   "old": "control/crates/layerfs-control/src/doctor/checks.rs",
+   "new": "control/crates/layerfs-inspect/src/home/records.rs",
+   "change": "rename",
+   "note": "home doctor's own record checks (owner 2026-11-27): used by home/ only, plus scan::shell in store/doctor.rs"
+  },
+  {
+   "old": "control/crates/layerfs-control/src/doctor/frame.rs",
+   "new": "control/crates/layerfs-inspect/src/doctor/runner.rs",
+   "change": "rename",
+   "note": "doctor/ (owner 2026-11-27): the one doctor runner, its kinds, report and budget; frame/ clashed with wire frames"
+  },
+  {
+   "old": "control/crates/layerfs-control/src/doctor/host_capacity.rs",
+   "new": "control/crates/layerfs-inspect/src/home/capacity.rs",
+   "change": "rename",
+   "note": "home/ leaf: home calls need doctor, machine, store and sandbox; the home kind"
+  },
+  {
+   "old": "control/crates/layerfs-control/src/doctor/host_install.rs",
+   "new": "control/crates/layerfs-inspect/src/home/install.rs",
+   "change": "rename",
+   "note": "home/ leaf: home calls need doctor, machine, store and sandbox; the home kind"
+  },
+  {
+   "old": "control/crates/layerfs-control/src/doctor/host_inventory.rs",
+   "new": "control/crates/layerfs-inspect/src/home/fingerprint.rs",
+   "change": "rename",
+   "note": "rule 13: not the sandbox inventory; the home paths' metadata fingerprint"
+  },
+  {
+   "old": "control/crates/layerfs-control/src/doctor/host_target.rs",
+   "new": "control/crates/layerfs-inspect/src/home/doctor.rs",
+   "change": "rename",
+   "note": "home/ leaf: home calls need doctor, machine, store and sandbox; the home kind"
+  },
+  {
+   "old": "control/crates/layerfs-control/src/doctor/kinds.rs",
+   "new": "control/crates/layerfs-inspect/src/doctor/kinds.rs",
+   "change": "move",
+   "note": "doctor/ (owner 2026-11-27): the one doctor runner, its kinds, report and budget; frame/ clashed with wire frames"
+  },
+  {
+   "old": "control/crates/layerfs-control/src/doctor/machine_target.rs",
+   "new": "control/crates/layerfs-inspect/src/machine/doctor.rs",
+   "change": "rename",
+   "note": "machine/ leaf: machine.doctor plus machine.stats, space and files, which read Sandboxes and Stores above layerfs-machine"
+  },
+  {
+   "old": "control/crates/layerfs-control/src/doctor/mod.rs",
+   "new": "control/crates/layerfs-inspect/src/lib.rs",
+   "change": "merge",
+   "note": "doctor/ becomes the crate root"
+  },
+  {
+   "old": "control/crates/layerfs-control/src/doctor/mount_holders.rs",
+   "new": "control/crates/layerfs-inspect/src/store/mount_holders.rs",
+   "change": "move",
+   "note": "store kind leaf"
+  },
+  {
+   "old": "control/crates/layerfs-control/src/doctor/network.rs",
+   "new": "control/crates/layerfs-inspect/src/machine/network.rs",
+   "change": "move",
+   "note": "machine kind leaf"
+  },
+  {
+   "old": "control/crates/layerfs-control/src/doctor/project_target.rs",
+   "new": "control/crates/layerfs-inspect/src/store/project.rs",
+   "change": "rename",
+   "note": "store kind leaf"
+  },
+  {
+   "old": "control/crates/layerfs-control/src/doctor/records.rs",
+   "new": "control/crates/layerfs-inspect/src/home/findings.rs",
+   "change": "rename",
+   "note": "home doctor's own record checks (owner 2026-11-27): used by home/ only, plus scan::shell in store/doctor.rs"
+  },
+  {
+   "old": "control/crates/layerfs-control/src/doctor/report.rs",
+   "new": "control/crates/layerfs-inspect/src/doctor/report.rs",
+   "change": "move",
+   "note": "doctor/ (owner 2026-11-27): the one doctor runner, its kinds, report and budget; frame/ clashed with wire frames"
+  },
+  {
+   "old": "control/crates/layerfs-control/src/doctor/sandbox_channel.rs",
+   "new": "control/crates/layerfs-inspect/src/sandbox/channel.rs",
+   "change": "rename",
+   "note": "sandbox_* prefix family"
+  },
+  {
+   "old": "control/crates/layerfs-control/src/doctor/sandbox_remote.rs",
+   "new": "control/crates/layerfs-inspect/src/sandbox/remote.rs",
+   "change": "rename",
+   "note": "sandbox_* prefix family"
+  },
+  {
+   "old": "control/crates/layerfs-control/src/doctor/sandbox_runtime.rs",
+   "new": "control/crates/layerfs-inspect/src/sandbox/runtime.rs",
+   "change": "rename",
+   "note": "sandbox_* prefix family"
+  },
+  {
+   "old": "control/crates/layerfs-control/src/doctor/sandbox_target.rs",
+   "new": "control/crates/layerfs-inspect/src/sandbox/doctor.rs",
+   "change": "rename",
+   "note": "sandbox_* prefix family"
+  },
+  {
+   "old": "control/crates/layerfs-control/src/doctor/scan.rs",
+   "new": "control/crates/layerfs-inspect/src/home/scan.rs",
+   "change": "move",
+   "note": "home doctor's own record checks (owner 2026-11-27): used by home/ only, plus scan::shell in store/doctor.rs"
+  },
+  {
+   "old": "control/crates/layerfs-control/src/doctor/store_target.rs",
+   "new": "control/crates/layerfs-inspect/src/store/doctor.rs",
+   "change": "rename",
+   "note": "store kind leaf"
+  },
+  {
+   "old": "control/crates/layerfs-control/src/doctor/target.rs",
+   "new": "control/crates/layerfs-inspect/src/doctor/budget.rs",
+   "change": "rename",
+   "note": "doctor/ (owner 2026-11-27): the one doctor runner, its kinds, report and budget; frame/ clashed with wire frames"
+  },
+  {
+   "old": "control/crates/layerfs-control/src/doctor/workspace_target.rs",
+   "new": "control/crates/layerfs-inspect/src/sandbox/workspace.rs",
+   "change": "rename",
+   "note": "sandbox_* prefix family"
+  },
+  {
+   "old": "control/crates/layerfs-control/src/worker_server/connection.rs",
+   "new": "api/crates/layerfs-api/src/worker/connection.rs",
+   "change": "split",
+   "note": "lines 226-517 (241 LOC) are the host-only Unix connection; guest part stays in api (part moves to layerfs-store/src/admin/host_worker/connection.rs)"
+  },
+  {
+   "old": "control/crates/layerfs-control/src/worker_server/fault.rs",
+   "new": "api/crates/layerfs-api/src/worker/fault.rs",
+   "change": "split",
+   "note": "write_outcome is a host-only write fault switch (fault.rs:196-218) (part moves to layerfs-store/src/admin/host_worker/write_queue.rs)"
+  },
+  {
+   "old": "control/crates/layerfs-control/src/worker_server/ops.rs",
+   "new": "api/crates/layerfs-api/src/worker/ops.rs",
+   "change": "move",
+   "note": "worker server goes to api: it serves store, sandbox, workspace and doctor ops"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/backup_progress.rs",
+   "new": "control/crates/layerfs-store/tests/backup/progress.rs",
+   "change": "rename",
+   "note": "area tests/backup/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/doctor.rs",
+   "new": "control/crates/layerfs-inspect/tests/doctor/records.rs",
+   "change": "rename",
+   "note": "area tests/doctor/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/doctor_backup_target.rs",
+   "new": "control/crates/layerfs-inspect/tests/doctor/backup_target.rs",
+   "change": "rename",
+   "note": "area tests/doctor/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/doctor_checks_pending.json",
+   "new": "control/crates/layerfs-inspect/tests/doctor_checks_pending.json",
+   "change": "move",
+   "note": "read by doctor frame test via CARGO_MANIFEST_DIR/tests/"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/doctor_fixes_host_machine.rs",
+   "new": "control/crates/layerfs-inspect/tests/standalone/doctor_fixes_host_machine.rs",
+   "change": "move",
+   "note": "own binary: process-global state (set_var); [[test]] entry in Cargo.toml"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/doctor_fixes_sandbox_backup.rs",
+   "new": "control/crates/layerfs-inspect/tests/doctor/fixes_sandbox_backup.rs",
+   "change": "rename",
+   "note": "area tests/doctor/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/doctor_fixes_store.rs",
+   "new": "control/crates/layerfs-inspect/tests/doctor/fixes_store.rs",
+   "change": "rename",
+   "note": "area tests/doctor/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/doctor_frame.rs",
+   "new": "control/crates/layerfs-inspect/tests/doctor/frame.rs",
+   "change": "rename",
+   "note": "area tests/doctor/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/doctor_host.rs",
+   "new": "control/crates/layerfs-inspect/tests/doctor/host.rs",
+   "change": "rename",
+   "note": "area tests/doctor/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/doctor_live_runtime.rs",
+   "new": "control/crates/layerfs-inspect/tests/doctor/live_runtime.rs",
+   "change": "rename",
+   "note": "area tests/doctor/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/doctor_machine_target.rs",
+   "new": "control/crates/layerfs-inspect/tests/standalone/doctor_machine_target.rs",
+   "change": "move",
+   "note": "own binary: process-global state (set_var); [[test]] entry in Cargo.toml"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/doctor_report.rs",
+   "new": "control/crates/layerfs-inspect/tests/doctor/report.rs",
+   "change": "rename",
+   "note": "area tests/doctor/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/doctor_sandbox.rs",
+   "new": "api/crates/layerfs-api/tests/worker_ops/doctor_sandbox.rs",
+   "change": "move",
+   "note": "area tests/worker_ops/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/home_get.rs",
+   "new": "control/crates/layerfs-inspect/tests/standalone/home_get.rs",
+   "change": "move",
+   "note": "own binary: process-global state (set_var); [[test]] entry in Cargo.toml"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/home_layout.rs",
+   "new": "control/crates/layerfs-inspect/tests/doctor/home_layout.rs",
+   "change": "move",
+   "note": "area tests/doctor/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/in_use_detail.rs",
+   "new": "control/crates/layerfs-sandbox/tests/users/in_use_detail.rs",
+   "change": "move",
+   "note": "area tests/users/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/inventory.rs",
+   "new": "control/crates/layerfs-sandbox/tests/users/inventory.rs",
+   "change": "move",
+   "note": "area tests/users/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/kernel_application.rs",
+   "new": "control/crates/layerfs-sandbox/tests/standalone/kernel_application.rs",
+   "change": "move",
+   "note": "own binary: mount target (Linux FUSE); [[test]] entry in Cargo.toml"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/kernel_mount_routes.rs",
+   "new": "control/crates/layerfs-sandbox/tests/standalone/kernel_mount_routes.rs",
+   "change": "move",
+   "note": "own binary: mount target (Linux FUSE); [[test]] entry in Cargo.toml"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/local_root_modes.rs",
+   "new": "api/crates/layerfs-api/tests/worker_ops/local_root_modes.rs",
+   "change": "move",
+   "note": "area tests/worker_ops/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/mount_control.rs",
+   "new": "control/crates/layerfs-sandbox/tests/standalone/mount_control.rs",
+   "change": "move",
+   "note": "own binary: mount target (Linux FUSE); [[test]] entry in Cargo.toml"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/mount_place_authority.rs",
+   "new": "control/crates/layerfs-sandbox/tests/mount/mount_place_authority.rs",
+   "change": "move",
+   "note": "area tests/mount/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/native_start.rs",
+   "new": "control/crates/layerfs-inspect/tests/standalone/native_start.rs",
+   "change": "move",
+   "note": "own binary: process-global state (set_var); [[test]] entry in Cargo.toml"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/observed_application.rs",
+   "new": "control/crates/layerfs-sandbox/tests/standalone/observed_application.rs",
+   "change": "move",
+   "note": "own binary: mount target (Linux FUSE); [[test]] entry in Cargo.toml"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/observed_control.rs",
+   "new": "control/crates/layerfs-sandbox/tests/mount/observed_control.rs",
+   "change": "move",
+   "note": "area tests/mount/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/op_intent.rs",
+   "new": "control/crates/layerfs-home/tests/records/op_intent.rs",
+   "change": "move",
+   "note": "area tests/records/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/project_delete_call.rs",
+   "new": "control/crates/layerfs-sandbox/tests/users/project_delete_call.rs",
+   "change": "move",
+   "note": "area tests/users/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/project_delete_worker.rs",
+   "new": "api/crates/layerfs-api/tests/worker_ops/project_delete.rs",
+   "change": "rename",
+   "note": "area tests/worker_ops/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/project_doctor_worker.rs",
+   "new": "api/crates/layerfs-api/tests/worker_ops/project_doctor.rs",
+   "change": "rename",
+   "note": "area tests/worker_ops/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/provider_ownership.rs",
+   "new": "control/crates/layerfs-sandbox/tests/mount/provider_ownership.rs",
+   "change": "move",
+   "note": "area tests/mount/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/r5_1_actual_daemon_commit.rs",
+   "new": "control/crates/layerfs-sandbox/tests/standalone/kernel_commit.rs",
+   "change": "rename",
+   "note": "own binary: mount target (Linux FUSE); [[test]] entry in Cargo.toml"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/sdk_merge_diagnostics.rs",
+   "new": "control/crates/layerfs-sandbox/tests/mount/sdk_merge_diagnostics.rs",
+   "change": "move",
+   "note": "area tests/mount/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/store_compact_worker.rs",
+   "new": "api/crates/layerfs-api/tests/worker_ops/store_compact.rs",
+   "change": "rename",
+   "note": "area tests/worker_ops/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/store_doctor.rs",
+   "new": "api/crates/layerfs-api/tests/worker_ops/store_doctor.rs",
+   "change": "move",
+   "note": "area tests/worker_ops/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/store_reads.rs",
+   "new": "control/crates/layerfs-sandbox/tests/users/store_reads.rs",
+   "change": "move",
+   "note": "area tests/users/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/store_repair_live.rs",
+   "new": "api/crates/layerfs-api/tests/worker_ops/store_repair_live.rs",
+   "change": "move",
+   "note": "area tests/worker_ops/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/store_repair_worker.rs",
+   "new": "api/crates/layerfs-api/tests/worker_ops/store_repair.rs",
+   "change": "rename",
+   "note": "area tests/worker_ops/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/store_transfer_recovery.rs",
+   "new": "api/crates/layerfs-api/tests/worker_ops/store_transfer_recovery.rs",
+   "change": "move",
+   "note": "area tests/worker_ops/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/store_upgrade.rs",
+   "new": "api/crates/layerfs-api/tests/standalone/worker_upgrade.rs",
+   "change": "rename",
+   "note": "own binary: process-wide cancel flag; worker_ prefix avoids api's upgrade_cancel; [[test]]"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/store_upgrade_cancel.rs",
+   "new": "api/crates/layerfs-api/tests/standalone/worker_upgrade_cancel.rs",
+   "change": "rename",
+   "note": "own binary: process-wide cancel flag; worker_ prefix avoids api's upgrade_cancel; [[test]]"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/store_upgrade_engine.rs",
+   "new": "api/crates/layerfs-api/tests/standalone/worker_upgrade_engine.rs",
+   "change": "rename",
+   "note": "own binary: process-wide cancel flag; worker_ prefix avoids api's upgrade_cancel; [[test]]"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/sweep_run_root.rs",
+   "new": "api/crates/layerfs-api/tests/worker_ops/sweep_run_root.rs",
+   "change": "move",
+   "note": "area tests/worker_ops/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/typed_names.rs",
+   "new": "control/crates/layerfs-home/tests/records/typed_names.rs",
+   "change": "move",
+   "note": "area tests/records/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/typed_records.rs",
+   "new": "control/crates/layerfs-sandbox/tests/users/typed_records.rs",
+   "change": "move",
+   "note": "area tests/users/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/unmount_dirty.rs",
+   "new": "control/crates/layerfs-sandbox/tests/mount/unmount_dirty.rs",
+   "change": "move",
+   "note": "area tests/mount/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/worker_fault.rs",
+   "new": "api/crates/layerfs-api/tests/worker_fault/connection.rs",
+   "change": "rename",
+   "note": "area tests/worker_fault/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/worker_fault_inspect.rs",
+   "new": "api/crates/layerfs-api/tests/worker_fault/inspect.rs",
+   "change": "rename",
+   "note": "area tests/worker_fault/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/worker_fault_store.rs",
+   "new": "api/crates/layerfs-api/tests/worker_fault/store.rs",
+   "change": "rename",
+   "note": "area tests/worker_fault/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/worker_fd_limit.rs",
+   "new": "api/crates/layerfs-api/tests/worker/fd_limit.rs",
+   "change": "rename",
+   "note": "area tests/worker/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/worker_frames.rs",
+   "new": "api/crates/layerfs-api/tests/worker/frames.rs",
+   "change": "rename",
+   "note": "area tests/worker/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/worker_hello.rs",
+   "new": "api/crates/layerfs-api/tests/standalone/worker_hello.rs",
+   "change": "move",
+   "note": "own binary: process-global state (set_var); [[test]] entry in Cargo.toml"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/worker_layout.rs",
+   "new": "api/crates/layerfs-api/tests/worker/layout.rs",
+   "change": "rename",
+   "note": "area tests/worker/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/worker_lifecycle.rs",
+   "new": "api/crates/layerfs-api/tests/worker/lifecycle.rs",
+   "change": "rename",
+   "note": "area tests/worker/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/worker_project_record.rs",
+   "new": "api/crates/layerfs-api/tests/worker/project_record.rs",
+   "change": "rename",
+   "note": "area tests/worker/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/worker_root.rs",
+   "new": "api/crates/layerfs-api/tests/worker/root.rs",
+   "change": "rename",
+   "note": "area tests/worker/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/worker_stage_parts.rs",
+   "new": "api/crates/layerfs-api/tests/worker/stage_parts.rs",
+   "change": "rename",
+   "note": "area tests/worker/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/worker_trace.rs",
+   "new": "api/crates/layerfs-api/tests/standalone/worker_trace.rs",
+   "change": "move",
+   "note": "own binary: process-global state (set_var); [[test]] entry in Cargo.toml"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/support/daemon_binary.rs",
+   "new": "control/crates/layerfs-sandbox/tests/support/daemon_binary.rs",
+   "change": "move",
+   "note": "used only by the mount tests that move to sandbox"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/support/doctor_own.rs",
+   "new": "control/crates/layerfs-inspect/tests/support/doctor_own.rs",
+   "change": "split",
+   "note": "doctor test helper stays with the doctor tests"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/support/worker_store.rs",
+   "new": "api/crates/layerfs-api/tests/support/worker_store.rs",
+   "change": "move",
+   "note": "worker-server test helper follows the worker tests to api"
+  },
+  {
+   "old": "control/crates/layerfs-home/Cargo.toml",
+   "new": "control/crates/layerfs-home/Cargo.toml",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "control/crates/layerfs-home/src/cancel.rs",
+   "new": "control/crates/layerfs-home/src/cancel.rs",
+   "change": "move",
+   "note": "process-wide SIGINT flag; op/ dissolved"
+  },
+  {
+   "old": "control/crates/layerfs-home/src/cursor.rs",
+   "new": "control/crates/layerfs-home/src/reply/cursor.rs",
+   "change": "move",
+   "note": "reply/ (owner 2026-11-27): what every answer is built from: paging cursor, progress events, state words, time format, values; call argument/answer values: one leaf"
+  },
+  {
+   "old": "control/crates/layerfs-home/src/events.rs",
+   "new": "control/crates/layerfs-home/src/reply/events.rs",
+   "change": "move",
+   "note": "reply/ (owner 2026-11-27): what every answer is built from: paging cursor, progress events, state words, time format, values; call argument/answer values: one leaf"
+  },
+  {
+   "old": "control/crates/layerfs-home/src/helpers.rs",
+   "new": "control/crates/layerfs-home/src/reply/values.rs",
+   "change": "split",
+   "note": "reply shaping only; lock and tokens split out"
+  },
+  {
+   "old": "control/crates/layerfs-home/src/json.rs",
+   "new": "control/crates/layerfs-home/src/json/value.rs",
+   "change": "rename",
+   "note": "json/ leaf: call-value JSON beside the shallow reader"
+  },
+  {
+   "old": "control/crates/layerfs-home/src/lib.rs",
+   "new": "control/crates/layerfs-home/src/lib.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "control/crates/layerfs-home/src/logs.rs",
+   "new": "control/crates/layerfs-home/src/log/calls.rs",
+   "change": "rename",
+   "note": "call log, rotated-file reader and trace route: one leaf"
+  },
+  {
+   "old": "control/crates/layerfs-home/src/names.rs",
+   "new": "control/crates/layerfs-home/src/names.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "control/crates/layerfs-home/src/op.rs",
+   "new": "control/crates/layerfs-home/src/record/intent.rs",
+   "change": "rename",
+   "note": "the in-flight op intent an entity record holds (rule 20 record/)"
+  },
+  {
+   "old": "control/crates/layerfs-home/src/outcome.rs",
+   "new": "control/crates/layerfs-home/src/reply/outcome.rs",
+   "change": "move",
+   "note": "what every answer is"
+  },
+  {
+   "old": "control/crates/layerfs-home/src/process.rs",
+   "new": "control/crates/layerfs-home/src/record/process.rs",
+   "change": "move",
+   "note": "the process identity a record names"
+  },
+  {
+   "old": "control/crates/layerfs-home/src/secrets.rs",
+   "new": "control/crates/layerfs-home/src/secret/keys.rs",
+   "change": "rename",
+   "note": "one secret/ concern folder"
+  },
+  {
+   "old": "control/crates/layerfs-home/src/state.rs",
+   "new": "control/crates/layerfs-home/src/reply/state.rs",
+   "change": "move",
+   "note": "reply/ (owner 2026-11-27): what every answer is built from: paging cursor, progress events, state words, time format, values; call argument/answer values: one leaf"
+  },
+  {
+   "old": "control/crates/layerfs-home/src/tail.rs",
+   "new": "control/crates/layerfs-home/src/log/tail.rs",
+   "change": "move",
+   "note": "call log, rotated-file reader and trace route: one leaf"
+  },
+  {
+   "old": "control/crates/layerfs-home/src/time.rs",
+   "new": "control/crates/layerfs-home/src/reply/time.rs",
+   "change": "move",
+   "note": "reply/ (owner 2026-11-27): what every answer is built from: paging cursor, progress events, state words, time format, values; call argument/answer values: one leaf"
+  },
+  {
+   "old": "control/crates/layerfs-home/src/trace.rs",
+   "new": "control/crates/layerfs-home/src/log/trace.rs",
+   "change": "move",
+   "note": "call log, rotated-file reader and trace route: one leaf"
+  },
+  {
+   "old": "control/crates/layerfs-home/src/home/capacity.rs",
+   "new": "control/crates/layerfs-home/src/disk/capacity.rs",
+   "change": "move",
+   "note": "the home on disk; `home/` repeated the crate name (owner 2026-11-27); public path layerfs_home::home \u2192 layerfs_home::disk"
+  },
+  {
+   "old": "control/crates/layerfs-home/src/home/entity_lock.rs",
+   "new": "control/crates/layerfs-home/src/lock/entity.rs",
+   "change": "rename",
+   "note": "three lock modules become one leaf"
+  },
+  {
+   "old": "control/crates/layerfs-home/src/home/fields.rs",
+   "new": "control/crates/layerfs-home/src/record/fields.rs",
+   "change": "move",
+   "note": "record fields; disk/ keeps the home as a folder on disk"
+  },
+  {
+   "old": "control/crates/layerfs-home/src/home/flock.rs",
+   "new": "control/crates/layerfs-home/src/lock/flock.rs",
+   "change": "move",
+   "note": "three lock modules become one leaf"
+  },
+  {
+   "old": "control/crates/layerfs-home/src/home/generation.rs",
+   "new": "control/crates/layerfs-home/src/record/generation.rs",
+   "change": "move",
+   "note": "record fields; disk/ keeps the home as a folder on disk"
+  },
+  {
+   "old": "control/crates/layerfs-home/src/home/guest.rs",
+   "new": "control/crates/layerfs-home/src/disk/guest.rs",
+   "change": "move",
+   "note": "the home on disk; `home/` repeated the crate name (owner 2026-11-27); public path layerfs_home::home \u2192 layerfs_home::disk"
+  },
+  {
+   "old": "control/crates/layerfs-home/src/home/layout.rs",
+   "new": "control/crates/layerfs-home/src/disk/layout.rs",
+   "change": "move",
+   "note": "the home on disk; `home/` repeated the crate name (owner 2026-11-27); public path layerfs_home::home \u2192 layerfs_home::disk"
+  },
+  {
+   "old": "control/crates/layerfs-home/src/home/lock.rs",
+   "new": "control/crates/layerfs-home/src/lock/home.rs",
+   "change": "rename",
+   "note": "three lock modules become one leaf"
+  },
+  {
+   "old": "control/crates/layerfs-home/src/home/mod.rs",
+   "new": "control/crates/layerfs-home/src/disk/mod.rs",
+   "change": "move",
+   "note": "the home on disk; `home/` repeated the crate name (owner 2026-11-27); public path layerfs_home::home \u2192 layerfs_home::disk"
+  },
+  {
+   "old": "control/crates/layerfs-home/src/home/observed.rs",
+   "new": "control/crates/layerfs-home/src/record/observed.rs",
+   "change": "move",
+   "note": "record fields; disk/ keeps the home as a folder on disk"
+  },
+  {
+   "old": "control/crates/layerfs-home/src/home/paths.rs",
+   "new": "control/crates/layerfs-home/src/disk/paths.rs",
+   "change": "move",
+   "note": "the home on disk; `home/` repeated the crate name (owner 2026-11-27); public path layerfs_home::home \u2192 layerfs_home::disk"
+  },
+  {
+   "old": "control/crates/layerfs-home/src/home/records.rs",
+   "new": "control/crates/layerfs-home/src/record/file.rs",
+   "change": "split",
+   "note": "record file read/write; log_line and log_swept split to log/lines.rs"
+  },
+  {
+   "old": "control/crates/layerfs-home/src/home/secrets.rs",
+   "new": "control/crates/layerfs-home/src/secret/saved.rs",
+   "change": "rename",
+   "note": "the home's saved named secrets; avoids secret/secrets.rs"
+  },
+  {
+   "old": "control/crates/layerfs-home/tests/cursor.rs",
+   "new": "control/crates/layerfs-home/tests/call/cursor.rs",
+   "change": "move",
+   "note": "area tests/call/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-home/tests/generation.rs",
+   "new": "control/crates/layerfs-home/tests/records/generation.rs",
+   "change": "move",
+   "note": "area tests/records/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-home/tests/json_codec.rs",
+   "new": "control/crates/layerfs-home/tests/call/json_codec.rs",
+   "change": "move",
+   "note": "area tests/call/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-home/tests/log_rotation.rs",
+   "new": "control/crates/layerfs-home/tests/log/jsonl.rs",
+   "change": "rename",
+   "note": "log/*.jsonl rotation; one log test area"
+  },
+  {
+   "old": "control/crates/layerfs-home/tests/ordered_token.rs",
+   "new": "control/crates/layerfs-home/tests/call/ordered_token.rs",
+   "change": "move",
+   "note": "area tests/call/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-home/tests/shell_word.rs",
+   "new": "control/crates/layerfs-home/tests/call/shell_word.rs",
+   "change": "move",
+   "note": "area tests/call/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-home/tests/shown.rs",
+   "new": "control/crates/layerfs-home/tests/call/shown.rs",
+   "change": "move",
+   "note": "area tests/call/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-home/tests/table_lock.rs",
+   "new": "control/crates/layerfs-home/tests/call/table_lock.rs",
+   "change": "move",
+   "note": "area tests/call/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-home/tests/tail.rs",
+   "new": "control/crates/layerfs-home/tests/log/tail.rs",
+   "change": "move",
+   "note": "the log cursor reader; one log test area"
+  },
+  {
+   "old": "control/crates/layerfs-machine/Cargo.toml",
+   "new": "control/crates/layerfs-machine/Cargo.toml",
+   "change": "keep",
+   "note": "edited: platform deps join; machine feature gates platform driver modules; [[test]]"
+  },
+  {
+   "old": "control/crates/layerfs-machine/src/bundle.rs",
+   "new": "control/crates/layerfs-machine/src/setup/bundle.rs",
+   "change": "move",
+   "note": "rule 19: prepare/ and setup/ were two words for one idea"
+  },
+  {
+   "old": "control/crates/layerfs-machine/src/create.rs",
+   "new": "control/crates/layerfs-machine/src/lifecycle/create.rs",
+   "change": "move",
+   "note": "machine.create; machine lifecycle (owner 2026-11-27): calls that change whether a machine exists or runs, one file per call"
+  },
+  {
+   "old": "control/crates/layerfs-machine/src/endpoint.rs",
+   "new": "control/crates/layerfs-machine/src/lifecycle/boot.rs",
+   "change": "rename",
+   "note": "was endpoint.rs: finds the running worker, boots the VM and worker, holds the start lock create and remove also take"
+  },
+  {
+   "old": "control/crates/layerfs-machine/src/image.rs",
+   "new": "control/crates/layerfs-machine/src/setup/default_image.rs",
+   "change": "rename",
+   "note": "rule 19: the docker machine's default image, loaded once"
+  },
+  {
+   "old": "control/crates/layerfs-machine/src/lib.rs",
+   "new": "control/crates/layerfs-machine/src/lib.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "control/crates/layerfs-machine/src/list.rs",
+   "new": "control/crates/layerfs-machine/src/status/list.rs",
+   "change": "split",
+   "note": "machine.list; get split out"
+  },
+  {
+   "old": "control/crates/layerfs-machine/src/live.rs",
+   "new": "control/crates/layerfs-machine/src/status/live.rs",
+   "change": "move",
+   "note": "status/ (owner 2026-11-27): everything that answers how a machine is without changing it: record reads, live probes, stats"
+  },
+  {
+   "old": "control/crates/layerfs-machine/src/local.rs",
+   "new": "control/crates/layerfs-machine/src/route/runs_here.rs",
+   "change": "rename",
+   "note": "rule 20: whether a machine's calls run here or via its worker"
+  },
+  {
+   "old": "control/crates/layerfs-machine/src/platforms.rs",
+   "new": "control/crates/layerfs-machine/src/platform/available.rs",
+   "change": "rename",
+   "note": "home.get --with platforms: which machine kinds this computer can run, probed live"
+  },
+  {
+   "old": "control/crates/layerfs-machine/src/power.rs",
+   "new": "control/crates/layerfs-machine/src/lifecycle/start.rs",
+   "change": "split",
+   "note": "machine.start; power.rs held the start and stop call entries, split into start.rs and stop.rs"
+  },
+  {
+   "old": "control/crates/layerfs-machine/src/progress.rs",
+   "new": "control/crates/layerfs-machine/src/lifecycle/progress.rs",
+   "change": "move",
+   "note": "phases of start and stop"
+  },
+  {
+   "old": "control/crates/layerfs-machine/src/record.rs",
+   "new": "control/crates/layerfs-machine/src/record/machine.rs",
+   "change": "rename",
+   "note": "the machine record; record/ like store and sandbox"
+  },
+  {
+   "old": "control/crates/layerfs-machine/src/related.rs",
+   "new": "control/crates/layerfs-machine/src/users.rs",
+   "change": "rename",
+   "note": "Related fn-pointer struct becomes the MachineUsers trait"
+  },
+  {
+   "old": "control/crates/layerfs-machine/src/remove.rs",
+   "new": "control/crates/layerfs-machine/src/lifecycle/remove.rs",
+   "change": "move",
+   "note": "machine.remove; machine lifecycle (owner 2026-11-27): calls that change whether a machine exists or runs, one file per call"
+  },
+  {
+   "old": "control/crates/layerfs-machine/src/spec.rs",
+   "new": "control/crates/layerfs-machine/src/record/adapter_spec.rs",
+   "change": "split",
+   "note": "record I/O: machine records become the adapters Spec; callers import it as record"
+  },
+  {
+   "old": "control/crates/layerfs-machine/src/state.rs",
+   "new": "control/crates/layerfs-machine/src/status/state.rs",
+   "change": "move",
+   "note": "status/ (owner 2026-11-27): everything that answers how a machine is without changing it: record reads, live probes, stats"
+  },
+  {
+   "old": "control/crates/layerfs-machine/src/update.rs",
+   "new": "control/crates/layerfs-machine/src/update.rs",
+   "change": "move",
+   "note": "machine.update changes settings only; loose at the crate root"
+  },
+  {
+   "old": "control/crates/layerfs-machine/src/worker/client.rs",
+   "new": "control/crates/layerfs-machine/src/route/guest/client.rs",
+   "change": "move",
+   "note": "rule 20: the worker client is how a call reaches a machine"
+  },
+  {
+   "old": "control/crates/layerfs-machine/src/worker/diagnostic.rs",
+   "new": "control/crates/layerfs-machine/src/route/guest/diagnostic.rs",
+   "change": "move",
+   "note": "rule 20: the worker client is how a call reaches a machine"
+  },
+  {
+   "old": "control/crates/layerfs-machine/src/worker/frame.rs",
+   "new": "control/crates/layerfs-machine/src/route/guest/frame.rs",
+   "change": "move",
+   "note": "rule 20: the worker client is how a call reaches a machine"
+  },
+  {
+   "old": "control/crates/layerfs-machine/src/worker/hello.rs",
+   "new": "control/crates/layerfs-machine/src/route/guest/hello.rs",
+   "change": "move",
+   "note": "rule 20: the worker client is how a call reaches a machine"
+  },
+  {
+   "old": "control/crates/layerfs-machine/src/worker/mod.rs",
+   "new": "control/crates/layerfs-machine/src/route/mod.rs",
+   "change": "move",
+   "note": "rule 20: the worker client is how a call reaches a machine"
+  },
+  {
+   "old": "control/crates/layerfs-machine/tests/bundle_preflight.rs",
+   "new": "control/crates/layerfs-machine/tests/standalone/bundle_preflight.rs",
+   "change": "move",
+   "note": "own binary: process-global state (set_var); [[test]] entry in Cargo.toml"
+  },
+  {
+   "old": "control/crates/layerfs-machine/tests/create_kept_vm.rs",
+   "new": "control/crates/layerfs-machine/tests/standalone/create_kept_vm.rs",
+   "change": "move",
+   "note": "own binary: process-global state (set_var); [[test]] entry in Cargo.toml"
+  },
+  {
+   "old": "control/crates/layerfs-machine/tests/docker_socket_choice.rs",
+   "new": "control/crates/layerfs-machine/tests/standalone/docker_socket_choice.rs",
+   "change": "move",
+   "note": "own binary: process-global state (set_var); [[test]] entry in Cargo.toml"
+  },
+  {
+   "old": "control/crates/layerfs-machine/tests/doctor_diagnostic_requests.rs",
+   "new": "control/crates/layerfs-machine/tests/worker/diagnostic_requests.rs",
+   "change": "rename",
+   "note": "area tests/worker/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-machine/tests/doctor_worker.rs",
+   "new": "control/crates/layerfs-machine/tests/worker/diagnostic_budget.rs",
+   "change": "rename",
+   "note": "area tests/worker/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-machine/tests/endpoint_debug.rs",
+   "new": "control/crates/layerfs-machine/tests/worker/endpoint_debug.rs",
+   "change": "move",
+   "note": "area tests/worker/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-machine/tests/frame_attachments.rs",
+   "new": "control/crates/layerfs-machine/tests/worker/frame_attachments.rs",
+   "change": "move",
+   "note": "area tests/worker/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-machine/tests/image_reuse.rs",
+   "new": "control/crates/layerfs-machine/tests/standalone/docker_image_reuse.rs",
+   "change": "rename",
+   "note": "own binary: process-global state (set_var); [[test]] entry in Cargo.toml"
+  },
+  {
+   "old": "control/crates/layerfs-machine/tests/in_process.rs",
+   "new": "control/crates/layerfs-machine/tests/runs_here.rs",
+   "change": "rename",
+   "note": "follows src rename prepare/runs_here.rs"
+  },
+  {
+   "old": "control/crates/layerfs-machine/tests/silent_worker_start.rs",
+   "new": "control/crates/layerfs-machine/tests/standalone/silent_worker_start.rs",
+   "change": "move",
+   "note": "own binary: process-global state (set_var); [[test]] entry in Cargo.toml"
+  },
+  {
+   "old": "control/crates/layerfs-machine/tests/start_compatibility.rs",
+   "new": "control/crates/layerfs-machine/tests/standalone/start_compatibility.rs",
+   "change": "move",
+   "note": "own binary: process-global state (set_var); [[test]] entry in Cargo.toml"
+  },
+  {
+   "old": "control/crates/layerfs-machine/tests/start_ordered.rs",
+   "new": "control/crates/layerfs-machine/tests/standalone/start_ordered.rs",
+   "change": "move",
+   "note": "own binary: process-global state (set_var); [[test]] entry in Cargo.toml"
+  },
+  {
+   "old": "control/crates/layerfs-platform/Cargo.toml",
+   "new": "control/crates/layerfs-machine/Cargo.toml",
+   "change": "merge",
+   "note": "platform crate removed"
+  },
+  {
+   "old": "control/crates/layerfs-platform/src/adapter.rs",
+   "new": "control/crates/layerfs-machine/src/platform/adapter.rs",
+   "change": "move",
+   "note": "rule 9/10: the trait every variant implements sits with the variants"
+  },
+  {
+   "old": "control/crates/layerfs-platform/src/docker_socket.rs",
+   "new": "control/crates/layerfs-machine/src/platform/docker/socket.rs",
+   "change": "rename",
+   "note": "docker-only: into the docker variant folder"
+  },
+  {
+   "old": "control/crates/layerfs-platform/src/error.rs",
+   "new": "control/crates/layerfs-machine/src/platform/error.rs",
+   "change": "move",
+   "note": "platform root: shared by every driver call"
+  },
+  {
+   "old": "control/crates/layerfs-platform/src/facts.rs",
+   "new": "control/crates/layerfs-machine/src/setup/facts.rs",
+   "change": "move",
+   "note": "rule 10: shared VM setup is not a variant; beside platform/"
+  },
+  {
+   "old": "control/crates/layerfs-platform/src/lib.rs",
+   "new": "control/crates/layerfs-machine/src/platform/mod.rs",
+   "change": "rename",
+   "note": "platform crate removed: becomes layerfs_machine::platform (path kept)"
+  },
+  {
+   "old": "control/crates/layerfs-platform/src/options.rs",
+   "new": "control/crates/layerfs-machine/src/table/options.rs",
+   "change": "move",
+   "note": "rule 10: create options each profile declares; beside platform/"
+  },
+  {
+   "old": "control/crates/layerfs-platform/src/platform.rs",
+   "new": "control/crates/layerfs-machine/src/table/profile.rs",
+   "change": "rename",
+   "note": "the table of each platform Profile; platform.rs collided with platform/"
+  },
+  {
+   "old": "control/crates/layerfs-platform/src/probe.rs",
+   "new": "control/crates/layerfs-machine/src/setup/probe.rs",
+   "change": "move",
+   "note": "runs the adapters and setup::tool; table/ keeps only table data"
+  },
+  {
+   "old": "control/crates/layerfs-platform/src/reach.rs",
+   "new": "control/crates/layerfs-machine/src/table/reach.rs",
+   "change": "move",
+   "note": "rule 12: the Store-URL reach rule the support table encodes (G3)"
+  },
+  {
+   "old": "control/crates/layerfs-platform/src/spec.rs",
+   "new": "control/crates/layerfs-machine/src/setup/spec.rs",
+   "change": "move",
+   "note": "rule 10: what the caller passes for one machine; setup input"
+  },
+  {
+   "old": "control/crates/layerfs-platform/src/support.rs",
+   "new": "control/crates/layerfs-machine/src/table/support.rs",
+   "change": "move",
+   "note": "rule 10: the SUPPORT.json table; beside platform/"
+  },
+  {
+   "old": "control/crates/layerfs-platform/src/platforms/mod.rs",
+   "new": "control/crates/layerfs-machine/src/platform/mod.rs",
+   "change": "merge",
+   "note": "4 lines of folder declarations join platform/mod.rs"
+  },
+  {
+   "old": "control/crates/layerfs-platform/src/platforms/apple_container/adapter.rs",
+   "new": "control/crates/layerfs-machine/src/platform/apple_container/adapter.rs",
+   "change": "move",
+   "note": "variant folder (owner 2026-11-27)"
+  },
+  {
+   "old": "control/crates/layerfs-platform/src/platforms/apple_container/create.rs",
+   "new": "control/crates/layerfs-machine/src/platform/apple_container/lifecycle.rs",
+   "change": "rename",
+   "note": "rule 9/19: create+remove+start+stop of the VM in one file per variant"
+  },
+  {
+   "old": "control/crates/layerfs-platform/src/platforms/apple_container/mod.rs",
+   "new": "control/crates/layerfs-machine/src/platform/apple_container/mod.rs",
+   "change": "move",
+   "note": "variant folder (owner 2026-11-27)"
+  },
+  {
+   "old": "control/crates/layerfs-platform/src/platforms/apple_container/observe.rs",
+   "new": "control/crates/layerfs-machine/src/platform/apple_container/status.rs",
+   "change": "rename",
+   "note": "rule 9/19: the variant's reads (observe, guest, status)"
+  },
+  {
+   "old": "control/crates/layerfs-platform/src/platforms/apple_container/power.rs",
+   "new": "control/crates/layerfs-machine/src/platform/apple_container/lifecycle.rs",
+   "change": "merge",
+   "note": "rule 12: power.rs rejected; start/stop join create/remove"
+  },
+  {
+   "old": "control/crates/layerfs-platform/src/platforms/apple_container/profile.rs",
+   "new": "control/crates/layerfs-machine/src/platform/apple_container/profile.rs",
+   "change": "move",
+   "note": "variant folder (owner 2026-11-27)"
+  },
+  {
+   "old": "control/crates/layerfs-platform/src/platforms/docker/adapter.rs",
+   "new": "control/crates/layerfs-machine/src/platform/docker/adapter.rs",
+   "change": "move",
+   "note": "variant folder (owner 2026-11-27)"
+  },
+  {
+   "old": "control/crates/layerfs-platform/src/platforms/docker/cli.rs",
+   "new": "control/crates/layerfs-machine/src/platform/docker/cli.rs",
+   "change": "move",
+   "note": "variant folder (owner 2026-11-27)"
+  },
+  {
+   "old": "control/crates/layerfs-platform/src/platforms/docker/images.rs",
+   "new": "control/crates/layerfs-machine/src/platform/docker/image_cache.rs",
+   "change": "rename",
+   "note": "holds only cached_image(), not the images call"
+  },
+  {
+   "old": "control/crates/layerfs-platform/src/platforms/docker/mod.rs",
+   "new": "control/crates/layerfs-machine/src/platform/docker/mod.rs",
+   "change": "move",
+   "note": "variant folder (owner 2026-11-27)"
+  },
+  {
+   "old": "control/crates/layerfs-platform/src/platforms/docker/network.rs",
+   "new": "control/crates/layerfs-machine/src/platform/docker/cli.rs",
+   "change": "merge",
+   "note": "5 lines parsing `docker port`; joins the docker CLI file"
+  },
+  {
+   "old": "control/crates/layerfs-platform/src/platforms/docker/power.rs",
+   "new": "control/crates/layerfs-machine/src/platform/docker/lifecycle.rs",
+   "change": "rename",
+   "note": "rule 12/9: power.rs rejected; worker container start/stop"
+  },
+  {
+   "old": "control/crates/layerfs-platform/src/platforms/docker/profile.rs",
+   "new": "control/crates/layerfs-machine/src/platform/docker/profile.rs",
+   "change": "move",
+   "note": "variant folder (owner 2026-11-27)"
+  },
+  {
+   "old": "control/crates/layerfs-platform/src/platforms/docker/unix.rs",
+   "new": "control/crates/layerfs-machine/src/platform/docker/status.rs",
+   "change": "rename",
+   "note": "rule 9: docker's reads (inspect, guest, status); windows.rs stays its cfg twin"
+  },
+  {
+   "old": "control/crates/layerfs-platform/src/platforms/docker/windows.rs",
+   "new": "control/crates/layerfs-machine/src/platform/docker/unsupported.rs",
+   "change": "rename",
+   "note": "stand-in off linux/macos for images, lifecycle and status"
+  },
+  {
+   "old": "control/crates/layerfs-platform/src/platforms/lima/adapter.rs",
+   "new": "control/crates/layerfs-machine/src/platform/lima/adapter.rs",
+   "change": "move",
+   "note": "variant folder (owner 2026-11-27)"
+  },
+  {
+   "old": "control/crates/layerfs-platform/src/platforms/lima/create.rs",
+   "new": "control/crates/layerfs-machine/src/platform/lima/lifecycle.rs",
+   "change": "rename",
+   "note": "rule 9/19: create+remove+start+stop of the VM in one file per variant"
+  },
+  {
+   "old": "control/crates/layerfs-platform/src/platforms/lima/limit.rs",
+   "new": "control/crates/layerfs-machine/src/platform/lima/name_limit.rs",
+   "change": "rename",
+   "note": "holds only name_limit()"
+  },
+  {
+   "old": "control/crates/layerfs-platform/src/platforms/lima/mod.rs",
+   "new": "control/crates/layerfs-machine/src/platform/lima/mod.rs",
+   "change": "move",
+   "note": "variant folder (owner 2026-11-27)"
+  },
+  {
+   "old": "control/crates/layerfs-platform/src/platforms/lima/observe.rs",
+   "new": "control/crates/layerfs-machine/src/platform/lima/status.rs",
+   "change": "rename",
+   "note": "rule 9/19: the variant's reads (observe, guest, status)"
+  },
+  {
+   "old": "control/crates/layerfs-platform/src/platforms/lima/power.rs",
+   "new": "control/crates/layerfs-machine/src/platform/lima/lifecycle.rs",
+   "change": "merge",
+   "note": "rule 12: power.rs rejected; start/stop join create/remove"
+  },
+  {
+   "old": "control/crates/layerfs-platform/src/platforms/lima/profile.rs",
+   "new": "control/crates/layerfs-machine/src/platform/lima/profile.rs",
+   "change": "move",
+   "note": "variant folder (owner 2026-11-27)"
+  },
+  {
+   "old": "control/crates/layerfs-platform/src/platforms/lima/template.rs",
+   "new": "control/crates/layerfs-machine/src/platform/lima/template.rs",
+   "change": "move",
+   "note": "variant folder (owner 2026-11-27)"
+  },
+  {
+   "old": "control/crates/layerfs-platform/src/platforms/host/adapter.rs",
+   "new": "control/crates/layerfs-machine/src/platform/host/adapter.rs",
+   "change": "move",
+   "note": "variant folder (owner 2026-11-27)"
+  },
+  {
+   "old": "control/crates/layerfs-platform/src/platforms/host/mod.rs",
+   "new": "control/crates/layerfs-machine/src/platform/host/mod.rs",
+   "change": "move",
+   "note": "variant folder (owner 2026-11-27)"
+  },
+  {
+   "old": "control/crates/layerfs-platform/src/platforms/host/observe.rs",
+   "new": "control/crates/layerfs-machine/src/platform/host/status.rs",
+   "change": "rename",
+   "note": "rule 9/19: the variant's reads"
+  },
+  {
+   "old": "control/crates/layerfs-platform/src/platforms/host/power.rs",
+   "new": "control/crates/layerfs-machine/src/platform/host/lifecycle.rs",
+   "change": "rename",
+   "note": "rule 12/9: power.rs rejected; same name as the other variants"
+  },
+  {
+   "old": "control/crates/layerfs-platform/src/platforms/host/profile.rs",
+   "new": "control/crates/layerfs-machine/src/platform/host/profile.rs",
+   "change": "move",
+   "note": "variant folder (owner 2026-11-27)"
+  },
+  {
+   "old": "control/crates/layerfs-platform/src/setup/artifacts.rs",
+   "new": "control/crates/layerfs-machine/src/setup/bundle_install.rs",
+   "change": "rename",
+   "note": "installs the bundle bundle.rs finds"
+  },
+  {
+   "old": "control/crates/layerfs-platform/src/setup/calls.rs",
+   "new": "control/crates/layerfs-machine/src/platform/dispatch.rs",
+   "change": "rename",
+   "note": "rule 12/19: the one dispatch of machine calls to a platform's adapter"
+  },
+  {
+   "old": "control/crates/layerfs-platform/src/setup/forward.rs",
+   "new": "control/crates/layerfs-machine/src/setup/forward.rs",
+   "change": "move",
+   "note": "rule 10: shared VM setup is not a variant; beside platform/"
+  },
+  {
+   "old": "control/crates/layerfs-platform/src/setup/guest.rs",
+   "new": "control/crates/layerfs-machine/src/setup/guest.rs",
+   "change": "move",
+   "note": "rule 10: shared VM setup is not a variant; beside platform/"
+  },
+  {
+   "old": "control/crates/layerfs-platform/src/setup/mod.rs",
+   "new": "control/crates/layerfs-machine/src/setup/mod.rs",
+   "change": "move",
+   "note": "rule 10: shared VM setup is not a variant; beside platform/"
+  },
+  {
+   "old": "control/crates/layerfs-platform/src/setup/tool.rs",
+   "new": "control/crates/layerfs-machine/src/setup/tool.rs",
+   "change": "move",
+   "note": "rule 10: shared VM setup is not a variant; beside platform/"
+  },
+  {
+   "old": "control/crates/layerfs-platform/src/setup/vm.rs",
+   "new": "control/crates/layerfs-machine/src/setup/vm.rs",
+   "change": "move",
+   "note": "rule 10: shared VM setup is not a variant; beside platform/"
+  },
+  {
+   "old": "control/crates/layerfs-platform/src/setup/worker.rs",
+   "new": "control/crates/layerfs-machine/src/setup/worker.rs",
+   "change": "move",
+   "note": "rule 10: shared VM setup is not a variant; beside platform/"
+  },
+  {
+   "old": "control/crates/layerfs-platform/tests/conformance.rs",
+   "new": "control/crates/layerfs-sandbox/tests/runtime/platform_conformance.rs",
+   "change": "rename",
+   "note": "area tests/runtime/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-platform/tests/docker_image_cache.rs",
+   "new": "control/crates/layerfs-machine/tests/platform/docker_image_cache.rs",
+   "change": "move",
+   "note": "area tests/platform/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-platform/tests/docker_socket.rs",
+   "new": "control/crates/layerfs-machine/tests/standalone/docker_socket.rs",
+   "change": "move",
+   "note": "own binary: process-global state (set_var); [[test]] entry in Cargo.toml"
+  },
+  {
+   "old": "control/crates/layerfs-platform/tests/doctor_provider.rs",
+   "new": "control/crates/layerfs-machine/tests/platform/provider_state.rs",
+   "change": "rename",
+   "note": "area tests/platform/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-platform/tests/endpoint_debug.rs",
+   "new": "control/crates/layerfs-machine/tests/table/endpoint_debug.rs",
+   "change": "move",
+   "note": "area tests/table/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-platform/tests/guest_artifacts.rs",
+   "new": "control/crates/layerfs-machine/tests/setup/guest_artifacts.rs",
+   "change": "move",
+   "note": "area tests/setup/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-platform/tests/localhost_reach.rs",
+   "new": "control/crates/layerfs-machine/tests/table/reach_localhost.rs",
+   "change": "rename",
+   "note": "area tests/table/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-platform/tests/machine_adapter.rs",
+   "new": "control/crates/layerfs-machine/tests/platform/adapter.rs",
+   "change": "rename",
+   "note": "area tests/platform/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-platform/tests/machine_deadline.rs",
+   "new": "control/crates/layerfs-machine/tests/standalone/setup_tool_deadline.rs",
+   "change": "rename",
+   "note": "own binary: slow target; [[test]] entry in Cargo.toml"
+  },
+  {
+   "old": "control/crates/layerfs-platform/tests/machine_force.rs",
+   "new": "control/crates/layerfs-machine/tests/platform/stop_force.rs",
+   "change": "rename",
+   "note": "area tests/platform/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-platform/tests/machine_forward.rs",
+   "new": "control/crates/layerfs-machine/tests/setup/forward.rs",
+   "change": "rename",
+   "note": "area tests/setup/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-platform/tests/machine_lima.rs",
+   "new": "control/crates/layerfs-machine/tests/platform/lima.rs",
+   "change": "rename",
+   "note": "area tests/platform/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-platform/tests/machine_platform.rs",
+   "new": "control/crates/layerfs-machine/tests/table/platform.rs",
+   "change": "rename",
+   "note": "area tests/table/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-platform/tests/machine_probe.rs",
+   "new": "control/crates/layerfs-machine/tests/setup/probe.rs",
+   "change": "rename",
+   "note": "area tests/setup/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-platform/tests/machine_providers.rs",
+   "new": "control/crates/layerfs-machine/tests/platform/commands.rs",
+   "change": "rename",
+   "note": "area tests/platform/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-platform/tests/machine_reach.rs",
+   "new": "control/crates/layerfs-machine/tests/table/reach.rs",
+   "change": "rename",
+   "note": "area tests/table/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-platform/tests/machine_spec.rs",
+   "new": "control/crates/layerfs-machine/tests/table/spec.rs",
+   "change": "rename",
+   "note": "area tests/table/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-platform/tests/support.rs",
+   "new": "control/crates/layerfs-machine/tests/table/support_table.rs",
+   "change": "rename",
+   "note": "area tests/table/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-platform/tests/worker_log.rs",
+   "new": "control/crates/layerfs-machine/tests/setup/worker_log.rs",
+   "change": "move",
+   "note": "area tests/setup/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-platform/tests/support/engine.rs",
+   "new": "control/crates/layerfs-machine/tests/support/engine.rs",
+   "change": "move",
+   "note": "platform test helpers join machine tests/support/"
+  },
+  {
+   "old": "control/crates/layerfs-platform/tests/support/standin.rs",
+   "new": "control/crates/layerfs-machine/tests/support/standin.rs",
+   "change": "move",
+   "note": "platform test helpers join machine tests/support/"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/Cargo.toml",
+   "new": "control/crates/layerfs-sandbox/Cargo.toml",
+   "change": "keep",
+   "note": "edited: backend deps, [[bin]] helper, deny(unsafe_code) instead of forbid"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/create.rs",
+   "new": "control/crates/layerfs-sandbox/src/lifecycle/create.rs",
+   "change": "move",
+   "note": "lifecycle/ (owner 2026-11-27): calls that change whether a Sandbox exists or runs"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/deploy.rs",
+   "new": "control/crates/layerfs-sandbox/src/deploy.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/direct.rs",
+   "new": "control/crates/layerfs-sandbox/src/route/direct.rs",
+   "change": "move",
+   "note": "rule 20: Workspace calls straight to a forwarded daemon"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/dispatch.rs",
+   "new": "control/crates/layerfs-sandbox/src/route/machine/dispatch.rs",
+   "change": "move",
+   "note": "rule 20: host dispatch is how a Sandbox call reaches its machine"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/docker.rs",
+   "new": "control/crates/layerfs-sandbox/src/image/copy/docker.rs",
+   "change": "move",
+   "note": "image_* prefix family"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/family.rs",
+   "new": "control/crates/layerfs-sandbox/src/family.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/files.rs",
+   "new": "control/crates/layerfs-sandbox/src/record/discovery.rs",
+   "change": "rename",
+   "note": "how Sandbox records are found on disk; joins the record it reads"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/force.rs",
+   "new": "control/crates/layerfs-sandbox/src/lifecycle/force_remove.rs",
+   "change": "rename",
+   "note": "the forced close behind sandbox.remove"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/get.rs",
+   "new": "control/crates/layerfs-sandbox/src/status/get.rs",
+   "change": "move",
+   "note": "status/ (owner 2026-11-27): everything that answers how a Sandbox is without changing it: record reads, live probes, stats"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/image_artifact.rs",
+   "new": "control/crates/layerfs-sandbox/src/image/cache.rs",
+   "change": "rename",
+   "note": "a machine's image cache"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/image_load.rs",
+   "new": "control/crates/layerfs-sandbox/src/image/copy/load.rs",
+   "change": "rename",
+   "note": "image_* prefix family"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/image_lock.rs",
+   "new": "control/crates/layerfs-sandbox/src/image/copy/lock.rs",
+   "change": "rename",
+   "note": "image_* prefix family"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/image_sweep.rs",
+   "new": "control/crates/layerfs-sandbox/src/image/copy/sweep.rs",
+   "change": "rename",
+   "note": "image_* prefix family"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/images.rs",
+   "new": "control/crates/layerfs-sandbox/src/image/list.rs",
+   "change": "split",
+   "note": "image list (and reclaimable); prune split to image/prune.rs"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/lib.rs",
+   "new": "control/crates/layerfs-sandbox/src/lib.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/lifecycle.rs",
+   "new": "control/crates/layerfs-sandbox/src/lifecycle/serve.rs",
+   "change": "rename",
+   "note": "runs Sandbox host operations on the machine; layerfs-workspace calls its counterpart serve.rs"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/list.rs",
+   "new": "control/crates/layerfs-sandbox/src/status/list.rs",
+   "change": "move",
+   "note": "status/ (owner 2026-11-27): everything that answers how a Sandbox is without changing it: record reads, live probes, stats"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/mount_intents.rs",
+   "new": "control/crates/layerfs-sandbox/src/lifecycle/mount_intents.rs",
+   "change": "move",
+   "note": "the mount intents a forced sandbox.remove ends"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/output.rs",
+   "new": "control/crates/layerfs-sandbox/src/exec/output.rs",
+   "change": "move",
+   "note": "rule 19: exec id, exec records; workspace has exec/ for the same idea"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/registry.rs",
+   "new": "control/crates/layerfs-sandbox/src/lifecycle/registry.rs",
+   "change": "move",
+   "note": "in-memory list of the Inits and Sandboxes this process started"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/remove.rs",
+   "new": "control/crates/layerfs-sandbox/src/lifecycle/remove.rs",
+   "change": "move",
+   "note": "lifecycle/ (owner 2026-11-27): calls that change whether a Sandbox exists or runs"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/reopen.rs",
+   "new": "control/crates/layerfs-sandbox/src/record/reopen.rs",
+   "change": "move",
+   "note": "reopens or deletes what a record says runs it"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/route.rs",
+   "new": "control/crates/layerfs-sandbox/src/route/machine/send.rs",
+   "change": "rename",
+   "note": "rule 14: route/host/route.rs; runs a host op here or sends it to the worker"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/run_folder.rs",
+   "new": "control/crates/layerfs-sandbox/src/status/run_folder.rs",
+   "change": "move",
+   "note": "status/ (owner 2026-11-27): everything that answers how a Sandbox is without changing it: record reads, live probes, stats"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/runtime.rs",
+   "new": "control/crates/layerfs-sandbox/src/backend/select.rs",
+   "change": "rename",
+   "note": "picks native or namespaces and validates deploy.sandbox; uses host, output, record, state, so not a shared runtime type"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/state.rs",
+   "new": "control/crates/layerfs-sandbox/src/status/state.rs",
+   "change": "move",
+   "note": "status/ (owner 2026-11-27): the Sandbox state words from its record, like machine and store status/state.rs"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/sweep.rs",
+   "new": "control/crates/layerfs-sandbox/src/record/sweep.rs",
+   "change": "move",
+   "note": "removes leftover run folders under the run root"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/unmount_guard.rs",
+   "new": "control/crates/layerfs-sandbox/src/record/unmount_guard.rs",
+   "change": "move",
+   "note": "the unmount ownership file beside the Workspace record"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/daemon/call.rs",
+   "new": "control/crates/layerfs-sandbox/src/route/daemon/call.rs",
+   "change": "move",
+   "note": "rule 20: the daemon channel is how a Workspace call reaches the daemon"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/daemon/capacity.rs",
+   "new": "control/crates/layerfs-sandbox/src/status/capacity.rs",
+   "change": "move",
+   "note": "a read model for sandbox.get and the doctor, not channel transport"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/daemon/channel.rs",
+   "new": "control/crates/layerfs-sandbox/src/route/daemon/channel/exchange.rs",
+   "change": "rename",
+   "note": "rule 20: daemon channel under route/"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/daemon/failure.rs",
+   "new": "control/crates/layerfs-sandbox/src/route/daemon/failure.rs",
+   "change": "move",
+   "note": "rule 20: the daemon channel is how a Workspace call reaches the daemon"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/daemon/fence.rs",
+   "new": "control/crates/layerfs-sandbox/src/route/daemon/channel/fence.rs",
+   "change": "move",
+   "note": "rule 20: daemon channel under route/"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/daemon/internal.rs",
+   "new": "control/crates/layerfs-sandbox/src/route/daemon/channel/internal.rs",
+   "change": "move",
+   "note": "rule 20: daemon channel under route/"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/daemon/mod.rs",
+   "new": "control/crates/layerfs-sandbox/src/route/daemon/mod.rs",
+   "change": "move",
+   "note": "rule 20: the daemon channel is how a Workspace call reaches the daemon"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/daemon/operator.rs",
+   "new": "control/crates/layerfs-sandbox/src/route/daemon/channel/operator.rs",
+   "change": "move",
+   "note": "rule 20: daemon channel under route/"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/daemon/pool.rs",
+   "new": "control/crates/layerfs-sandbox/src/route/daemon/channel/pool.rs",
+   "change": "move",
+   "note": "rule 20: daemon channel under route/"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/daemon/values.rs",
+   "new": "control/crates/layerfs-sandbox/src/route/daemon/refusal.rs",
+   "change": "split",
+   "note": "wire/sdk_error/failure stay; Workspace answer values (mounted, status, commit, unmounted) "
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/daemon/workspace/commit.rs",
+   "new": "control/crates/layerfs-sandbox/src/route/daemon/workspace/commit.rs",
+   "change": "move",
+   "note": "rule 20: Workspace calls over the daemon channel"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/daemon/workspace/mod.rs",
+   "new": "control/crates/layerfs-sandbox/src/route/daemon/workspace/mod.rs",
+   "change": "move",
+   "note": "rule 20: Workspace calls over the daemon channel"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/daemon/workspace/mount.rs",
+   "new": "control/crates/layerfs-sandbox/src/route/daemon/workspace/mount.rs",
+   "change": "move",
+   "note": "rule 20: Workspace calls over the daemon channel"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/daemon/workspace/recovery.rs",
+   "new": "control/crates/layerfs-sandbox/src/route/daemon/workspace/recovery.rs",
+   "change": "move",
+   "note": "rule 20: Workspace calls over the daemon channel"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/daemon/workspace/status.rs",
+   "new": "control/crates/layerfs-sandbox/src/route/daemon/workspace/status.rs",
+   "change": "move",
+   "note": "rule 20: Workspace calls over the daemon channel"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/daemon/workspace/unmount.rs",
+   "new": "control/crates/layerfs-sandbox/src/route/daemon/workspace/unmount.rs",
+   "change": "move",
+   "note": "rule 20: Workspace calls over the daemon channel"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/exec/cancel.rs",
+   "new": "control/crates/layerfs-sandbox/src/exec/settle.rs",
+   "change": "split",
+   "note": "after workspace.cancel moves out, only settle/stale handling stays"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/exec/id.rs",
+   "new": "control/crates/layerfs-sandbox/src/exec/id.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/exec/mod.rs",
+   "new": "control/crates/layerfs-sandbox/src/exec/mod.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/exec/pending.rs",
+   "new": "control/crates/layerfs-sandbox/src/exec/pending.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/exec/record.rs",
+   "new": "control/crates/layerfs-sandbox/src/record/exec.rs",
+   "change": "rename",
+   "note": "an exec record; joins the crate records"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/exec/remote.rs",
+   "new": "control/crates/layerfs-sandbox/src/exec/remote.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/exec/run.rs",
+   "new": "control/crates/layerfs-workspace/src/exec/run.rs",
+   "change": "move",
+   "note": "workspace.exec: the call and the side that runs it"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/host/call.rs",
+   "new": "control/crates/layerfs-sandbox/src/route/machine/call.rs",
+   "change": "move",
+   "note": "rule 20: host dispatch is how a Sandbox call reaches its machine"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/host/frame.rs",
+   "new": "control/crates/layerfs-sandbox/src/route/machine/frame.rs",
+   "change": "move",
+   "note": "rule 20: host dispatch is how a Sandbox call reaches its machine"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/host/mod.rs",
+   "new": "control/crates/layerfs-sandbox/src/route/machine/mod.rs",
+   "change": "move",
+   "note": "rule 20: host dispatch is how a Sandbox call reaches its machine"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/image_tar/filter.rs",
+   "new": "control/crates/layerfs-sandbox/src/image/tar/filter.rs",
+   "change": "move",
+   "note": "image_* prefix family"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/image_tar/header.rs",
+   "new": "control/crates/layerfs-sandbox/src/image/tar/header.rs",
+   "change": "move",
+   "note": "image_* prefix family"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/image_tar/mod.rs",
+   "new": "control/crates/layerfs-sandbox/src/image/tar/mod.rs",
+   "change": "move",
+   "note": "image_* prefix family"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/image_tar/pax.rs",
+   "new": "control/crates/layerfs-sandbox/src/image/tar/pax.rs",
+   "change": "move",
+   "note": "image_* prefix family"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/image_tar/sparse.rs",
+   "new": "control/crates/layerfs-sandbox/src/image/tar/sparse.rs",
+   "change": "move",
+   "note": "image_* prefix family"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/inspect/files.rs",
+   "new": "control/crates/layerfs-inspect/src/files/walk.rs",
+   "change": "rename",
+   "note": "files/ leaf: one reader for machine.files, sandbox.files, machine.log and sandbox.log (from sandbox inspect/)"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/inspect/host.rs",
+   "new": "control/crates/layerfs-inspect/src/machine/kernel.rs",
+   "change": "rename",
+   "note": "machine/ leaf: machine.doctor plus machine.stats, space and files, which read Sandboxes and Stores above layerfs-machine"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/inspect/live.rs",
+   "new": "control/crates/layerfs-inspect/src/machine/live.rs",
+   "change": "move",
+   "note": "only users stats.rs and space.rs live in layerfs-inspect machine/"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/inspect/log.rs",
+   "new": "control/crates/layerfs-inspect/src/files/log.rs",
+   "change": "move",
+   "note": "files/ leaf: one reader for machine.files, sandbox.files, machine.log and sandbox.log (from sandbox inspect/)"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/inspect/machine.rs",
+   "new": "control/crates/layerfs-inspect/src/machine/files.rs",
+   "change": "move",
+   "note": "machine/ leaf: machine.doctor plus machine.stats, space and files, which read Sandboxes and Stores above layerfs-machine"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/inspect/mod.rs",
+   "new": "control/crates/layerfs-inspect/src/lib.rs",
+   "change": "merge",
+   "note": "crate root: doctor lib + sandbox inspect/mod.rs"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/inspect/overlay.rs",
+   "new": "control/crates/layerfs-sandbox/src/status/overlay.rs",
+   "change": "move",
+   "note": "status/ (owner 2026-11-27): everything that answers how a Sandbox is without changing it: record reads, live probes, stats; Workspace overlay bytes"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/inspect/owner.rs",
+   "new": "control/crates/layerfs-sandbox/src/route/inspect.rs",
+   "change": "merge",
+   "note": "inspect permits and budget; merged into route/inspect.rs"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/inspect/process.rs",
+   "new": "control/crates/layerfs-sandbox/src/status/stats.rs",
+   "change": "rename",
+   "note": "a Sandbox daemon process as a monitoring read sees it; no clash with process/"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/inspect/root.rs",
+   "new": "control/crates/layerfs-inspect/src/files/root_view.rs",
+   "change": "rename",
+   "note": "files/ leaf: one reader for machine.files, sandbox.files, machine.log and sandbox.log (from sandbox inspect/)"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/inspect/roots.rs",
+   "new": "control/crates/layerfs-inspect/src/files/roots.rs",
+   "change": "move",
+   "note": "files/ leaf: one reader for machine.files, sandbox.files, machine.log and sandbox.log (from sandbox inspect/)"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/inspect/route.rs",
+   "new": "control/crates/layerfs-sandbox/src/route/inspect.rs",
+   "change": "rename",
+   "note": "the inspect route: where an inspect request runs (ask.rs) and how many may run (owner.rs), merged"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/inspect/space.rs",
+   "new": "control/crates/layerfs-inspect/src/machine/space.rs",
+   "change": "move",
+   "note": "machine/ leaf: machine.doctor plus machine.stats, space and files, which read Sandboxes and Stores above layerfs-machine"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/inspect/stats.rs",
+   "new": "control/crates/layerfs-inspect/src/machine/stats.rs",
+   "change": "move",
+   "note": "machine/ leaf: machine.doctor plus machine.stats, space and files, which read Sandboxes and Stores above layerfs-machine"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/launch/connection.rs",
+   "new": "control/crates/layerfs-sandbox/src/lifecycle/connection.rs",
+   "change": "move",
+   "note": "rule 8/20: launch is part of lifecycle (one TCP/Noise/Hello pipeline)"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/launch/create.rs",
+   "new": "control/crates/layerfs-sandbox/src/lifecycle/startup.rs",
+   "change": "rename",
+   "note": "rule 13: lifecycle/create.rs is sandbox.create; this is startup inputs/failure"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/launch/local.rs",
+   "new": "control/crates/layerfs-sandbox/src/lifecycle/boot.rs",
+   "change": "rename",
+   "note": "'local' distinguishes nothing since both backends run locally and #835 retired it; boots the daemon in its run folder, same word as machine lifecycle/boot.rs"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/launch/mod.rs",
+   "new": "control/crates/layerfs-sandbox/src/lifecycle/mod.rs",
+   "change": "move",
+   "note": "launch declarations join lifecycle/mod.rs"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/launch/network.rs",
+   "new": "control/crates/layerfs-sandbox/src/lifecycle/network.rs",
+   "change": "move",
+   "note": "rule 8/20: the launcher's firewall input is lifecycle"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/launch/provider.rs",
+   "new": "control/crates/layerfs-sandbox/src/lifecycle/launch.rs",
+   "change": "rename",
+   "note": "rule 13: provider.rs is each backend's; this is the one launch facade"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/record/daemon.rs",
+   "new": "control/crates/layerfs-sandbox/src/record/daemon.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/record/mod.rs",
+   "new": "control/crates/layerfs-sandbox/src/record/mod.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/record/sandbox.rs",
+   "new": "control/crates/layerfs-sandbox/src/record/sandbox.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/record/tombstone.rs",
+   "new": "control/crates/layerfs-sandbox/src/record/tombstone.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/record/workspace.rs",
+   "new": "control/crates/layerfs-sandbox/src/record/workspace.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/workspace/answers.rs",
+   "new": "control/crates/layerfs-workspace/src/answers.rs",
+   "change": "move",
+   "note": "Workspace management becomes its own crate above sandbox"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/workspace/calls.rs",
+   "new": "control/crates/layerfs-workspace/src/route/send.rs",
+   "change": "rename",
+   "note": "rule 12/20: mount/commit/unmount/status sent to the Sandbox's machine"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/workspace/direct.rs",
+   "new": "control/crates/layerfs-workspace/src/route/direct.rs",
+   "change": "move",
+   "note": "rule 20: Workspace calls straight to a forwarded daemon"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/workspace/dispatch.rs",
+   "new": "control/crates/layerfs-workspace/src/route/dispatch.rs",
+   "change": "move",
+   "note": "rule 20: host dispatch of Workspace operations"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/workspace/exec.rs",
+   "new": "control/crates/layerfs-workspace/src/exec/call.rs",
+   "change": "rename",
+   "note": "workspace.exec: the call and the side that runs it"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/workspace/list.rs",
+   "new": "control/crates/layerfs-workspace/src/list.rs",
+   "change": "move",
+   "note": "Workspace management becomes its own crate above sandbox"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/workspace/mod.rs",
+   "new": "control/crates/layerfs-workspace/src/lib.rs",
+   "change": "rename",
+   "note": "Workspace management becomes its own crate above sandbox"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/src/workspace/serve.rs",
+   "new": "control/crates/layerfs-workspace/src/machine/serve.rs",
+   "change": "move",
+   "note": "host side of Workspace operations (host/ \u2192 machine/: \"host\" now names the host machine)"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/tests/capacity_read.rs",
+   "new": "control/crates/layerfs-sandbox/tests/daemon/capacity_read.rs",
+   "change": "move",
+   "note": "area tests/daemon/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/tests/daemon_unreadable_reply.rs",
+   "new": "control/crates/layerfs-sandbox/tests/daemon/unreadable_reply.rs",
+   "change": "rename",
+   "note": "area tests/daemon/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/tests/direct_stopped.rs",
+   "new": "control/crates/layerfs-sandbox/tests/lifecycle/direct_stopped.rs",
+   "change": "move",
+   "note": "area tests/lifecycle/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/tests/exec_running.rs",
+   "new": "control/crates/layerfs-sandbox/tests/daemon/exec_running.rs",
+   "change": "move",
+   "note": "area tests/daemon/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/tests/exec_start_race.rs",
+   "new": "control/crates/layerfs-sandbox/tests/daemon/exec_start_race.rs",
+   "change": "move",
+   "note": "area tests/daemon/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/tests/failure_words.rs",
+   "new": "control/crates/layerfs-sandbox/tests/lifecycle/failure_words.rs",
+   "change": "move",
+   "note": "area tests/lifecycle/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/tests/half_created.rs",
+   "new": "control/crates/layerfs-sandbox/tests/lifecycle/half_created.rs",
+   "change": "move",
+   "note": "area tests/lifecycle/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/tests/host_frame.rs",
+   "new": "control/crates/layerfs-sandbox/tests/daemon/host_frame.rs",
+   "change": "move",
+   "note": "area tests/daemon/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/tests/image_candidates.rs",
+   "new": "control/crates/layerfs-sandbox/tests/image/candidates.rs",
+   "change": "rename",
+   "note": "area tests/image/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/tests/image_copy.rs",
+   "new": "control/crates/layerfs-sandbox/tests/image/copy.rs",
+   "change": "rename",
+   "note": "area tests/image/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/tests/image_sweep.rs",
+   "new": "control/crates/layerfs-sandbox/tests/image/sweep.rs",
+   "change": "rename",
+   "note": "area tests/image/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/tests/image_tar.rs",
+   "new": "control/crates/layerfs-sandbox/tests/image/tar.rs",
+   "change": "rename",
+   "note": "area tests/image/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/tests/inspect_admission.rs",
+   "new": "control/crates/layerfs-sandbox/tests/standalone/inspect_admission.rs",
+   "change": "move",
+   "note": "own binary: slow target; [[test]] entry in Cargo.toml"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/tests/inspect_files.rs",
+   "new": "control/crates/layerfs-inspect/tests/reads/files.rs",
+   "change": "rename",
+   "note": "tests follow the reads into layerfs-inspect; area reads/ (inspect/ would repeat the crate name)"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/tests/inspect_machine_files.rs",
+   "new": "control/crates/layerfs-inspect/tests/reads/machine_files.rs",
+   "change": "rename",
+   "note": "tests follow the reads into layerfs-inspect; area reads/ (inspect/ would repeat the crate name)"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/tests/inspect_root_files.rs",
+   "new": "control/crates/layerfs-inspect/tests/reads/root_files.rs",
+   "change": "rename",
+   "note": "tests follow the reads into layerfs-inspect; area reads/ (inspect/ would repeat the crate name)"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/tests/inspect_space.rs",
+   "new": "control/crates/layerfs-inspect/tests/reads/space.rs",
+   "change": "rename",
+   "note": "tests follow the reads into layerfs-inspect; area reads/ (inspect/ would repeat the crate name)"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/tests/inspect_stats.rs",
+   "new": "control/crates/layerfs-inspect/tests/standalone/machine_stats.rs",
+   "change": "move",
+   "note": "tests follow the reads into layerfs-inspect; area reads/ (inspect/ would repeat the crate name)"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/tests/installed_repair.rs",
+   "new": "control/crates/layerfs-sandbox/tests/lifecycle/installed_repair.rs",
+   "change": "move",
+   "note": "area tests/lifecycle/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/tests/lp176_image_export.rs",
+   "new": "control/crates/layerfs-sandbox/tests/image/export.rs",
+   "change": "rename",
+   "note": "area tests/image/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/tests/lp176_image_lock.rs",
+   "new": "control/crates/layerfs-sandbox/tests/image/lock.rs",
+   "change": "rename",
+   "note": "area tests/image/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/tests/lp176_image_recovery.rs",
+   "new": "control/crates/layerfs-sandbox/tests/image/recovery.rs",
+   "change": "rename",
+   "note": "area tests/image/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/tests/place_evidence.rs",
+   "new": "control/crates/layerfs-sandbox/tests/lifecycle/place_evidence.rs",
+   "change": "move",
+   "note": "area tests/lifecycle/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/tests/pool_admission.rs",
+   "new": "control/crates/layerfs-sandbox/tests/daemon/pool_admission.rs",
+   "change": "move",
+   "note": "area tests/daemon/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/tests/pool_recovery.rs",
+   "new": "control/crates/layerfs-sandbox/tests/daemon/pool_recovery.rs",
+   "change": "move",
+   "note": "area tests/daemon/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/tests/record_codec.rs",
+   "new": "control/crates/layerfs-sandbox/tests/record/codec.rs",
+   "change": "rename",
+   "note": "area tests/record/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/tests/recorded_names.rs",
+   "new": "control/crates/layerfs-sandbox/tests/record/recorded_names.rs",
+   "change": "move",
+   "note": "area tests/record/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/tests/retired_docker.rs",
+   "new": "control/crates/layerfs-sandbox/tests/record/retired_docker.rs",
+   "change": "move",
+   "note": "area tests/record/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/tests/retired_tombstone.rs",
+   "new": "control/crates/layerfs-sandbox/tests/record/retired_tombstone.rs",
+   "change": "move",
+   "note": "area tests/record/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/tests/stopped_machine.rs",
+   "new": "control/crates/layerfs-sandbox/tests/lifecycle/stopped_machine.rs",
+   "change": "move",
+   "note": "area tests/lifecycle/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/tests/uncertain_failure.rs",
+   "new": "control/crates/layerfs-sandbox/tests/lifecycle/uncertain_failure.rs",
+   "change": "move",
+   "note": "area tests/lifecycle/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/tests/unmount_record.rs",
+   "new": "control/crates/layerfs-sandbox/tests/mount/unmount_record.rs",
+   "change": "move",
+   "note": "area tests/mount/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/tests/workspace_answers.rs",
+   "new": "control/crates/layerfs-workspace/tests/answers.rs",
+   "change": "rename",
+   "note": "follows Workspace code to layerfs-workspace; crate prefix dropped"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/tests/workspace_busy_op.rs",
+   "new": "control/crates/layerfs-workspace/tests/busy_op.rs",
+   "change": "rename",
+   "note": "follows Workspace code to layerfs-workspace; crate prefix dropped"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/tests/workspace_inputs.rs",
+   "new": "control/crates/layerfs-workspace/tests/inputs.rs",
+   "change": "rename",
+   "note": "follows Workspace code to layerfs-workspace; crate prefix dropped"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/tests/workspace_isolation.rs",
+   "new": null,
+   "change": "remove",
+   "note": "deleted (refactor rule): the crate boundary replaces its source-text pin"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/tests/workspace_usage.rs",
+   "new": "control/crates/layerfs-sandbox/tests/runtime/workspace_usage.rs",
+   "change": "move",
+   "note": "area tests/runtime/main.rs: Workspace usage is read by sandbox monitor/ (inspect/ area left with the reads)"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/tests/support/standin.rs",
+   "new": "control/crates/layerfs-sandbox/tests/support/standin.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/Cargo.toml",
+   "new": "control/crates/layerfs-sandbox/Cargo.toml",
+   "change": "merge",
+   "note": "sandbox-backend crate removed"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/PROVIDERS.md",
+   "new": "control/crates/layerfs-sandbox/PROVIDERS.md",
+   "change": "move",
+   "note": "travels with the backend code"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/lib.rs",
+   "new": "control/crates/layerfs-sandbox/src/lib.rs",
+   "change": "merge",
+   "note": "sandbox-backend crate removed: its declarations/re-exports join sandbox lib.rs"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/backend/adapter.rs",
+   "new": "control/crates/layerfs-sandbox/src/backend/adapter.rs",
+   "change": "move",
+   "note": "sandbox-backend merged into sandbox as backend/"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/backend/kind.rs",
+   "new": "control/crates/layerfs-machine/src/table/backend.rs",
+   "change": "split",
+   "note": "split: machine keeps the Backend enum and names; capabilities() needs sandbox adapter and stays in sandbox backend/adapter.rs"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/backend/mod.rs",
+   "new": "control/crates/layerfs-sandbox/src/backend/mod.rs",
+   "change": "move",
+   "note": "sandbox-backend merged into sandbox as backend/"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/backend/namespaces/adapter.rs",
+   "new": "control/crates/layerfs-sandbox/src/backend/namespaces/adapter.rs",
+   "change": "move",
+   "note": "variant folder (owner 2026-11-27)"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/backend/namespaces/cgroup.rs",
+   "new": "control/crates/layerfs-sandbox/src/backend/namespaces/instance/cgroup.rs",
+   "change": "move",
+   "note": "one namespaces Sandbox's lifecycle leaf; one running namespace Sandbox; `sandbox/` repeated the crate name (owner 2026-11-27)"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/backend/namespaces/create.rs",
+   "new": "control/crates/layerfs-sandbox/src/backend/namespaces/instance/create.rs",
+   "change": "move",
+   "note": "one namespaces Sandbox's lifecycle leaf; one running namespace Sandbox; `sandbox/` repeated the crate name (owner 2026-11-27)"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/backend/namespaces/exec.rs",
+   "new": "control/crates/layerfs-sandbox/src/backend/namespaces/instance/exec.rs",
+   "change": "move",
+   "note": "one namespaces Sandbox's lifecycle leaf; one running namespace Sandbox; `sandbox/` repeated the crate name (owner 2026-11-27)"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/backend/namespaces/host_checks.rs",
+   "new": "control/crates/layerfs-sandbox/src/backend/namespaces/linux/host_checks.rs",
+   "change": "move",
+   "note": "Linux host facts beside confined/mounts"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/backend/namespaces/mod.rs",
+   "new": "control/crates/layerfs-sandbox/src/backend/namespaces/mod.rs",
+   "change": "move",
+   "note": "variant folder (owner 2026-11-27)"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/backend/namespaces/paths.rs",
+   "new": "control/crates/layerfs-sandbox/src/backend/namespaces/instance/paths.rs",
+   "change": "move",
+   "note": "one namespaces Sandbox's lifecycle leaf; one running namespace Sandbox; `sandbox/` repeated the crate name (owner 2026-11-27)"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/backend/namespaces/provider.rs",
+   "new": "control/crates/layerfs-sandbox/src/backend/namespaces/provider.rs",
+   "change": "move",
+   "note": "variant folder (owner 2026-11-27)"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/backend/namespaces/sandbox.rs",
+   "new": "control/crates/layerfs-sandbox/src/backend/namespaces/instance/handle.rs",
+   "change": "rename",
+   "note": "one namespaces Sandbox's lifecycle leaf; one running namespace Sandbox; `sandbox/` repeated the crate name (owner 2026-11-27)"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/backend/namespaces/seccomp.rs",
+   "new": "control/crates/layerfs-sandbox/src/backend/namespaces/seccomp.rs",
+   "change": "move",
+   "note": "variant folder (owner 2026-11-27)"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/backend/namespaces/spec.rs",
+   "new": "control/crates/layerfs-sandbox/src/backend/namespaces/instance/spec.rs",
+   "change": "move",
+   "note": "one namespaces Sandbox's lifecycle leaf; one running namespace Sandbox; `sandbox/` repeated the crate name (owner 2026-11-27)"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/backend/namespaces/linux/confined.rs",
+   "new": "control/crates/layerfs-sandbox/src/backend/namespaces/linux/confined.rs",
+   "change": "move",
+   "note": "sandbox-backend merged; os alias path unchanged"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/backend/namespaces/linux/mod.rs",
+   "new": "control/crates/layerfs-sandbox/src/backend/namespaces/linux/mod.rs",
+   "change": "move",
+   "note": "sandbox-backend merged; os alias path unchanged"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/backend/namespaces/linux/mounts.rs",
+   "new": "control/crates/layerfs-sandbox/src/backend/namespaces/linux/mounts.rs",
+   "change": "move",
+   "note": "sandbox-backend merged; os alias path unchanged"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/backend/namespaces/network/links.rs",
+   "new": "control/crates/layerfs-sandbox/src/backend/namespaces/network/links.rs",
+   "change": "move",
+   "note": "sandbox-backend merged into sandbox"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/backend/namespaces/network/lock.rs",
+   "new": "control/crates/layerfs-sandbox/src/backend/namespaces/network/lock.rs",
+   "change": "move",
+   "note": "sandbox-backend merged into sandbox"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/backend/namespaces/network/mod.rs",
+   "new": "control/crates/layerfs-sandbox/src/backend/namespaces/network/mod.rs",
+   "change": "move",
+   "note": "sandbox-backend merged into sandbox"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/backend/namespaces/network/netlink.rs",
+   "new": "control/crates/layerfs-sandbox/src/backend/namespaces/network/netlink.rs",
+   "change": "move",
+   "note": "sandbox-backend merged into sandbox"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/backend/namespaces/network/nftables.rs",
+   "new": "control/crates/layerfs-sandbox/src/backend/namespaces/network/nftables.rs",
+   "change": "move",
+   "note": "sandbox-backend merged into sandbox"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/backend/namespaces/network/pool.rs",
+   "new": "control/crates/layerfs-sandbox/src/backend/namespaces/network/pool.rs",
+   "change": "move",
+   "note": "sandbox-backend merged into sandbox"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/backend/namespaces/network/resolver.rs",
+   "new": "control/crates/layerfs-sandbox/src/backend/namespaces/network/resolver.rs",
+   "change": "move",
+   "note": "sandbox-backend merged into sandbox"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/backend/namespaces/network/setup.rs",
+   "new": "control/crates/layerfs-sandbox/src/backend/namespaces/network/setup.rs",
+   "change": "move",
+   "note": "sandbox-backend merged into sandbox"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/backend/namespaces/rootfs/cache.rs",
+   "new": "control/crates/layerfs-sandbox/src/backend/namespaces/rootfs/cache.rs",
+   "change": "move",
+   "note": "sandbox-backend merged into sandbox"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/backend/namespaces/rootfs/docker_archive.rs",
+   "new": "control/crates/layerfs-sandbox/src/backend/namespaces/rootfs/docker_archive.rs",
+   "change": "move",
+   "note": "sandbox-backend merged into sandbox"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/backend/namespaces/rootfs/layers.rs",
+   "new": "control/crates/layerfs-sandbox/src/backend/namespaces/rootfs/layers.rs",
+   "change": "move",
+   "note": "sandbox-backend merged into sandbox"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/backend/namespaces/rootfs/mod.rs",
+   "new": "control/crates/layerfs-sandbox/src/backend/namespaces/rootfs/mod.rs",
+   "change": "move",
+   "note": "sandbox-backend merged into sandbox"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/backend/namespaces/rootfs/tar.rs",
+   "new": "control/crates/layerfs-sandbox/src/backend/namespaces/rootfs/tar.rs",
+   "change": "move",
+   "note": "sandbox-backend merged into sandbox"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/backend/namespaces/rootfs/types.rs",
+   "new": "control/crates/layerfs-sandbox/src/backend/namespaces/rootfs/root.rs",
+   "change": "rename",
+   "note": "names the content, not 'types'"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/backend/process/adapter.rs",
+   "new": "control/crates/layerfs-sandbox/src/backend/process/adapter.rs",
+   "change": "move",
+   "note": "variant folder (owner 2026-11-27)"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/backend/process/exec.rs",
+   "new": "control/crates/layerfs-sandbox/src/backend/process/instance/exec.rs",
+   "change": "move",
+   "note": "one native Sandbox's lifecycle leaf; one running local Sandbox; `sandbox/` repeated the crate name (owner 2026-11-27)"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/backend/process/groups.rs",
+   "new": "control/crates/layerfs-sandbox/src/backend/process/instance/groups.rs",
+   "change": "move",
+   "note": "one native Sandbox's lifecycle leaf; one running local Sandbox; `sandbox/` repeated the crate name (owner 2026-11-27)"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/backend/process/mod.rs",
+   "new": "control/crates/layerfs-sandbox/src/backend/process/mod.rs",
+   "change": "move",
+   "note": "variant folder (owner 2026-11-27)"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/backend/process/provider.rs",
+   "new": "control/crates/layerfs-sandbox/src/backend/process/provider.rs",
+   "change": "move",
+   "note": "variant folder (owner 2026-11-27)"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/backend/process/sandbox.rs",
+   "new": "control/crates/layerfs-sandbox/src/backend/process/instance/handle.rs",
+   "change": "rename",
+   "note": "one native Sandbox's lifecycle leaf; one running local Sandbox; `sandbox/` repeated the crate name (owner 2026-11-27)"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/backend/process/macos/confined.rs",
+   "new": "control/crates/layerfs-sandbox/src/backend/process/macos/confined.rs",
+   "change": "move",
+   "note": "sandbox-backend merged; os alias path unchanged"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/backend/process/macos/darwin.rs",
+   "new": "control/crates/layerfs-sandbox/src/backend/process/macos/mount_table.rs",
+   "change": "rename",
+   "note": "sandbox-backend merged; os alias path unchanged"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/backend/process/macos/mod.rs",
+   "new": "control/crates/layerfs-sandbox/src/backend/process/macos/mod.rs",
+   "change": "move",
+   "note": "sandbox-backend merged; os alias path unchanged"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/backend/process/macos/mounts.rs",
+   "new": "control/crates/layerfs-sandbox/src/backend/process/macos/mounts.rs",
+   "change": "move",
+   "note": "sandbox-backend merged; os alias path unchanged"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/bin/layerfs-sandbox-helper/exec.rs",
+   "new": "control/crates/layerfs-sandbox/src/bin/layerfs-sandbox-helper/exec.rs",
+   "change": "move",
+   "note": "helper binary moves with its crate ([[bin]] in sandbox)"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/bin/layerfs-sandbox-helper/init.rs",
+   "new": "control/crates/layerfs-sandbox/src/bin/layerfs-sandbox-helper/init.rs",
+   "change": "move",
+   "note": "helper binary moves with its crate ([[bin]] in sandbox)"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/bin/layerfs-sandbox-helper/main.rs",
+   "new": "control/crates/layerfs-sandbox/src/bin/layerfs-sandbox-helper/main.rs",
+   "change": "move",
+   "note": "helper binary moves with its crate ([[bin]] in sandbox)"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/bin/layerfs-sandbox-helper/netns.rs",
+   "new": "control/crates/layerfs-sandbox/src/bin/layerfs-sandbox-helper/netns.rs",
+   "change": "move",
+   "note": "helper binary moves with its crate ([[bin]] in sandbox)"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/bin/layerfs-sandbox-helper/root.rs",
+   "new": "control/crates/layerfs-sandbox/src/bin/layerfs-sandbox-helper/root.rs",
+   "change": "move",
+   "note": "helper binary moves with its crate ([[bin]] in sandbox)"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/runtime/cancel.rs",
+   "new": "control/crates/layerfs-sandbox/src/runtime/stop.rs",
+   "change": "rename",
+   "note": "one command's stop handle; avoids a third cancel.rs"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/runtime/dispatch.rs",
+   "new": "control/crates/layerfs-sandbox/src/backend/dispatch.rs",
+   "change": "move",
+   "note": "rule 9/19: the one match over backends, like machine platform/dispatch.rs"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/runtime/mod.rs",
+   "new": "control/crates/layerfs-sandbox/src/runtime/mod.rs",
+   "change": "move",
+   "note": "rule 10: shared runtime is not a variant; beside backend/"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/runtime/trace.rs",
+   "new": "control/crates/layerfs-sandbox/src/runtime/trace.rs",
+   "change": "move",
+   "note": "rule 10: shared runtime is not a variant; beside backend/"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/runtime/types/bind.rs",
+   "new": "control/crates/layerfs-sandbox/src/runtime/bind.rs",
+   "change": "move",
+   "note": "rule 10: shared runtime is not a variant; beside backend/"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/runtime/types/capabilities.rs",
+   "new": "control/crates/layerfs-sandbox/src/runtime/capabilities.rs",
+   "change": "move",
+   "note": "rule 10: shared runtime is not a variant; beside backend/"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/runtime/types/execution.rs",
+   "new": "control/crates/layerfs-sandbox/src/runtime/execution.rs",
+   "change": "move",
+   "note": "rule 10: shared runtime is not a variant; beside backend/"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/runtime/types/failure.rs",
+   "new": "control/crates/layerfs-sandbox/src/runtime/failure.rs",
+   "change": "move",
+   "note": "rule 10: shared runtime is not a variant; beside backend/"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/runtime/types/identity.rs",
+   "new": "control/crates/layerfs-sandbox/src/runtime/identity.rs",
+   "change": "move",
+   "note": "rule 10: shared runtime is not a variant; beside backend/"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/runtime/types/image.rs",
+   "new": "control/crates/layerfs-sandbox/src/runtime/image.rs",
+   "change": "move",
+   "note": "rule 10: shared runtime is not a variant; beside backend/"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/runtime/types/mod.rs",
+   "new": "control/crates/layerfs-sandbox/src/runtime/mod.rs",
+   "change": "merge",
+   "note": "types/ flattened; its re-exports move to runtime/mod.rs"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/runtime/types/options.rs",
+   "new": "control/crates/layerfs-sandbox/src/runtime/options.rs",
+   "change": "move",
+   "note": "rule 10: shared runtime is not a variant; beside backend/"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/runtime/types/request.rs",
+   "new": "control/crates/layerfs-sandbox/src/runtime/request.rs",
+   "change": "move",
+   "note": "rule 10: shared runtime is not a variant; beside backend/"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/runtime/types/transfer.rs",
+   "new": "control/crates/layerfs-sandbox/src/runtime/transfer.rs",
+   "change": "move",
+   "note": "rule 10: shared runtime is not a variant; beside backend/"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/shared/confined.rs",
+   "new": "control/crates/layerfs-sandbox/src/backend/confined.rs",
+   "change": "move",
+   "note": "the per-OS folder-read contract native/macos and namespaces/linux implement (with the os alias and mounts_under); not daemon process code"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/shared/daemon.rs",
+   "new": "control/crates/layerfs-sandbox/src/spawn/daemon.rs",
+   "change": "split",
+   "note": "the macOS-only process daemon create is a variant member; shared Local/LocalPaths/LocalPhase/LOG stay"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/shared/listener.rs",
+   "new": "control/crates/layerfs-sandbox/src/spawn/listener.rs",
+   "change": "move",
+   "note": "rule 10: shared daemon process, not a variant; joins running/"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/shared/mod.rs",
+   "new": "control/crates/layerfs-sandbox/src/spawn/mod.rs",
+   "change": "move",
+   "note": "the local daemon process both backends start: spawn, listener line, search path, streams, confined reads"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/shared/search_path.rs",
+   "new": "control/crates/layerfs-sandbox/src/spawn/search_path.rs",
+   "change": "move",
+   "note": "rule 10: shared daemon process, not a variant; joins running/"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/shared/streams.rs",
+   "new": "control/crates/layerfs-sandbox/src/spawn/streams.rs",
+   "change": "move",
+   "note": "rule 10: shared daemon process, not a variant; joins running/"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/support/mod.rs",
+   "new": null,
+   "change": "remove",
+   "note": "declared only json/, postgres_url, removed_platforms, which move to home and machine"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/support/postgres_url.rs",
+   "new": "control/crates/layerfs-machine/src/table/postgresql_url.rs",
+   "change": "rename",
+   "note": "postgresql, the word used everywhere else"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/support/removed_platforms.rs",
+   "new": "control/crates/layerfs-machine/src/table/removed.rs",
+   "change": "rename",
+   "note": "rule 10: removed platforms; beside platform/"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/support/json/mod.rs",
+   "new": "control/crates/layerfs-home/src/json/mod.rs",
+   "change": "move",
+   "note": "moved down: machine platform code reads/quotes JSON; errors become home JsonError"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/support/json/read.rs",
+   "new": "control/crates/layerfs-home/src/json/read.rs",
+   "change": "move",
+   "note": "moved down: machine platform code reads/quotes JSON; errors become home JsonError"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/src/support/json/strings.rs",
+   "new": "control/crates/layerfs-home/src/json/strings.rs",
+   "change": "move",
+   "note": "moved down: machine platform code reads/quotes JSON; errors become home JsonError"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/tests/confined.rs",
+   "new": "control/crates/layerfs-sandbox/tests/local/confined.rs",
+   "change": "move",
+   "note": "area tests/local/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/tests/conformance.rs",
+   "new": "control/crates/layerfs-sandbox/tests/runtime/conformance.rs",
+   "change": "move",
+   "note": "area tests/runtime/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/tests/image_inventory.rs",
+   "new": "control/crates/layerfs-sandbox/tests/runtime/image_inventory.rs",
+   "change": "move",
+   "note": "area tests/runtime/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/tests/local_runtime.rs",
+   "new": "control/crates/layerfs-sandbox/tests/local/runtime.rs",
+   "change": "rename",
+   "note": "area tests/local/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/tests/local_search_path.rs",
+   "new": "control/crates/layerfs-sandbox/tests/standalone/local_search_path.rs",
+   "change": "move",
+   "note": "own binary: process-global state (set_var); [[test]] entry in Cargo.toml"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/tests/local_stop_mount.rs",
+   "new": "control/crates/layerfs-sandbox/tests/local/stop_mount.rs",
+   "change": "rename",
+   "note": "area tests/local/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/tests/namespaces_lifecycle.rs",
+   "new": "control/crates/layerfs-sandbox/tests/namespaces/lifecycle.rs",
+   "change": "rename",
+   "note": "area tests/namespaces/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/tests/namespaces_protocol.rs",
+   "new": "control/crates/layerfs-sandbox/tests/namespaces/protocol.rs",
+   "change": "rename",
+   "note": "area tests/namespaces/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/tests/namespaces_rootfs.rs",
+   "new": "control/crates/layerfs-sandbox/tests/namespaces/rootfs.rs",
+   "change": "rename",
+   "note": "area tests/namespaces/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/tests/namespaces_rootfs_times.rs",
+   "new": "control/crates/layerfs-sandbox/tests/namespaces/rootfs_times.rs",
+   "change": "rename",
+   "note": "area tests/namespaces/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/tests/namespaces_userns.rs",
+   "new": "control/crates/layerfs-sandbox/tests/namespaces/userns.rs",
+   "change": "rename",
+   "note": "area tests/namespaces/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/tests/native_provider.rs",
+   "new": "control/crates/layerfs-sandbox/tests/local/native_provider.rs",
+   "change": "move",
+   "note": "area tests/local/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/tests/runtime_enum.rs",
+   "new": "control/crates/layerfs-sandbox/tests/runtime/adapters.rs",
+   "change": "rename",
+   "note": "area tests/runtime/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/tests/stop_handle.rs",
+   "new": "control/crates/layerfs-sandbox/tests/runtime/stop_handle.rs",
+   "change": "move",
+   "note": "area tests/runtime/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/tests/support/image.rs",
+   "new": "control/crates/layerfs-sandbox/tests/support/image.rs",
+   "change": "move",
+   "note": "backend test helpers join sandbox tests/support/"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox-backend/tests/support/support_json.rs",
+   "new": "control/crates/layerfs-sandbox/tests/support/json.rs",
+   "change": "rename",
+   "note": "backend test helpers join sandbox tests/support/"
+  },
+  {
+   "old": "control/crates/layerfs-store/Cargo.toml",
+   "new": "control/crates/layerfs-store/Cargo.toml",
+   "change": "keep",
+   "note": "edited: bucket deps and features (local_folder, minio, s3_api, tls) join"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/call.rs",
+   "new": "control/crates/layerfs-store/src/admin/route/call.rs",
+   "change": "move",
+   "note": "route/ leaf: the route a Store call takes and the Store held open; store groups (owner 2026-11-27): the Store itself"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/compact.rs",
+   "new": "control/crates/layerfs-store/src/admin/maintenance/compact.rs",
+   "change": "move",
+   "note": "maintenance/ leaf: checks and in-place maintenance; store groups (owner 2026-11-27): the Store itself"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/diagnostic.rs",
+   "new": "control/crates/layerfs-store/src/backend/sqlite/diagnostic.rs",
+   "change": "split",
+   "note": "rule 23: each backend holds its engine diagnostic entry points; postgresql part split out"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/formats.rs",
+   "new": "control/crates/layerfs-store/src/admin/status/formats.rs",
+   "change": "move",
+   "note": "status/ (owner 2026-11-27): everything that answers how a Store is without changing it: record reads, live probes, stats"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/get.rs",
+   "new": "control/crates/layerfs-store/src/admin/status/get.rs",
+   "change": "move",
+   "note": "status/ (owner 2026-11-27): everything that answers how a Store is without changing it: record reads, live probes, stats"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/identity.rs",
+   "new": "control/crates/layerfs-store/src/admin/record/identity.rs",
+   "change": "move",
+   "note": "record/ leaf: a Store's record, identity and op intent; store groups (owner 2026-11-27): the Store itself"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/intent.rs",
+   "new": "control/crates/layerfs-store/src/admin/record/intent.rs",
+   "change": "move",
+   "note": "record/ leaf: a Store's record, identity and op intent; store groups (owner 2026-11-27): the Store itself"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/lease.rs",
+   "new": "control/crates/layerfs-store/src/admin/open/lease.rs",
+   "change": "move",
+   "note": "leases live in store/<name>/open/; held-open concern, not route choice"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/lib.rs",
+   "new": "control/crates/layerfs-store/src/lib.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "control/crates/layerfs-store/src/list.rs",
+   "new": "control/crates/layerfs-store/src/admin/status/list.rs",
+   "change": "move",
+   "note": "status/ (owner 2026-11-27): everything that answers how a Store is without changing it: record reads, live probes, stats"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/live.rs",
+   "new": "control/crates/layerfs-store/src/admin/status/live.rs",
+   "change": "move",
+   "note": "status/ (owner 2026-11-27): everything that answers how a Store is without changing it: record reads, live probes, stats"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/observed.rs",
+   "new": "control/crates/layerfs-store/src/admin/status/observed.rs",
+   "change": "move",
+   "note": "status/ (owner 2026-11-27): everything that answers how a Store is without changing it: record reads, live probes, stats"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/open.rs",
+   "new": "control/crates/layerfs-store/src/admin/open/cache.rs",
+   "change": "split",
+   "note": "674 LOC holding four concerns; cache core lands in cache.rs"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/open_args.rs",
+   "new": "control/crates/layerfs-store/src/admin/open/args.rs",
+   "change": "rename",
+   "note": "what a call opens its Store with; folder already says open (rule 16)"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/place.rs",
+   "new": "control/crates/layerfs-store/src/admin/route/executor.rs",
+   "change": "rename",
+   "note": "decides the Executor a call runs on; place means admission in the engine"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/place_view.rs",
+   "new": "control/crates/layerfs-store/src/admin/route/place_view.rs",
+   "change": "move",
+   "note": "route/ leaf: the route a Store call takes and the Store held open; store groups (owner 2026-11-27): the Store itself"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/record.rs",
+   "new": "control/crates/layerfs-store/src/admin/record/store.rs",
+   "change": "rename",
+   "note": "record/ leaf: a Store's record, identity and op intent; store groups (owner 2026-11-27): the Store itself"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/related.rs",
+   "new": "control/crates/layerfs-store/src/users.rs",
+   "change": "rename",
+   "note": "Related fn-pointer struct becomes the StoreUsers trait"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/repair.rs",
+   "new": "control/crates/layerfs-store/src/admin/maintenance/repair_mount_holders.rs",
+   "change": "rename",
+   "note": "named after store.repair_mount_holders"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/report.rs",
+   "new": "control/crates/layerfs-store/src/admin/maintenance/compact_report.rs",
+   "change": "rename",
+   "note": "maintenance/ leaf: checks and in-place maintenance; store groups (owner 2026-11-27): the Store itself"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/resolve.rs",
+   "new": "control/crates/layerfs-store/src/admin/route/resolve.rs",
+   "change": "move",
+   "note": "route/ leaf: the route a Store call takes and the Store held open; store groups (owner 2026-11-27): the Store itself"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/service.rs",
+   "new": "control/crates/layerfs-store/src/admin/open/service.rs",
+   "change": "split",
+   "note": "StoreService registry is held-open state; Sandbox/machine helpers leave; Owner renamed Route"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/state.rs",
+   "new": "control/crates/layerfs-store/src/admin/status/state.rs",
+   "change": "move",
+   "note": "status/ (owner 2026-11-27): everything that answers how a Store is without changing it: record reads, live probes, stats"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/stats.rs",
+   "new": "control/crates/layerfs-store/src/admin/status/stats.rs",
+   "change": "move",
+   "note": "status/ (owner 2026-11-27): everything that answers how a Store is without changing it: record reads, live probes, stats"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/unknown.rs",
+   "new": "control/crates/layerfs-store/src/data/unknown.rs",
+   "change": "move",
+   "note": "cross-call reply helper: branch, project, live and delete use it"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/upgrade.rs",
+   "new": "control/crates/layerfs-store/src/admin/maintenance/upgrade.rs",
+   "change": "move",
+   "note": "maintenance/ leaf: checks and in-place maintenance; store groups (owner 2026-11-27): the Store itself"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/words.rs",
+   "new": "control/crates/layerfs-store/src/words.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "control/crates/layerfs-store/src/backup/create.rs",
+   "new": "control/crates/layerfs-store/src/backup/jobs/create.rs",
+   "change": "move",
+   "note": "jobs/ (owner 2026-11-27): backup create and restore are long jobs with progress and an end; list and heads read them"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/backup/ended.rs",
+   "new": "control/crates/layerfs-store/src/backup/jobs/ended.rs",
+   "change": "move",
+   "note": "jobs/ (owner 2026-11-27): backup create and restore are long jobs with progress and an end; list and heads read them"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/backup/family.rs",
+   "new": "control/crates/layerfs-store/src/backup/bucket/connect.rs",
+   "change": "rename",
+   "note": "backup.connect and backup.disconnect: buckets connected by name, not jobs"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/backup/heads.rs",
+   "new": "control/crates/layerfs-store/src/backup/jobs/list.rs",
+   "change": "merge",
+   "note": "merged into its only caller"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/backup/list.rs",
+   "new": "control/crates/layerfs-store/src/backup/jobs/list.rs",
+   "change": "move",
+   "note": "jobs/ (owner 2026-11-27): backup create and restore are long jobs with progress and an end; list and heads read them"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/backup/mod.rs",
+   "new": "control/crates/layerfs-store/src/backup/mod.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "control/crates/layerfs-store/src/backup/progress.rs",
+   "new": "control/crates/layerfs-store/src/backup/jobs/progress.rs",
+   "change": "move",
+   "note": "jobs/ (owner 2026-11-27): backup create and restore are long jobs with progress and an end; list and heads read them"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/backup/record.rs",
+   "new": "control/crates/layerfs-store/src/backup/bucket/record.rs",
+   "change": "split",
+   "note": "provider design (local plan, 2026-11-27): keeps the record; URL parsing and the provider match move to providers/*/url.rs and registry.rs; store groups (owner 2026-11-27): the bucket's record"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/backup/restore.rs",
+   "new": "control/crates/layerfs-store/src/backup/jobs/restore.rs",
+   "change": "move",
+   "note": "jobs/ (owner 2026-11-27): backup create and restore are long jobs with progress and an end; list and heads read them"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/backup/restored.rs",
+   "new": "control/crates/layerfs-store/src/data/project/record/restored.rs",
+   "change": "move",
+   "note": "rebuilds project records; callers are project init, store move, doctor, sandbox"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/backup/secret.rs",
+   "new": "control/crates/layerfs-store/src/backup/bucket/secret.rs",
+   "change": "move",
+   "note": "reads and writes only the key secret; auth.rs holds the key"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/calls/branch.rs",
+   "new": "control/crates/layerfs-store/src/data/branch.rs",
+   "change": "move",
+   "note": "branch.* calls (owner 2026-11-27: store calls match the api families)"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/calls/commit.rs",
+   "new": "control/crates/layerfs-store/src/data/commit.rs",
+   "change": "move",
+   "note": "commit.* calls (owner 2026-11-27: store calls match the api families)"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/calls/mod.rs",
+   "new": "control/crates/layerfs-store/src/data/mod.rs",
+   "change": "move",
+   "note": "old calls/mod.rs declared the branch/commit/file families: data/"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/calls/op.rs",
+   "new": "control/crates/layerfs-store/src/admin/route/methods.rs",
+   "change": "rename",
+   "note": "the Store methods fs/branch/project send and their engine translation; both routes use it"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/calls/project.rs",
+   "new": "control/crates/layerfs-store/src/data/project/hide_path.rs",
+   "change": "split",
+   "note": "project.hide_path; project.stats goes to project/status/stats.rs (owner 2026-11-27: store calls match the api families)"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/calls/file/mod.rs",
+   "new": "control/crates/layerfs-store/src/data/file/mod.rs",
+   "change": "move",
+   "note": "file family; file/ is the name at 1317ebf7ca (owner 2026-11-27: store calls match the api families)"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/calls/file/read.rs",
+   "new": "control/crates/layerfs-store/src/data/file/read.rs",
+   "change": "split",
+   "note": "rule 1: one file per call; file.read (stat, list, glob, grep, history, blame split out)"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/calls/file/requests.rs",
+   "new": "control/crates/layerfs-store/src/data/file/requests.rs",
+   "change": "move",
+   "note": "file family; file/ is the name at 1317ebf7ca (owner 2026-11-27: store calls match the api families)"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/calls/file/write.rs",
+   "new": "control/crates/layerfs-store/src/data/file/write.rs",
+   "change": "split",
+   "note": "rule 1: one file per call; file.write (edit, rm, mkdir, mv, cp, apply split out)"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/postgresql/address.rs",
+   "new": "control/crates/layerfs-store/src/backend/postgresql/address.rs",
+   "change": "move",
+   "note": "store groups (owner 2026-11-27): where a Store lives (like sandbox backend/)"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/postgresql/check.rs",
+   "new": "control/crates/layerfs-store/src/backend/postgresql/check.rs",
+   "change": "move",
+   "note": "store groups (owner 2026-11-27): where a Store lives (like sandbox backend/)"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/postgresql/connect.rs",
+   "new": "control/crates/layerfs-store/src/backend/postgresql/connect.rs",
+   "change": "move",
+   "note": "store groups (owner 2026-11-27): where a Store lives (like sandbox backend/)"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/postgresql/family.rs",
+   "new": "control/crates/layerfs-store/src/backend/postgresql/family.rs",
+   "change": "move",
+   "note": "store groups (owner 2026-11-27): where a Store lives (like sandbox backend/)"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/postgresql/login.rs",
+   "new": "control/crates/layerfs-store/src/backend/postgresql/login.rs",
+   "change": "move",
+   "note": "store groups (owner 2026-11-27): where a Store lives (like sandbox backend/)"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/postgresql/mod.rs",
+   "new": "control/crates/layerfs-store/src/backend/postgresql/mod.rs",
+   "change": "move",
+   "note": "store groups (owner 2026-11-27): where a Store lives (like sandbox backend/)"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/postgresql/open.rs",
+   "new": "control/crates/layerfs-store/src/backend/postgresql/open.rs",
+   "change": "move",
+   "note": "store groups (owner 2026-11-27): where a Store lives (like sandbox backend/)"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/postgresql/reader.rs",
+   "new": "control/crates/layerfs-store/src/backend/postgresql/reader.rs",
+   "change": "move",
+   "note": "store groups (owner 2026-11-27): where a Store lives (like sandbox backend/)"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/project/add.rs",
+   "new": "control/crates/layerfs-store/src/data/project/init/sqlite.rs",
+   "change": "rename",
+   "note": "project/init leaf; store groups (owner 2026-11-27): what a Store holds"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/project/delete.rs",
+   "new": "control/crates/layerfs-store/src/data/project/delete/run.rs",
+   "change": "split",
+   "note": "project.delete entry; one entry name for each call folder (run.rs)"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/project/discovery.rs",
+   "new": "control/crates/layerfs-store/src/data/project/record/discovery.rs",
+   "change": "move",
+   "note": "rule 18/19: record/ as in admin/record/ and sandbox record/"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/project/family.rs",
+   "new": "control/crates/layerfs-store/src/data/project/init/run.rs",
+   "change": "rename",
+   "note": "project.init entry (get moves with it; check its caller when built)"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/project/frame.rs",
+   "new": "control/crates/layerfs-store/src/data/project/frame.rs",
+   "change": "move",
+   "note": "store groups (owner 2026-11-27): what a Store holds"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/project/init.rs",
+   "new": "control/crates/layerfs-store/src/data/project/init/worker.rs",
+   "change": "rename",
+   "note": "project/init leaf; store groups (owner 2026-11-27): what a Store holds"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/project/listing.rs",
+   "new": "control/crates/layerfs-store/src/data/project/status/listing.rs",
+   "change": "move",
+   "note": "rule 12/19: read/ rejected; a crate's reads are status/"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/project/live.rs",
+   "new": "control/crates/layerfs-store/src/data/project/status/live.rs",
+   "change": "move",
+   "note": "rule 12/19: read/ rejected; a crate's reads are status/"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/project/mod.rs",
+   "new": "control/crates/layerfs-store/src/data/project/mod.rs",
+   "change": "move",
+   "note": "store groups (owner 2026-11-27): what a Store holds"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/project/op.rs",
+   "new": "control/crates/layerfs-store/src/data/project/record/intent.rs",
+   "change": "rename",
+   "note": "the op intent a project record holds; same word as admin/record/intent.rs and home record/intent.rs"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/project/parts.rs",
+   "new": "control/crates/layerfs-store/src/data/project/init/parts.rs",
+   "change": "move",
+   "note": "project/init leaf; store groups (owner 2026-11-27): what a Store holds"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/project/postgres_init.rs",
+   "new": "control/crates/layerfs-store/src/data/project/init/postgresql.rs",
+   "change": "rename",
+   "note": "project/init leaf; store groups (owner 2026-11-27): what a Store holds"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/project/read.rs",
+   "new": "control/crates/layerfs-store/src/data/project/status/get.rs",
+   "change": "split",
+   "note": "project.get; list split out"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/project/record.rs",
+   "new": "control/crates/layerfs-store/src/data/project/record/project.rs",
+   "change": "rename",
+   "note": "rule 14: record/record.rs; like admin/record/store.rs"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/project/send.rs",
+   "new": "control/crates/layerfs-store/src/data/project/init/send.rs",
+   "change": "move",
+   "note": "project/init leaf; store groups (owner 2026-11-27): what a Store holds"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/project/staged.rs",
+   "new": "control/crates/layerfs-store/src/data/project/init/staged.rs",
+   "change": "move",
+   "note": "project/init leaf; store groups (owner 2026-11-27): what a Store holds"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/project/state.rs",
+   "new": "control/crates/layerfs-store/src/data/project/status/state.rs",
+   "change": "move",
+   "note": "rule 12/19: read/ rejected; a crate's reads are status/"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/project/tree.rs",
+   "new": "control/crates/layerfs-store/src/data/project/init/tree.rs",
+   "change": "move",
+   "note": "project/init leaf; store groups (owner 2026-11-27): what a Store holds"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/project/delete/remote.rs",
+   "new": "control/crates/layerfs-store/src/data/project/delete/remote.rs",
+   "change": "move",
+   "note": "store groups (owner 2026-11-27): what a Store holds"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/project/export/destination.rs",
+   "new": "control/crates/layerfs-store/src/data/project/export/destination.rs",
+   "change": "move",
+   "note": "store groups (owner 2026-11-27): what a Store holds"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/project/export/mod.rs",
+   "new": "control/crates/layerfs-store/src/data/project/export/mod.rs",
+   "change": "move",
+   "note": "store groups (owner 2026-11-27): what a Store holds"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/project/export/route.rs",
+   "new": "control/crates/layerfs-store/src/data/project/export/run.rs",
+   "change": "rename",
+   "note": "project.export entry; route.rs collided with admin/route/"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/project/export/walk.rs",
+   "new": "control/crates/layerfs-store/src/data/project/export/walk.rs",
+   "change": "move",
+   "note": "store groups (owner 2026-11-27): what a Store holds"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/project/export/writer.rs",
+   "new": "control/crates/layerfs-store/src/data/project/export/writer.rs",
+   "change": "move",
+   "note": "store groups (owner 2026-11-27): what a Store holds"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/sqlite/create.rs",
+   "new": "control/crates/layerfs-store/src/backend/sqlite/create.rs",
+   "change": "move",
+   "note": "store groups (owner 2026-11-27): where a Store lives (like sandbox backend/)"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/sqlite/family.rs",
+   "new": "control/crates/layerfs-store/src/backend/sqlite/family.rs",
+   "change": "move",
+   "note": "store groups (owner 2026-11-27): where a Store lives (like sandbox backend/)"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/sqlite/mod.rs",
+   "new": "control/crates/layerfs-store/src/backend/sqlite/mod.rs",
+   "change": "move",
+   "note": "store groups (owner 2026-11-27): where a Store lives (like sandbox backend/)"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/sqlite/remove.rs",
+   "new": "control/crates/layerfs-store/src/backend/sqlite/remove.rs",
+   "change": "move",
+   "note": "store groups (owner 2026-11-27): where a Store lives (like sandbox backend/)"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/sqlite/transfer/mod.rs",
+   "new": "control/crates/layerfs-store/src/backend/sqlite/mod.rs",
+   "change": "merge",
+   "note": "folder flattened; declarations move up; store groups (owner 2026-11-27): where a Store lives (like sandbox backend/)"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/sqlite/transfer/phases.rs",
+   "new": "control/crates/layerfs-store/src/backend/sqlite/move_phases.rs",
+   "change": "rename",
+   "note": "two-level transfer/ flattened into the sqlite variant; store groups (owner 2026-11-27): where a Store lives (like sandbox backend/)"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/sqlite/transfer/resolve.rs",
+   "new": "control/crates/layerfs-store/src/backend/sqlite/move_leftover.rs",
+   "change": "rename",
+   "note": "two-level transfer/ flattened into the sqlite variant; store groups (owner 2026-11-27): where a Store lives (like sandbox backend/)"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/sqlite/transfer/step.rs",
+   "new": "control/crates/layerfs-store/src/backend/sqlite/step_request.rs",
+   "change": "rename",
+   "note": "two-level transfer/ flattened into the sqlite variant; store groups (owner 2026-11-27): where a Store lives (like sandbox backend/)"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/sqlite/transfer/steps.rs",
+   "new": "control/crates/layerfs-store/src/backend/sqlite/step_run.rs",
+   "change": "rename",
+   "note": "two-level transfer/ flattened into the sqlite variant; store groups (owner 2026-11-27): where a Store lives (like sandbox backend/)"
+  },
+  {
+   "old": "control/crates/layerfs-store/tests/compact_in_process_call.rs",
+   "new": "control/crates/layerfs-store/tests/maintenance/compact_in_process_call.rs",
+   "change": "move",
+   "note": "area tests/maintenance/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-store/tests/compact_report_status.rs",
+   "new": "control/crates/layerfs-store/tests/maintenance/compact_report_status.rs",
+   "change": "move",
+   "note": "area tests/maintenance/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-store/tests/create_directory.rs",
+   "new": "control/crates/layerfs-store/tests/sqlite/create_directory.rs",
+   "change": "move",
+   "note": "area tests/sqlite/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-store/tests/diagnostic_structure.rs",
+   "new": "control/crates/layerfs-store/tests/maintenance/diagnostic_structure.rs",
+   "change": "move",
+   "note": "area tests/maintenance/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-store/tests/failure_words.rs",
+   "new": "control/crates/layerfs-store/tests/failure_words.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "control/crates/layerfs-store/tests/init_copy_hold.rs",
+   "new": "control/crates/layerfs-store/tests/project/init_copy_hold.rs",
+   "change": "move",
+   "note": "area tests/project/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-store/tests/kind_isolation.rs",
+   "new": "control/crates/layerfs-store/tests/sqlite/kind_isolation.rs",
+   "change": "move",
+   "note": "area tests/sqlite/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-store/tests/lease_race.rs",
+   "new": "control/crates/layerfs-store/tests/route/lease_race.rs",
+   "change": "move",
+   "note": "area tests/route/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-store/tests/lease_stale.rs",
+   "new": "control/crates/layerfs-store/tests/route/lease_stale.rs",
+   "change": "move",
+   "note": "area tests/route/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-store/tests/observed_reach.rs",
+   "new": "control/crates/layerfs-store/tests/postgresql/observed_reach.rs",
+   "change": "move",
+   "note": "area tests/postgresql/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-store/tests/open_args.rs",
+   "new": "control/crates/layerfs-store/tests/route/open_args.rs",
+   "change": "move",
+   "note": "area tests/route/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-store/tests/place_view_scope.rs",
+   "new": "control/crates/layerfs-store/tests/route/place_view_scope.rs",
+   "change": "move",
+   "note": "area tests/route/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-store/tests/postgresql_status.rs",
+   "new": "control/crates/layerfs-store/tests/postgresql/status.rs",
+   "change": "rename",
+   "note": "area tests/postgresql/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-store/tests/postgresql_url_corpus.rs",
+   "new": "control/crates/layerfs-store/tests/postgresql/url_corpus.rs",
+   "change": "rename",
+   "note": "area tests/postgresql/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-store/tests/profile_label.rs",
+   "new": "control/crates/layerfs-store/tests/profile_label.rs",
+   "change": "keep",
+   "note": ""
+  },
+  {
+   "old": "control/crates/layerfs-store/tests/project_add_unknown.rs",
+   "new": "control/crates/layerfs-store/tests/project/add_unknown.rs",
+   "change": "rename",
+   "note": "area tests/project/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-store/tests/project_delete.rs",
+   "new": "control/crates/layerfs-store/tests/project/delete.rs",
+   "change": "rename",
+   "note": "area tests/project/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-store/tests/project_delete_frames.rs",
+   "new": "control/crates/layerfs-store/tests/project/delete_frames.rs",
+   "change": "rename",
+   "note": "area tests/project/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-store/tests/project_delete_store.rs",
+   "new": "control/crates/layerfs-store/tests/project/delete_store.rs",
+   "change": "rename",
+   "note": "area tests/project/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-store/tests/project_frames.rs",
+   "new": "control/crates/layerfs-store/tests/project/frames.rs",
+   "change": "rename",
+   "note": "area tests/project/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-store/tests/project_list_frames.rs",
+   "new": "control/crates/layerfs-store/tests/project/list_frames.rs",
+   "change": "rename",
+   "note": "area tests/project/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-store/tests/repair_postgresql.rs",
+   "new": "control/crates/layerfs-store/tests/postgresql/repair.rs",
+   "change": "rename",
+   "note": "area tests/postgresql/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-store/tests/restore_install.rs",
+   "new": "control/crates/layerfs-store/tests/backup/restore_install.rs",
+   "change": "move",
+   "note": "area tests/backup/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-store/tests/restored_records.rs",
+   "new": "control/crates/layerfs-store/tests/backup/restored_records.rs",
+   "change": "move",
+   "note": "area tests/backup/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-store/tests/store_ops.rs",
+   "new": "control/crates/layerfs-store/tests/sqlite/store_ops.rs",
+   "change": "move",
+   "note": "area tests/sqlite/main.rs; module drops the area prefix"
+  },
+  {
+   "old": "control/crates/layerfs-store/tests/store_steps.rs",
+   "new": "control/crates/layerfs-store/tests/sqlite/store_steps.rs",
+   "change": "move",
+   "note": "area tests/sqlite/main.rs; module drops the area prefix"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-inspect/src/home/mod.rs",
+   "change": "new",
+   "note": "declarations only for the new folder"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-inspect/src/machine/mod.rs",
+   "change": "new",
+   "note": "declarations only for the new folder"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-inspect/src/sandbox/mod.rs",
+   "change": "new",
+   "note": "declarations only for the new folder"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-inspect/src/store/mod.rs",
+   "change": "new",
+   "note": "declarations only for the new folder"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-home/src/reply/mod.rs",
+   "change": "new",
+   "note": "reply/ (owner 2026-11-27): what every answer is built from: paging cursor, progress events, state words, time format, values; declarations only for the new folder"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-home/src/lock/mod.rs",
+   "change": "new",
+   "note": "declarations only for the new folder"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-home/src/log/mod.rs",
+   "change": "new",
+   "note": "declarations only for the new folder"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-machine/src/status/mod.rs",
+   "change": "new",
+   "note": "declarations only for the new folder"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-machine/src/table/mod.rs",
+   "change": "new",
+   "note": "declarations only for the new folder"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-sandbox/src/backend/namespaces/instance/mod.rs",
+   "change": "new",
+   "note": "declarations only for the new folder; one running namespace Sandbox; `sandbox/` repeated the crate name (owner 2026-11-27)"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-sandbox/src/backend/process/instance/mod.rs",
+   "change": "new",
+   "note": "declarations only for the new folder; one running local Sandbox; `sandbox/` repeated the crate name (owner 2026-11-27)"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-sandbox/src/status/mod.rs",
+   "change": "new",
+   "note": "declarations only for the new folder"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-sandbox/src/route/daemon/channel/mod.rs",
+   "change": "new",
+   "note": "declarations only for the new folder"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-sandbox/src/image/copy/mod.rs",
+   "change": "new",
+   "note": "declarations only for the new folder"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-sandbox/src/image/mod.rs",
+   "change": "new",
+   "note": "declarations only for the new folder"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-sandbox/src/lifecycle/machine_stop.rs",
+   "change": "new",
+   "note": "the Sandbox side of machine.stop --force; Sandbox has no stop call"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-sandbox/src/users.rs",
+   "change": "new",
+   "note": "implements MachineUsers/StoreUsers incl. action hooks (reconcile, forget, holders, force stop), so not a status read; mirrors machine root users.rs"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-store/src/admin/maintenance/mod.rs",
+   "change": "new",
+   "note": "declarations only for the new folder; store groups (owner 2026-11-27): the Store itself"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-store/src/data/project/delete/mod.rs",
+   "change": "new",
+   "note": "declarations only for the new folder; store groups (owner 2026-11-27): what a Store holds"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-store/src/data/project/init/mod.rs",
+   "change": "new",
+   "note": "declarations only for the new folder; store groups (owner 2026-11-27): what a Store holds"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-store/src/data/project/status/mod.rs",
+   "change": "new",
+   "note": "declarations only for the new folder; store groups (owner 2026-11-27): what a Store holds"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-store/src/data/project/record/mod.rs",
+   "change": "new",
+   "note": "declarations only for the new folder; store groups (owner 2026-11-27): what a Store holds"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-store/src/admin/record/mod.rs",
+   "change": "new",
+   "note": "declarations only for the new folder; store groups (owner 2026-11-27): the Store itself"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-store/src/admin/route/mod.rs",
+   "change": "new",
+   "note": "declarations only for the new folder; store groups (owner 2026-11-27): the Store itself"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-workspace/Cargo.toml",
+   "change": "new",
+   "note": "new crate: depends on home, machine, store, sandbox"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-workspace/src/exec/cancel.rs",
+   "change": "new",
+   "note": "split from control/crates/layerfs-sandbox/src/exec/cancel.rs"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-workspace/src/exec/mod.rs",
+   "change": "new",
+   "note": "declarations only for the new folder"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-workspace/src/machine/drain.rs",
+   "change": "new",
+   "note": "impl WorkspaceDrain (declared in sandbox) for Sandbox close (host/ \u2192 machine/: \"host\" now names the host machine)"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-workspace/src/machine/mod.rs",
+   "change": "new",
+   "note": "declarations only for the new folder (host/ \u2192 machine/: \"host\" now names the host machine)"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-workspace/src/machine/values.rs",
+   "change": "new",
+   "note": "split from control/crates/layerfs-sandbox/src/daemon/values.rs (host/ \u2192 machine/: \"host\" now names the host machine)"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-inspect/tests/doctor/main.rs",
+   "change": "new",
+   "note": "area test binary: one module per topic"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-home/tests/call/main.rs",
+   "change": "new",
+   "note": "area test binary: one module per topic"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-home/tests/records/main.rs",
+   "change": "new",
+   "note": "area test binary: one module per topic"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-machine/tests/platform/main.rs",
+   "change": "new",
+   "note": "area test binary: one module per topic"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-machine/tests/setup/main.rs",
+   "change": "new",
+   "note": "area test binary: one module per topic"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-machine/tests/table/main.rs",
+   "change": "new",
+   "note": "area test binary: one module per topic"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-machine/tests/worker/main.rs",
+   "change": "new",
+   "note": "area test binary: one module per topic"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-sandbox/tests/daemon/main.rs",
+   "change": "new",
+   "note": "area test binary: one module per topic"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-sandbox/tests/image/main.rs",
+   "change": "new",
+   "note": "area test binary: one module per topic"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-inspect/tests/reads/main.rs",
+   "change": "new",
+   "note": "tests follow the reads into layerfs-inspect; area reads/ (inspect/ would repeat the crate name)"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-sandbox/tests/lifecycle/main.rs",
+   "change": "new",
+   "note": "area test binary: one module per topic"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-sandbox/tests/local/main.rs",
+   "change": "new",
+   "note": "area test binary: one module per topic"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-sandbox/tests/mount/main.rs",
+   "change": "new",
+   "note": "area test binary: one module per topic"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-sandbox/tests/namespaces/main.rs",
+   "change": "new",
+   "note": "area test binary: one module per topic"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-sandbox/tests/record/main.rs",
+   "change": "new",
+   "note": "area test binary: one module per topic"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-sandbox/tests/runtime/main.rs",
+   "change": "new",
+   "note": "area test binary: one module per topic"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-sandbox/tests/users/main.rs",
+   "change": "new",
+   "note": "area test binary: one module per topic"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-store/tests/backup/main.rs",
+   "change": "new",
+   "note": "area test binary: one module per topic"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-store/tests/bucket/main.rs",
+   "change": "new",
+   "note": "area test binary: one module per topic"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-store/tests/maintenance/main.rs",
+   "change": "new",
+   "note": "area test binary: one module per topic"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-store/tests/postgresql/main.rs",
+   "change": "new",
+   "note": "area test binary: one module per topic"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-store/tests/project/main.rs",
+   "change": "new",
+   "note": "area test binary: one module per topic"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-store/tests/route/main.rs",
+   "change": "new",
+   "note": "area test binary: one module per topic"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-store/tests/sqlite/main.rs",
+   "change": "new",
+   "note": "area test binary: one module per topic"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-store/src/backup/bucket/provider.rs",
+   "change": "new",
+   "note": "provider design (local plan, 2026-11-27): trait Provider: URL \u21c4 settings, record fields, auth kind, limits, connect, checks; store groups (owner 2026-11-27): bucket belongs to backup"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-store/src/backup/providers/mod.rs",
+   "change": "new",
+   "note": "provider design (local plan, 2026-11-27): module root: one folder per provider; store groups (owner 2026-11-27): providers sit beside backup/bucket/ (four-level limit)"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-store/src/backup/providers/s3/url.rs",
+   "change": "new",
+   "note": "provider design (local plan, 2026-11-27): split from layerfs-store/src/backup/record.rs: http(s)://host/bucket/prefix \u21c4 record fields; store groups (owner 2026-11-27): providers sit beside backup/bucket/ (four-level limit)"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-store/src/backup/providers/s3/checks.rs",
+   "change": "new",
+   "note": "provider design (local plan, 2026-11-27): split from layerfs-control/src/doctor/backup_target.rs: S3-endpoint checks; store groups (owner 2026-11-27): providers sit beside backup/bucket/ (four-level limit)"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-store/src/backup/providers/r2/url.rs",
+   "change": "new",
+   "note": "provider design (local plan, 2026-11-27): split from layerfs-store/src/backup/record.rs: r2://account/bucket/prefix[?jurisdiction] \u21c4 record fields; store groups (owner 2026-11-27): providers sit beside backup/bucket/ (four-level limit)"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-store/src/backup/providers/r2/checks.rs",
+   "change": "new",
+   "note": "provider design (local plan, 2026-11-27): split from layerfs-control/src/doctor/backup_target.rs: R2 account/jurisdiction checks; store groups (owner 2026-11-27): providers sit beside backup/bucket/ (four-level limit)"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-store/src/backup/providers/local_folder/url.rs",
+   "change": "new",
+   "note": "provider design (local plan; owner 2026-11-27: local_folder becomes a real backup target for SQLite Store backups): NEW FEATURE: backup.connect accepts file:///<absolute path> (e.g. an external drive or mounted NAS on the host); URL \u21c4 record fields; store groups (owner 2026-11-27): providers sit beside backup/bucket/ (four-level limit)"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-store/src/backup/providers/local_folder/settings.rs",
+   "change": "new",
+   "note": "provider design (local plan; owner 2026-11-27: local_folder becomes a real backup target for SQLite Store backups): the folder path and limits (the filesystem's, not the test limits used to exercise pieces); refuses a path that is not an existing directory; store groups (owner 2026-11-27): providers sit beside backup/bucket/ (four-level limit)"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-store/src/backup/providers/s3/auth.rs",
+   "change": "new",
+   "note": "provider design (local plan, 2026-11-27): this provider's auth: access key + secret signed with SigV4 in its region; checks the key before any request; store groups (owner 2026-11-27): providers sit beside backup/bucket/ (four-level limit)"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-store/src/backup/providers/r2/auth.rs",
+   "change": "new",
+   "note": "provider design (local plan, 2026-11-27): this provider's auth: access key + secret (from an R2 API token) signed with SigV4, region \"auto\"; store groups (owner 2026-11-27): providers sit beside backup/bucket/ (four-level limit)"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-store/src/backup/providers/local_folder/auth.rs",
+   "change": "new",
+   "note": "provider design (local plan; owner 2026-11-27: local_folder becomes a real backup target for SQLite Store backups): no key: refuses one if given; the folder's own permissions protect it (0700, like the home); store groups (owner 2026-11-27): providers sit beside backup/bucket/ (four-level limit)"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-store/src/admin/mod.rs",
+   "change": "new",
+   "note": "store groups (owner 2026-11-27): the Store itself: record, route, calls, maintenance (name pending owner)"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-store/src/backend/mod.rs",
+   "change": "new",
+   "note": "store groups (owner 2026-11-27): where a Store lives: sqlite, postgresql"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-store/src/backup/jobs/mod.rs",
+   "change": "new",
+   "note": "jobs/ (owner 2026-11-27): backup create and restore are long jobs with progress and an end; list and heads read them"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-inspect/src/doctor/mod.rs",
+   "change": "new",
+   "note": "doctor/ (owner 2026-11-27): the one doctor runner, its kinds, report and budget; frame/ clashed with wire frames"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-inspect/src/files/mod.rs",
+   "change": "new",
+   "note": "declarations only for the new folder"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-inspect/src/serve.rs",
+   "change": "new",
+   "note": "split from sandbox inspect/route.rs: the worker side's one match on every inspect kind, which now spans machine and Sandbox reads"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-machine/src/lifecycle/stop.rs",
+   "change": "new",
+   "note": "machine.stop; split from power.rs"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-machine/src/lifecycle/mod.rs",
+   "change": "new",
+   "note": "declarations only for the new folder"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-sandbox/src/route/mod.rs",
+   "change": "new",
+   "note": "declarations only for the new folder"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-workspace/src/route/mod.rs",
+   "change": "new",
+   "note": "declarations only for the new folder"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-store/src/admin/status/mod.rs",
+   "change": "new",
+   "note": "declarations only for the new folder"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-inspect/src/home/init.rs",
+   "change": "new",
+   "note": "split from control/crates/layerfs-control/src/home.rs: home.init (rule 15)"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-store/src/data/project/status/stats.rs",
+   "change": "new",
+   "note": "split from calls/project.rs: project.stats is a read"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-sandbox/src/image/prune.rs",
+   "change": "new",
+   "note": "split from images.rs: image prune and its worker side"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-store/src/data/project/delete/worker.rs",
+   "change": "new",
+   "note": "delete worker handlers, split from delete.rs (as init/worker.rs)"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-store/src/data/project/status/list.rs",
+   "change": "new",
+   "note": "project.list, split from read.rs"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-store/src/backup/copy/link.rs",
+   "change": "new",
+   "note": "StoreLink, a Store record field, from bucket/record.rs"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-store/src/backend/postgresql/diagnostic.rs",
+   "change": "new",
+   "note": "PostgreSQL diagnostic entry points, split from diagnostic.rs"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-store/src/data/file/stat.rs",
+   "change": "new",
+   "note": "file.stat, split from read.rs (rule 1)"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-store/src/data/file/list.rs",
+   "change": "new",
+   "note": "file.list, split from read.rs (rule 1)"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-store/src/data/file/glob.rs",
+   "change": "new",
+   "note": "file.glob, split from read.rs (rule 1)"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-store/src/data/file/grep.rs",
+   "change": "new",
+   "note": "file.grep, split from read.rs (rule 1)"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-store/src/data/file/history.rs",
+   "change": "new",
+   "note": "file.history, split from read.rs (rule 1)"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-store/src/data/file/blame.rs",
+   "change": "new",
+   "note": "file.blame, split from read.rs (rule 1)"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-store/src/data/file/edit.rs",
+   "change": "new",
+   "note": "file.edit, split from write.rs (rule 1)"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-store/src/data/file/rm.rs",
+   "change": "new",
+   "note": "file.rm, split from write.rs (rule 1)"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-store/src/data/file/mkdir.rs",
+   "change": "new",
+   "note": "file.mkdir, split from write.rs (rule 1)"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-store/src/data/file/mv.rs",
+   "change": "new",
+   "note": "file.mv, split from write.rs (rule 1)"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-store/src/data/file/cp.rs",
+   "change": "new",
+   "note": "file.cp, split from write.rs (rule 1)"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-store/src/data/file/apply.rs",
+   "change": "new",
+   "note": "file.apply, split from write.rs (rule 1)"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-machine/src/record/built_ins.rs",
+   "change": "new",
+   "note": "the built-in machine records, split from spec.rs"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-machine/src/status/get.rs",
+   "change": "new",
+   "note": "machine.get, split from list.rs"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-home/src/record/mod.rs",
+   "change": "new",
+   "note": "records an entity keeps in the home"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-home/src/record/token.rs",
+   "change": "new",
+   "note": "ordered_token and random, split from helpers.rs"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-home/src/lock/mutex.rs",
+   "change": "new",
+   "note": "the poison-tolerant mutex lock, split from helpers.rs"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-home/src/log/lines.rs",
+   "change": "new",
+   "note": "log_line and log_swept, split from records.rs"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-home/tests/log/main.rs",
+   "change": "new",
+   "note": "home log test area"
+  },
+  {
+   "old": "control/crates/layerfs-machine/src/worker/host.rs",
+   "new": "control/crates/layerfs-machine/src/route/host/client.rs",
+   "change": "split",
+   "note": "lines 1-330 are endpoint custody and server bind, not the client"
+  },
+  {
+   "old": "control/crates/layerfs-machine/src/worker/host/stream.rs",
+   "new": "control/crates/layerfs-machine/src/route/host/stream.rs",
+   "change": "move",
+   "note": "new at #818/#835"
+  },
+  {
+   "old": "control/crates/layerfs-machine/src/worker/host_diagnostic.rs",
+   "new": "control/crates/layerfs-machine/src/route/host/diagnostic.rs",
+   "change": "move",
+   "note": "new at #818/#835"
+  },
+  {
+   "old": "control/crates/layerfs-machine/src/worker/host_frame.rs",
+   "new": "control/crates/layerfs-machine/src/route/host/frame.rs",
+   "change": "move",
+   "note": "new at #818/#835"
+  },
+  {
+   "old": "control/crates/layerfs-machine/src/worker/host_hello.rs",
+   "new": "control/crates/layerfs-machine/src/route/host/hello.rs",
+   "change": "move",
+   "note": "new at #818/#835"
+  },
+  {
+   "old": "control/crates/layerfs-control/src/host_power.rs",
+   "new": "control/crates/layerfs-machine/src/lifecycle/host.rs",
+   "change": "split",
+   "note": "part moves to users.rs: holder scan uses inventory and layerfs_store open/record/lease (above machine); via a MachineUsers::host_holders method"
+  },
+  {
+   "old": "control/crates/layerfs-control/src/doctor/host_worker.rs",
+   "new": "control/crates/layerfs-inspect/src/machine/worker.rs",
+   "change": "split",
+   "note": "live/observe/evidence serve machine.get in machine with_users.rs; machine cannot call inspect (parts move to layerfs-machine/src/status/worker.rs)"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/host_read.rs",
+   "new": "control/crates/layerfs-store/src/admin/host_worker/read.rs",
+   "change": "rename",
+   "note": "route code, called only by admin/route/call.rs; data/ holds call families"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/host_write.rs",
+   "new": "control/crates/layerfs-store/src/admin/host_worker/write.rs",
+   "change": "split",
+   "note": "retained write outcomes (worker writes, doctor reads) are a separate concern"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/host_stream.rs",
+   "new": "control/crates/layerfs-store/src/admin/host_worker/stream.rs",
+   "change": "rename",
+   "note": "both ends of a streamed host write"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/host_postgresql.rs",
+   "new": "control/crates/layerfs-store/src/admin/host_worker/postgresql.rs",
+   "change": "rename",
+   "note": "host-worker route for PostgreSQL reads/writes and retire"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/host_maintenance.rs",
+   "new": "control/crates/layerfs-store/src/admin/host_worker/handoff.rs",
+   "change": "rename",
+   "note": "close handoff of the worker's hold; callers compact, upgrade, sqlite remove/move"
+  },
+  {
+   "old": "control/crates/layerfs-store/src/postgresql/pool.rs",
+   "new": "control/crates/layerfs-store/src/backend/postgresql/pool.rs",
+   "change": "move",
+   "note": "new at #818/#835"
+  },
+  {
+   "old": "control/crates/layerfs-home/src/home/host_socket.rs",
+   "new": "control/crates/layerfs-home/src/socket.rs",
+   "change": "move",
+   "note": "new at #818/#835"
+  },
+  {
+   "old": "control/crates/layerfs-home/src/home/legacy_host.rs",
+   "new": "control/crates/layerfs-home/src/disk/native_names.rs",
+   "change": "rename",
+   "note": "only caller is disk/layout.rs detect; checks records still naming native"
+  },
+  {
+   "old": "control/crates/layerfs-home/src/json/stream.rs",
+   "new": "control/crates/layerfs-home/src/json/stream.rs",
+   "change": "keep",
+   "note": "new at #818/#835"
+  },
+  {
+   "old": "control/crates/layerfs-home/src/wipe.rs",
+   "new": "control/crates/layerfs-home/src/secret/wipe.rs",
+   "change": "move",
+   "note": "erasing a secret from memory belongs with the secrets"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-store/src/admin/host_worker/mod.rs",
+   "change": "new",
+   "note": "declarations for the new leaf; exports serve_host"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-machine/src/route/host/endpoint.rs",
+   "change": "new",
+   "note": "HostPaths, HostGuard, lock, bind, peer check (263 LOC from client.rs)"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-sandbox/src/backend/process/instance/create.rs",
+   "change": "new",
+   "note": "the process backend's daemon start, the twin of backend/namespaces/instance/create.rs"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-store/src/admin/host_worker/retained.rs",
+   "change": "new",
+   "note": "keep/retained/retained_dir/RETAINED_CAP from write.rs"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-store/src/admin/open/checkpoint.rs",
+   "change": "new",
+   "note": "idle WAL checkpoint (#86) and released"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-store/src/admin/open/close.rs",
+   "change": "new",
+   "note": "reaper, close_idle*, close, close_report, CloseReport"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-store/src/admin/open/host.rs",
+   "change": "new",
+   "note": "host worker cache admission, slot cap and close_host; needs cache internals via pub(super)"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-store/src/admin/route/mount_intents.rs",
+   "change": "new",
+   "note": "end_mount and reconcile_machine: placed mount intents beside place_view.rs"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-home/src/secret/mod.rs",
+   "change": "new",
+   "note": "declarations for the new folder"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-store/src/admin/host_worker/connection.rs",
+   "change": "new",
+   "note": "review835: split part"
+  },
+  {
+   "old": null,
+   "new": "control/crates/layerfs-machine/src/status/worker.rs",
+   "change": "new",
+   "note": "review835: split part"
+  },
+  {
+   "old": "control/crates/layerfs-control/src/worker_server/host.rs",
+   "new": "control/crates/layerfs-store/src/admin/host_worker/server.rs",
+   "change": "rename",
+   "note": "host server uses only store/machine/home/bridge and dispatches only Store ops"
+  },
+  {
+   "old": "control/crates/layerfs-control/src/worker_server/host/postgres.rs",
+   "new": "control/crates/layerfs-store/src/admin/host_worker/postgresql_queue.rs",
+   "change": "rename",
+   "note": "PostgreSQL queue of the host server on store pool slots; avoids 'lane'"
+  },
+  {
+   "old": "control/crates/layerfs-control/src/worker_server/host/write.rs",
+   "new": "control/crates/layerfs-store/src/admin/host_worker/write_queue.rs",
+   "change": "rename",
+   "note": "write admission and threads of the host server; avoids 'lane' (publication lane)"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/host_machine_legacy_home.rs",
+   "new": "control/crates/layerfs-inspect/tests/doctor/host_legacy_home.rs",
+   "change": "rename",
+   "note": "test added at #818/#835"
+  },
+  {
+   "old": "control/crates/layerfs-control/tests/host_machine_names.rs",
+   "new": "api/crates/layerfs-api/tests/machine/host_names.rs",
+   "change": "rename",
+   "note": "test added at #818/#835"
+  },
+  {
+   "old": "control/crates/layerfs-home/tests/json_stream.rs",
+   "new": "control/crates/layerfs-home/tests/call/json_stream.rs",
+   "change": "move",
+   "note": "test added at #818/#835"
+  },
+  {
+   "old": "control/crates/layerfs-machine/tests/host_client.rs",
+   "new": "control/crates/layerfs-machine/tests/worker/host_client.rs",
+   "change": "move",
+   "note": "test added at #818/#835"
+  },
+  {
+   "old": "control/crates/layerfs-machine/tests/host_frame_budget.rs",
+   "new": "control/crates/layerfs-machine/tests/worker/host_frame_budget.rs",
+   "change": "move",
+   "note": "test added at #818/#835"
+  },
+  {
+   "old": "control/crates/layerfs-sandbox/tests/run_root_layout.rs",
+   "new": "control/crates/layerfs-sandbox/tests/record/run_root_layout.rs",
+   "change": "move",
+   "note": "test added at #818/#835"
+  },
+  {
+   "old": "control/crates/layerfs-store/tests/host_store_cache.rs",
+   "new": "control/crates/layerfs-store/tests/route/host_cache.rs",
+   "change": "rename",
+   "note": "test added at #818/#835"
+  },
+  {
+   "old": "control/crates/layerfs-store/tests/lease_release.rs",
+   "new": "control/crates/layerfs-store/tests/route/lease_release.rs",
+   "change": "move",
+   "note": "test added at #818/#835"
+  },
+  {
+   "old": "control/crates/layerfs-store/tests/postgresql_held_sessions.rs",
+   "new": "control/crates/layerfs-store/tests/postgresql/held_sessions.rs",
+   "change": "rename",
+   "note": "test added at #818/#835"
+  }
+ ]
+}
