@@ -1,6 +1,7 @@
 //! Bounded file-length facts from the owning Store catalogue and small file states.
 use crate::{
     error::{StorageError, StorageResult},
+    location::ObjectLocation,
     source::Source,
     storage::Storage,
 };
@@ -30,20 +31,7 @@ pub(super) fn read(
             .ok_or(StorageError::ObjectMissing(*id))?;
         match location.role {
             ObjectRole::WholeFile => {
-                let length = location
-                    .canonical_length
-                    .checked_sub(WHOLE_FILE_CANONICAL_OVERHEAD)
-                    .filter(|length| {
-                        *length > 0
-                            && *length
-                                <= storage
-                                    .policy()
-                                    .construction()
-                                    .capacities()
-                                    .whole_file_raw_limit
-                    })
-                    .ok_or(StorageError::Integrity("whole-file length descriptor"))?;
-                lengths[position] = length as u64;
+                lengths[position] = whole_file_length(storage, &location)?;
             }
             ObjectRole::FileState => {
                 if location.canonical_length != mapping::FILE_STATE_CANONICAL_BYTES {
@@ -65,4 +53,78 @@ pub(super) fn read(
         }
     }
     Ok(lengths)
+}
+
+/// [`read`] with one result per requested position (#818 H6): an absent
+/// id, a bad descriptor or role, and a file state that fails its own read
+/// or decode are that id's result, the one its point read returns; the
+/// demand's bound, its locate and a failure `read_states` cannot tie to one
+/// state object fail the call.
+pub(super) fn read_each(
+    storage: &Storage,
+    ids: &[ObjectId],
+    read_states: impl FnOnce(&[ObjectId]) -> StorageResult<Vec<StorageResult<Vec<u8>>>>,
+) -> StorageResult<Vec<StorageResult<u64>>> {
+    if ids.len() > storage.capacities().read_objects {
+        return Err(StorageError::CapacityExceeded {
+            what: "storage.file_lengths",
+            limit: storage.capacities().read_objects as u64,
+            actual: ids.len() as u64,
+        });
+    }
+    storage.source.begin_demand(true);
+    storage.source.locate(ids)?;
+    let mut lengths = Vec::with_capacity(ids.len());
+    let mut states = Vec::new();
+    let mut positions = Vec::new();
+    for (position, id) in ids.iter().enumerate() {
+        let Some(location) = storage.source.location(*id, i64::MAX)? else {
+            lengths.push(Err(StorageError::ObjectMissing(*id)));
+            continue;
+        };
+        lengths.push(match location.role {
+            ObjectRole::WholeFile => whole_file_length(storage, &location),
+            ObjectRole::FileState
+                if location.canonical_length != mapping::FILE_STATE_CANONICAL_BYTES =>
+            {
+                Err(StorageError::Integrity("file-state length descriptor"))
+            }
+            ObjectRole::FileState => {
+                states.push(*id);
+                positions.push(position);
+                Ok(0)
+            }
+            _ => Err(layerfs_content::ContentError::WrongLogicalRole.into()),
+        });
+    }
+    if !states.is_empty() {
+        let canonical = read_states(&states)?;
+        if canonical.len() != states.len() {
+            return Err(StorageError::Integrity("file-state length cardinality"));
+        }
+        for (position, bytes) in positions.into_iter().zip(canonical) {
+            lengths[position] =
+                bytes.and_then(|bytes| Ok(mapping::decode_file_state(&bytes)?.logical_len));
+        }
+    }
+    Ok(lengths)
+}
+
+/// A whole file's length from its located canonical length, within the
+/// construction's whole-file bound.
+fn whole_file_length(storage: &Storage, location: &ObjectLocation) -> StorageResult<u64> {
+    let length = location
+        .canonical_length
+        .checked_sub(WHOLE_FILE_CANONICAL_OVERHEAD)
+        .filter(|length| {
+            *length > 0
+                && *length
+                    <= storage
+                        .policy()
+                        .construction()
+                        .capacities()
+                        .whole_file_raw_limit
+        })
+        .ok_or(StorageError::Integrity("whole-file length descriptor"))?;
+    Ok(length as u64)
 }

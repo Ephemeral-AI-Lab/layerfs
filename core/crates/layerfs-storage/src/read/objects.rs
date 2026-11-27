@@ -10,6 +10,7 @@ use crate::{
     },
     error::{StorageError, StorageResult},
     policy::{StorageCapacities, READ_CANONICAL_BYTES_LIMIT},
+    port::PersistenceError,
     source::Source,
 };
 use layerfs_content::ObjectId;
@@ -225,5 +226,253 @@ impl ReadState {
             start = end;
         }
         Ok(out)
+    }
+    /// [`Self::read`] with one result per requested position (#818 H5): the
+    /// same demand, steps, caches and order, so healthy objects cost what
+    /// they cost there. A session, transport or admission failure, a
+    /// failure of a call that serves several units at once (locate, page,
+    /// whole packs, a chain level's group read and locate, a leaf window's
+    /// value lookup that fails as a call) and the demand's bounds fail the
+    /// call, as there. Any other failure is the result of exactly the
+    /// objects that need the failed unit (an absent object or base, a pack,
+    /// a chain record, a leaf, a body): the failure each one's point read
+    /// meets, since that read runs the same steps over its own units in
+    /// the same order. A failed unit is not requested again in the demand.
+    pub(crate) fn read_each(
+        &mut self,
+        workspace: &mut DecompressionWorkspace,
+        source: &Fetch,
+        capacities: &StorageCapacities,
+        ids: &[ObjectId],
+    ) -> StorageResult<Vec<StorageResult<Vec<u8>>>> {
+        if ids.len() > capacities.read_objects {
+            return Err(StorageError::CapacityExceeded {
+                what: "storage.read_objects",
+                limit: capacities.read_objects as u64,
+                actual: ids.len() as u64,
+            });
+        }
+        source.begin_demand(true);
+        self.pool.forget_prepared();
+        source.locate(ids)?;
+        let mut out: Vec<Option<StorageResult<Vec<u8>>>> = ids.iter().map(|_| None).collect();
+        // Located roots with their output slots; an absent one is its own result.
+        let mut roots = Vec::with_capacity(ids.len());
+        for (position, id) in ids.iter().enumerate() {
+            match source.location(*id, i64::MAX)? {
+                Some(row) => roots.push((position, row)),
+                None => out[position] = Some(Err(StorageError::ObjectMissing(*id))),
+            }
+        }
+        let bytes = roots.iter().try_fold(0usize, |total, (_, row)| {
+            total
+                .checked_add(row.canonical_length)
+                .ok_or(StorageError::Integrity("read byte accounting"))
+        })?;
+        if bytes > READ_CANONICAL_BYTES_LIMIT {
+            return Err(StorageError::CapacityExceeded {
+                what: "storage.read_canonical_bytes",
+                limit: READ_CANONICAL_BYTES_LIMIT as u64,
+                actual: bytes as u64,
+            });
+        }
+        let mut counters = ChainCounters::default();
+        roots.sort_by_key(|(_, row)| (row.pack_id, row.group_number, row.record_number));
+        let sorted: Vec<_> = roots.iter().map(|(_, row)| *row).collect();
+        let live = |out: &[Option<_>], at: usize| out[roots[at].0].is_none();
+        let mut start = 0;
+        while start < sorted.len() {
+            let paged = source.page(sorted[start..].chunks(1), &mut self.packs)?;
+            let end = start
+                + match paged {
+                    0 => source.cohort(sorted[start..].iter().map(|row| row.pack_id)),
+                    covered => covered,
+                };
+            let cohort = &sorted[start..end];
+            if paged == 0 {
+                let located: Vec<i64> = cohort.iter().map(|row| row.pack_id).collect();
+                source.whole_packs(&located, &mut self.packs)?;
+            }
+            let mut walk = || {
+                prefetch::chains_each(source, cohort, &mut self.packs, workspace, &mut self.groups)
+            };
+            // A walk a stale hint broke runs once more without hints, as in `read`.
+            let (prefetch, failed) = match walk()? {
+                (_, failed)
+                    if failed.iter().any(|(_, error)| super::hint_failure(error))
+                        && source.drop_hints(&[])? =>
+                {
+                    walk()?
+                }
+                walked => walked,
+            };
+            self.prefetch_pool.accumulate(prefetch);
+            for (at, error) in failed {
+                out[roots[start + at].0] = Some(Err(error));
+            }
+            let mut from = start;
+            while from < end {
+                let id = sorted[from].pack_id;
+                let next = from
+                    + sorted[from..end]
+                        .iter()
+                        .take_while(|row| row.pack_id == id)
+                        .count();
+                let needed: Vec<_> = (from..next)
+                    .filter(|at| live(&out, *at))
+                    .map(|at| sorted[at].group_number)
+                    .collect::<BTreeSet<_>>()
+                    .into_iter()
+                    .collect();
+                if !needed.is_empty() {
+                    if let Err(error) = self.packs.acquire_groups(source, id, &needed) {
+                        if call_failure(&error) {
+                            return Err(error);
+                        }
+                        for at in from..next {
+                            if live(&out, at) {
+                                out[roots[at].0] = Some(Err(duplicate(&error)));
+                            }
+                        }
+                    }
+                }
+                for at in from..next {
+                    let (position, root) = roots[at];
+                    if !live(&out, at) {
+                        continue;
+                    }
+                    if root.role == layerfs_content::ObjectRole::InodeLeaf
+                        && !self.pool.is_prepared(&root.object_id)
+                    {
+                        let ahead: Vec<_> = (at..end)
+                            .filter(|k| live(&out, *k))
+                            .map(|k| sorted[k])
+                            .collect();
+                        let failed = self.pool.prepare_leaves_each(
+                            source,
+                            capacities,
+                            i64::MAX,
+                            workspace,
+                            &ahead,
+                            Some(PooledCaches {
+                                encoded: &mut self.packs,
+                                decoded: &mut self.groups,
+                            }),
+                            call_failure,
+                        )?;
+                        for (object, error) in failed {
+                            for k in at..end {
+                                if sorted[k].object_id == object && live(&out, k) {
+                                    out[roots[k].0] = Some(Err(duplicate(&error)));
+                                }
+                            }
+                        }
+                        if !live(&out, at) {
+                            continue;
+                        }
+                    }
+                    let resolved = Resolver::new(
+                        source,
+                        i64::MAX,
+                        capacities,
+                        BodyCaches {
+                            packs: &mut self.packs,
+                            pool: &mut self.pool,
+                        },
+                        &mut self.groups,
+                        workspace,
+                        &mut counters,
+                    )
+                    .resolve_at(root);
+                    out[position] = Some(match resolved {
+                        Ok((canonical, _)) => Ok(canonical),
+                        Err(error) if call_failure(&error) => return Err(error),
+                        Err(error) => Err(error),
+                    });
+                }
+                from = next;
+            }
+            start = end;
+        }
+        out.into_iter()
+            .map(|slot| slot.ok_or(StorageError::Integrity("per-object read outcome")))
+            .collect()
+    }
+}
+
+/// Whether `error` fails a per-object demand as a whole: a session,
+/// transport or admission failure, or an unknown outcome. A provider's
+/// `Missing` or `Malformed` answer for one unit, and every physical, framing,
+/// content or bound failure of one unit, belong to the objects that need it.
+pub(crate) fn call_failure(error: &StorageError) -> bool {
+    match error {
+        StorageError::Io(io) => !matches!(
+            io.get_ref()
+                .and_then(|inner| inner.downcast_ref::<PersistenceError>()),
+            Some(PersistenceError::Missing | PersistenceError::Malformed)
+        ),
+        StorageError::Busy
+        | StorageError::OwnershipUnavailable
+        | StorageError::UninspectedState { .. }
+        | StorageError::UnsupportedPolicy { .. }
+        | StorageError::UnknownOutcome { .. }
+        | StorageError::CleanupFailed { .. }
+        | StorageError::Aborted => true,
+        _ => false,
+    }
+}
+
+/// The same failure again, for each object that needs one failed unit.
+pub(crate) fn duplicate(error: &StorageError) -> StorageError {
+    use StorageError as E;
+    match error {
+        E::Busy => E::Busy,
+        E::Content(error) => E::Content(error.clone()),
+        E::Io(io) => E::Io(match (io.raw_os_error(), io.get_ref()) {
+            (Some(code), _) => std::io::Error::from_raw_os_error(code),
+            (None, None) => std::io::Error::from(io.kind()),
+            (None, Some(inner)) => match inner.downcast_ref::<PersistenceError>() {
+                Some(inner) => std::io::Error::new(io.kind(), inner.clone()),
+                None => std::io::Error::new(io.kind(), inner.to_string()),
+            },
+        }),
+        E::ObjectMissing(id) => E::ObjectMissing(*id),
+        E::Unpublished(id) => E::Unpublished(*id),
+        E::Collision(id) => E::Collision(*id),
+        E::MissingDependency { object, reference } => E::MissingDependency {
+            object: *object,
+            reference: *reference,
+        },
+        E::VisibilityCeiling { pack_id, ceiling } => E::VisibilityCeiling {
+            pack_id: *pack_id,
+            ceiling: *ceiling,
+        },
+        E::OwnershipUnavailable => E::OwnershipUnavailable,
+        E::UninspectedState {
+            ceiling,
+            highest_pack_id,
+        } => E::UninspectedState {
+            ceiling: *ceiling,
+            highest_pack_id: *highest_pack_id,
+        },
+        E::UnsupportedPolicy { field } => E::UnsupportedPolicy { field },
+        E::Integrity(what) => E::Integrity(what),
+        E::CapacityExceeded {
+            what,
+            limit,
+            actual,
+        } => E::CapacityExceeded {
+            what,
+            limit: *limit,
+            actual: *actual,
+        },
+        E::UnknownOutcome { original } => E::UnknownOutcome {
+            original: Box::new(duplicate(original)),
+        },
+        E::CleanupFailed { original, cleanup } => E::CleanupFailed {
+            original: Box::new(duplicate(original)),
+            cleanup: Box::new(duplicate(cleanup)),
+        },
+        E::Aborted => E::Aborted,
     }
 }

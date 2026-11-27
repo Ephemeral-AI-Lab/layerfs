@@ -1,0 +1,463 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.05s
+     Running unittests src/lib.rs (target/debug/deps/layerfs_storage-465af3880411f97c)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/candidate_ring_recency.rs (target/debug/deps/candidate_ring_recency-4fe1acfb2029ef69)
+
+running 3 tests
+test an_equal_overlap_proposes_the_newer_entry_whatever_its_identity ... ok
+test a_higher_overlap_still_wins_over_a_newer_entry ... ok
+test recency_follows_insertion_across_the_ring_wrap ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/capacity_refusal.rs (target/debug/deps/capacity_refusal-9a9f61c1e6e54cc1)
+
+running 2 tests
+test a_failed_cleanup_keeps_the_refusal_only_when_its_outcome_is_known ... ok
+test only_a_definite_capacity_refusal_counts ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/captured_payload_retention.rs (target/debug/deps/captured_payload_retention-9ed23e09b66935fc)
+
+running 3 tests
+test captured_save_uses_the_first_winner_and_releases_the_losing_pack ... ok
+test captured_network_save_keeps_recent_payload_and_preserves_metadata_under_pressure ... ok
+test captured_base_reads_keep_a_dense_shared_pack_whole ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.28s
+
+     Running tests/chain_budget_scaling.rs (target/debug/deps/chain_budget_scaling-6ab035730dcc1da3)
+
+running 6 tests
+test default_store_budgets_are_unchanged ... ok
+test budgets_scale_with_every_cutoff ... ok
+test largest_whole_file_fits_a_chain_alone_at_every_cutoff ... ok
+test issue_472_second_versions_are_deltas ... ok
+test a_chain_re_bases_onto_its_root_at_the_scaled_canonical_budget ... ok
+test largest_file_at_each_cutoff_saves_its_next_version ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests/chain_hints.rs (target/debug/deps/chain_hints-a0742469acd48f4d)
+
+running 29 tests
+test a_hinted_element_whose_page_header_names_another_role_is_not_kept ... ok
+test a_misplaced_member_fails_its_hash_and_the_read_rebuilds_once ... ok
+test a_program_base_whose_own_row_is_wrong_fails_with_its_own_error_not_as_a_stale_hint ... ok
+test a_misplaced_member_of_a_program_base_fails_its_hash_and_the_save_walks_it_from_locates ... ok
+test a_hinted_element_whose_record_leads_back_to_an_authoritative_one_is_a_stale_hint ... ok
+test a_retained_authoritative_group_keeps_authority_for_a_later_whole_read ... ok
+test a_program_page_binds_no_member_so_a_misplaced_one_cannot_break_its_read ... ok
+test a_save_checks_only_the_chain_selection_walks ... ok
+test a_member_naming_another_base_is_stale_and_the_walk_goes_on_level_by_level ... ok
+test a_hinted_chain_walk_sends_one_locate_and_one_group_read ... ok
+test a_hinted_locator_serves_only_the_demand_that_bound_it ... ok
+test a_fresh_handle_save_rebuilds_its_program_page_bases_without_a_locate_per_level ... ok
+test a_pack_descriptor_only_a_stale_member_gave_is_forgotten_with_the_hints ... ok
+test captured_inode_reads_keep_authoritative_failures_in_a_mixed_group ... ok
+test a_group_read_admits_its_ranges_when_the_pack_is_dense_in_the_cache ... ok
+test a_program_page_read_locates_every_deeper_level_of_its_chain_in_one_locate ... ok
+test a_member_pack_that_does_not_answer_as_named_is_stale_and_the_read_goes_on ... ok
+test a_provider_defect_on_a_hinted_walk_is_not_replayed ... ok
+test a_chain_a_read_binds_adds_no_guesses_to_another_chain_s_locate ... ok
+test a_refused_chain_answer_keeps_none_of_its_rows ... ok
+test guesses_decode_each_group_once_per_level_and_count_it ... ok
+test a_save_that_loses_its_registrations_binds_no_member_reading_the_winners ... ok
+test bytes_that_fail_their_hash_at_the_authoritative_location_stay_a_hard_failure ... ok
+test full_rewrites_cost_exactly_the_default_calls ... ok
+test malformed_chain_answers_are_refused ... ok
+test an_authoritative_descriptor_that_contradicts_a_member_s_makes_the_hint_stale ... ok
+test saves_through_a_chain_port_store_what_the_default_port_stores ... ok
+test a_writer_reads_its_own_bases_chains_in_one_group_read ... ok
+test a_fresh_handle_save_rebuilds_its_bases_without_a_locate_per_level ... ok
+
+test result: ok. 29 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+     Running tests/chain_memo_reads.rs (target/debug/deps/chain_memo_reads-14470087bcbf8fe9)
+
+running 2 tests
+test a_memo_reader_refuses_the_chains_a_plain_reader_refuses ... ok
+test a_memo_reader_answers_as_a_plain_reader_with_less_work ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/codec_frames.rs (target/debug/deps/codec_frames-aa44e728a7d76292)
+
+running 8 tests
+test a_frame_whose_checksum_no_longer_matches_is_refused ... ok
+test a_declared_length_that_contradicts_the_frame_is_refused ... ok
+test a_forged_declared_length_inside_the_header_is_refused_by_the_call_itself ... ok
+test every_truncation_of_a_valid_frame_is_refused_without_panicking ... ok
+test no_prefix_frame_is_shorter_than_its_declared_minimum ... ok
+test the_decode_arena_is_charged_only_when_a_frame_needs_it ... ok
+test a_valid_frame_round_trips_through_both_decode_entry_points ... ok
+test a_frame_beyond_the_profiles_window_is_refused ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/concurrent_winner_chain.rs (target/debug/deps/concurrent_winner_chain-1b32f8463c78c6b1)
+
+running 1 test
+test a_concurrent_winner_chain_resolves_a_base_this_wave_located_absent ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/decoded_group_retention.rs (target/debug/deps/decoded_group_retention-60151ad30eaf5759)
+
+running 2 tests
+test duplicate_input_is_idempotent_and_invalid_admission_preserves_retention ... ok
+test overflow_keeps_recent_dependency_groups_and_evicts_only_a_cold_group ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/delta_base_budget.rs (target/debug/deps/delta_base_budget-66f560fb34261ca7)
+
+running 9 tests
+test control_a_corrupt_base_inside_both_budgets_still_fails_the_save ... ok
+test control_a_base_inside_both_budgets_still_chains ... ok
+test a_corrupt_base_that_fits_is_authenticated_even_when_the_dependent_tips_the_chain_over ... ok
+test a_dependent_that_fills_the_encoded_budget_exactly_is_admitted ... ok
+test a_stored_chain_above_the_budgets_is_refused_not_fatal ... ok
+test a_rebased_dependent_is_one_trial_against_the_authenticated_root ... ok
+test a_dependent_that_fills_the_canonical_budget_exactly_is_admitted ... ok
+test control_with_whole_file_deltas_off_the_same_saves_succeed ... ok
+test a_chain_built_inside_one_save_is_judged_like_one_built_over_several ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests/delta_depth_counts.rs (target/debug/deps/delta_depth_counts-ecfa7d337df7cffc)
+
+running 3 tests
+test a_chain_at_the_depth_cap_re_bases_onto_its_root_and_reports_it ... ok
+test a_chunk_chain_at_its_depth_cap_re_bases_onto_its_root ... ok
+test a_chain_re_bases_at_the_work_budget_before_a_deep_cap ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/encode_region_reuse.rs (target/debug/deps/encode_region_reuse-fd14cb90457238ce)
+
+running 3 tests
+test a_region_of_another_size_is_refused ... ok
+test reused_and_poisoned_decode_regions_give_byte_identical_output ... ok
+test reused_and_poisoned_encode_regions_give_byte_identical_frames ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/exact_reuse_trust.rs (target/debug/deps/exact_reuse_trust-5b1f250ff4cda1a7)
+
+running 4 tests
+test an_exact_reuse_reads_no_stored_bytes ... ok
+test a_corrupt_stored_copy_is_accepted_at_save_and_fails_at_its_next_read ... ok
+test a_role_or_length_mismatch_is_still_refused_at_save ... ok
+test an_exact_reuse_of_a_pooled_leaf_acquires_no_pack ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/group_reads.rs (target/debug/deps/group_reads-dbe774600b34833f)
+
+running 5 tests
+test answers_out_of_request_order_are_refused ... ok
+test a_cached_range_refuses_its_pack_under_another_digest ... ok
+test ranges_where_a_directory_is_known_and_whole_packs_where_not ... ok
+test a_corrupted_range_fails_at_the_object_hash ... ok
+test each_call_stays_within_the_cache_bound ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running tests/inode_branch_deltas.rs (target/debug/deps/inode_branch_deltas-4ce0ddae88130889)
+
+running 5 tests
+test a_refused_base_stores_the_branch_whole_and_it_reads_back ... ok
+test a_lookup_reconstructs_one_branch_chain_per_level ... ok
+test a_store_of_whole_branches_reads_identically_after_delta_branches_join_it ... ok
+test branch_chains_grow_to_the_cap_re_base_onto_their_root_and_read_back ... ok
+test re_based_branch_programs_over_half_the_whole_are_stored_whole_and_read_back ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.34s
+
+     Running tests/inode_branch_merge_reads.rs (target/debug/deps/inode_branch_merge_reads-da40e2172f1596e2)
+
+running 1 test
+test a_merge_reconstructs_one_branch_chain_per_demanded_branch_page ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests/kept_ids_pooled_chains.rs (target/debug/deps/kept_ids_pooled_chains-1c8823ae0b88188e)
+
+running 7 tests
+test a_save_that_fails_definitely_leaves_its_unused_rest_and_assigns_nothing_twice ... ok
+test a_keeping_handle_returns_its_kept_ordinals_once_and_never_reuses_them ... ok
+test a_kept_block_serves_later_saves_and_a_failed_save_drops_it ... ok
+test the_kept_ordinals_are_bounded_and_a_larger_save_refills ... ok
+test ids_stay_unique_across_saves_and_across_two_handles_on_one_store ... ok
+test a_kept_handle_reads_the_bodies_and_values_it_published_without_a_call ... ok
+test a_pooled_chain_of_depth_eight_is_read_in_a_bounded_number_of_calls ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/lazy_candidate_ring.rs (target/debug/deps/lazy_candidate_ring-f0892f391a314bec)
+
+running 1 test
+test a_lazily_loaded_ring_selects_what_a_loaded_ring_selects ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/locator_pressure.rs (target/debug/deps/locator_pressure-67935a385876863f)
+
+running 4 tests
+test pressure_admission_preserves_an_unrequested_positive_locator ... ok
+test second_chance_breaks_repeated_low_key_victim_churn ... ok
+test a_captured_full_ring_winner_keeps_one_extra_clock_pass ... ok
+test a_network_batched_reader_prefers_an_authoritative_inode_locator_at_the_same_bound ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running tests/logical_size_lengths.rs (target/debug/deps/logical_size_lengths-6b866d118ea3c881)
+
+running 2 tests
+test catalogue_lengths_give_the_payload_route_size_for_every_representation ... ok
+test more_changed_files_than_one_window_are_asked_in_several_demands ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/losing_chunk_bases.rs (target/debug/deps/losing_chunk_bases-4a0d9a7b7bfee686)
+
+running 5 tests
+test the_memo_backs_off_doubling_and_forgets_a_base_on_a_win ... ok
+test a_skipped_base_is_tried_again_and_a_win_resumes_every_trial ... ok
+test incompressible_chunks_stop_trying_a_base_that_keeps_losing ... ok
+test text_resembling_its_base_keeps_every_delta ... ok
+test deltas_that_save_little_back_off_like_losses ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/object_key.rs (target/debug/deps/object_key-1a3968ca9df76182)
+
+running 1 test
+test sealed_keys_keep_standard_sha256_bytes_for_empty_short_and_many_blocks ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/pack_cache_contract.rs (target/debug/deps/pack_cache_contract-016a77fd46473c10)
+
+running 3 tests
+test cohort_reservation_keeps_requested_hits_while_releasing_misses_space ... ok
+test pressure_evicts_only_cold_bodies_and_keeps_recent_siblings ... ok
+test singleton_is_isolated_and_new_owner_has_no_retained_input ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/pack_range_contract.rs (target/debug/deps/pack_range_contract-2397f6136f4b17d2)
+
+running 4 tests
+test invalid_ranges_fail_without_body_scan_or_whole_strategy_fallback ... ok
+test corruption_outside_selected_ranges_is_still_refused ... ok
+test whole_selection_keeps_the_existing_carrier_and_io_failure_is_terminal ... ok
+test ranges_crossing_prefix_and_scan_chunks_are_exact_and_all_bytes_are_paid_once ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/pack_repack.rs (target/debug/deps/pack_repack-6f2a475e0f48443b)
+
+running 6 tests
+test a_group_that_keeps_every_record_is_carried_over_as_stored ... ok
+test a_kept_set_the_pack_cannot_satisfy_is_refused ... ok
+test a_compressed_group_is_decoded_and_built_again ... ok
+test a_pack_that_already_holds_exactly_the_kept_records_is_left_alone ... ok
+test record_counts_are_read_from_the_pack_itself_in_every_lane ... ok
+test kept_records_keep_their_bytes_at_their_new_ordinals_in_every_lane ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/page_program_deltas.rs (target/debug/deps/page_program_deltas-7abc3c1397fbc412)
+
+running 5 tests
+test a_small_directory_whose_every_row_changed_stays_whole ... ok
+test directory_pages_take_programs_re_base_at_the_cap_and_read_back ... ok
+test directory_programs_cut_metadata_and_an_old_store_still_reads ... ok
+test a_reconstruction_offered_its_earlier_version_hints_every_page_by_position ... ok
+test edited_extent_pages_take_programs_against_the_positional_base_and_read_back ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+     Running tests/per_object_reads.rs (target/debug/deps/per_object_reads-29468aa6cb2302a2)
+
+running 9 tests
+test lengths_each_match_lengths_alone ... ok
+test pooled_leaves_healthy_cost_and_bad_leaves ... ok
+test a_missing_pack_fails_only_its_objects_and_is_requested_once ... ok
+test a_broken_chain_fails_only_its_dependents ... ok
+test a_transport_failure_at_any_call_fails_the_demand ... ok
+test an_undecodable_body_fails_only_the_objects_that_need_it ... ok
+test healthy_demands_cost_what_the_batched_read_costs ... ok
+test a_mismatched_object_is_its_own_result ... ok
+test a_missing_object_is_its_own_result ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/physical_formats.rs (target/debug/deps/physical_formats-9c7cde3493dc83a5)
+
+running 9 tests
+test grouped_whole_file_versions_keep_their_own_body_offsets ... ok
+test every_implemented_framing_is_recognized_by_its_own_version ... ok
+test ordinary_and_chunk_versions_keep_their_own_body_offsets ... ok
+test unimplemented_and_unknown_framings_are_rejected_without_a_trial_decode ... ok
+test the_lane_table_names_one_limit_per_lane ... ok
+test written_packs_size_their_directory_to_their_groups ... ok
+test a_recipe_frame_larger_than_its_profile_is_refused ... ok
+test closing_a_pack_and_retaining_its_tail_assemble_the_same_bytes ... ok
+test declared_pack_and_group_bounds_are_enforced_on_the_bytes ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/pooled_demand_work.rs (target/debug/deps/pooled_demand_work-503572ce6067e06e)
+
+running 2 tests
+test a_missing_stored_value_still_refuses_canonical_reconstruction ... ok
+test pooled_demand_reuses_one_checked_physical_reconstruction ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/pooled_dependency_integrity.rs (target/debug/deps/pooled_dependency_integrity-9ca682d5d8e2e643)
+
+running 1 test
+test literal_delta_cannot_hide_a_wrong_canonical_base ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/read_demand_custody.rs (target/debug/deps/read_demand_custody-c8dcdcb364cc96eb)
+
+running 1 test
+test mixed_hit_miss_wave_keeps_all_requested_locators_within_existing_bound ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/read_pack_locality.rs (target/debug/deps/read_pack_locality-8819651a8f54e4e5)
+
+running 2 tests
+test physical_scheduling_preserves_repeated_ids_and_demand_order ... ok
+test bounded_hash_order_demand_does_not_reacquire_one_pack_for_each_object ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/rebased_delta_fraction.rs (target/debug/deps/rebased_delta_fraction-a4518b34e8eb3423)
+
+running 3 tests
+test a_re_based_prefix_that_loses_anyway_is_not_counted_as_the_rule_firing ... ok
+test a_drifting_file_stores_full_when_its_re_based_delta_passes_half_the_full ... ok
+test a_drifting_extent_page_stores_whole_when_its_re_based_program_passes_half ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests/ring_prefix_admission.rs (target/debug/deps/ring_prefix_admission-015e8131f09acd84)
+
+running 6 tests
+test a_file_stored_against_its_declared_base_does_not_enter_the_ring ... ok
+test a_third_version_at_a_new_path_deltas_against_the_second_not_the_first ... ok
+test a_winner_admitted_in_a_save_is_never_proposed_back_to_that_save ... ok
+test a_packed_inode_can_reference_a_same_wave_ring_delta ... ok
+test an_init_of_similar_files_in_one_save_admits_only_full_winners ... ok
+test a_ring_chain_over_the_budget_re_bases_onto_its_root_instead_of_storing_full ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/save_demand_locality.rs (target/debug/deps/save_demand_locality-959e71b9743904fe)
+
+running 1 test
+test exact_reuse_does_not_scan_the_wave_before_consuming_its_objects ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/save_encoder_reuse.rs (target/debug/deps/save_encoder_reuse-15d9ef5a44171865)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/save_resolved_reads.rs (target/debug/deps/save_resolved_reads-e44311eba23408de)
+
+running 3 tests
+test an_over_budget_save_read_refuses_before_acquiring_stored_packs ... ok
+test a_save_reads_an_object_it_resolved_without_acquiring_its_pack_again ... ok
+test past_its_bound_the_resolved_cache_releases_the_least_recently_read ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/selected_cache_bounds.rs (target/debug/deps/selected_cache_bounds-7b4fa4041645c493)
+
+running 5 tests
+test cohort_still_refuses_corruption_in_an_unrequested_directory_entry ... ok
+test whole_cohort_shares_full_directory_walks_and_preserves_descriptor_checks ... ok
+test whole_promotion_replaces_units_within_same_byte_allowance ... ok
+test tiny_selected_units_still_obey_the_existing_entry_count_limit ... ok
+test selected_units_evict_selectively_under_the_same_two_mib_body_limit ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/selected_group_reads.rs (target/debug/deps/selected_group_reads-5eb7029375084c1c)
+
+running 10 tests
+test hash_valid_malformed_directory_is_refused_by_the_shared_prefix_validator ... ok
+test unread_corruption_is_outside_scoped_read_but_whole_pack_audit_refuses_it ... ok
+test accessed_record_corruption_fails_canonical_authentication ... ok
+test random_sparse_groups_preserve_duplicate_slots ... ok
+test sparse_chunk_records_reconstruct_canonical_chunk_bytes ... ok
+test a_sparse_prefix_target_reconstructs_its_required_base_exactly ... ok
+test new_sparse_group_miss_promotes_retained_pack_then_all_siblings_reuse ... ok
+test adjacent_sparse_groups_coalesce_and_dense_promotion_preserves_bytes_and_order ... ok
+test dense_payload_coverage_promotes_once_and_then_reuses_sibling_groups ... ok
+test sparse_payload_siblings_survive_multiple_pack_pressure_without_whole_promotion ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/sparse_edges.rs (target/debug/deps/sparse_edges-efbfc9cc4cb902b3)
+
+running 5 tests
+test the_header_reader_refuses_a_header_of_the_wrong_width_and_the_ordinary_lane ... ok
+test a_broken_directory_is_refused_and_an_encoded_group_is_left_to_the_decoder ... ok
+test the_header_reader_accepts_and_refuses_what_the_record_reader_does ... ok
+test a_sparse_walk_reports_the_complete_groups_edge_without_its_payload ... ok
+test every_record_of_a_full_group_is_answered_in_one_pass_over_its_directory ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/stored_value_reads.rs (target/debug/deps/stored_value_reads-2c1f3ed8ad92fd3b)
+
+running 7 tests
+test one_save_stores_a_repeated_value_once ... ok
+test one_save_stores_values_that_differ_only_in_mtime_once_each ... ok
+test a_wrong_or_absent_stored_value_fails_the_read ... ok
+test a_first_save_reads_nothing_of_the_history_it_does_not_change ... ok
+test a_changed_leaf_stores_one_row_for_each_changed_value ... ok
+test one_demand_of_many_leaves_looks_up_their_values_together ... ok
+test one_handle_reads_any_number_of_leaves_at_one_lookup_each ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.35s
+
+     Running tests/verified_pack_read.rs (target/debug/deps/verified_pack_read-4e316bd38e7e322b)
+
+running 2 tests
+test immutable_carrier_rejects_wrong_length_digest_and_modified_consumed_bytes ... ok
+test c2_still_refuses_hash_valid_pack_with_wrong_domain ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/wave_reference_locates.rs (target/debug/deps/wave_reference_locates-a8c2912d5aff4966)
+
+running 1 test
+test pages_naming_more_payloads_than_the_cache_holds_locate_them_in_pages ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+   Doc-tests layerfs_storage
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+run_bounded: exit 0 after 30.3 s
