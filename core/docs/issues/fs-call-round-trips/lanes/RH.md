@@ -888,3 +888,101 @@ in history calls: green, 22 s / 28 s, was 55 s / 62 s with fewer trips to
 cut), equivalence, `method_refusal_order`, `visibility_guard`,
 `postgresql_statement_schema`, and the blame/revision/compare/diff tests.
 Clippy `-D warnings` clean. Deleted tests: none.
+
+## R6 — prediction (written before coding, 2026-11-27; decision D3)
+
+Mechanism: on PostgreSQL only (`batched_reads`, i.e. the writer's
+`batched_chain_reads`), `fs.grep` and `fs.glob` (unpaged) take directory
+pages of up to 256 names (`DIRECTORY_WINDOW` 64 → 256 there;
+`DIRECTORY_BYTES` 8,192 unchanged) and `fs.grep` collects up to 256 files a
+window, their roots read in demands of at most 256 roots and the existing
+`ROOT_BYTES` 4 MiB (`ROOTS` 64 → 256 there). 256 is the decided cap; the
+byte bounds are the existing ones; the reader's `READ_OBJECT_LIMIT` 4,096
+is untouched. SQLite and the paged (`page`) forms are unchanged; history
+windows keep `ROOTS` 64.
+
+Per-case model (probe: 10 folders of 100 files, PostgreSQL control):
+- a 100-name folder is one page and one inode-values demand instead of
+  two each (−2 a folder);
+- 1,000 files' roots in 4 windows instead of 16, each window's lengths and
+  roots demands (−2 a window saved, ~−24).
+
+| Case | Now cold / warm | Predicted cold / warm |
+| --- | --- | --- |
+| `grep.tree_1k` | 92 / 24 | ~45–60 / ~12–20 |
+| `grep.one_file_dir` | 20 / 5 | unchanged |
+| `glob.tree` (`*` from `/`) | 30 / 6 | ~25–30 / ~4–6 |
+| `glob.dir_100` | 21 / 5 | ~19–21 / ~3–5 |
+| SQLite, every case | — | unchanged |
+
+SPEC's grep 1k ≈ 29 (from its 64 baseline) is inferred, not derived; my
+model says grep keeps its per-window file reads and per-folder reads, so
+roughly half, not a third.
+
+Large-file shape (new pin, both backends): the probe tree plus `/big/` of
+four text files of 1, 4, 16 and 64 MiB (chunked), each ending in one
+`needle` line; `grep.large` (`needle` from `/`) and `glob.large` (`*` from
+`/big`). Predicted: grep's trips fall as in `grep.tree_1k` (~−30 to −45);
+the big files' chunk demands are unchanged (bounded by the reader, not by
+R6). Peak RSS (`/usr/bin/time -l`, PostgreSQL test process) within a few
+MiB of before: a root demand stays ≤ 4 MiB and a chunked file's root is a
+fixed-size state.
+
+### R6 — built and measured
+
+- `walk.rs`: `WIDE_DIRECTORY_WINDOW` 256; `walk_excluding(.., wide, ..)`
+  sets the walker's page size; `DIRECTORY_BYTES` 8,192 unchanged.
+- `cached.rs`: `WIDE_ROOTS` 256, `batches_of(lengths, count)` (`batches`
+  keeps 64 for history), `Cached::roots(ids, count)`, `Cached::wide()`
+  (`StorePorts::batched_reads`, the writer's `batched_chain_reads`).
+- `reads::grep` collects `WIDE_ROOTS` files a window and reads their roots
+  in demands of at most 256 roots and `ROOT_BYTES` 4 MiB when wide;
+  `reads::glob` takes `wide` from its method. Paged forms, SQLite and the
+  history windows are unchanged; `READ_OBJECT_LIMIT` untouched.
+
+Measured once, PostgreSQL control (`sdk_read_round_trips`):
+
+| Case | Before cold / warm | After | Predicted | Within 15% |
+| --- | --- | --- | --- | --- |
+| `grep.tree_1k` | 92 / 24 | 62 / 15 | ~45–60 / ~12–20 | yes (62 is 3% over) |
+| `grep.one_file_dir` | 20 / 5 | 20 / 5 | unchanged | yes |
+| `glob.tree` | 30 / 6 | 30 / 6 | ~25–30 / ~4–6 | yes |
+| `glob.dir_100` | 21 / 5 | 21 / 5 | ~19–21 / ~3–5 | yes |
+| SQLite, every case | — | unchanged | unchanged | yes |
+
+SPEC's ≈29 for grep 1k (inferred from its 64 baseline) is not reached:
+62 cold. The globs did not move: a 100-name folder's second page and
+inode values cost no extra trip before either (by inference, the walk's
+memo already held the objects the second window reads; not traced).
+
+Large-file shape (new `sdk_read_large_rh`, both backends): the probe tree
+plus `/big/` (a small file, then 1, 4, 16 and 64 MiB texts written by
+`fs.write` on `work`, chunked). Before = the same binary with `wide()`
+forced false (temporary edit, reverted), after = R6:
+
+| Case (PostgreSQL) | Before cold / warm | After cold / warm |
+| --- | --- | --- |
+| `grep.large` | 321 / 280 | 291 / 255 |
+| `glob.large` (`/big`, 5 entries) | 21 / 5 | 21 / 5 |
+
+SQLite `grep.large` 307 / 266 → 307 / 267 and `glob.large` 40 / 22
+unchanged (same code path; see below). Peak resident size
+(`/usr/bin/time -l`, whole test process): PostgreSQL 242.24 MB before,
+242.22 MB after, setup alone (Init, the four `fs.write` Commits, no grep)
+238.93 MB; SQLite 232.65 → 233.00 MB. No byte or RSS regression beyond
+noise; the per-demand bound is the existing 4 MiB.
+
+Pin variance: `grep.large`'s counts vary run to run with the same code
+and Store (SQLite warm 266/267; with Init writing the big files, SQLite
+cold 289–293 and warm 257–265 over four runs, PostgreSQL warm 248–249).
+Writing the big files by `fs.write` did not remove it, so it is not Init's
+packing; the cause is not diagnosed (the reader's bounded caches are the
+likely source). The large pin therefore holds `grep.large`'s round trips
+and statements within ±8 (the widest range observed) and everything else
+exactly: an open item, not a product change.
+
+Checks once: `sdk_read_round_trips` (both backends, repinned),
+`sdk_read_large_rh` (both), `sdk_history_round_trips`,
+`fs_call_round_trips`, `sdk_round_trip_equivalence_seeded`,
+`method_refusal_order`. No new message, no sweep. Clippy clean.
+Deleted tests: none.

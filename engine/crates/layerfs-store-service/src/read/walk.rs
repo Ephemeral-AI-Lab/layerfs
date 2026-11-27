@@ -18,6 +18,10 @@ use layerfs_content::{
 /// Names and inode demands acquired together, bounded independently of the tree.
 const DIRECTORY_WINDOW: usize = 64;
 const DIRECTORY_BYTES: usize = 8192;
+/// A wide walk's names a page (#818 R6): where the Store pays a round trip
+/// per demand (PostgreSQL), `fs.grep` and `fs.glob` let the page's byte
+/// bound decide, up to this many names; `DIRECTORY_BYTES` is unchanged.
+pub const WIDE_DIRECTORY_WINDOW: usize = 256;
 type Child = (PathName, u64, Option<InodeValue>);
 
 /// One directory frame retains one bounded window and its next-name boundary.
@@ -75,6 +79,8 @@ pub struct Walker<'a> {
     top: Option<(String, EntryFacts)>,
     /// Folders every descended folder agrees with, from [`leading`].
     within: Option<String>,
+    /// Names a directory page takes at most.
+    window: usize,
 }
 impl<'a> Walker<'a> {
     pub fn new(
@@ -186,6 +192,7 @@ impl<'a> Walker<'a> {
             stack,
             top,
             within,
+            window: DIRECTORY_WINDOW,
         }
     }
 
@@ -208,7 +215,7 @@ impl<'a> Walker<'a> {
                     &self.memo,
                     DirectoryRoot(frame.entry.value.content_root),
                     frame.after.as_ref(),
-                    DIRECTORY_WINDOW,
+                    self.window,
                     DIRECTORY_BYTES,
                     &mut DirectoryReadWork::default(),
                 )
@@ -262,17 +269,23 @@ pub fn walk(
 
 /// [`walk_within`] from `path`'s entry, looked up through `memo`
 /// ([`Walker::from_entry`]), leaving out every path `excluded` says, and
-/// not descending into an excluded folder.
+/// not descending into an excluded folder; its directory pages take at most
+/// [`WIDE_DIRECTORY_WINDOW`] names when `wide` (#818 R6).
+#[allow(clippy::too_many_arguments)]
 pub fn walk_excluding<'a>(
     memo: Memo<'a>,
     snap: &'a snapshot::Snap,
     path: &str,
     entry: EntryFacts,
     within: Option<String>,
+    wide: bool,
     excluded: impl Fn(&str) -> bool,
     mut visit: impl FnMut(&str, EntryFacts) -> Result<bool, SdkRefusal>,
 ) -> Result<(), SdkRefusal> {
     let mut walker = Walker::from_entry(memo, snap, path, entry, within);
+    if wide {
+        walker.window = WIDE_DIRECTORY_WINDOW;
+    }
     while let Some((path, entry)) = walker.next()? {
         if excluded(&path) {
             walker.skip(&path);

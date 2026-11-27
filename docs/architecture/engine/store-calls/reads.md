@@ -79,10 +79,12 @@ one.
 ```text
 walk_within(snap, path)          depth-first, name order, one memo per walk
   directory windows: 64 names / 8 KiB
+    (unpaged grep and glob on PostgreSQL: 256 names / 8 KiB, #818 R6)
   glob: enter only folders matching walk::leading(pattern)
   |
-grep: files gathered in windows of ROOTS = 64
-  Cached::roots   lengths first, then roots per demand (<= 64 files, 4 MiB)
+grep: files gathered in windows of ROOTS = 64 (PostgreSQL: WIDE_ROOTS = 256)
+  Cached::roots   lengths first, then roots per demand (<= 64 files, or 256
+                  on PostgreSQL; always <= 4 MiB of root bytes)
   search::matches literal substring over whole text parts
   search::Reuse   content already scanned this call answered from kept lines
 ```
