@@ -1709,6 +1709,30 @@ refuses every unit ([`acquisition/`](../../../../engine/crates/layerfs-persisten
 same lock-free value as on SQLite ([Acquisition](sqlite.md#acquisition)): a
 `begin` waiting for the lane blocks no live owner's unit.
 
+**Write units with no wait (#818 I3b, part C).** `complete_files`,
+`set_directory_roots`, `advance`, `discard` and `dispose` send their
+transaction as one pipelined flight: the `BEGIN` text (the lane row and
+barrier as before) with the generation fence and an attempt token, the owner
+check, the unit's statements, the token check and `COMMIT` as a request of
+its own. Every check the unit made between statements is a server assertion
+before `COMMIT`: a division by zero for `Stale` (a missing owner or charge
+row) and for a root window that missed an input position (the client reads
+`Changed`, the first input position missing from that window's returned
+positions); a `smallint` overflow where the unit read `Integrity` (an unknown
+phase, a negative count). A removal job is one statement (data-modifying
+CTEs: the entry key, the entry delete, the host-file key, the host-file
+delete and the credit); `dispose` adds the release, which deletes the record
+only at zero held rows and flags the last record, and the compaction below as
+a `DO` block that swallows its own refusal. The first refusal decides; a lost
+reply, or a committed reply that does not validate, is `Uncertain` and
+quarantines the session; nothing is resent. A session without a generation,
+a write nested in the held lane, or a position that does not convert to
+signed runs the ordinary transaction instead
+([`flights.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/acquisition/flights.rs)).
+A warm unit is one round trip instead of five to thirteen. `put_entries` and
+`place_children` keep the ordinary transaction: their dependency check is a
+wait inside the transaction.
+
 **Wide-directory placement (#818 I2a).** A `place_children` unit (one write
 window: at most 4,096 children or 1 MiB) binds and places its children in
 set windows instead of two statements per child. The window rule is shared
@@ -1729,6 +1753,7 @@ instead of 20,000 ([`placement.rs`](../../../../engine/crates/layerfs-persistenc
 
 ```text
  release of the last operation                    one Write transaction
+                                                  (a flight: `dispose`)
    SELECT 1 FROM store_lane ... FOR UPDATE
    DELETE the record; no other record left?
      SAVEPOINT; SET LOCAL lock_timeout 2 s
@@ -1752,6 +1777,7 @@ reuses an operation id
 | [`acquisition_placement.rs`](../../../../engine/crates/layerfs-persistence/tests/acquisition_placement.rs) | `LAYERFS_TEST_POSTGRES_URL=… cargo +1.85.1 test --locked -p layerfs-persistence --test acquisition_placement` | Set-window placement gives the per-row loop's first refusal, rows and charges (repeated names and positions, unsigned positions, stored-row dependencies, all-hardlink and large mixed directories), both backends |
 | [`postgresql_placement_fault.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_placement_fault.rs) | same, `--test postgresql_placement_fault` | Drop and kill at every server message of a placement unit (84 + 84): the unit is atomic, never replayed |
 | [`postgresql_save_flight_fault.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_save_flight_fault.rs) | same, `--test postgresql_save_flight_fault` | A Save publishing in flights stores the ordinary Save's rows in fewer round trips; drop and kill at every server message of its finish (68 + 68): atomic, a dropped reply never a success, never replayed |
+| [`postgresql_acquisition_flights.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_acquisition_flights.rs) | same, `--test postgresql_acquisition_flights` | The no-wait write units give SQLite's answers and charges (recorded, repeated, missing, filled and unconvertible root positions, every phase, removal budgets, disposal with another operation live and of the last one, stale owners); a warm unit is one round trip and one transaction; drop and kill at every server message of each unit kind (327 + 327): atomic, a dropped reply never a success, never replayed |
 | [`postgresql_acquisition_reads.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_acquisition_reads.rs) | same, `--test postgresql_acquisition_reads` | Every read window, paged under row and byte limits, equals SQLite's; empty, released, missing and foreign owners stay distinct; drop and kill at every server message of each read kind (78 + 78): never a wrong answer, no row changed, never replayed |
 
 Without `LAYERFS_TEST_POSTGRES_URL` these tests print `NOT_RUN` and check

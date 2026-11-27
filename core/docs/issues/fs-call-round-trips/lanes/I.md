@@ -482,3 +482,92 @@ Prediction (from the I3 table): nested_10k 303 → ~218, flat_10k 342 →
   session-local flag, as `publish_flight`'s nonce check does). About −50 at
   10k (nested ~253, flat ~292): neither reaches 250 without the put and
   place units. Not started, pending the coordinator's choice.
+
+## I3b part C — the units with no wait, one message each (coordinator: C now, then A)
+
+Decision (coordinator): build the no-wait units now; the waiting units
+(`put_entries`, `place_children`) wait for lane W's session capability
+(note `I3b-session-capability.md` in the shared notes); B (optimistic unit
+with a fallback) not taken.
+
+### Prediction (written before coding)
+
+Each unit becomes one pipelined flight: `BEGIN` (write, lane row and
+barrier as before) with the generation fence and an attempt token, the
+owner assertion, the unit's statements with server-side assertions before
+`COMMIT` (a `Changed` window or a missing charge row aborts the
+transaction; the client reads which from the replies), the token check and
+`COMMIT` as its own request. Init's units: `complete_files` (3 at 10k),
+`set_directory_roots` (1), `dispose` (5; the last releases and compacts).
+`advance` and `discard` are built too (not on Init's ordinary path).
+
+| Unit (nested_10k) | Old trips | New |
+|---|---|---|
+| complete_files ×3 (2 + owner + update + charge) | 15 | 3 |
+| set_directory_roots ×1 | 5 | 1 |
+| dispose ×5 (2 + owner + key lookups, deletes, credit; release + compact once) | 40 | 5 |
+| prepares: 10 old texts out, 3 flight kinds' first prepare in | 10 | 3 |
+| **total** | 70 | 12 (−58) |
+
+nested_10k 303 → **~245**, flat_10k 342 → **~284** (same units);
+1k shapes: complete 1, dirs 1, dispose 1: about −4 −4 −7 −7 ≈ −22
+(nested_1k 145 → ~123, flat_1k 155 → ~133). Statements: each flight counts
+its seven requests (begin, owner, body, token check, `COMMIT`), about +19 at
+10k. Transactions unchanged; prepares about −4.
+
+Design points:
+- `discard` is one statement: data-modifying CTEs for the entry key (the
+  offset key, else the tail), the entry delete, the host key (the largest of
+  at most `budget − deleted entries` lowest positions), the host delete and
+  the credit, with `1/(credit row exists)` for `Stale`: the same rows,
+  order (entries first), sizes and charge as the five to seven statements.
+- `dispose` adds the release as one statement that deletes the record only
+  at zero held rows, asserts a missing record (`Stale`, as before) and sets a
+  transaction-local flag when it was the last record; compaction is a `DO`
+  block that runs only under that flag, with the same 2 s lock timeout and
+  an exception handler in place of the savepoint (a refusal keeps the dead
+  rows, as `KEEP` did).
+- A root window's update sets a transaction-local flag when every input
+  position was recorded; the next request divides by it, so `COMMIT` never
+  lands on a `Changed` window; `Changed` is the first input position missing
+  from that window's returned positions, as before.
+- Selected before sending: no generation yet, a held lane (nested), or a
+  position that does not convert to signed use today's transaction.
+
+### Measured (receipts `receipts/I3/I3b-C/`)
+
+| Shape (PG `[connects, rt, stmts, tx]`) | I3c pin | Predicted rt | Measured |
+|---|---|---|---|
+| nested_10k | [0, 303, 250, 33] | ~245 | [0, 245, 271, 33] |
+| flat_10k | [0, 342, 281, 36] | ~284 | [0, 284, 302, 36] |
+| nested_1k | [0, 145, 88, 18] | ~123 | [0, 119, 93, 18] |
+| flat_1k | [0, 155, 94, 19] | ~133 | [0, 129, 99, 19] |
+| dir_600 | [0, 155, 94, 19] | ~133 | [0, 129, 99, 19] |
+| hardlink_window | [0, 494, 433, 18] | — | [0, 468, 438, 18] |
+| wide_hardlinks | [0, 1060, 995, 19] | — | [0, 1034, 1000, 19] |
+| mixed | [0, 173, 116, 18] | — | [0, 147, 121, 18] |
+
+10k exactly as predicted (−58 each); statements +21 (predicted about +19);
+prepares 45 → 41 and 47 → 43 (predicted about −4). The 1k delta is −26, not
+about −22 (18% beyond the delta, 3% on the total). Diagnosed once from the
+per-role counts: prepares −4 and the root units −8 as predicted; the one 1k
+`dispose` (≈2k rows in one job) ran its key lookups past the end, so each fell
+back to the tail (two more lookups), plus the release and the compaction
+batch: 13 old round trips, not the 8 the prediction priced → −12, not −8.
+The 10k jobs end mid-table except the last, which the 10k prediction priced
+correctly. SQLite pins unchanged.
+
+Tests: `postgresql_acquisition_flights` (equivalence 39 script lines equal
+SQLite's; warm unit one round trip and one transaction for each of the five
+units; drop 327 and kill 327 over 7 unit kinds, `Changed` included). A drop
+after the refusal's reply was received answers the definite refusal (its
+transaction cannot commit), as `publish_flight` does; the sweep checks a
+drop is never a success and a definite refusal changed nothing. Reached:
+postgresql_acquisition, acquisition_disposal, postgresql_acquisition_compaction
+(the held-table case keeps the release through the `DO` block's handler),
+postgresql_acquisition_reads, layerfs-project init_postgresql,
+acquisition_custody, backed_acquisition, init_sqlite, init_counters,
+complete_root; check set method_refusal_order, sdk_round_trip_equivalence_seeded.
+
+Not built: the waiting units (`put_entries`, `place_children`); see the note
+`I3b-session-capability.md` for lane W.

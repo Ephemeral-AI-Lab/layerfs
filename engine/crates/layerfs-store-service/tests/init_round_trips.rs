@@ -109,52 +109,55 @@ const SQLITE: &[InitPin] = &[
 /// window; hard-link `job` reads included), and I3c (each Save publication
 /// one fenced flight instead of BEGIN, pack COPY (2 round trips), lane,
 /// rows and COMMIT: 5 fewer with packs, 3 without; 3 more statements each,
-/// as the flight counts every request).
+/// as the flight counts every request), and I3b part C (each root window
+/// unit and removal job one fenced flight from BEGIN to COMMIT, the last
+/// release and compaction in it).
 const POSTGRESQL: &[InitPin] = &[
     // probe init.nested_1k at baseline: [0, 229, 118, 33]
-    // at I2a [0, 209, 98, 33]; at I3a [0, 158, 79, 18]
+    // at I2a [0, 209, 98, 33]; at I3a [0, 158, 79, 18]; at I3c [0, 145, 88, 18]
     pin(
         "nested_1k",
-        [0, 145, 88, 18],
+        [0, 119, 93, 18],
         9900,
         137268,
         "6ac312b34cca5d86",
     ),
     // probe init.flat_1k at baseline: [0, 2,246, 2,125, 37]
-    // at I2a [0, 228, 107, 37]; at I3a [0, 168, 85, 19]
+    // at I2a [0, 228, 107, 37]; at I3a [0, 168, 85, 19]; at I3c [0, 155, 94, 19]
     pin(
         "flat_1k",
-        [0, 155, 94, 19],
+        [0, 129, 99, 19],
         10890,
         137359,
         "8a79e63caabd7530",
     ),
     // baseline [0, 705, 492, 82]
-    // at I2a [0, 704, 491, 82]; at I3a [0, 507, 424, 18]
+    // at I2a [0, 704, 491, 82]; at I3a [0, 507, 424, 18]; at I3c [0, 494, 433, 18]
     pin(
         "hardlink_window",
-        [0, 494, 433, 18],
+        [0, 468, 438, 18],
         780,
         7524,
         "d767c58fa69403d6",
     ),
     // added before I2 (at I1: [0, 2,634, 1,907, 339])
-    // at I2a [0, 2,038, 1,309, 339]; at I3a [0, 1,073, 986, 19]
+    // at I2a [0, 2,038, 1,309, 339]; at I3a [0, 1,073, 986, 19];
+    // at I3c [0, 1,060, 995, 19]
     pin(
         "wide_hardlinks",
-        [0, 1060, 995, 19],
+        [0, 1034, 1000, 19],
         5180,
         43894,
         "e6cba9e302a3c58f",
     ),
     // baseline [0, 1,438, 1,317, 37]
-    // at I2a [0, 228, 107, 37]; at I3a [0, 168, 85, 19]
-    pin("dir_600", [0, 155, 94, 19], 6490, 82511, "f2238ebb0be91b92"),
+    // at I2a [0, 228, 107, 37]; at I3a [0, 168, 85, 19]; at I3c [0, 155, 94, 19]
+    pin("dir_600", [0, 129, 99, 19], 6490, 82511, "f2238ebb0be91b92"),
     // added at I1 (no baseline row)
-    // at I2a [0, 255, 129, 38]; at I3a [0, 189, 105, 18]
+    // at I2a [0, 255, 129, 38]; at I3a [0, 189, 105, 18]; at I3c [0, 173, 116, 18]
     pin(
         "mixed",
-        [0, 173, 116, 18],
+        [0, 147, 121, 18],
         1100005,
         402976,
         "186f611869dd16c6",

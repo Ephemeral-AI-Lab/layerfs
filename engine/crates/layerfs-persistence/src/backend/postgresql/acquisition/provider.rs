@@ -6,12 +6,14 @@
 //! `Stale` before any row is written. Each read unit is one fenced
 //! autocommit statement (#818 I3a): one snapshot, with the owner's row
 //! joined in, so a released or foreign operation reads no row and is
-//! `Stale` too (`reads`). Nothing is created, and contention is the
-//! one-attempt refusal.
-use super::{cleanup, placement, reads, writes};
+//! `Stale` too (`reads`). A write unit with no wait (root windows,
+//! `advance`, `discard`, `dispose`) is one pipelined message from `BEGIN`
+//! to `COMMIT` when the session is eligible (`flights`, #818 I3b). Nothing
+//! is created, and contention is the one-attempt refusal.
+use super::{cleanup, flights, placement, reads, writes};
 use crate::backend::{
     postgresql::session::{connection::Session, transaction::Transaction},
-    sqlite::acquisition::statements::Failure,
+    sqlite::acquisition::statements::{signed, Failure},
 };
 use layerfs_content::ObjectId;
 use layerfs_storage::port::acquisition::{
@@ -63,6 +65,27 @@ impl PostgresAcquisition {
             let (_, work) = writes::owner(tx, owner)?;
             body(tx, work)
         })?)
+    }
+
+    /// A write unit with no wait: one flight (`flights`) when this session
+    /// is eligible and `flight` takes the unit, else today's transaction.
+    fn flight<T>(
+        &self,
+        owner: Owner,
+        flight: impl FnOnce(&Session, flights::Identity) -> Option<Result<T, Failure>>,
+        body: impl FnOnce(&Transaction<'_>) -> Result<T, Failure>,
+    ) -> AcquisitionResult<T> {
+        self.available()?;
+        if owner.epoch == 0 || owner.epoch != self.epoch.get() {
+            return Err(Failure::Stale.into());
+        }
+        if flights::eligible(&self.session).map_err(Failure::from)? {
+            let identity = signed(owner.operation).and_then(|o| Ok((o, signed(owner.epoch)?)));
+            if let Some(outcome) = identity.ok().and_then(|id| flight(&self.session, id)) {
+                return Ok(outcome?);
+            }
+        }
+        self.unit(owner, true, body)
     }
 
     /// One read unit: one fenced autocommit statement whose read joins the
@@ -182,9 +205,12 @@ impl Acquisition for PostgresAcquisition {
 
     fn complete_files(&self, owner: Owner, roots: &[(u64, ObjectId)]) -> AcquisitionResult<()> {
         bounded(roots.len(), roots.len() * 48)?;
-        self.unit(owner, true, |tx| {
-            writes::record_roots(tx, owner, writes::Roots::Files, roots)
-        })
+        let which = writes::Roots::Files;
+        self.flight(
+            owner,
+            |session, id| flights::record_roots(session, id, which, roots),
+            |tx| writes::record_roots(tx, owner, which, roots),
+        )
     }
 
     fn file_roots(
@@ -220,21 +246,38 @@ impl Acquisition for PostgresAcquisition {
         roots: &[(u64, ObjectId)],
     ) -> AcquisitionResult<()> {
         bounded(roots.len(), roots.len() * 48)?;
-        self.unit(owner, true, |tx| {
-            writes::record_roots(tx, owner, writes::Roots::Directories, roots)
-        })
+        let which = writes::Roots::Directories;
+        self.flight(
+            owner,
+            |session, id| flights::record_roots(session, id, which, roots),
+            |tx| writes::record_roots(tx, owner, which, roots),
+        )
     }
 
     fn advance(&self, owner: Owner, phase: Phase) -> AcquisitionResult<()> {
-        self.unit(owner, true, |tx| writes::advance(tx, owner, phase))
+        self.flight(
+            owner,
+            |session, id| Some(flights::advance(session, id, phase)),
+            |tx| writes::advance(tx, owner, phase),
+        )
     }
 
     fn discard(&self, owner: Owner, rows: usize) -> AcquisitionResult<Discarded> {
-        self.unit(owner, true, |tx| cleanup::discard(tx, owner, budget(rows)))
+        self.flight(
+            owner,
+            |session, id| {
+                Some(flights::dispose(session, id, budget(rows), false).map(|d| d.discarded))
+            },
+            |tx| cleanup::discard(tx, owner, budget(rows)),
+        )
     }
 
     fn dispose(&self, owner: Owner, rows: usize) -> AcquisitionResult<Disposal> {
-        self.unit(owner, true, |tx| cleanup::dispose(tx, owner, budget(rows)))
+        self.flight(
+            owner,
+            |session, id| Some(flights::dispose(session, id, budget(rows), true)),
+            |tx| cleanup::dispose(tx, owner, budget(rows)),
+        )
     }
 
     fn release(&self, owner: Owner) -> AcquisitionResult<()> {
