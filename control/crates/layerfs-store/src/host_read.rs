@@ -182,9 +182,11 @@ pub(crate) fn routed(
         Ok(paths) => paths,
         Err(error) => return Some(Err(error)),
     };
+    // None also when no worker is ready: the read goes direct (#833)
     paths
         .request_fits(OP, &args)
         .then(|| paths.call_validated(OP, args, |value| checked.valid_answer(value)))
+        .flatten()
 }
 
 #[cfg(not(any(target_os = "macos", target_os = "linux")))]

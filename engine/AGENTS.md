@@ -355,11 +355,12 @@ the fork's tag `v0.18.0-layerfs.1`.
 
 ### Audited unsafe files
 
-Each crate below uses `deny(unsafe_code)` with exactly one allowed module; the
-guard and its tests enforce the path, and no other FFI or dependency change is
-authorized.
+Each crate below uses `deny(unsafe_code)` with only the listed allowed
+modules; the guard and its tests enforce the paths, and no other FFI or
+dependency change is authorized.
 
 | Crate | Allowed module | Why |
 | --- | --- | --- |
 | `layerfs-persistence` | `src/backend/sqlite/lifecycle/file_control.rs`, macOS only | sets and reads back `SQLITE_FCNTL_PERSIST_WAL` under sole seal ownership and on a live-Store snapshot's own new destination connection (#506); owner authorization 2026-10-07, "Approve the narrowly audited seal wrapper" ([decision](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/307/SEAL-PERSIST-WAL-DECISION-20261007.md)); no manual sidecar deletion |
 | `layerfs-bridge` | `src/process/darwin.rs`, macOS only | `proc_pidinfo`, `proc_listallpids` and the `sysctl` boot id, each with its SAFETY comment; moved below the drivers by layerfs-project#112 (finding R10, accepted 2026-11-06, #101 M-3) |
+| `layerfs-bridge` | `src/process/inherit.rs`, Unix | `Command::pre_exec` marking every descriptor above stderr close-on-exec in a spawned host worker (Linux `close_range(3, ~0, CLOSE_RANGE_CLOEXEC)`, else `fcntl` over the descriptors listed before the fork), each with its SAFETY comment; #833 review finding 1, owner approved 2026-11-27 ("Approve it") |

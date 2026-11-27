@@ -85,10 +85,12 @@ fn worker_death_distinguishes_sent_work_from_the_unsent_queue() {
         "only an explicit later open may settle this lease"
     );
 
-    // A new CLI request starts the replacement, and the normal Store lease
-    // path removes the original worker's proved-stale lease.
+    // A new CLI request runs direct and starts the replacement (#833); its
+    // normal Store lease path removes the original worker's proved-stale
+    // lease, and the next request reaches the replacement.
     proof::assert_reads(proof::spawn_reads(&home, 1, false));
     let restarted = home.ping();
+    proof::assert_reads(proof::spawn_reads(&home, 1, false));
     let new_pid = restarted.get_int("pid").unwrap();
     assert_ne!(new_pid, worker.pid());
     assert_ne!(restarted.get_text("generation"), old.get_text("generation"));

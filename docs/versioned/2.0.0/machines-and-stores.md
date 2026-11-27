@@ -747,7 +747,8 @@ record with no key id is refused with the fix that connects it again
 
 The host-worker transport uses private Unix sockets and checks the user of
 the other process before exchanging any operation bytes. A CLI call chooses
-its route before sending. A lost answer after an operation send starts is
+its route before sending: a call that finds no ready worker runs directly
+and starts one in the background, never sending to a worker first. A lost answer after an operation send starts is
 reported as `Unknown` with a request ID. The CLI makes one attempt.
 A streamed file write is sent once: input that stops before its end frame
 commits nothing and is refused; a lost answer after it is `Unknown`. The

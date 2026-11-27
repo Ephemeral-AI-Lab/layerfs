@@ -228,7 +228,21 @@ pub const READ: &[&str] = &["file", "read", "pg/p", "main", "/a.txt"];
 pub const STAT: &[&str] = &["file", "stat", "pg/p", "main", "/a.txt"];
 pub const LIST: &[&str] = &["file", "list", "pg/p", "main", "/"];
 
-/// A home with PostgreSQL Store `pg` connected at `port` and project `p`.
+/// Starts `home`'s host worker and waits for it: since #833 a first call
+/// that finds no ready worker runs direct, so a test of the worker's held
+/// sessions starts it first.
+pub fn warm(home: &Fixture) {
+    let host = if cfg!(target_os = "macos") {
+        "macos-host"
+    } else {
+        "linux-host"
+    };
+    ok(&home.paths.home, &["machine", "start", host]);
+    home.ping();
+}
+
+/// A home with PostgreSQL Store `pg` connected at `port` and project `p`,
+/// and its host worker started.
 pub fn connected(db: &Db, at: (&str, u16)) -> Fixture {
     let home = Fixture::new();
     connect(&home.paths.home, db, at);
@@ -240,6 +254,7 @@ pub fn connected(db: &Db, at: (&str, u16)) -> Fixture {
         &home.paths.home,
         &["project", "init", "pg/p", source.to_str().unwrap()],
     );
+    warm(&home);
     home
 }
 

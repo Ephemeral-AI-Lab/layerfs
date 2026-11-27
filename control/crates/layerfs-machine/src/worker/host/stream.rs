@@ -20,7 +20,7 @@
 //! of `end` leaves nothing committed; after that, a lost answer is `Unknown`.
 use super::super::frame::ATTACHED;
 use super::super::host_frame::{self, HOST_MAX_REPLY, HOST_MAX_REQUEST};
-use super::{decode_answer, unavailable, unknown, HostPaths};
+use super::{decode_answer, unknown, HostPaths};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::{
     home::host_socket,
@@ -327,23 +327,42 @@ fn not_committed(op: &str, id: &str, why: &str) -> SdkRefusal {
 }
 
 impl HostPaths {
-    /// Makes one streamed write on the write endpoint: its input `body`
-    /// streams after its request, launching a worker if the home has none.
-    /// A failure before the end
-    /// frame is written is a definite refusal (the worker's own, when it
-    /// refused early); after it, a missing or invalid answer is `Unknown`.
+    /// Makes one streamed write on the write endpoint of a ready worker:
+    /// its input `body` streams after its request. None when no worker is
+    /// ready (#833): nothing was sent and `body` was not called, the caller
+    /// runs the write on its direct route, and the worker is being started
+    /// in the background. A failure before the end frame is written is a
+    /// definite refusal (the worker's own, when it refused early); after
+    /// it, a missing or invalid answer is `Unknown`.
     pub fn call_streamed(
         &self,
         op: &str,
         args: SdkValue,
         body: &mut dyn FnMut(&mut StreamSender<'_>) -> Result<(), SdkRefusal>,
         valid: impl FnOnce(&SdkValue) -> bool,
-    ) -> Outcome {
+    ) -> Option<Outcome> {
         // the write endpoint: a held write never takes an ordinary place
+        match self.greet(
+            super::Endpoint::Writes,
+            super::Start::Background,
+            op,
+            args,
+            None,
+        ) {
+            Ok(Some(greeted)) => Some(self.stream_greeted(greeted, op, body, valid)),
+            Ok(None) => None,
+            Err(refusal) => Some(Err(refusal)),
+        }
+    }
+
+    fn stream_greeted(
+        &self,
+        greeted: super::Greeted,
+        op: &str,
+        body: &mut dyn FnMut(&mut StreamSender<'_>) -> Result<(), SdkRefusal>,
+        valid: impl FnOnce(&SdkValue) -> bool,
+    ) -> Outcome {
         let path = &self.writes;
-        let Some(greeted) = self.greet(super::Endpoint::Writes, true, op, args, None)? else {
-            return Err(unavailable("start", "no accepting host endpoint"));
-        };
         let (stream, id, began) = (greeted.stream, greeted.id, greeted.began);
         // a deadline an earlier frame set on this socket does not apply
         stream

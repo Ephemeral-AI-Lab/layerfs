@@ -30,8 +30,9 @@ fn connections_waiting_at_the_idle_mark_keep_the_worker_accepting() {
     assert_eq!(ping.get_text("state"), Some("ready"));
 
     // Once they close, the idle worker first removes its socket names, then
-    // exits. A call made then finds no endpoint and starts the next worker
-    // within its start deadline; it is never reset in a dying listen queue.
+    // exits. A call made then finds no endpoint and runs direct (#833); it
+    // is never reset in a dying listen queue. Once the old worker is gone
+    // the next call starts the next worker in the background.
     drop(waiting);
     let removed = Instant::now() + Duration::from_secs(10);
     while home.paths.socket.exists() {
@@ -40,6 +41,7 @@ fn connections_waiting_at_the_idle_mark_keep_the_worker_accepting() {
     }
     proof::assert_reads(proof::spawn_reads(&home, 1, false));
     assert!(worker.wait(Duration::from_secs(10)).success());
+    proof::assert_reads(proof::spawn_reads(&home, 1, false));
     let next = home.ping();
     assert_ne!(next.get_int("pid"), Some(worker.pid()));
     home.drain();

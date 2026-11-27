@@ -356,7 +356,10 @@ installed executable using its package version and kernel file identity,
 including device, inode, size, and change timestamps. This keeps the
 warm-call check independent of executable size. Separate installed copies
 may require waiting for the old worker to drain, even when their bytes match.
-The startup lock serializes launchers. The worker holds its lifetime lock
-from stale-socket recovery through socket removal. See the
+The startup lock serializes launchers; a call that starts the worker in the
+background hands the lock to it, and the worker releases it once its
+sockets are published ([first call](workers-and-reach.md#first-call-and-background-start-833)).
+The worker holds its lifetime lock from stale-socket recovery through
+socket removal. See the
 [host worker exchange](workers-and-reach.md#host-worker-exchange-20-implementation-plan)
 for wire limits and result custody.

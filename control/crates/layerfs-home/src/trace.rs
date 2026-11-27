@@ -5,8 +5,9 @@
 //! `LAYERFS_TRACE_STEP` set too, [`stepped`] times the steps of one call
 //! ([`step`]) and appends one line per step to that file; a worker-routed
 //! call asks its worker for the worker's own steps (`trace_step` in the
-//! request, `steps` in the answer). Unset, a step mark is one thread-local
-//! check.
+//! request, `steps` in the answer). [`route`] appends one line when a call
+//! goes direct because its worker is not ready (#833). Unset, a step mark
+//! is one thread-local check.
 use layerfs_bridge::control::SdkValue;
 use std::cell::RefCell;
 use std::io::Write;
@@ -145,6 +146,27 @@ pub fn connection(worker: &str, op: &str, sent: bool, started: Instant) {
             "ms",
             SdkValue::Int(i64::try_from(started.elapsed().as_millis()).unwrap_or(i64::MAX)),
         ),
+    ]);
+    let mut text = crate::json::print(&line);
+    text.push('\n');
+    append(&text);
+}
+
+/// Appends `{at, event: "worker.route", op, worker, route, reason}` to the
+/// file `LAYERFS_TRACE` names: call `op` took `route` (`direct`) instead of
+/// the worker at `worker`, chosen before anything was sent, for `reason`
+/// (such as `worker starting`, #833). Unset, nothing is written.
+pub fn route(worker: &str, op: &str, route: &str, reason: &str) {
+    if std::env::var_os("LAYERFS_TRACE").is_none_or(|path| path.is_empty()) {
+        return;
+    }
+    let line = SdkValue::map([
+        ("at", SdkValue::Int(crate::home::now_ms())),
+        ("event", SdkValue::text("worker.route")),
+        ("op", SdkValue::text(op)),
+        ("worker", SdkValue::text(worker)),
+        ("route", SdkValue::text(route)),
+        ("reason", SdkValue::text(reason)),
     ]);
     let mut text = crate::json::print(&line);
     text.push('\n');

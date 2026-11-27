@@ -472,11 +472,11 @@ load (20 callers, small calls) and a queue behind calls of ordinary length
 complete. A caller still waiting at 30 s (all 8 threads held by long calls,
 or a stopped or wedged worker) gets a pre-send `Unavailable` naming the load
 ("no call thread was free within 30 s"), so nothing is half sent. Only a
-caller that spawned the worker it reached keeps the startup lock to its
-hello and the 10 s deadline, as do management calls and connecting. A
-caller that took the startup lock while the listen queue was full, or while
-another worker's socket was not yet private, and started nothing releases it
-once connected and waits as any queued caller does: 30 s from its connect,
+caller that spawned the worker it reached and waits for it (management:
+`machine start`) keeps the startup lock to its hello and the 10 s deadline,
+as do other management calls and connecting. An ordinary call never waits
+for a worker to start ([first call](#first-call-and-background-start-833)):
+it waits only on a listen queue that is full, 30 s from its connect,
 refused naming the load. A worker that exits
 closes every waiting connection, also before anything was sent.
 
@@ -489,13 +489,16 @@ caller can join a listen
 queue, keeps serving anything already queued (a `connect` that resolved the
 name just before is in the queue within microseconds; the worker keeps reading
 for 1 s, `UNPUBLISHED`), and drains only when it is quiet with every listen
-queue empty. A caller after the removal finds no endpoint and can start the next
-worker only once this worker releases `worker.lock`. The old worker keeps
-that lock while it serves a call accepted in its last 1 s window and while it
-closes and checkpoints its Stores, so the next start is not guaranteed within
-the new caller's 10 s start deadline: that caller can get `Unavailable` with
-nothing sent, and maintenance meanwhile gets `InUse` naming the old worker's
-pid. No caller is reset mid-queue by an idle exit.
+queue empty. A call after the removal finds no endpoint and runs on its
+direct route; it can start the next worker only once this worker releases
+`worker.lock`. The old worker keeps that lock while it serves a call
+accepted in its last 1 s window and while it closes and checkpoints its
+Stores: meanwhile ordinary calls go direct and start nothing (route reason
+`worker not ready`), the first call after the release starts the next
+worker in the background, a `machine start` waits up to its 10 s start
+deadline (`Unavailable` with nothing sent past it), and maintenance gets
+`InUse` naming the old worker's pid. No caller is reset mid-queue by an
+idle exit.
 
 A `store.write` request names its method, Store, project, field map and
 `body`: `none` (`edit`, `mkdir`, `rm`, `cp`, `mv`), `content` (`write`) or
@@ -694,13 +697,83 @@ were checked. There is no call that removes them.
 A scoped apply (`file apply --scope`) runs in the caller's process, not
 through the worker: its Workspace route is not a host Store write.
 
+### First call and background start (#833)
+
+An ordinary call (`store.call`, `store.postgresql_read`, `store.write`)
+uses the worker only when it is ready: its socket has mode 0600 and accepts
+a connection. Otherwise (no socket, a refused connect, a socket not yet
+private, or another caller starting a worker) the call runs on its direct
+route, as it would with no worker, and that route is chosen before anything
+is sent to a worker: it is never a fallback after a send. Before it runs,
+the call starts the worker in the background unless one is starting:
+
+| Found at route time | Route and start | Trace `reason` |
+| --- | --- | --- |
+| worker ready | the worker, as before | (none: a `worker.connection` line) |
+| host machine stopped (D7) | refused `Unavailable` (SQLite, as before); PostgreSQL calls stay direct, as before | (none) |
+| worker of another build or protocol | refused before the request, as before | (none) |
+| startup lock held | direct; nothing started: another caller is starting one | `worker starting` |
+| no lock held, `worker.lock` held | direct; nothing started: a worker without a published endpoint (exiting, or started by hand) | `worker not ready` |
+| both locks free | direct; this caller starts the worker | `worker started` |
+| the start failed | direct; the failure is recorded | `worker start failed: <message>` |
+
+The call takes the startup lock without waiting, re-probes (a start that
+finished meanwhile is used), checks that `worker.lock` is free and the host
+machine not stopped, and spawns `layerfs worker --host` as `machine start`
+does (its own process group, the cleared environment below, output to
+`log/worker.log`, and no descriptor above stderr: every inherited
+descriptor is marked close-on-exec between fork and exec, so a pipe or
+channel the CLI's own caller passed ends with the CLI, not with the
+worker). It hands the startup lock to the worker as its stdin
+and does not wait: the worker keeps the lock until all three endpoints are
+bound and private, then points stdin at `/dev/null`, so concurrent first
+calls start one worker and a worker that dies first frees the lock. The
+caller never waits for the child; a caller that lives on reaps it on a
+thread. The spawn costs the call about 0.3 ms on Linux and 0.7 ms on macOS
+(#833 attribution); the worker is ready about 1 ms (Linux) or 6 ms (macOS)
+after it, so the next call is routed.
+
+A failed start never fails the call. The caller (spawn, lock or log
+failures) or the worker (any failure before its endpoints are published:
+its home's identity, its lifetime lock, the home lock, a stopped machine,
+a bind, or a panic, through a hook active until then) writes
+`machine/<host>/worker-start-failed.json`, `{ at, by, launch, pid,
+message }` (message at most 1 KiB; `launch` is `background` or
+`machine start`), and the trace line names it. Before it spawns, the
+caller writes `machine/<host>/worker-starting.json` (`{ at, pid }`, the
+caller's pid) under the startup lock and removes an earlier failure
+record: this start is the one reported from then on. The worker removes
+both once its endpoints are published, before it releases the startup
+lock. A worker that ends before that without a record (a signal) leaves
+the marker with the startup lock free, which reads as a failed start
+("the worker ended before publishing its endpoints"); a held startup lock
+means the start is still in progress. `machine start` removes a leftover
+marker before it spawns the worker it waits for. While no worker listens,
+`machine.worker.endpoint` is a warning naming the failure by its cause
+(a stopped host machine: calls are refused until `layerfs machine start
+<host>`; a failed `machine start`; a failed background start: calls run
+directly), its evidence adding `start_failure`, with `layerfs machine
+start <host>` as the fix. A start that fails again is not backed off: each
+call that finds no worker tries once (an owner decision is pending).
+
+Each such call adds one trace line, `{event: "worker.route", op, worker,
+route: "direct", reason}`, and the step `background_start` (the time from
+`route` to the decision, the spawn included). A streamed write whose input
+is not a regular file makes the same decision before its spool copy, so a
+cold worker never costs the copy; that check reads the write endpoint's
+mode and never dials it. The idle exit stays 60 s: calls further
+apart than that each run direct and start a worker that then exits idle.
+
 A separate startup lock serializes launch attempts until the child is
-ready. Only the worker holding the lifetime `worker.lock` may recover stale
+ready; a start that waits for its worker probes the socket every 2 ms
+(`READY_POLL`; 15 ms before #833, which a caller spent asleep after a
+worker bound in about 1 ms). Only the worker holding the lifetime `worker.lock` may recover stale
 sockets, bind or remove endpoints. A worker binds each socket and then sets
 it to 0600; callers never dial a socket with another mode. Such a socket
 whose lifetime lock is free has no owner (its worker died between bind and
 chmod), so a starting caller treats it as absent and launches a worker that
-replaces it, and a caller that does not start one reports no endpoint.
+replaces it, and a caller that does not start one reports no endpoint (an
+ordinary call goes direct).
 The CLI starts the worker with an empty environment except `LAYERFS_HOME`
 and `PATH`, `HOME`, `TMPDIR`, `LANG`, `LC_ALL`, `LC_CTYPE`, `SSL_CERT_FILE`
 and `SSL_CERT_DIR`, in `/`: the worker serves later callers too, so it
