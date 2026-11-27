@@ -164,6 +164,42 @@ impl ReadSession {
                 .map_err(PortError::Storage)
         })
     }
+    /// [`Self::objects_with`] with each object's own result (#818 H5): one
+    /// demand, as the batched read makes it (`Storage::read_each_with`).
+    pub fn objects_each_with(
+        &self,
+        cache: &mut ReadCache,
+        ids: &[ObjectId],
+    ) -> Result<Vec<layerfs_storage::StorageResult<Vec<u8>>>, Arc<PortError>> {
+        self.attempt(|handle, _, counts| {
+            counts.objects.fetch_add(1, Ordering::Relaxed);
+            counts
+                .object_ids
+                .fetch_add(ids.len() as u64, Ordering::Relaxed);
+            handle
+                .storage
+                .read_each_with(cache, ids)
+                .map_err(PortError::Storage)
+        })
+    }
+    /// [`Self::lengths_with`] with each file's own result (#818 H6): one
+    /// demand (`Storage::lengths_each_with`).
+    pub fn lengths_each_with(
+        &self,
+        cache: &mut ReadCache,
+        ids: &[ObjectId],
+    ) -> Result<Vec<layerfs_storage::StorageResult<u64>>, Arc<PortError>> {
+        self.attempt(|handle, _, counts| {
+            counts.lengths.fetch_add(1, Ordering::Relaxed);
+            counts
+                .length_ids
+                .fetch_add(ids.len() as u64, Ordering::Relaxed);
+            handle
+                .storage
+                .lengths_each_with(cache, ids)
+                .map_err(PortError::Storage)
+        })
+    }
     /// [`Self::file_lengths`] through a caller's caches (#818 R4); the lock
     /// is held for this one demand only.
     pub fn lengths_with(

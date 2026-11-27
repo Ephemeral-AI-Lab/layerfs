@@ -60,6 +60,23 @@ impl PortError {
         ContentError::ProviderFailure { what }
     }
 }
+impl PortError {
+    /// Whether this failure is the requested object's own (#818 H5): it is
+    /// missing, or its stored bytes do not authenticate or decode. Anything
+    /// else (the session, admission, transport, a bound) fails the demand.
+    pub fn object_owned(&self) -> bool {
+        matches!(
+            self,
+            Self::Storage(
+                StorageError::ObjectMissing(_)
+                    | StorageError::Content(_)
+                    | StorageError::Integrity(_)
+                    | StorageError::Unpublished(_)
+                    | StorageError::VisibilityCeiling { .. }
+            )
+        )
+    }
+}
 impl std::error::Error for PortError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
@@ -70,6 +87,10 @@ impl std::error::Error for PortError {
         }
     }
 }
+/// One object's read in a per-object demand: its bytes or its own failure.
+pub type ObjectRead = Result<Vec<u8>, Arc<PortError>>;
+/// One regular file's length in a per-object demand, or its own failure.
+pub type LengthRead = Result<u64, Arc<PortError>>;
 /// Fresh demand custody for one operation, never stored in the immutable cache.
 pub struct StorePorts {
     store: Arc<Store>,
@@ -154,6 +175,15 @@ impl StorePorts {
         &self,
         call: impl FnOnce() -> Result<T, Arc<PortError>>,
     ) -> Result<T, Arc<PortError>> {
+        self.attempt_keeping(call, |_| true)
+    }
+    /// [`Self::attempt`], retaining as this operation's failure only the
+    /// failures `retain` names.
+    fn attempt_keeping<T>(
+        &self,
+        call: impl FnOnce() -> Result<T, Arc<PortError>>,
+        retain: impl FnOnce(&PortError) -> bool,
+    ) -> Result<T, Arc<PortError>> {
         self.attempting
             .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
             .map_err(|_| Arc::new(PortError::ConcurrentDemand))?;
@@ -162,6 +192,9 @@ impl StorePorts {
             return Err(error);
         }
         call().inspect_err(|error| {
+            if !retain(error) {
+                return;
+            }
             // Retain this original failure even if an earlier observer poisoned
             // the mutex. Subsequent access still reports the poison explicitly.
             let mut first = self
@@ -206,6 +239,25 @@ impl StorePorts {
     ) -> Result<Vec<Vec<u8>>, Arc<PortError>> {
         self.attempt(|| self.reader()?.objects_with(cache, ids))
     }
+    /// Each object's own result, in request order (#818 H5), in one demand
+    /// (`Storage::read_each_with`, the batched read's calls): an object's own
+    /// failure ([`PortError::object_owned`]) is returned for it and is not
+    /// retained as this operation's failure, so the other objects and the
+    /// operation's later demands go on; a failure of the demand, or any other
+    /// failure an object meets, fails the call and is retained, as
+    /// [`Self::objects_with`] retains it.
+    pub fn objects_each_with(
+        &self,
+        cache: &mut layerfs_storage::ReadCache,
+        ids: &[ObjectId],
+    ) -> Result<Vec<ObjectRead>, Arc<PortError>> {
+        self.attempt(|| each(ids.len(), self.reader()?.objects_each_with(cache, ids)?))
+    }
+    /// Whether [`Self::objects_each_with`] and [`Self::lengths_each_with`]
+    /// read their objects in one demand: the storage reader does.
+    pub fn reads_each_at_once(&self) -> bool {
+        true
+    }
     /// [`Self::file_lengths`] through the same caller-kept caches (#818 R4).
     pub fn lengths_with(
         &self,
@@ -214,6 +266,37 @@ impl StorePorts {
     ) -> Result<Vec<u64>, Arc<PortError>> {
         self.attempt(|| self.reader()?.lengths_with(cache, ids))
     }
+    /// Each regular file's length or its own failure (#818 H6), in one
+    /// demand (`Storage::lengths_each_with`), kept as
+    /// [`Self::objects_each_with`] keeps an object's.
+    pub fn lengths_each_with(
+        &self,
+        cache: &mut layerfs_storage::ReadCache,
+        ids: &[ObjectId],
+    ) -> Result<Vec<LengthRead>, Arc<PortError>> {
+        self.attempt(|| each(ids.len(), self.reader()?.lengths_each_with(cache, ids)?))
+    }
+}
+/// A per-object demand's results for `requested` objects: each object's own
+/// failure stays its own; the first failure that is not an object's fails
+/// the demand.
+fn each<T>(
+    requested: usize,
+    results: Vec<layerfs_storage::StorageResult<T>>,
+) -> Result<Vec<Result<T, Arc<PortError>>>, Arc<PortError>> {
+    if results.len() != requested {
+        return Err(Arc::new(PortError::Storage(StorageError::Integrity(
+            "per-object demand cardinality",
+        ))));
+    }
+    results
+        .into_iter()
+        .map(|result| match result.map_err(PortError::Storage) {
+            Ok(value) => Ok(Ok(value)),
+            Err(error) if error.object_owned() => Ok(Err(Arc::new(error))),
+            Err(error) => Err(Arc::new(error)),
+        })
+        .collect()
 }
 impl AuthenticatedObjects for StorePorts {
     fn read_canonical_batch(&self, ids: &[ObjectId]) -> ContentResult<Vec<Vec<u8>>> {

@@ -71,6 +71,11 @@ impl<'a> Rows<'a> {
         }
     }
 
+    /// The Store the rows are read from.
+    pub fn store(&self) -> &'a Arc<Store> {
+        self.store
+    }
+
     /// Starts a first-parent walk that reads at most `budget` more rows:
     /// [`Self::walked`] then reads Commits in windows, where the Store
     /// batches reads.
@@ -134,6 +139,21 @@ impl<'a> Rows<'a> {
             }
         }
         self.record(node)
+    }
+
+    /// The Commits the open window holds after the walk's current node, in
+    /// walk order, up to `count`, with their roots: those a walk reads next
+    /// if it goes on (#818 H5). It stops at a row that failed to read.
+    pub fn upcoming(&self, count: usize) -> Vec<(NodeId, ObjectId)> {
+        self.ahead
+            .iter()
+            .map_while(|(id, row)| {
+                row.as_ref()
+                    .ok()
+                    .map(|row| (NodeId::Commit(*id), row.record.root))
+            })
+            .take(count)
+            .collect()
     }
 
     /// Reads the window from `head`, sized by the windows read before and

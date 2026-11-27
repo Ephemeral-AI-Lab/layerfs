@@ -1,0 +1,92 @@
+== rev-begin: 48 statements
+  16 SELECT q.*,f.__layerfs_incarnation FROM (SELECT substring(s.span FROM ($6::int4[])[k] FOR ($7::int4[])[k]) FRO
+  12 SELECT q.*,f.__layerfs_incarnation FROM (SELECT y.layer_id, y.layer_stack_id, y.parent_layer_id, y.root_id, y.
+   6 SELECT q.*,f.__layerfs_incarnation FROM (SELECT k,p.pack_id,octet_length(p.body),substring(s.span FROM ($6::in
+   4 SELECT q.*,f.__layerfs_incarnation FROM (SELECT b.first_ordinal,b.last_ordinal,CASE WHEN octet_length(b.body) 
+   3 SELECT q.*,f.__layerfs_incarnation FROM (WITH RECURSIVE seg(n, run, top, want) AS (SELECT 0, l.run, l.depth, $
+   2 SELECT q.*,f.__layerfs_incarnation FROM (SELECT branch_id, layer_stack_id, name, base_layer_id, head_commit_id
+   2 SELECT q.*,f.__layerfs_incarnation FROM (SELECT history_serial FROM <schema>."commit" WHERE commi
+   1 SELECT q.*,f.__layerfs_incarnation FROM (SELECT layer_stack_id, name, scope_id, profile_id, head_layer_id FROM
+   1 SELECT q.*,f.__layerfs_incarnation FROM (SELECT path,frontier_serial,removed_ms FROM <schema>.pat
+   1 SELECT q.*,f.__layerfs_incarnation FROM (SELECT commit_id, layer_stack_id, root_id, parent_commit_id, base_lay
+-- order
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT layer_stack_id, name, scope_id, profile_id
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT branch_id, layer_stack_id, name, base_laye
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT history_serial FROM <schema>.
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT path,frontier_serial,removed_ms FROM lfs81
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT commit_id, layer_stack_id, root_id, parent
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT substring(s.span FROM ($6::int4[])[k] FOR 
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT substring(s.span FROM ($6::int4[])[k] FOR 
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT b.first_ordinal,b.last_ordinal,CASE WHEN o
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT branch_id, layer_stack_id, name, base_laye
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT history_serial FROM <schema>.
+    SELECT q.*,f.__layerfs_incarnation FROM (WITH RECURSIVE seg(n, run, top, want) AS (SELECT 
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT k,p.pack_id,octet_length(p.body),substring
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT k,p.pack_id,octet_length(p.body),substring
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT b.first_ordinal,b.last_ordinal,CASE WHEN o
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT substring(s.span FROM ($6::int4[])[k] FOR 
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT substring(s.span FROM ($6::int4[])[k] FOR 
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT y.layer_id, y.layer_stack_id, y.parent_lay
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT y.layer_id, y.layer_stack_id, y.parent_lay
+    SELECT q.*,f.__layerfs_incarnation FROM (WITH RECURSIVE seg(n, run, top, want) AS (SELECT 
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT k,p.pack_id,octet_length(p.body),substring
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT k,p.pack_id,octet_length(p.body),substring
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT k,p.pack_id,octet_length(p.body),substring
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT b.first_ordinal,b.last_ordinal,CASE WHEN o
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT y.layer_id, y.layer_stack_id, y.parent_lay
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT y.layer_id, y.layer_stack_id, y.parent_lay
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT substring(s.span FROM ($6::int4[])[k] FOR 
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT y.layer_id, y.layer_stack_id, y.parent_lay
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT y.layer_id, y.layer_stack_id, y.parent_lay
+    SELECT q.*,f.__layerfs_incarnation FROM (WITH RECURSIVE seg(n, run, top, want) AS (SELECT 
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT k,p.pack_id,octet_length(p.body),substring
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT b.first_ordinal,b.last_ordinal,CASE WHEN o
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT y.layer_id, y.layer_stack_id, y.parent_lay
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT y.layer_id, y.layer_stack_id, y.parent_lay
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT y.layer_id, y.layer_stack_id, y.parent_lay
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT substring(s.span FROM ($6::int4[])[k] FOR 
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT substring(s.span FROM ($6::int4[])[k] FOR 
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT y.layer_id, y.layer_stack_id, y.parent_lay
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT substring(s.span FROM ($6::int4[])[k] FOR 
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT substring(s.span FROM ($6::int4[])[k] FOR 
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT substring(s.span FROM ($6::int4[])[k] FOR 
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT substring(s.span FROM ($6::int4[])[k] FOR 
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT y.layer_id, y.layer_stack_id, y.parent_lay
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT substring(s.span FROM ($6::int4[])[k] FOR 
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT substring(s.span FROM ($6::int4[])[k] FOR 
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT substring(s.span FROM ($6::int4[])[k] FOR 
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT substring(s.span FROM ($6::int4[])[k] FOR 
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT y.layer_id, y.layer_stack_id, y.parent_lay
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT substring(s.span FROM ($6::int4[])[k] FOR 
+== diff-begin: 22 statements
+   8 SELECT q.*,f.__layerfs_incarnation FROM (SELECT commit_id, layer_stack_id, root_id, parent_commit_id, base_lay
+   4 SELECT q.*,f.__layerfs_incarnation FROM (SELECT substring(s.span FROM ($6::int4[])[k] FOR ($7::int4[])[k]) FRO
+   2 SELECT q.*,f.__layerfs_incarnation FROM (SELECT history_serial FROM <schema>."commit" WHERE commi
+   2 SELECT q.*,f.__layerfs_incarnation FROM (SELECT b.first_ordinal,b.last_ordinal,CASE WHEN octet_length(b.body) 
+   2 SELECT q.*,f.__layerfs_incarnation FROM (SELECT path,frontier_serial,removed_ms FROM <schema>.pat
+   2 SELECT q.*,f.__layerfs_incarnation FROM (SELECT branch_id, layer_stack_id, name, base_layer_id, head_commit_id
+   1 SELECT q.*,f.__layerfs_incarnation FROM (SELECT layer_stack_id, name, scope_id, profile_id, head_layer_id FROM
+   1 SELECT q.*,f.__layerfs_incarnation FROM (SELECT k,p.pack_id,octet_length(p.body),substring(s.span FROM ($6::in
+-- order
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT layer_stack_id, name, scope_id, profile_id
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT commit_id, layer_stack_id, root_id, parent
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT substring(s.span FROM ($6::int4[])[k] FOR 
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT history_serial FROM <schema>.
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT commit_id, layer_stack_id, root_id, parent
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT substring(s.span FROM ($6::int4[])[k] FOR 
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT b.first_ordinal,b.last_ordinal,CASE WHEN o
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT commit_id, layer_stack_id, root_id, parent
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT path,frontier_serial,removed_ms FROM lfs81
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT commit_id, layer_stack_id, root_id, parent
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT substring(s.span FROM ($6::int4[])[k] FOR 
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT history_serial FROM <schema>.
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT commit_id, layer_stack_id, root_id, parent
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT substring(s.span FROM ($6::int4[])[k] FOR 
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT b.first_ordinal,b.last_ordinal,CASE WHEN o
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT commit_id, layer_stack_id, root_id, parent
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT path,frontier_serial,removed_ms FROM lfs81
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT k,p.pack_id,octet_length(p.body),substring
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT commit_id, layer_stack_id, root_id, parent
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT branch_id, layer_stack_id, name, base_laye
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT commit_id, layer_stack_id, root_id, parent
+    SELECT q.*,f.__layerfs_incarnation FROM (SELECT branch_id, layer_stack_id, name, base_laye

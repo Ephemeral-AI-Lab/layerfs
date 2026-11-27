@@ -709,3 +709,182 @@ Tests (once each): `sdk_read_context_corrupt_rh`, `sdk_read_context_rh`,
 `history_surface`, `postgresql_statement_schema`, `compare_across`, the
 content unit test: green. Pins unchanged. Clippy `-D warnings` clean on
 content, history, persistence, store-service. Deleted tests: none.
+
+### H5 port (`2a9a328930`) and lane S
+
+`AuthenticatedObjects::read_canonical_each` / `reads_each_at_once` (default:
+point reads one by one; `false`). The storage reader that serves a
+per-object demand at once is lane S's (`H5-per-object-reads.md` in the
+notes folder); until it merges, every reader reports `false` and no window
+is read in the product.
+
+### H5 wiring — path windows (`read/versions.rs`)
+
+**Prediction (written before any measurement; measurable only after lane S
+merges, when `reads_each_at_once` turns true on the PostgreSQL reader).**
+PostgreSQL control, warm (cold +1–2 prepares and the first-use gap):
+
+- `blame.h100` 59 → ~25–35: the path lookups of each row window's versions
+  become 1 roots demand + inode height (~2) + 1 value block + memo misses
+  (0 for content-only edits) per window (3 windows), and the version's new
+  pack, fetched there, serves the later text reads from the pack cache.
+- `blame.h10` 16 → ~10–14 (one window); `revision.h100` 72 → ~30–40;
+  `revision.h10` cold 66 → ~50–60; `diff_files` 23 unchanged (H6).
+- SQLite: unchanged (no row windows, no per-object demand).
+- Now (before lane S): every pin unchanged on both backends.
+
+**Built and checked (receipts `receipts/H5/`).**
+
+- `read/versions.rs` (`Versions`, `Batching::{Provider, Forced}`): a version
+  the walk reaches opens a window with the Commits `Rows::upcoming` holds
+  after it; `PathAcross` resolves it through an adapter whose every demand
+  is `Cached::read_canonical_each`. Outcomes: answers kept per version; a
+  data failure (an object's own, or a page that does not decode) marks the
+  window's versions to be walked alone; a demand failure refuses at once;
+  a strict-walk refusal walks that version alone.
+- `Cached` records each object's own failure from a per-object read and
+  serves it to any later demand naming the object, which is never read
+  again. `StorePorts::objects_each_with` keeps an object's own failure out
+  of the operation's retained failure (custody keeps the rest), one point
+  demand per object until lane S's storage reader; `reads_each_at_once`
+  false until then. H3's memo is now lane C's `DirectoryMemo` (`MEMO`
+  4,096).
+- `blame::blame` and `revision::Request` take `Batching`; the methods and
+  attribution pass `Provider`.
+- New `sdk_history_versions_rh.rs` (PostgreSQL, `Forced`): the pinned
+  scenario's blame (h100, h10, other.txt) and revision (h100, h10, page 7)
+  answer identically windowed and alone, a window read each time; with one
+  version's tree root location deleted 10 Commits below the head, blame of a
+  file whose walk stops at the head's parent and a one-item revision page
+  answer as before, and blame of a file whose walk reaches it refuses
+  identically. Mutation check: refusing on any window failure fails that
+  test (`blame stops before`), so the test discriminates.
+- No new server message (a per-object read is the existing object demand):
+  no new sweep; `sdk_history_fault_rh_{drop,kill}` rerun green.
+- Pins unchanged (both backends). History, read and compare tests,
+  `sdk_round_trip_equivalence_seeded`, `method_refusal_order` green.
+- Deleted tests: none.
+
+## H6 — prediction (written before coding, 2026-11-27)
+
+Mechanism: per-window lengths, text and metadata roots, and `diff_files`
+two-sided planning, all through per-object reads (H5 port), gated like H5
+(`Batching::Provider`: PostgreSQL and a reader serving per-object demands at
+once; `Forced` for tests).
+
+- New `StorePorts::lengths_each_with` (one point `lengths_with` per id until
+  lane S's `Storage::lengths_each_with`; an object's own failure per object,
+  not retained). `Cached` records each prefetched length (or its failure)
+  and answers a lengths demand from the record when every id is in it; it
+  holds prefetched canonical roots (at most `ROOT_BYTES`, released when the
+  next window opens) and serves a demand from them when every id is held.
+  Recorded failures are served where the walk first asks, never re-read.
+- A window (H5) also demands, after it resolves: the lengths of its regular
+  files' content roots (one demand); for blame, the older-side roots the walk
+  would read as text, in walk order while `(newer + older) * 3` fits the
+  remaining `limits.bytes`, the first `batches()` run (≤64 roots, ≤4 MiB);
+  for revision, its entries' metadata roots (≤64, ≤4 MiB held). Each pair's
+  `equal_edges` stays per pair; `CONTENT_QUERY_BYTES` is charged in today's
+  order (the charge is arithmetic on recorded lengths).
+- `diff_files`: both sides located first, then one lengths demand and one
+  root demand for both sides' regular files; the left side's text and the
+  right side's locate refusal are served in today's order.
+
+Predicted, PostgreSQL control warm, once lane S merges (SQLite and PG pins
+unchanged now; nothing is batched until `reads_each_at_once`):
+
+| Row | after H5 (pred.) | after H6 (pred.) | SPEC M3 |
+| --- | --- | --- | --- |
+| `blame.h100` | ~25–35 | ~18–28 | ~29 |
+| `blame.h10` | ~10–14 | ~8–12 | ~17 |
+| `revision.h100` | ~30–40 | ~22–32 | ~30 |
+| `diff_files` | 23 | ~20–21 | ~12 |
+
+`diff_files` reaching ~12 needs the per-side resolve, `for_snap` and
+attribution trips, which H6's file-facts planning does not touch: an open
+gap to SPEC, to diagnose from the merge-time trace.
+
+### H6 — built and checked
+
+- `StorePorts::lengths_each_with` (`LengthRead`): one point lengths demand
+  per file until lane S; an object's own failure per file, not retained.
+- `Cached`: kept lengths (≤ `MEMO` files; `length`, `lengths_each`; `lengths`
+  answers from them when every file is kept) and held roots (`hold_each`,
+  ≤ `ROOT_BYTES`, released by the next plan; `read_canonical_batch` serves
+  a demand naming only held roots).
+- `Versions::entry` takes `Ahead::{Texts { newer, budget }, Facts}`; after a
+  window resolves it plans lengths, then blame's text roots (walk order,
+  `(newer + older) * 3` within the remaining `limits.bytes`, stop at the
+  first unknown length, first `batches()` run) or revision's attribute-tree
+  roots (≤64).
+- `file_compare::diff` (`Options.batching`): when on, locates the right side
+  before the left text, plans both sides' lengths and text roots, then reads
+  left text, surfaces the right side's refusal, reads right text; off, the
+  order is the old one exactly.
+- Tests: `sdk_history_versions_rh::a_damaged_text_refuses_only_where_the_call_reaches_it`
+  (PostgreSQL, `Forced`): 20 Commits of a two-line file, the 10th text from
+  the head with its location deleted. Blame of line 2, a one-item revision
+  page and the head/parent diff answer as before; blame of line 1, the full
+  revision list and both diffs naming the damaged Commit refuse identically.
+  Mutation check: refusing on a kept length failure fails `blame line 2`.
+  The damaged text's length fails before its root is planned, so the held
+  roots' failure path is the H5 per-object read path (already covered).
+- No new server message (per-file lengths are the existing lengths demand):
+  no new sweep; `sdk_history_fault_rh_{drop,kill}` rerun green.
+- Pins unchanged on both backends (nothing is planned until
+  `reads_each_at_once`). History, blame, revision, compare, diff tests,
+  `sdk_round_trip_equivalence_seeded`, `method_refusal_order` green; Clippy
+  `-D warnings` clean.
+- Fault-only residual (batched mode only, after lane S): `diff_files`
+  locates the right side before reading the left text, so a demand failure
+  in the right side's locate now precedes the left text's demands.
+- Deleted tests: none.
+
+## H5/H6 switch-on — measured (after lane S, merge eb0d8c6b69, 2026-11-27)
+
+`StorePorts::{objects_each_with, lengths_each_with}` now make one demand
+each through `ReadSession` → `Storage::read_each_with` /
+`lengths_each_with` (lane S); `reads_each_at_once` is true. An object's own
+failure stays its own; any other failure an object meets fails the demand
+and is retained. `Batching::Forced` is replaced by `Batching::Alone`, which
+the tests hold the product's windows to. Measured once, PostgreSQL control
+(warm unless noted); SQLite pins unchanged:
+
+| Row | Before | Measured | Predicted (H6) | Within 15% | SPEC M3 |
+| --- | --- | --- | --- | --- | --- |
+| `blame.h100` | 59 | 22 | ~18–28 | yes | ~29 (met) |
+| `blame.h10` | 16 | 12 | ~8–12 | yes | ~17 (met) |
+| `revision.h100` | 72 | 48 | ~22–32 | **no** | ~30 (not met) |
+| `revision.h10` cold | 66 | 52 | ~50–60 (H5) | yes | — |
+| `diff_files` | 23 | 22 | ~20–21 | yes | ~12 (not met) |
+| cold `blame.h100` / `blame.h10` / `revision.h100` / `diff_files` | 296 / 54 / 301 / 49 | 65 / 38 / 92 / 48 | — | — | — |
+
+Diagnosis, once, from a PostgreSQL statement log of the warm calls (my
+database only, `log_statement` reset afterwards; a temporary test, not
+committed):
+
+- `revision.h100` (48): the provenance walk leaves the 100 Commits for the
+  Branch's base Layers. The Commit part costs ~26 (3 row windows, the
+  version windows' demands, two lone-walk serials and rows): inside the
+  prediction. The other ~22 are the Layer part: 12 Layer rows read one at a
+  time (`layer`/`layer_lineage` by id) and ~10 object demands of Layer
+  versions walked alone. H4's row windows follow first-parent Commits only,
+  so `Rows::upcoming` names no Layer and no version window opens there. The
+  prediction missed that the probe's walk reaches Layers. Not retuned; the
+  fix would be a Layer-chain row window (an H4-style statement over
+  `layer.parent_layer_id`), a new item.
+- `diff_files` (22): H6's two-sided plan is one demand (both sides' lengths
+  and texts). The rest is per side: the Commit row read 4 times (resolve,
+  the `belongs` check, `for_snap`, the side's reference), the tree-root
+  object, the path walk's group read, the serial and the stack's markers,
+  then a Branch row per reference. ~12 would need one row read per side and
+  the markers once per call (−6 to −9): the R5 read-context route applied to
+  `diff_files`' sides, not file facts.
+
+Checks, once each: history and read pins (both backends),
+`sdk_history_versions_rh` (product windows vs `Alone`: 3/3),
+`sdk_history_fault_rh_{drop,kill}` (now the sweep of the per-object reads
+in history calls: green, 22 s / 28 s, was 55 s / 62 s with fewer trips to
+cut), equivalence, `method_refusal_order`, `visibility_guard`,
+`postgresql_statement_schema`, and the blame/revision/compare/diff tests.
+Clippy `-D warnings` clean. Deleted tests: none.
