@@ -336,7 +336,31 @@ fn exercise(arm: Arm) {
     let Some(SdkValue::List(findings)) = doctor.get("findings") else {
         panic!("{doctor:?}");
     };
-    assert!(findings.is_empty(), "{doctor:?}");
+    // The two calls above ran in the host worker (#819), which keeps its
+    // warm Store lease; the doctor names that lease as a notice
+    // (`store.operation`). That notice alone is allowed: one holder, the
+    // host worker, and no other process.
+    for finding in findings {
+        assert_eq!(
+            finding.get_text("check"),
+            Some("store.operation"),
+            "{doctor:?}"
+        );
+        assert_eq!(finding.get_text("severity"), Some("notice"), "{doctor:?}");
+        let message = finding.get_text("message").unwrap_or_default();
+        assert!(message.contains("including host worker"), "{doctor:?}");
+        let evidence = finding.get("evidence").expect("lease evidence");
+        let Some(SdkValue::List(holders)) = evidence.get("holders") else {
+            panic!("{doctor:?}");
+        };
+        assert_eq!(holders.len(), 1, "{doctor:?}");
+        assert_eq!(
+            holders[0].get_text("kind"),
+            Some("host_worker"),
+            "{doctor:?}"
+        );
+        assert_eq!(evidence.get_int("holder_count"), Some(1), "{doctor:?}");
+    }
 
     std::fs::remove_dir_all(&home).unwrap();
     std::fs::remove_dir_all(&source).unwrap();
