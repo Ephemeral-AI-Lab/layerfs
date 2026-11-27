@@ -19,8 +19,8 @@
 //! recorded: only a live read that could not be made answers it.
 //!
 //! Built without the `machine` feature too: the caller says whether the
-//! record's platform was removed (`layerfs-control`'s
-//! `inventory::machine_state` asks the platform policy).
+//! record's platform was removed (`layerfs-sandbox`'s
+//! `status::inventory::machine_state` asks the platform policy).
 use crate::record::machine::{Holders, MachineRecord, CREATE, REMOVE};
 use layerfs_home::record::intent::{Op, Standing};
 use layerfs_home::reply::outcome::shell_word;

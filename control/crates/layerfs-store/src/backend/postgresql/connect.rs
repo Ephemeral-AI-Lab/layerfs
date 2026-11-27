@@ -6,7 +6,7 @@
 //! given, an address alone, and the user; the password is a secret of the
 //! home ([`super::login`]), put into the URL on each call. The full URL is
 //! never written down, and no recorded URL is ever rewritten. Machines
-//! attach to a Store (`layerfs-control`'s `store.attach`) and dial both.
+//! attach to a Store (`layerfs-api`'s `store.attach`) and dial both.
 use super::address::{self, with_login};
 pub use super::address::{holds_login, refuse_login, shown, target, HIDDEN};
 use super::check;

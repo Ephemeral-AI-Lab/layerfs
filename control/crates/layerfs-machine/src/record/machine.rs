@@ -57,7 +57,7 @@ pub fn no_vm_name(name: &str) -> String {
 /// What is recorded on a machine, by name, as its remove's `InUse`
 /// refusal names them: its Sandboxes, its sqlite Stores and the old
 /// Firecracker machine records it hosted. Read by the caller
-/// (`layerfs-control`'s inventory) from the records it already holds.
+/// (`layerfs-sandbox`'s `status::inventory`) from the records it already holds.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Holders<'a> {
     /// The Sandboxes whose record names the machine.

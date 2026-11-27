@@ -9,7 +9,7 @@
 //! The window is driven through the product's mount path, not a fixture store:
 //! a Workspace bound on the Store, OPENDIR, the reading visit, and the window's
 //! facts read outside the owner over the Workspace's own base. Those are the
-//! calls `layerfs-mount-ports`' `DirectoryStream` makes for a READDIRPLUS
+//! calls `layerfs-vfs`' `DirectoryStream` makes for a READDIRPLUS
 //! reply. `Store::work()` counts the port demands themselves, so a PostgreSQL
 //! and a SQLite Store are compared on the same counters.
 //!

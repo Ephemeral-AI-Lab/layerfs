@@ -1,6 +1,6 @@
 //! The worker's side: `layerfs worker` serves one request per connection.
 //! It runs every entity's operations, so it sits above them in
-//! `layerfs-control` (layerfs-project#104); the protocol is
+//! `layerfs-api` (layerfs-project#104; #828); the protocol is
 //! `layerfs-machine` `worker`.
 //!
 //! A connection starts with a small frame `{ secret }`: the worker reads at

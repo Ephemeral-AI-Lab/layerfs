@@ -1,8 +1,9 @@
 //! Sandboxes (#533 step 12; cut from `layerfs-control` by
 //! layerfs-project#106): their records, launch and host operations, exec,
-//! the daemon channel (`daemon`), and the Workspaces a Sandbox's daemon
-//! serves (`workspace`). Sandbox modules never import `workspace` (rule 4;
-//! a test checks it): a host operation's local runner is passed in
+//! the daemon channel (`route::daemon`) and the kernel backends
+//! (`backend/`). The Workspaces a Sandbox's daemon serves are the
+//! `layerfs-workspace` crate above this one (#828), so no Sandbox module
+//! can import them: a host operation's local runner is passed in
 //! (`route::Local`).
 //!
 //! Actual ordinary Sandbox lifecycle and its Workspaces, with exact logical and kernel readiness.
@@ -66,7 +67,7 @@ pub use lifecycle::{SandboxCause, SandboxPhase};
 // - `support/`: small formats other crates read (`json/`, `postgres_url.rs`,
 //   `removed_platforms.rs`).
 //
-// The kernels Sandboxes run on live in the `layerfs-platform` crate (host
+// The machines Sandboxes run on live in `layerfs-machine` `platform/` (host
 // only).
 // unsafe only in backend/namespaces/seccomp.rs (the namespaces command
 // filter's two prctl calls and the helper's clone3 into a cgroup); the macOS

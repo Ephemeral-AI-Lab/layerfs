@@ -14,8 +14,8 @@
 //! never resent.
 //!
 //! This is the protocol and its client; the worker's server, which runs
-//! every entity's operations, is `layerfs-control` `worker_server`
-//! (layerfs-project#104).
+//! every entity's operations, is `layerfs-api` `worker::serve`
+//! (layerfs-project#104; #828).
 pub mod accept;
 pub(crate) mod guest;
 #[cfg(any(target_os = "macos", target_os = "linux"))]

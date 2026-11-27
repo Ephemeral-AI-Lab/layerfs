@@ -81,7 +81,7 @@ fn crash_failpoint() -> Option<u32> {
 const WATCH: Duration = Duration::from_millis(25);
 
 /// The use check of a caller that reads no Sandbox records: other live
-/// processes' leases alone. `layerfs-control` passes its own
+/// processes' leases alone. A caller with [`crate::StoreUsers`] passes its own
 /// ([`upgrade_with`]), which adds the Sandboxes of the Store's projects.
 fn leases_only(home: &Path, store: &str) -> Result<()> {
     check_leases(home, store, None)

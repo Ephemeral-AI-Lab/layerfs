@@ -1,11 +1,12 @@
 //! The `machine` family (H §7.1, §7.2): records in `machine/<name>/`, the
 //! built-in `native` and `docker`, VMs created by name, and the worker
 //! client (cut from `layerfs-control` by
-//! layerfs-project#104). The adapters that make and start machines are the
-//! `layerfs-platform` driver; this crate writes the records and keeps
+//! layerfs-project#104). The adapters that make and start machines are
+//! `platform/` (the support table is `table/`; #828 joined the
+//! `layerfs-platform` driver in); this crate also writes the records and keeps
 //! `Exists`, `InUse` and each record's `op` (`Busy`, `Unresolved`). What a
 //! machine holds (its Stores and Sandboxes) comes from the caller
-//! ([`Related`]). Without the `machine` feature (the guest worker's build)
+//! ([`MachineUsers`], [`Related`]). Without the `machine` feature (the guest worker's build)
 //! the machine calls are not built.
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]

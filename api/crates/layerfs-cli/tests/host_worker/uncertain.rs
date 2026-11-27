@@ -1,5 +1,5 @@
 //! S2.2 records of engine-uncertain write outcomes (§8.5, review M3),
-//! through a worker built with `layerfs-control/worker-fault`: its switch
+//! through a worker built with `layerfs-api/worker-fault`: its switch
 //! file turns a write's outcome into an engine-style `Unknown`. The record
 //! is written before the answer and outlives drain and replacement. A
 //! record that cannot be written is one attempt: the outcome is logged,
@@ -35,7 +35,7 @@ fn faulted() -> Option<Faulted> {
         b"w\n",
     );
     if !home.ping().get_bool("faults") {
-        eprintln!("NOT_RUN: the worker was built without layerfs-control/worker-fault");
+        eprintln!("NOT_RUN: the worker was built without layerfs-api/worker-fault");
         drain(&home);
         return None;
     }

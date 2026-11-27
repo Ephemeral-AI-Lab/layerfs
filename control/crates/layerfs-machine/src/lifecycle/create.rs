@@ -31,7 +31,7 @@ use std::path::Path;
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
 /// The longest name `machine.create` takes. A provider takes a VM name of
-/// at most 63 characters (`layerfs-platform`'s plain-name rule, checked for
+/// at most 63 characters (`platform/`'s plain-name rule, checked for
 /// every platform but `native`), and `layerfs-<home id8>-` takes 17 of
 /// them. Every platform `machine.create` makes is held to it; a machine
 /// made earlier with a longer name keeps its recorded VM name.

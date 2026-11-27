@@ -41,7 +41,7 @@ fn default_flush_commits_with_the_export_volume_and_refuses_without_it() {
     // the Commit run, and one that fails (`ENOENT` after the directory is
     // removed) refuses it as `Failed` at `commit:flush`, before it runs, and
     // leaves the Workspace idle. `sync_volume_wait`'s `Ok`/error is covered
-    // where it lives, by `layerfs-bridge`'s `process_identity` test.
+    // where it lives, by `layerfs-os`'s `process_identity` test.
     let base = std::env::temp_dir().join(format!("layerfs-nfs-mounter-{}", std::process::id()));
     let source = base.join("src");
     let work = base.join("work");

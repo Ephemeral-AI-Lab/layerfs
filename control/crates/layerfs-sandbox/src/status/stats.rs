@@ -11,8 +11,8 @@ use layerfs_protocol::sdk::SdkValue;
 use std::path::{Path, PathBuf};
 
 /// This kernel's unified cgroup v2 hierarchy, where the namespaces backend
-/// makes one group per Sandbox (`layerfs-sandbox-backend`
-/// `backend/namespaces/cgroup.rs`: `ROOT`).
+/// makes one group per Sandbox (`backend/namespaces/instance/cgroup.rs`:
+/// `ROOT`).
 pub const CGROUP_ROOT: &str = "/sys/fs/cgroup";
 /// The folder under it that holds those groups, one per runtime id (the
 /// same file's `GROUP`).
@@ -290,7 +290,7 @@ pub fn shown_usage(read: &SdkValue) -> SdkValue {
 /// under cgroup v2 hierarchy `root` ([`CGROUP_ROOT`]): `workspace_usage`,
 /// one `{ workspace, usage, usage_reason? }` for each `ws-<workspace>`
 /// group of a namespaces Sandbox's group (the group its Workspace's
-/// commands run in, `layerfs-sandbox-backend` `namespaces/cgroup.rs`
+/// commands run in, `backend/namespaces/instance/cgroup.rs`
 /// `exec_path`), at most [`MOST_GROUPS`], read as [`usage_in`] reads a
 /// Sandbox's. A Workspace with no group is not listed: no command runs in
 /// it ([`NO_COMMAND`]). The Sandbox's group holds no process (its own are

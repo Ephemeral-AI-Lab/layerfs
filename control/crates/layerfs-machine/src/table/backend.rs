@@ -1,4 +1,4 @@
-//! How a Sandbox runs on a machine (`layerfs-platform`'s `Platform::backend`);
+//! How a Sandbox runs on a machine (`Platform::backend`);
 //! callers never choose it.
 /// How a Sandbox runs on a machine; callers never choose it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

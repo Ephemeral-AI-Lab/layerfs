@@ -4,7 +4,7 @@
 //! `attached`) runs its Sandboxes, dialling that URL with that login; no
 //! machine has an address of its own. This module is the Store's part: the
 //! check run on the side that dials, and the attachment writes. Which side
-//! dials is the caller's (`layerfs-control`, through the Sandbox route).
+//! dials is the caller's (`layerfs-api`, through the Sandbox route).
 use crate::admin::open::args::PgSelection;
 use crate::admin::record::store::{StoreKind, StoreRecord};
 use crate::backend::postgresql::connect::SCHEMA;

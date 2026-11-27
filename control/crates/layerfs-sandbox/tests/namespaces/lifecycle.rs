@@ -164,7 +164,7 @@ fn helper() -> PathBuf {
     let helper = target.join("layerfs-sandbox-helper");
     assert!(
         helper.is_file(),
-        "build the helper first: cargo build -p layerfs-sandbox-backend --bin layerfs-sandbox-helper"
+        "build the helper first: cargo build -p layerfs-sandbox --bin layerfs-sandbox-helper"
     );
     helper
 }

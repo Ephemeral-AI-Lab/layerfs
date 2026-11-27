@@ -8,8 +8,8 @@
 //! platform (its `PROFILE` in `platforms/<p>/profile.rs`), read through
 //! [`Platform::profile`]; every refusal of a platform, host and Store kind
 //! comes from the one support table, `support.rs`. This file only declares. This layer uses only
-//! `layerfs-sandbox-backend`'s shared types, its `json`, and nothing of `backend/`;
-//! `backend/` never uses it.
+//! this crate's `table/` and `record/`, and nothing of the Sandbox
+//! backends (`layerfs-sandbox` `backend/`), which never use it.
 #![cfg(unix)]
 #![forbid(unsafe_code)]
 pub(crate) mod adapter;
