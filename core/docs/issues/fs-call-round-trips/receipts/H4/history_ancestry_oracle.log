@@ -1,0 +1,13 @@
+ 9:23  up 3 days,  7:56, 1 user, load averages: 7.27 5.94 6.61
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.08s
+     Running tests/history_ancestry_oracle.rs (target/debug/deps/history_ancestry_oracle-88e5a99d0cdf95e9)
+
+running 1 test
+test bounded_ancestry_equals_the_whole_history_walk ... ANCESTRY_ORACLE seed=352 branches=97 nodes=145 pairs=1500 related=261 commit_bases=937 criss_cross=305 merges=63 publishes=45
+ANCESTRY_ORACLE seed=7 branches=96 nodes=141 pairs=1500 related=230 commit_bases=938 criss_cross=243 merges=61 publishes=34
+ANCESTRY_ORACLE seed=2026 branches=113 nodes=131 pairs=1500 related=245 commit_bases=829 criss_cross=260 merges=65 publishes=35
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.69s
+
+run_bounded: exit 0 after 8.5 s

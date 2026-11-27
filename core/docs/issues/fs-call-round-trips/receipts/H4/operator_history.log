@@ -1,0 +1,12 @@
+ 9:23  up 3 days,  7:56, 1 user, load averages: 4.89 5.46 6.47
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.08s
+     Running tests/operator_history.rs (target/debug/deps/operator_history-1ebcc5e054aa7124)
+
+running 3 tests
+test history_is_read_from_the_store_alone ... ok
+test the_workspaces_alone_are_the_snapshot_s_workspaces ... ok
+test workspaces_name_branches_beyond_the_first_page ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+
+run_bounded: exit 0 after 1.0 s

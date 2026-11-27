@@ -107,12 +107,18 @@ impl NodeRecord {
     }
 }
 
+/// A node's `history_serial` with its stack's `path_removed` markers, or
+/// `None` when the node has no row ([`HistoryCatalog::node_path_removals`]).
+pub type NodeRemovals = Option<(u64, Vec<PathRemovalRecord>)>;
+
 /// What one read call needs from history before its path, found by its
 /// project's name and the snapshot it names ([`HistoryCatalog::read_context`]).
 /// Each part is `None` where the read stopped: no stack ends the read, no
 /// Branch ends it after the stack, and a missing node row leaves `node`
 /// `None`. `removals` and `recorded` are `None` when not read here; the
-/// caller then reads them itself, as it did before (#818 R5).
+/// caller then reads them itself, as it did before (#818 R5). Each is its
+/// own result: a part read here but not decoded is that part's error, which
+/// the caller meets where it read the part before, after its other checks.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ReadContext {
     /// The project's stack.
@@ -123,10 +129,10 @@ pub struct ReadContext {
     pub node: Option<NodeRecord>,
     /// The node's `history_serial` with the stack's `path_removed` markers,
     /// as [`HistoryCatalog::node_path_removals`] reads them.
-    pub removals: Option<Option<(u64, Vec<PathRemovalRecord>)>>,
+    pub removals: Option<HistoryResult<NodeRemovals>>,
     /// A Commit's recorded Branch, as [`HistoryCatalog::branch_any`] reads
     /// it; `Some(None)` when it records none or its row is gone.
-    pub recorded: Option<Option<BranchRecord>>,
+    pub recorded: Option<HistoryResult<Option<BranchRecord>>>,
 }
 
 /// [`HistoryCatalog::read_context`]'s default: the stack, the Branch and the
@@ -168,6 +174,57 @@ pub fn read_context_serial<C: HistoryCatalog + ?Sized>(
         NodeId::Layer(id) => catalog.layer(id)?.map(NodeRecord::Layer),
     };
     Ok(context)
+}
+
+/// One Commit of a first-parent window ([`HistoryCatalog::first_parent_window`]):
+/// the Commit's record and the `history_serial` it records, as
+/// [`HistoryCatalog::commit`] and [`HistoryCatalog::node_history_serial`]
+/// read them (a provider that keeps no serial gives 0).
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ChainRow {
+    /// The Commit's record.
+    pub record: CommitRecord,
+    /// Its `history_serial`.
+    pub serial: u64,
+}
+
+/// [`HistoryCatalog::first_parent_window`]'s default: from `head`, each
+/// Commit's record and then its serial, then its first parent, until
+/// `count` rows, a Commit without a row, or a Commit whose parent is its
+/// base Layer. A row that fails ends the window with its error, so a caller
+/// meets the failure only on reaching that row (#818 H4).
+pub fn first_parent_window_serial<C: HistoryCatalog + ?Sized>(
+    catalog: &C,
+    head: CommitId,
+    count: usize,
+) -> HistoryResult<Vec<HistoryResult<ChainRow>>> {
+    let mut rows = Vec::new();
+    let mut next = Some(head);
+    while let Some(id) = next.filter(|_| rows.len() < count) {
+        let row = catalog.commit(id).and_then(|record| {
+            let Some(record) = record else {
+                return Ok(None);
+            };
+            let serial = match catalog.node_history_serial(NodeId::Commit(id)) {
+                Ok(serial) => serial.unwrap_or(0),
+                Err(crate::error::HistoryError::Unsupported(_)) => 0,
+                Err(error) => return Err(error),
+            };
+            Ok(Some(ChainRow { record, serial }))
+        });
+        match row {
+            Ok(None) => break,
+            Ok(Some(row)) => {
+                next = row.record.parent;
+                rows.push(Ok(row));
+            }
+            Err(error) => {
+                rows.push(Err(error));
+                break;
+            }
+        }
+    }
+    Ok(rows)
 }
 
 /// What a mount's registration read beside its intent
@@ -288,6 +345,20 @@ pub trait HistoryCatalog: Send + Sync {
         target: &ContextTarget,
     ) -> HistoryResult<ReadContext> {
         read_context_serial(self, project, target)
+    }
+
+    /// Up to `count` Commits along first parents from `head`, newest first
+    /// ([`ChainRow`]); the window ends early at a Commit whose parent is its
+    /// base Layer or has no row. Each row is its own result: a row that
+    /// fails ends the window, and an error is the caller's only where its
+    /// walk reaches that row. A provider answers in one statement; this
+    /// default is [`first_parent_window_serial`] (#818 H4).
+    fn first_parent_window(
+        &self,
+        head: CommitId,
+        count: usize,
+    ) -> HistoryResult<Vec<HistoryResult<ChainRow>>> {
+        first_parent_window_serial(self, head, count)
     }
 
     /// [`Self::branch_snapshot`] with the name of the Branch's stack. A

@@ -177,7 +177,7 @@ pub fn diff(
         let right_seen = Visibility::for_snap(store, &right.snap)?;
         attribution::align(
             store,
-            &ports,
+            reader,
             (
                 (&left.snap, &left.path, &left_seen),
                 (&right.snap, &right.path, &right_seen),

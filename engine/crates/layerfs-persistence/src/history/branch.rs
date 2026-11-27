@@ -317,25 +317,26 @@ fn context_of(rows: Vec<Row>, target: &ContextTarget) -> HistoryResult<ReadConte
         (None, None) => return Ok(context),
         (Some(_), Some(_)) => return Err(HistoryError::Integrity("catalog row")),
     };
-    let serial = unsigned(&first, 38)?;
-    let mut markers = Vec::with_capacity(rows.len());
-    for row in rows {
-        if kind(&row)? != 1 {
-            return Err(HistoryError::Integrity("path marker"));
+    // The serial with the markers, and the recorded Branch, each decoded
+    // into its own result: a caller meets a bad one where it read that
+    // part before, after the ownership check and the tree's open.
+    let removals = || -> HistoryResult<_> {
+        let serial = unsigned(&first, 38)?;
+        let mut markers = Vec::with_capacity(rows.len());
+        for row in rows {
+            if kind(&row)? != 1 {
+                return Err(HistoryError::Integrity("path marker"));
+            }
+            markers.push(PathRemovalRecord {
+                path: cell(&row, 45)?,
+                frontier_serial: unsigned(&row, 46)?,
+                removed_ms: cell::<i64>(&row, 47)?,
+            });
         }
-        markers.push(PathRemovalRecord {
-            path: cell(&row, 45)?,
-            frontier_serial: unsigned(&row, 46)?,
-            removed_ms: cell::<i64>(&row, 47)?,
-        });
-    }
-    context.removals = Some(Some((serial, markers)));
-    context.recorded = Some(
-        columns(&first, 39..45)
-            .as_ref()
-            .map(branch_row)
-            .transpose()?,
-    );
+        Ok(Some((serial, markers)))
+    };
+    context.removals = Some(removals());
+    context.recorded = Some(columns(&first, 39..45).as_ref().map(branch_row).transpose());
     Ok(context)
 }
 

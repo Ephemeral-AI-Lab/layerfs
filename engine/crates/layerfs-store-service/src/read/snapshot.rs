@@ -145,11 +145,23 @@ pub fn resolve_context(
         args::branch_in(wanted, |_| Ok(branch))
     })?;
     let record = found.ok_or_else(|| args::absent(named.2))?;
+    // A part the context read but could not decode refuses where it was
+    // read before: the markers at the marker step (`Visibility::load`), the
+    // recorded Branch where the call reads it (a fresh read of that row).
     let (snap, removals) = opened(stack, pages, named, &record, |node| match read {
-        Some(found) => (found.as_ref().map_or(0, |(serial, _)| *serial), Ok(found)),
+        Some(found) => {
+            let serial = match &found {
+                Ok(Some((serial, _))) => *serial,
+                _ => 0,
+            };
+            let found = found.map_err(|error| Arc::new(PortError::History(error)));
+            (serial, found)
+        }
         None => removals_of(store, stack, node),
     })?;
-    let recorded = recorded.map(|branch| branch.map(|b: BranchRecord| b.name.as_str().to_owned()));
+    let recorded = recorded
+        .and_then(Result::ok)
+        .map(|branch| branch.map(|b: BranchRecord| b.name.as_str().to_owned()));
     let saved = Saved {
         record,
         removals,

@@ -368,6 +368,23 @@ impl HistoryCatalog for HistoryProvider {
         self.read_statement(|tx| super::position::node_serial(tx, node))
     }
 
+    fn first_parent_window(
+        &self,
+        head: CommitId,
+        count: usize,
+    ) -> HistoryResult<Vec<HistoryResult<ChainRow>>> {
+        match &self.engine {
+            // One fenced statement (#818 H4).
+            crate::backend::Engine::Postgres(_) => {
+                self.read_statement(|tx| super::lineage::chain_window(tx, head, count))
+            }
+            // Today's statements in today's order: the default's body.
+            crate::backend::Engine::Sqlite(_) => {
+                layerfs_history::catalog::first_parent_window_serial(self, head, count)
+            }
+        }
+    }
+
     fn node_path_removals(
         &self,
         stack: LayerStackId,

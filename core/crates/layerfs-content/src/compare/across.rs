@@ -148,14 +148,18 @@ impl DirectoryMemo {
         name: PathName,
         binding: Option<u64>,
     ) -> bool {
-        let names = self.entries.entry(directory.0).or_default();
-        if names.contains_key(&name) {
+        if self.get(directory, &name).is_some() {
             return true;
         }
+        // Full: nothing is added, not even an empty map for a new directory,
+        // so the memo stays bounded by its capacity.
         if self.len >= self.capacity {
             return false;
         }
-        names.insert(name, binding);
+        self.entries
+            .entry(directory.0)
+            .or_default()
+            .insert(name, binding);
         self.len += 1;
         true
     }
@@ -661,4 +665,26 @@ fn checked(wire: &Wire<PathName, u64>, descent: &Descent<'_>) -> ContentResult<(
         return Err(ContentError::NonCanonicalOrdering);
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A full memo adds nothing, not even an empty entry for a directory it
+    /// has not seen: it stays bounded by its capacity.
+    #[test]
+    fn a_full_memo_adds_no_directory() {
+        let mut memo = DirectoryMemo::new(1);
+        let name = PathName::new("a").unwrap();
+        let first = DirectoryRoot(ObjectId::for_bytes(b"first"));
+        assert!(memo.insert(first, name.clone(), Some(1)));
+        assert!(memo.insert(first, name.clone(), Some(1)), "already kept");
+        for n in 0..64u8 {
+            let other = DirectoryRoot(ObjectId::for_bytes(&[n]));
+            assert!(!memo.insert(other, name.clone(), None));
+            assert_eq!(memo.get(other, &name), None);
+        }
+        assert_eq!((memo.len(), memo.entries.len()), (1, 1));
+    }
 }

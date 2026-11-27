@@ -589,3 +589,123 @@ duplicated `allow(dead_code)` in the new `sdk_read_context_rh.rs`).
 `cargo fmt --check` differs only in files this lane did not touch (as at
 M1). History pins, `sdk_read_context_rh`, `sdk_file_compare_budget` rerun
 green (`receipts/M2-lint/`). Host free space 195 GB.
+
+## M3 (base: merged M2 tip `7a79aaaea5`)
+
+### H4 — windowed first-parent chain read (PostgreSQL; SQLite default)
+
+**Prediction (written before the code).**
+
+- Mechanism: `HistoryCatalog::first_parent_window(head, count)` returns up
+  to `count` first-parent Commits from `head`, each a `ChainRow` (full
+  `CommitRecord` + `history_serial`), each row its own result so a bad row
+  refuses only when a walk reaches it (rows past where blame stops are never
+  surfaced). Default `first_parent_window_serial`: `commit()` +
+  `node_history_serial` per step (Unsupported → 0). PostgreSQL: one fenced
+  statement `lineage_chain_window` (recursive over runs through the
+  `commit_runs` (run, depth) index; a run's first Commit continues in its
+  parent's run), rows checked in Rust (first row is `head`, each row's id
+  is the previous row's parent, else `Integrity` on that row). The store
+  service's `Rows` prefetches windows of 16, 32, 64, then 128 rows, clipped
+  to the walk's remaining budget, only where the Store batches reads
+  (`batched_reads()`: PostgreSQL), and serves blame's and revision's parent
+  rows and serials from them. SQLite: unchanged (no window is read).
+  Branch names stay H1's per-call memo (one read per distinct Branch; the
+  SPEC's `= ANY` names statement is not needed for that).
+- PostgreSQL control, warm (cold +1 prepare):
+  - `blame.h100` 254 → ~55–65 (−2 per version, +3 windows).
+  - `blame.h10` 33 → ~14–16 (one 16-row window).
+  - `revision.h100` 253 → ~55–65; `revision.h10` cold 82 → ~62–66.
+  - `diff_files`, read pins: unchanged. SQLite: unchanged everywhere.
+- Memory: at most 128 Commit rows held ahead per call.
+- New message `lineage_chain_window`: drop and kill sweep (a cold
+  `fs.blame` on PostgreSQL).
+
+**Measured (receipts `receipts/H4/`).** PostgreSQL control (writer 0):
+
+| Case | before warm (cold) | predicted | after warm (cold) | within 15% |
+|---|---|---|---|---|
+| `blame.h100` | 254 (491) | ~55–65 | 59 (296) | yes |
+| `blame.h10` | 33 (71) | ~14–16 | 16 (54) | yes |
+| `revision.h100` | 253 (481) | ~55–65 | 72 (301) | yes (+11% over 65) |
+| `revision.h10` (cold) | 82 | ~62–66 | 66 | yes |
+| `diff_files` | 23 (49) | unchanged | unchanged | yes |
+
+- `revision.h100` saves −1.8 a node, not −2: `fs.revision` reads a node's
+  serial only where the path exists there, so the window saves a serial
+  read only at those nodes. Diagnosed once; recorded, no change.
+- SQLite: every pin unchanged (no window is read; `walked` and `serial`
+  fall back to today's reads). Formula check holds.
+- Answers: the eleven calls of the pinned scenario dumped on SQLite and
+  PostgreSQL at H4 and on SQLite at H3, ids and times masked: identical
+  (sha256 prefix `70ba09470f703fa3`, all three). Temporary dump test, not
+  committed.
+- `first_parent_window` equals its default on random histories (forks from
+  the middle of a run, merges, publications, removed Branches; sizes 0, 1,
+  3, 16, 32, 400; an absent Commit), SQLite and PostgreSQL
+  (`persistence/tests/first_parent_window.rs`). The first PostgreSQL run
+  refused Store creation `Capacity` (Docker guest disk full; reported,
+  rerun after the space was restored).
+- Sweep (new binaries `sdk_history_fault_rh_{drop,kill}.rs`, the shared
+  `support/read_sweep_rh.rs` now takes the call): a cold `fs.blame` over
+  18 Commits (two windows), K = 492 messages: drop 95 `Failed` + 397
+  `Unknown`; kill 439 ok + 5 `Failed` + 48 `Unknown`; each armed answer is
+  the clean one or a failed-read refusal, the same service and a fresh one
+  answer exactly, no backend left in a transaction. The stat sweeps rerun
+  green after the refactor.
+- `postgresql_statement_schema` (READS entry `chain_window`),
+  `sdk_round_trip_equivalence_seeded`, `method_refusal_order`,
+  `sdk_blame_coarse`, `sdk_file_history`, `history_surface`,
+  `operator_history`, `sdk_history_depth`, `history_wire_codes`,
+  `sdk_method_golden`, `verify_history_readback`, `sdk_compare`,
+  `history_ancestry_oracle`, `sdk_file_compare_budget` green. Clippy
+  `-D warnings` (all targets) clean on history, persistence, store-service.
+- `blame::blame` no longer takes the Store (its serials come from `Rows`).
+- Deleted tests: none.
+
+### M2 review fixes (one commit after H4)
+
+Each checked against source first; receipts `receipts/M2-review/`.
+
+1. `history/rows.rs`: the Branch-name memo keeps at most 1,024 names; a
+   name met once it is full is read each time (a fresh read). Confirmed
+   unbounded before: `operator/files.rs` met one name per distinct Branch.
+2. `fs.diff_files` with attribution: `attribution::align`/`owners` take the
+   call's `Cached` instead of building a second one (confirmed:
+   `owners` built `Cached::new` while `file_compare::diff` held its own).
+   A branch comparison now builds one cache per path for both sides' owners
+   (it built one per side, one at a time).
+3. `layerfs-content` `DirectoryMemo::insert`: a full memo adds no empty map
+   for a new directory (confirmed: `entry().or_default()` ran before the
+   capacity check). Unit test `a_full_memo_adds_no_directory`.
+4. Refusal order on a corrupt Store: `ReadContext.removals`/`recorded` are
+   each their own result (`NodeRemovals` alias); persistence decodes them
+   into those results, the store service carries the markers' error to the
+   marker step (`Visibility::load`, after `path`) and treats an
+   undecodable recorded Branch as not read, so the answer's `at` reads it
+   where it always did and refuses there (one extra read, corruption only).
+   New `sdk_read_context_corrupt_rh.rs` (PostgreSQL): with a corrupt marker
+   row and then a corrupt recorded-Branch row, `fs.stat` by full id (one
+   statement) and by prefix (reads one by one) refuse alike: `relative`
+   `InvalidInput` first, a valid path at the marker step / at `at`.
+   Residual, fault-only, not changed: a failure of the context statement
+   itself refuses before the `path` argument. Before R5 the project read
+   (first, before `path`) failed the same way; only a fault that lands
+   exactly on the marker read (sent after `path`) refused after an invalid
+   `path` before. Restoring it needs the markers as a second statement (an
+   extra trip on every read), and checking `path` before the statement
+   would reorder `NoSuchProject`/`NoSuchBranch` vs `InvalidInput` on a
+   healthy Store, so neither was done.
+5. Recorded only: `operator/files.rs` reads Branch names through
+   `published` with its error mapping (text differs from `store.history()`
+   only on a fault).
+
+Tests (once each): `sdk_read_context_corrupt_rh`, `sdk_read_context_rh`,
+`sdk_read_round_trips`, `sdk_read_fault_rh_{drop,kill}`, `sdk_compare`,
+`sdk_file_compare_budget`, `history_diff_oracle`, `saved_branch_queries`,
+`fs_call_round_trips`, `sdk_history_round_trips`,
+`sdk_round_trip_equivalence_seeded`, `method_refusal_order`,
+`sdk_file_history`, `sdk_blame_coarse`, `operator_history`,
+`history_surface`, `postgresql_statement_schema`, `compare_across`, the
+content unit test: green. Pins unchanged. Clippy `-D warnings` clean on
+content, history, persistence, store-service. Deleted tests: none.

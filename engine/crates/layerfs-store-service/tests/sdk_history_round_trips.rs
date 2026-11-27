@@ -108,18 +108,24 @@ const SQLITE: &[Pin] = &[
 ///   packs the call already holds: warm `blame.h100` 1,768 → 254,
 ///   `blame.h10` 193 → 33, `revision.h100` 1,705 → 253, `diff_files` 77 →
 ///   23; cold `blame.h100` 2,005 → 491, `revision.h10` 260 → 82.
+/// - #818 H4 (batch): the walk's Commit rows and serials in windows of 16,
+///   32, 64 then 128 (`lineage_chain_window`): warm `blame.h100` 254 → 59,
+///   `blame.h10` 33 → 16, `revision.h100` 253 → 72; cold `blame.h100`
+///   491 → 296, `blame.h10` 71 → 54, `revision.h100` 481 → 301,
+///   `revision.h10` 82 → 66 (one more prepare); `diff_files` unchanged.
+///   SQLite reads no window: its pins are unchanged.
 const POSTGRESQL: &[Pin] = &[
     // probe blame.h10: 267 trips
-    pin("blame.h10.cold", NONE, [1, 71, 63, 0], NONE),
-    pin("blame.h10.warm", NONE, [0, 33, 33, 0], NONE),
+    pin("blame.h10.cold", NONE, [1, 54, 46, 0], NONE),
+    pin("blame.h10.warm", NONE, [0, 16, 16, 0], NONE),
     // probe blame.h100: 2,325
-    pin("blame.h100.cold", NONE, [1, 491, 483, 0], NONE),
-    pin("blame.h100.warm", NONE, [0, 254, 254, 0], NONE),
+    pin("blame.h100.cold", NONE, [1, 296, 288, 0], NONE),
+    pin("blame.h100.warm", NONE, [0, 59, 59, 0], NONE),
     // probe revision.h10 (appended at P0)
-    pin("revision.h10.cold", NONE, [1, 82, 71, 0], NONE),
+    pin("revision.h10.cold", NONE, [1, 66, 54, 0], NONE),
     // probe revision.h100: 3,890
-    pin("revision.h100.cold", NONE, [1, 481, 470, 0], NONE),
-    pin("revision.h100.warm", NONE, [0, 253, 253, 0], NONE),
+    pin("revision.h100.cold", NONE, [1, 301, 289, 0], NONE),
+    pin("revision.h100.warm", NONE, [0, 72, 72, 0], NONE),
     // probe diff_files.h10_vs_h99: 88
     pin("diff_files.h10_vs_h99.cold", NONE, [1, 49, 40, 0], NONE),
     pin("diff_files.h10_vs_h99.warm", NONE, [0, 23, 23, 0], NONE),

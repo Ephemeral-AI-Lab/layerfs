@@ -384,7 +384,17 @@ reads all of that in one statement instead (#818 R5, `read_context_named` or
 `read_context_node`): its stack, Branch, node record with its serial, the
 Commit's recorded Branch and the project's markers come from one snapshot,
 one context row then one row per marker (records carry no arrays). The
-markers are those `path_removals` already loads; nothing caps them. Statements outside a transaction name the
+markers are those `path_removals` already loads; nothing caps them. A
+history walk (`fs.blame`, `fs.revision`) reads its first-parent Commits in
+windows of 16, 32, 64 then 128, each one such statement
+(`lineage_chain_window`, #818 H4): it follows the Commits' run segments
+through the `commit_runs` (run, depth) index, a run being one first-parent
+path whose first Commit's parent lies in another run, and returns each
+Commit's row and `history_serial` with its segment and depth, so the order
+is checked in Rust. A row is that Commit's read: one that fails to decode
+refuses only when the walk reaches it, and a gap ends the window so the walk
+reads the next Commit itself. SQLite reads no window (the catalog's default,
+one Commit and serial at a time, is not sent there). Statements outside a transaction name the
 schema (`{s}` in [`queries/history`](../../../../engine/crates/layerfs-persistence/sql/postgresql/queries/history)).
 Writes are never `SERIALIZABLE` and never retried.
 

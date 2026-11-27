@@ -1,0 +1,9 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.04s
+     Running unittests src/lib.rs (target/debug/deps/layerfs_content-4f6968bbdc16da93)
+
+running 1 test
+test compare::across::tests::a_full_memo_adds_no_directory ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+run_bounded: exit 0 after 0.6 s

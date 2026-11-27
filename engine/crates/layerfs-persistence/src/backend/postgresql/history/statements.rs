@@ -92,6 +92,10 @@ pub(crate) fn qualified(key: &str) -> Option<&'static str> {
         "read_context_node" => Some(include_str!(
             "../../../../sql/postgresql/queries/history/read_context_node.sql"
         )),
+        // First-parent Commits in windows (#818 H4); PostgreSQL only.
+        "lineage_chain_window" => Some(include_str!(
+            "../../../../sql/postgresql/queries/history/lineage_chain_window.sql"
+        )),
         _ => None,
     }
 }

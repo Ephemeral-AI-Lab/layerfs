@@ -1,0 +1,16 @@
+ 9:33  up 3 days,  8:06, 1 user, load averages: 5.98 9.03 8.42
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.09s
+     Running tests/history_surface.rs (target/debug/deps/history_surface-fcaab43f6dd4edbc)
+
+running 7 tests
+test a_commit_is_read_by_its_id_or_a_prefix_without_its_branch ... ok
+test a_commit_list_pages_from_the_commit_it_started_at ... ok
+test a_diff_compares_from_its_default_side_within_its_path ... ok
+test a_later_diff_page_compares_the_commits_the_first_page_pinned ... ok
+test a_merge_moves_an_existing_branch_or_leaves_it_unchanged ... ok
+test a_publish_names_the_commit_it_publishes ... ok
+test branches_page_by_name_with_a_prefix_and_an_excluded_prefix ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.35s
+
+run_bounded: exit 0 after 1.2 s
