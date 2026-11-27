@@ -11,14 +11,16 @@ use layerfs_history::error::{
     HistoryError, HistoryResult, HolderKind, HolderState, Missing, NameHolder, NameSource,
     NameTakenState,
 };
+use layerfs_history::identity::NodeId;
 use layerfs_history::identity::{BranchId, CatalogId, HistoryName, LayerStackId};
+use layerfs_history::records::PathRemovalRecord;
 use layerfs_history::records::{
     BranchRecord, BranchSnapshot, ForkRequest, ForkSource, Page, PageResult,
 };
-use layerfs_history::NamedSnapshot;
+use layerfs_history::{ContextTarget, NamedSnapshot, NodeRecord, ReadContext};
 
 use super::query::{self, Context, Cursor, Range};
-use super::rows::{branch_row, cell, commit_row, many, one, sql, stack_row};
+use super::rows::{branch_row, cell, commit_row, layer_row, many, one, sql, stack_row, unsigned};
 use crate::backend::records::{Record as Row, Value};
 use layerfs_content::ObjectId;
 use layerfs_history::records::{CommitRecord, LayerStackRecord};
@@ -118,14 +120,20 @@ pub(crate) struct SnapshotRows {
     row: Row,
 }
 
+/// The columns `columns` of `row` as a row of their own; `None` when the
+/// first of them is NULL (a LEFT JOIN that found no row).
+fn columns(row: &Row, columns: std::ops::Range<usize>) -> Option<Row> {
+    match row.cells.get(columns.start) {
+        None | Some(Value::Null) => None,
+        Some(_) => Some(Row {
+            cells: row.cells[columns].to_vec(),
+        }),
+    }
+}
+
 impl SnapshotRows {
-    fn part(&self, columns: std::ops::Range<usize>) -> Option<Row> {
-        match self.row.cells.get(columns.start) {
-            None | Some(Value::Null) => None,
-            Some(_) => Some(Row {
-                cells: self.row.cells[columns].to_vec(),
-            }),
-        }
+    fn part(&self, range: std::ops::Range<usize>) -> Option<Row> {
+        columns(&self.row, range)
     }
     /// The Branch's LayerStack, when its row exists.
     pub(crate) fn stack(&self) -> HistoryResult<Option<LayerStackRecord>> {
@@ -227,6 +235,108 @@ pub(crate) fn branch_snapshot_named(
     }
     let rows = snapshot_of(rows)?.ok_or(HistoryError::Integrity("catalog row"))?;
     resolve(rows).map(|(snapshot, _)| NamedSnapshot::Found(Box::new(snapshot)))
+}
+
+const CONTEXT_NAMED: &str = "read_context_named";
+
+const CONTEXT_NODE: &str = "read_context_node";
+
+/// Columns of a context statement's rows: the kind (0 the context row, 1 a
+/// marker row), the stack (5), the Branch (6), the Commit (18), the Layer
+/// (8), the node's serial, the recorded Branch (6) and a marker (3).
+const CONTEXT_COLUMNS: usize = 48;
+
+/// A read call's context in one statement (#818 R5): PostgreSQL's
+/// [`layerfs_history::HistoryCatalog::read_context`]. The rows are one
+/// context row, then one row per marker of the stack, the markers that
+/// `path_removals` loads; no row is no such stack.
+pub(crate) fn read_context(
+    tx: &Transaction<'_>,
+    project: &HistoryName,
+    target: &ContextTarget,
+) -> HistoryResult<ReadContext> {
+    let rows = match target {
+        ContextTarget::Main => {
+            tx.query(CONTEXT_NAMED, params![project.as_str(), None::<String>])?
+        }
+        ContextTarget::Branch(name) => tx.query(
+            CONTEXT_NAMED,
+            params![project.as_str(), Some(name.as_str().to_owned())],
+        )?,
+        ContextTarget::Node(node) => {
+            let id = Some(node.as_slice().to_vec());
+            let (commit, layer) = match node {
+                NodeId::Commit(_) => (id, None),
+                NodeId::Layer(_) => (None, id),
+            };
+            tx.query(CONTEXT_NODE, params![project.as_str(), commit, layer])?
+        }
+    };
+    context_of(rows, target)
+}
+
+/// Decodes a context statement's rows in the order a read checks them: the
+/// stack, the Branch, the node, then its serial, markers and recorded
+/// Branch, which are kept only when the node was found.
+fn context_of(rows: Vec<Row>, target: &ContextTarget) -> HistoryResult<ReadContext> {
+    let mut rows = rows.into_iter();
+    let Some(first) = rows.next() else {
+        return Ok(ReadContext::default());
+    };
+    let kind = |row: &Row| -> HistoryResult<i64> {
+        if row.cells.len() != CONTEXT_COLUMNS {
+            return Err(HistoryError::Integrity("catalog row"));
+        }
+        cell::<i64>(row, 0)
+    };
+    if kind(&first)? != 0 {
+        return Err(HistoryError::Integrity("catalog row"));
+    }
+    let stack = columns(&first, 1..6).ok_or(HistoryError::Integrity("catalog row"))?;
+    let mut context = ReadContext {
+        stack: Some(stack_row(&stack)?),
+        ..ReadContext::default()
+    };
+    if matches!(target, ContextTarget::Branch(_)) {
+        let Some(branch) = columns(&first, 6..12) else {
+            return Ok(context);
+        };
+        context.branch = Some(branch_row(&branch)?);
+    }
+    let commit = columns(&first, 12..30)
+        .as_ref()
+        .map(commit_row)
+        .transpose()?;
+    let layer = columns(&first, 30..38)
+        .as_ref()
+        .map(layer_row)
+        .transpose()?;
+    context.node = match (commit, layer) {
+        (Some(commit), None) => Some(NodeRecord::Commit(Box::new(commit))),
+        (None, Some(layer)) => Some(NodeRecord::Layer(layer)),
+        (None, None) => return Ok(context),
+        (Some(_), Some(_)) => return Err(HistoryError::Integrity("catalog row")),
+    };
+    let serial = unsigned(&first, 38)?;
+    let mut markers = Vec::with_capacity(rows.len());
+    for row in rows {
+        if kind(&row)? != 1 {
+            return Err(HistoryError::Integrity("path marker"));
+        }
+        markers.push(PathRemovalRecord {
+            path: cell(&row, 45)?,
+            frontier_serial: unsigned(&row, 46)?,
+            removed_ms: cell::<i64>(&row, 47)?,
+        });
+    }
+    context.removals = Some(Some((serial, markers)));
+    context.recorded = Some(
+        columns(&first, 39..45)
+            .as_ref()
+            .map(branch_row)
+            .transpose()?,
+    );
+    Ok(context)
 }
 
 /// The snapshot one Branch's rows resolve to, checked, with its stack's name.

@@ -1,0 +1,15 @@
+ 8:07  up 3 days,  6:40, 1 user, load averages: 6.44 6.97 6.53
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.08s
+     Running tests/saved_branch_queries.rs (target/debug/deps/saved_branch_queries-ac078935dc6cc735)
+
+running 6 tests
+test commit_list_on_main_pages_published_layers ... ok
+test first_commit_base_comparison_and_component_prefix_are_preserved ... ok
+test identical_saved_endpoint_needs_no_binary_attribution_guess ... ok
+test mixed_comparisons_find_equal_text_different_owners_and_keep_result_pages ... ok
+test requested_directory_attribution_remains_unknown_on_metadata_changes ... ok
+test unknown_prefix_and_lookahead_do_not_change_returned_page_coverage ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.28s
+
+run_bounded: exit 0 after 1.5 s

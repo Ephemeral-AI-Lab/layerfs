@@ -164,6 +164,24 @@ impl ReadSession {
                 .map_err(PortError::Storage)
         })
     }
+    /// [`Self::file_lengths`] through a caller's caches (#818 R4); the lock
+    /// is held for this one demand only.
+    pub fn lengths_with(
+        &self,
+        cache: &mut ReadCache,
+        ids: &[ObjectId],
+    ) -> Result<Vec<u64>, Arc<PortError>> {
+        self.attempt(|handle, _, counts| {
+            counts.lengths.fetch_add(1, Ordering::Relaxed);
+            counts
+                .length_ids
+                .fetch_add(ids.len() as u64, Ordering::Relaxed);
+            handle
+                .storage
+                .lengths_with(cache, ids)
+                .map_err(PortError::Storage)
+        })
+    }
     pub fn file_lengths(&self, ids: &[ObjectId]) -> Result<Vec<u64>, Arc<PortError>> {
         self.attempt(|handle, cache, counts| {
             counts.lengths.fetch_add(1, Ordering::Relaxed);

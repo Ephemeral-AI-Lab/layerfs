@@ -1,5 +1,7 @@
 //! `fs.blame`.
-use crate::methods::args::{line, path, snapshot_full, Answer};
+use crate::history::rows::Rows;
+use crate::methods::args::{line, path, snapshot_in, snapshot_target, Answer};
+use crate::read::cached::Cached;
 use crate::{
     read::{blame, visibility},
     StoreService,
@@ -8,12 +10,20 @@ use layerfs_bridge::control::SdkValue;
 
 /// `blame(path, { branch, commit?, fromLine? })`: each line with the Commit that last changed it.
 pub fn blame(service: &StoreService, args: &SdkValue) -> Answer {
-    let (stack, reader, snap, saved) = snapshot_full(service, args)?;
+    let (stack, reader, name) = snapshot_target(service, args)?;
+    // The call's caches, from the root's open on, across every version
+    // (#818 H3).
+    let cached = Cached::new(&reader)?;
+    let (snap, saved) = snapshot_in(service, &stack, &cached, name)?;
     let path = path(args, "path")?;
     let seen = visibility::Visibility::load(&service.store, &stack, &snap, saved.removals)?;
+    // The call's rows, from the resolve's on (#818 H1).
+    let mut rows = Rows::new(&service.store);
+    rows.hold(snap.node, saved.record, saved.recorded);
     blame::blame(
         &service.store,
-        &reader,
+        &mut rows,
+        &cached,
         &snap,
         &path,
         &seen,

@@ -34,6 +34,20 @@ without a second read; the markers reach the visibility filter at the place
 the marker read used to be, so its failure still refuses there. A node with
 no row, or a provider without the combined read, reads the markers alone.
 
+A read naming `main`, a valid Branch name or a full Commit or Layer identity
+reads its history context with one catalog call, `read_context` (#818 R5):
+the project's stack, the Branch, the node's record and, on PostgreSQL, the
+node's serial, the project's markers and a Commit's recorded Branch, all in
+one fenced statement (`read_context_named`, `read_context_node`). The store
+service decodes it in the order the reads ran one by one: `NoSuchProject`,
+then the Branch (with the identity-shaped rule), `NoSuchCommit`/`NotFound`,
+another project's node, the root's tree, then the path. SQLite's provider
+answers with the default, `read_context_serial`: the stack, Branch and node
+reads one after another, with the markers and the recorded Branch read later
+where they always were, so its statements do not change. A `commit` prefix,
+an invalid name or an identity that does not parse keeps the reads one by
+one.
+
 | Rule | Detail | Source |
 | --- | --- | --- |
 | Header | Every answer starts with `kind`, `snapshot` (label such as `feat@<short id>`), `root`, `path`. | [`snapshot.rs`](../../../../engine/crates/layerfs-store-service/src/read/snapshot.rs) |
@@ -73,7 +87,7 @@ grep: files gathered in windows of ROOTS = 64
 | `fs.list` | One page of a directory: `name`, `path`, `type`, `inode`. | [`reads.rs`](../../../../engine/crates/layerfs-store-service/src/read/reads.rs) |
 | `fs.glob` | Paths matching a `/.lww`-syntax glob; only folders on the pattern's literal lead are entered. | [`walk.rs`](../../../../engine/crates/layerfs-store-service/src/read/walk.rs) |
 | `fs.grep` | Lines holding a nonempty literal; a pattern with LF anywhere but last matches nothing; binary files skipped and counted. | [`search.rs`](../../../../engine/crates/layerfs-store-service/src/read/search.rs) |
-| Per-call cache | `Cached` keeps pack bodies, decoded groups and the decode arena for the call's later demands; dropped with the call. | [`cached.rs`](../../../../engine/crates/layerfs-store-service/src/read/cached.rs) |
+| Per-call cache | `Cached` keeps pack bodies, decoded groups and the decode arena for the call's later demands; dropped with the call. The five reads build it before the snapshot resolves, so the root's tree opens through it, and file sizes and grep's lengths read through it too (`lengths_with`, #818 R4). | [`cached.rs`](../../../../engine/crates/layerfs-store-service/src/read/cached.rs) |
 | One path walk | `fs.stat`, `fs.read`, `fs.list`, `fs.glob` and `fs.grep` build the call's `Cached` and one `Memo` first and walk the path once, strictly, through them (#818 R3): a symlink component or a read failure refuses there, a hidden entry refuses `Removed`, and the entry found is what the read, listing or walk starts from. An absent path is refused `NoSuchPath` by the read itself, after the arguments it reads first. The marker lookups of `removed_count` go through the same memo; the paged forms keep their own walk. | [`visibility.rs`](../../../../engine/crates/layerfs-store-service/src/read/visibility.rs), [`reads.rs`](../../../../engine/crates/layerfs-store-service/src/read/reads.rs) |
 
 ## Numbered pages and continuations
@@ -120,6 +134,9 @@ fs.blame(path, fromLine, lineCount <= 2000)
 | First parents | A Commit's parent, or its base Layer; a Layer's source Commit, else its parent Layer. | [`blame.rs`](../../../../engine/crates/layerfs-store-service/src/read/blame.rs), [`operator/files.rs`](../../../../engine/crates/layerfs-store-service/src/operator/files.rs) |
 | Coarse comparison | A middle too large for the bounded LCS becomes one removed/added block and is disclosed (`comparisonCoarse`). | [`blame.rs`](../../../../engine/crates/layerfs-store-service/src/read/blame.rs), [`line_alignment.rs`](../../../../engine/crates/layerfs-store-service/src/read/line_alignment.rs) |
 | Attribution | `includeAttribution` on a comparison runs blame per changed file under one shared budget (10,000 steps, 64 MiB); byte equality is never taken as an owner. Exhaustion is reported as incomplete coverage or `Capacity`. | [`attribution.rs`](../../../../engine/crates/layerfs-store-service/src/read/attribution.rs) |
+| Rows read once | A blame, revision or `fs.list_revisions` walk reads its rows through one per-call `Rows` (#818 H1): the last 8 Commit/Layer rows are held, so a node read as a parent is not read again as the next node or for a `ref`, `comparedTo` or record; each Branch name is read once per call on the control reader (it was read on the writer's session). Blame takes the resolve's row and recorded Branch, keeps each owner's `ref` from the row held when the owner was assigned, and carries the older text of one comparison to the next. | [`history/rows.rs`](../../../../engine/crates/layerfs-store-service/src/history/rows.rs) |
+| One walk per node | `fs.revision` and `fs.list_revisions` read a node's path entry (and, in `fs.revision`, its serial when the entry exists) once: a node's parent side is the next node's own and is carried to it (#818 H2). A hidden parent ends the walk, so nothing is carried past it. | [`revision.rs`](../../../../engine/crates/layerfs-store-service/src/read/revision.rs), [`operator/files.rs`](../../../../engine/crates/layerfs-store-service/src/operator/files.rs) |
+| One cache across versions | `fs.blame`, `fs.revision`, `fs.diff_files`, `fs.list_revisions` and `fs.get_storage` read every version's objects through one call `Cached` (roots, inode and directory pages, file lengths, text windows, byte ranges and comparisons; 3 MiB bound) and bind path names through its directory memo, `(directory root, name) → serial`, at most 4,096 names: a directory root's contents never change, so a name bound once is bound in every version holding that root (#818 H3). `fs.diff_files` keeps its strict lookup (`raw`) instead of walking again. | [`cached.rs`](../../../../engine/crates/layerfs-store-service/src/read/cached.rs) |
 
 ## Compare
 

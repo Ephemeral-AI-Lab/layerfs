@@ -48,31 +48,38 @@ const NONE: Counts = [0, 0, 0, 0];
 /// - #818 R2 (dedupe): `blame` reads its Commit row once and the serial
 ///   with the markers; each `diff_files` side reads its Commit row once:
 ///   2 reads fewer (−6 statements, −2 transactions); `revision` unchanged.
+/// - #818 H1 (dedupe): one per-call `Rows`: each walked row is read once
+///   (as the parent, then carried), Branch names once per call and on the
+///   control reader (they were read on the writer's session: writer 597 →
+///   0 on `blame.h100`), owners' and items' references from held rows, and
+///   blame's text carried between comparisons. `blame.h100` warm control
+///   6,746 → 5,829, `blame.h10` 621 → 548, `revision.h100` 12,382 → 10,483,
+///   `revision.h10` cold 1,325 → 1,106; writer reads 0 on all four;
+///   `diff_files` unchanged.
+/// - #818 H2 (dedupe): `revision` walks each node's path once (a node's
+///   parent side, entry and serial, is the next node's own): `revision.h100`
+///   warm 10,483 → 5,797, cold 10,827 → 6,141; `revision.h10` cold 1,106 →
+///   634; `blame` and `diff_files` unchanged.
+/// - #818 H3 (dedupe): every version's objects through one call cache, and
+///   names bound through a per-call directory memo; `diff_files` keeps its
+///   strict lookup: warm `blame.h100` 5,829 → 779, `blame.h10` 548 → 91,
+///   `revision.h100` 5,797 → 769, `diff_files` 187 → 71; cold alike
+///   (`revision.h10` 634 → 147).
 const SQLITE: &[Pin] = &[
     // probe blame.h10: 714 statements
-    pin("blame.h10.cold", [0, 0, 57, 19], [0, 0, 662, 47], NONE),
-    pin("blame.h10.warm", [0, 0, 57, 19], [0, 0, 621, 47], NONE),
+    pin("blame.h10.cold", NONE, [0, 0, 132, 24], NONE),
+    pin("blame.h10.warm", NONE, [0, 0, 91, 24], NONE),
     // probe blame.h100: 7,575
-    pin("blame.h100.cold", [0, 0, 597, 199], [0, 0, 7102, 408], NONE),
-    pin("blame.h100.warm", [0, 0, 597, 199], [0, 0, 6746, 408], NONE),
+    pin("blame.h100.cold", NONE, [0, 0, 1135, 205], NONE),
+    pin("blame.h100.warm", NONE, [0, 0, 779, 205], NONE),
     // probe revision.h10 (appended at P0): 1,314
-    pin("revision.h10.cold", [0, 0, 30, 10], [0, 0, 1325, 112], NONE),
+    pin("revision.h10.cold", NONE, [0, 0, 147, 29], NONE),
     // probe revision.h100: 12,658
-    pin(
-        "revision.h100.cold",
-        [0, 0, 276, 92],
-        [0, 0, 12726, 927],
-        NONE,
-    ),
-    pin(
-        "revision.h100.warm",
-        [0, 0, 276, 92],
-        [0, 0, 12382, 927],
-        NONE,
-    ),
+    pin("revision.h100.cold", NONE, [0, 0, 1113, 203], NONE),
+    pin("revision.h100.warm", NONE, [0, 0, 769, 203], NONE),
     // probe diff_files.h10_vs_h99: 198
-    pin("diff_files.h10_vs_h99.cold", NONE, [0, 0, 218, 15], NONE),
-    pin("diff_files.h10_vs_h99.warm", NONE, [0, 0, 187, 15], NONE),
+    pin("diff_files.h10_vs_h99.cold", NONE, [0, 0, 102, 15], NONE),
+    pin("diff_files.h10_vs_h99.warm", NONE, [0, 0, 71, 15], NONE),
 ];
 
 /// PostgreSQL: `[connects, round_trips, statements, transactions]` per
@@ -85,41 +92,37 @@ const SQLITE: &[Pin] = &[
 ///   `diff_files` −4 (one marker read per side); statements unchanged.
 /// - #818 R2: `blame` and `diff_files` −2 round trips and −2 statements
 ///   (see SQLITE), cold and warm; `revision` unchanged.
+/// - #818 R5: `blame` resolves through the one context statement:
+///   `blame.h10` (a full Commit id: project, Commit, markers) −2 warm, −3
+///   cold; `blame.h100` (a Branch: project, Branch, Commit, markers) −3
+///   warm, −5 cold (prepares of the statements it no longer sends);
+///   `revision` and `diff_files` unchanged.
+/// - #818 H1 (dedupe, see SQLITE): writer 0 (Branch names now read once per
+///   call on the control reader); control warm `blame.h100` 2,021 → 1,768,
+///   `blame.h10` 221 → 193, `revision.h100` 3,794 → 3,161; cold alike
+///   (`revision.h10` 493 → 420); `diff_files` unchanged.
+/// - #818 H2 (dedupe, see SQLITE): one path walk and serial per node fewer:
+///   `revision.h100` warm 3,161 → 1,705, cold 3,389 → 1,933;
+///   `revision.h10` cold 420 → 260.
+/// - #818 H3 (dedupe, see SQLITE): a version's objects mostly come from
+///   packs the call already holds: warm `blame.h100` 1,768 → 254,
+///   `blame.h10` 193 → 33, `revision.h100` 1,705 → 253, `diff_files` 77 →
+///   23; cold `blame.h100` 2,005 → 491, `revision.h10` 260 → 82.
 const POSTGRESQL: &[Pin] = &[
     // probe blame.h10: 267 trips
-    pin("blame.h10.cold", [0, 20, 19, 0], [1, 263, 253, 0], NONE),
-    pin("blame.h10.warm", [0, 19, 19, 0], [0, 223, 223, 0], NONE),
+    pin("blame.h10.cold", NONE, [1, 71, 63, 0], NONE),
+    pin("blame.h10.warm", NONE, [0, 33, 33, 0], NONE),
     // probe blame.h100: 2,325
-    pin(
-        "blame.h100.cold",
-        [0, 200, 199, 0],
-        [1, 2264, 2253, 0],
-        NONE,
-    ),
-    pin(
-        "blame.h100.warm",
-        [0, 199, 199, 0],
-        [0, 2024, 2024, 0],
-        NONE,
-    ),
+    pin("blame.h100.cold", NONE, [1, 491, 483, 0], NONE),
+    pin("blame.h100.warm", NONE, [0, 254, 254, 0], NONE),
     // probe revision.h10 (appended at P0)
-    pin("revision.h10.cold", [0, 11, 10, 0], [1, 493, 482, 0], NONE),
+    pin("revision.h10.cold", NONE, [1, 82, 71, 0], NONE),
     // probe revision.h100: 3,890
-    pin(
-        "revision.h100.cold",
-        [0, 93, 92, 0],
-        [1, 4022, 4011, 0],
-        NONE,
-    ),
-    pin(
-        "revision.h100.warm",
-        [0, 92, 92, 0],
-        [0, 3794, 3794, 0],
-        NONE,
-    ),
+    pin("revision.h100.cold", NONE, [1, 481, 470, 0], NONE),
+    pin("revision.h100.warm", NONE, [0, 253, 253, 0], NONE),
     // probe diff_files.h10_vs_h99: 88
-    pin("diff_files.h10_vs_h99.cold", NONE, [1, 103, 94, 0], NONE),
-    pin("diff_files.h10_vs_h99.warm", NONE, [0, 77, 77, 0], NONE),
+    pin("diff_files.h10_vs_h99.cold", NONE, [1, 49, 40, 0], NONE),
+    pin("diff_files.h10_vs_h99.warm", NONE, [0, 23, 23, 0], NONE),
 ];
 
 /// `(method, F, W, K)`: cold PostgreSQL round trips at V versions are at

@@ -23,7 +23,8 @@
 mod support;
 
 use layerfs_history::{
-    CommitHistoryRequest, HistoryCatalog, LayerHistoryRequest, NamedSnapshot, NodeId,
+    CommitHistoryRequest, ContextTarget, HistoryCatalog, HistoryName, LayerHistoryRequest,
+    NamedSnapshot, NodeId, NodeRecord, ReadContext,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -112,6 +113,11 @@ const READS: &[Read] = &[
     Read {
         called: "stored",
         keys: &["digest_roots"],
+        pg_only: false,
+    },
+    Read {
+        called: "read_context",
+        keys: &["read_context_named", "read_context_node"],
         pg_only: false,
     },
     // The shared facade forwards its caller's closure; the call sites above
@@ -591,6 +597,66 @@ fn postgresql_one_statement_reads_answer() {
         history.statistics().expect("statistics").file > 0,
         "the Store's page total"
     );
+
+    // read_context: one statement, decoded to what the default's reads and
+    // the markers and recorded-Branch reads beside them find (#818 R5).
+    let project = support::name("project-1");
+    let targets = [
+        ContextTarget::Main,
+        ContextTarget::Branch(support::name("work")),
+        ContextTarget::Branch(support::name("absent")),
+        ContextTarget::Node(NodeId::Commit(record.id)),
+        ContextTarget::Node(NodeId::Layer(layer.id)),
+        ContextTarget::Node(NodeId::Commit(absent_commit())),
+    ];
+    for target in &targets {
+        let found = history
+            .read_context(&project, target)
+            .expect("read_context");
+        assert_eq!(
+            found,
+            expected(history, stack, &project, target),
+            "{target:?}"
+        );
+    }
+    let work = history
+        .read_context(&project, &targets[1])
+        .expect("read_context");
+    assert_eq!(work.removals.expect("read").expect("the node").1, markers);
+    assert_eq!(work.recorded.expect("read").map(|b| b.id), Some(branch));
+    assert_eq!(
+        history
+            .read_context(&support::name("absent"), &ContextTarget::Main)
+            .expect("no such project"),
+        ReadContext::default()
+    );
+}
+
+/// What `read_context` must answer: the default's reads, then the node's
+/// markers and a Commit's recorded Branch, read one by one.
+fn expected(
+    history: &dyn HistoryCatalog,
+    stack: layerfs_history::LayerStackId,
+    project: &HistoryName,
+    target: &ContextTarget,
+) -> ReadContext {
+    let mut context = layerfs_history::catalog::read_context_serial(history, project, target)
+        .expect("the reads one by one");
+    if let Some(node) = &context.node {
+        let id = match node {
+            NodeRecord::Commit(record) => NodeId::Commit(record.id),
+            NodeRecord::Layer(record) => NodeId::Layer(record.id),
+        };
+        context.removals = Some(history.node_path_removals(stack, id).expect("markers"));
+        context.recorded = Some(match node {
+            NodeRecord::Commit(record) => record
+                .meta
+                .branch
+                .and_then(|id| history.branch_any(id).expect("branch_any")),
+            NodeRecord::Layer(_) => None,
+        });
+    }
+    context
 }
 
 /// A Commit id no Store holds.

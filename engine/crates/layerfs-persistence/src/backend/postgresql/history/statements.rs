@@ -83,6 +83,15 @@ pub(crate) fn qualified(key: &str) -> Option<&'static str> {
         "position_node_serial" => Some(include_str!(
             "../../../../sql/postgresql/queries/history/position_node_serial.sql"
         )),
+        // A read call's context in one statement (#818 R5); PostgreSQL only:
+        // SQLite reads it through the catalog's default, statement by
+        // statement.
+        "read_context_named" => Some(include_str!(
+            "../../../../sql/postgresql/queries/history/read_context_named.sql"
+        )),
+        "read_context_node" => Some(include_str!(
+            "../../../../sql/postgresql/queries/history/read_context_node.sql"
+        )),
         _ => None,
     }
 }

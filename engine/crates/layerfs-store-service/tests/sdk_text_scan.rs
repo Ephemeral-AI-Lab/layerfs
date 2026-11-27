@@ -457,7 +457,6 @@ fn grep_and_read_give_the_window_scan_results() {
             let entry =
                 layerfs_store_service::read::snapshot::lookup(&cached, &snap.tree, path).unwrap();
             let got = layerfs_store_service::read::reads::read(
-                &reader,
                 &cached,
                 &snap,
                 path,

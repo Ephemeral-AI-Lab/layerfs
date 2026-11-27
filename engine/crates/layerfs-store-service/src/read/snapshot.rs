@@ -6,6 +6,7 @@
 //! reads a live Workspace.
 use crate::history::lookup::{self as args, branch_node, invalid, refuse, short, Answer};
 use crate::history::MAIN;
+use crate::read::cached::Cached;
 use crate::store::{PortError, Store, StorePorts};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_content::compare::{as_text, EntryFacts, TreeTable, MAXIMUM_TEXT_BYTES};
@@ -13,7 +14,7 @@ use layerfs_content::filesystem::path::PathName;
 use layerfs_content::filesystem::{FilesystemRootId, SymlinkTarget};
 use layerfs_content::object::inode_leaf::InodeKind;
 use layerfs_content::{AuthenticatedObjects, ContentError, ObjectId};
-use layerfs_history::{LayerStackRecord, NodeId, PathRemovalRecord};
+use layerfs_history::{BranchRecord, LayerStackRecord, NodeId, PathRemovalRecord, ReadContext};
 use std::sync::Arc;
 
 /// Width of one identity's hex text.
@@ -52,6 +53,16 @@ pub type Removals = Result<Option<(u64, Vec<PathRemovalRecord>)>, Arc<PortError>
 pub struct Saved {
     pub record: args::NodeRecord,
     pub removals: Removals,
+    /// A Commit's recorded Branch name when the context read it (#818 R5);
+    /// `None` when not read, and the answer's `at` reads it then.
+    pub recorded: Option<Option<String>>,
+}
+
+/// The snapshot a read names, with its history context when one call read
+/// it (#818 R5).
+pub struct Named {
+    pub name: String,
+    pub context: Option<ReadContext>,
 }
 
 /// The stack's object reader.
@@ -66,7 +77,18 @@ pub fn resolve(
     reader: &StorePorts,
     name: &str,
 ) -> Result<Snap, SdkRefusal> {
-    let (snap, _, ()) = resolve_with(store, stack, reader, name, |node| {
+    resolve_in(store, stack, reader, name)
+}
+
+/// [`resolve`] with the root's tree opened through `pages`, such as a
+/// call's caches (#818 H3).
+pub fn resolve_in(
+    store: &Arc<Store>,
+    stack: &LayerStackRecord,
+    pages: &dyn AuthenticatedObjects,
+    name: &str,
+) -> Result<Snap, SdkRefusal> {
+    let (snap, _, ()) = resolve_with(store, stack, pages, name, |node| {
         let serial = match store.published(|history| history.node_history_serial(node)) {
             Ok(Some(serial)) => serial,
             _ => 0,
@@ -81,21 +103,71 @@ pub fn resolve(
 /// where the serial alone was read (#818 R2). A failed or missing read
 /// gives serial 0 here, as [`resolve`] does; [`Saved::removals`] keeps the
 /// outcome for the marker step.
+///
+/// `pages` opens the root's tree: the call's caches, so the call's later
+/// demands find what the open read (#818 R4).
 pub fn resolve_saved(
     store: &Arc<Store>,
     stack: &LayerStackRecord,
-    reader: &StorePorts,
+    pages: &dyn AuthenticatedObjects,
     name: &str,
 ) -> Result<(Snap, Saved), SdkRefusal> {
-    let (snap, record, removals) = resolve_with(store, stack, reader, name, |node| {
-        let removals = store.published(|history| history.node_path_removals(stack.id, node));
-        let serial = match &removals {
-            Ok(Some((serial, _))) => *serial,
-            _ => 0,
-        };
-        (serial, removals)
+    let (snap, record, removals) = resolve_with(store, stack, pages, name, |node| {
+        removals_of(store, stack, node)
     })?;
-    Ok((snap, Saved { record, removals }))
+    let saved = Saved {
+        record,
+        removals,
+        recorded: None,
+    };
+    Ok((snap, saved))
+}
+
+/// [`resolve_saved`] from the history `context` one call read (#818 R5),
+/// refused in the same order: the Branch, the node, its project, the
+/// root's tree. A context without markers (SQLite's default) reads them
+/// here, where [`resolve_saved`] does.
+pub fn resolve_context(
+    store: &Arc<Store>,
+    stack: &LayerStackRecord,
+    pages: &dyn AuthenticatedObjects,
+    name: &str,
+    context: ReadContext,
+) -> Result<(Snap, Saved), SdkRefusal> {
+    let ReadContext {
+        branch,
+        node: found,
+        removals: read,
+        recorded,
+        ..
+    } = context;
+    let named = named(stack, name, |wanted| {
+        args::branch_in(wanted, |_| Ok(branch))
+    })?;
+    let record = found.ok_or_else(|| args::absent(named.2))?;
+    let (snap, removals) = opened(stack, pages, named, &record, |node| match read {
+        Some(found) => (found.as_ref().map_or(0, |(serial, _)| *serial), Ok(found)),
+        None => removals_of(store, stack, node),
+    })?;
+    let recorded = recorded.map(|branch| branch.map(|b: BranchRecord| b.name.as_str().to_owned()));
+    let saved = Saved {
+        record,
+        removals,
+        recorded,
+    };
+    Ok((snap, saved))
+}
+
+/// The node's serial read with the stack's markers in one statement; a
+/// failed or missing read gives serial 0, the outcome kept for the marker
+/// step.
+fn removals_of(store: &Arc<Store>, stack: &LayerStackRecord, node: NodeId) -> (u64, Removals) {
+    let removals = store.published(|history| history.node_path_removals(stack.id, node));
+    let serial = match &removals {
+        Ok(Some((serial, _))) => *serial,
+        _ => 0,
+    };
+    (serial, removals)
 }
 
 /// The shared resolve: the name, the node's record (its ownership check
@@ -104,11 +176,24 @@ pub fn resolve_saved(
 fn resolve_with<T>(
     store: &Arc<Store>,
     stack: &LayerStackRecord,
-    reader: &StorePorts,
+    pages: &dyn AuthenticatedObjects,
     name: &str,
     position: impl FnOnce(NodeId) -> (u64, T),
 ) -> Result<(Snap, args::NodeRecord, T), SdkRefusal> {
-    let (kind, label, node) = if name == MAIN {
+    let named = named(stack, name, |wanted| args::branch(store, stack, wanted))?;
+    let record = args::node_record(store, named.2)?;
+    let (snap, beside) = opened(stack, pages, named, &record, position)?;
+    Ok((snap, record, beside))
+}
+
+/// What `name` names: `main`, a full Commit or Layer identity, else a
+/// Branch, found by `branch`.
+fn named(
+    stack: &LayerStackRecord,
+    name: &str,
+    branch: impl FnOnce(&str) -> Result<BranchRecord, SdkRefusal>,
+) -> Result<(Kind, String, NodeId), SdkRefusal> {
+    Ok(if name == MAIN {
         let node = NodeId::Layer(stack.head_layer);
         (Kind::Main, format!("main@{}", short(node)), node)
     } else if name.len() == NODE_TEXT && args::unhex(name).is_some() {
@@ -119,7 +204,7 @@ fn resolve_with<T>(
         };
         (kind, short(node), node)
     } else {
-        let branch = args::branch(store, stack, name).map_err(|refusal| {
+        let branch = branch(name).map_err(|refusal| {
             // A hex-shaped name of 8 or more characters (as long as a
             // commit.get prefix) that is no Branch is a truncated or
             // wrong-length identity, not a missing Branch; a shorter one
@@ -138,13 +223,23 @@ fn resolve_with<T>(
         })?;
         let node = branch_node(&branch);
         (Kind::Branch, format!("{name}@{}", short(node)), node)
-    };
-    let record = args::node_record(store, node)?;
+    })
+}
+
+/// The node's tree: its ownership check, its root's tree opened through
+/// `pages`, then `position`.
+fn opened<T>(
+    stack: &LayerStackRecord,
+    pages: &dyn AuthenticatedObjects,
+    (kind, label, node): (Kind, String, NodeId),
+    record: &args::NodeRecord,
+    position: impl FnOnce(NodeId) -> (u64, T),
+) -> Result<(Snap, T), SdkRefusal> {
     if record.stack() != stack.id {
         return Err(invalid("saved version belongs to another project"));
     }
     let root = record.root();
-    let tree = TreeTable::open(reader, FilesystemRootId(root)).map_err(args::content)?;
+    let tree = TreeTable::open(pages, FilesystemRootId(root)).map_err(args::content)?;
     let (serial, beside) = position(node);
     let snap = Snap {
         kind,
@@ -154,7 +249,7 @@ fn resolve_with<T>(
         tree,
         serial,
     };
-    Ok((snap, record, beside))
+    Ok((snap, beside))
 }
 
 /// The entry at a checked absolute path, if any.
@@ -178,7 +273,21 @@ pub fn lookup(
     tree: &TreeTable,
     path: &str,
 ) -> Result<Option<EntryFacts>, SdkRefusal> {
-    find_with(pages, tree, path, true)
+    find_with(pages, tree, path, true, &mut |serial, name| {
+        tree.lookup(pages, serial, name)
+    })
+}
+
+/// [`lookup`] with each name bound by `bind` (directory serial, name) in
+/// place of the tree's own lookup: a history call's directory memo
+/// (#818 H3). Refusals are [`lookup`]'s.
+pub fn lookup_bound(
+    pages: &dyn AuthenticatedObjects,
+    tree: &TreeTable,
+    path: &str,
+    bind: &mut dyn FnMut(u64, &PathName) -> layerfs_content::ContentResult<Option<u64>>,
+) -> Result<Option<EntryFacts>, SdkRefusal> {
+    find_with(pages, tree, path, true, bind)
 }
 
 /// [`entry`] through any object reader, such as a call's memo. A component
@@ -189,7 +298,9 @@ pub fn find(
     tree: &TreeTable,
     path: &str,
 ) -> Result<Option<EntryFacts>, SdkRefusal> {
-    find_with(reader, tree, path, false)
+    find_with(reader, tree, path, false, &mut |serial, name| {
+        tree.lookup(reader, serial, name)
+    })
 }
 
 /// The shared path walk. `strict` refuses a symlink component before the last
@@ -201,12 +312,13 @@ fn find_with(
     tree: &TreeTable,
     path: &str,
     strict: bool,
+    bind: &mut dyn FnMut(u64, &PathName) -> layerfs_content::ContentResult<Option<u64>>,
 ) -> Result<Option<EntryFacts>, SdkRefusal> {
     let mut serial = tree.root_serial();
     let mut names = path.split('/').filter(|name| !name.is_empty()).peekable();
     while let Some(name) = names.next() {
         let name = PathName::new(name).map_err(|_| invalid(format!("`{path}` is not valid")))?;
-        match tree.lookup(reader, serial, &name).map_err(args::content)? {
+        match bind(serial, &name).map_err(args::content)? {
             Some(child) => serial = child,
             None => return Ok(None),
         }
@@ -284,9 +396,29 @@ pub fn size(reader: &StorePorts, entry: &EntryFacts) -> Result<u64, SdkRefusal> 
     }
 }
 
+/// [`size`] through the call's caches (#818 R4): a file's length state and
+/// a symlink's target can come from a pack the call already holds.
+pub fn size_in(cached: &Cached, entry: &EntryFacts) -> Result<u64, SdkRefusal> {
+    match entry.value.kind {
+        InodeKind::Directory => Ok(0),
+        InodeKind::RegularFile => cached
+            .lengths(&[entry.value.content_root])?
+            .pop()
+            .ok_or_else(|| args::failed("missing file length")),
+        InodeKind::Symlink => cached
+            .read_canonical(entry.value.content_root)
+            .and_then(|canonical| SymlinkTarget::decode(&canonical))
+            .map(|target| target.as_bytes().len() as u64)
+            .map_err(args::content),
+    }
+}
+
 /// A regular file's text within the text bound; `None` for anything else, a
 /// binary file or a larger one.
-pub fn text(reader: &StorePorts, entry: Option<EntryFacts>) -> Result<Option<String>, SdkRefusal> {
+pub fn text(
+    reader: &dyn AuthenticatedObjects,
+    entry: Option<EntryFacts>,
+) -> Result<Option<String>, SdkRefusal> {
     let Some(entry) = entry.filter(|entry| entry.value.kind == InodeKind::RegularFile) else {
         return Ok(None);
     };
@@ -316,17 +448,6 @@ pub fn open(
     let reader = reader(store, stack);
     let snap = resolve(store, stack, &reader, name)?;
     Ok((reader, snap))
-}
-
-/// [`open`] for a read call, with what [`resolve_saved`] kept.
-pub fn open_saved(
-    store: &Arc<Store>,
-    stack: &LayerStackRecord,
-    name: &str,
-) -> Result<(Arc<StorePorts>, Snap, Saved), SdkRefusal> {
-    let reader = reader(store, stack);
-    let (snap, saved) = resolve_saved(store, stack, &reader, name)?;
-    Ok((reader, snap, saved))
 }
 
 /// The result shape every read shares.

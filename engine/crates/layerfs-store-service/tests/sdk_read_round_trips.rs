@@ -66,47 +66,50 @@ const NONE: Counts = [0, 0, 0, 0];
 ///   case's count no longer grows with depth here (`stat` 22 to 23
 ///   statements warm at depths 0 to 7); markers are looked up through the
 ///   same memo (`hidden.list.dir_100` −67).
+/// - #818 R4: the root's tree opens through the call's caches, and file
+///   lengths read through them: −1 statement on every case (the root's
+///   page, read once). PostgreSQL unchanged.
 const SQLITE: &[Pin] = &[
     // probe stat.root: 39 statements
-    pin("stat.root.cold", NONE, [0, 0, 30, 5], NONE),
-    pin("stat.root.warm", NONE, [0, 0, 22, 5], NONE),
+    pin("stat.root.cold", NONE, [0, 0, 29, 5], NONE),
+    pin("stat.root.warm", NONE, [0, 0, 21, 5], NONE),
     // probe stat.depth3: 95
-    pin("stat.depth3.cold", NONE, [0, 0, 36, 5], NONE),
-    pin("stat.depth3.warm", NONE, [0, 0, 23, 5], NONE),
+    pin("stat.depth3.cold", NONE, [0, 0, 35, 5], NONE),
+    pin("stat.depth3.warm", NONE, [0, 0, 22, 5], NONE),
     // probe stat.depth7: 152
-    pin("stat.depth7.cold", NONE, [0, 0, 40, 5], NONE),
-    pin("stat.depth7.warm", NONE, [0, 0, 23, 5], NONE),
+    pin("stat.depth7.cold", NONE, [0, 0, 39, 5], NONE),
+    pin("stat.depth7.warm", NONE, [0, 0, 22, 5], NONE),
     // probe read.small_depth3: 83
-    pin("read.small_depth3.cold", NONE, [0, 0, 37, 5], NONE),
-    pin("read.small_depth3.warm", NONE, [0, 0, 24, 5], NONE),
+    pin("read.small_depth3.cold", NONE, [0, 0, 36, 5], NONE),
+    pin("read.small_depth3.warm", NONE, [0, 0, 23, 5], NONE),
     // probe read.2000_lines: 68
-    pin("read.2000_lines.cold", NONE, [0, 0, 34, 5], NONE),
-    pin("read.2000_lines.warm", NONE, [0, 0, 23, 5], NONE),
+    pin("read.2000_lines.cold", NONE, [0, 0, 33, 5], NONE),
+    pin("read.2000_lines.warm", NONE, [0, 0, 22, 5], NONE),
     // probe read.lines_100_200: 66
-    pin("read.lines_100_200.cold", NONE, [0, 0, 34, 5], NONE),
-    pin("read.lines_100_200.warm", NONE, [0, 0, 23, 5], NONE),
+    pin("read.lines_100_200.cold", NONE, [0, 0, 33, 5], NONE),
+    pin("read.lines_100_200.warm", NONE, [0, 0, 22, 5], NONE),
     // probe list.root: 39
-    pin("list.root.cold", NONE, [0, 0, 31, 5], NONE),
-    pin("list.root.warm", NONE, [0, 0, 22, 5], NONE),
+    pin("list.root.cold", NONE, [0, 0, 30, 5], NONE),
+    pin("list.root.warm", NONE, [0, 0, 21, 5], NONE),
     // probe list.dir_100: 69
-    pin("list.dir_100.cold", NONE, [0, 0, 37, 5], NONE),
-    pin("list.dir_100.warm", NONE, [0, 0, 24, 5], NONE),
+    pin("list.dir_100.cold", NONE, [0, 0, 36, 5], NONE),
+    pin("list.dir_100.warm", NONE, [0, 0, 23, 5], NONE),
     // probe glob.dir_100: 66
-    pin("glob.dir_100.cold", NONE, [0, 0, 35, 5], NONE),
-    pin("glob.dir_100.warm", NONE, [0, 0, 23, 5], NONE),
+    pin("glob.dir_100.cold", NONE, [0, 0, 34, 5], NONE),
+    pin("glob.dir_100.warm", NONE, [0, 0, 22, 5], NONE),
     // probe glob.tree: 44
-    pin("glob.tree.cold", NONE, [0, 0, 44, 5], NONE),
-    pin("glob.tree.warm", NONE, [0, 0, 24, 5], NONE),
+    pin("glob.tree.cold", NONE, [0, 0, 43, 5], NONE),
+    pin("glob.tree.warm", NONE, [0, 0, 23, 5], NONE),
     // probe grep.one_file_dir: 49
-    pin("grep.one_file_dir.cold", NONE, [0, 0, 34, 5], NONE),
-    pin("grep.one_file_dir.warm", NONE, [0, 0, 23, 5], NONE),
+    pin("grep.one_file_dir.cold", NONE, [0, 0, 33, 5], NONE),
+    pin("grep.one_file_dir.warm", NONE, [0, 0, 22, 5], NONE),
     // probe grep.tree_1k: 131
-    pin("grep.tree_1k.cold", NONE, [0, 0, 139, 5], NONE),
-    pin("grep.tree_1k.warm", NONE, [0, 0, 60, 5], NONE),
+    pin("grep.tree_1k.cold", NONE, [0, 0, 138, 5], NONE),
+    pin("grep.tree_1k.warm", NONE, [0, 0, 59, 5], NONE),
     // Markers present (one `project.remove_file` of /src/d09/f099.txt).
-    pin("hidden.stat.depth3.cold", NONE, [0, 0, 36, 5], NONE),
-    pin("hidden.list.dir_100.cold", NONE, [0, 0, 37, 5], NONE),
-    pin("hidden.stat.removed.cold", NONE, [0, 0, 32, 4], NONE),
+    pin("hidden.stat.depth3.cold", NONE, [0, 0, 35, 5], NONE),
+    pin("hidden.list.dir_100.cold", NONE, [0, 0, 36, 5], NONE),
+    pin("hidden.stat.removed.cold", NONE, [0, 0, 31, 4], NONE),
 ];
 
 /// PostgreSQL: `[connects, round_trips, statements, transactions]` per
@@ -122,47 +125,51 @@ const SQLITE: &[Pin] = &[
 ///   root and −7 per component, cold and warm (`stat.root` 11 → 8,
 ///   `stat.depth3` 30 → 9, `stat.depth7` 58 → 9 warm); `grep.tree_1k` −3;
 ///   `hidden.list.dir_100` −28 (its marker lookup through the memo too).
+/// - #818 R5: the project, Branch, Commit, serial with markers and recorded
+///   Branch reads are one context statement: −4 round trips and statements
+///   warm (`stat.root` 8 → 4); cold −8, four prepares fewer too;
+///   `hidden.stat.removed` −6 cold (it reads no recorded Branch).
 const POSTGRESQL: &[Pin] = &[
     // probe stat.root: 18 trips
-    pin("stat.root.cold", NONE, [1, 24, 15, 0], NONE),
-    pin("stat.root.warm", NONE, [0, 8, 8, 0], NONE),
+    pin("stat.root.cold", NONE, [1, 16, 11, 0], NONE),
+    pin("stat.root.warm", NONE, [0, 4, 4, 0], NONE),
     // probe stat.depth3: 50
-    pin("stat.depth3.cold", NONE, [1, 30, 21, 0], NONE),
-    pin("stat.depth3.warm", NONE, [0, 9, 9, 0], NONE),
+    pin("stat.depth3.cold", NONE, [1, 22, 17, 0], NONE),
+    pin("stat.depth3.warm", NONE, [0, 5, 5, 0], NONE),
     // probe stat.depth7: 73
-    pin("stat.depth7.cold", NONE, [1, 34, 25, 0], NONE),
-    pin("stat.depth7.warm", NONE, [0, 9, 9, 0], NONE),
+    pin("stat.depth7.cold", NONE, [1, 26, 21, 0], NONE),
+    pin("stat.depth7.warm", NONE, [0, 5, 5, 0], NONE),
     // probe read.small_depth3: 38
-    pin("read.small_depth3.cold", NONE, [1, 31, 22, 0], NONE),
-    pin("read.small_depth3.warm", NONE, [0, 10, 10, 0], NONE),
+    pin("read.small_depth3.cold", NONE, [1, 23, 18, 0], NONE),
+    pin("read.small_depth3.warm", NONE, [0, 6, 6, 0], NONE),
     // probe read.2000_lines: 32
-    pin("read.2000_lines.cold", NONE, [1, 28, 19, 0], NONE),
-    pin("read.2000_lines.warm", NONE, [0, 9, 9, 0], NONE),
+    pin("read.2000_lines.cold", NONE, [1, 20, 15, 0], NONE),
+    pin("read.2000_lines.warm", NONE, [0, 5, 5, 0], NONE),
     // probe read.lines_100_200: 30
-    pin("read.lines_100_200.cold", NONE, [1, 28, 19, 0], NONE),
-    pin("read.lines_100_200.warm", NONE, [0, 9, 9, 0], NONE),
+    pin("read.lines_100_200.cold", NONE, [1, 20, 15, 0], NONE),
+    pin("read.lines_100_200.warm", NONE, [0, 5, 5, 0], NONE),
     // probe list.root: 18
-    pin("list.root.cold", NONE, [1, 25, 16, 0], NONE),
-    pin("list.root.warm", NONE, [0, 8, 8, 0], NONE),
+    pin("list.root.cold", NONE, [1, 17, 12, 0], NONE),
+    pin("list.root.warm", NONE, [0, 4, 4, 0], NONE),
     // probe list.dir_100: 33
-    pin("list.dir_100.cold", NONE, [1, 31, 22, 0], NONE),
-    pin("list.dir_100.warm", NONE, [0, 10, 10, 0], NONE),
+    pin("list.dir_100.cold", NONE, [1, 23, 18, 0], NONE),
+    pin("list.dir_100.warm", NONE, [0, 6, 6, 0], NONE),
     // probe glob.dir_100: 30
-    pin("glob.dir_100.cold", NONE, [1, 29, 20, 0], NONE),
-    pin("glob.dir_100.warm", NONE, [0, 9, 9, 0], NONE),
+    pin("glob.dir_100.cold", NONE, [1, 21, 16, 0], NONE),
+    pin("glob.dir_100.warm", NONE, [0, 5, 5, 0], NONE),
     // probe glob.tree: 23
-    pin("glob.tree.cold", NONE, [1, 38, 29, 0], NONE),
-    pin("glob.tree.warm", NONE, [0, 10, 10, 0], NONE),
+    pin("glob.tree.cold", NONE, [1, 30, 25, 0], NONE),
+    pin("glob.tree.warm", NONE, [0, 6, 6, 0], NONE),
     // probe grep.one_file_dir: 23
-    pin("grep.one_file_dir.cold", NONE, [1, 28, 19, 0], NONE),
-    pin("grep.one_file_dir.warm", NONE, [0, 9, 9, 0], NONE),
+    pin("grep.one_file_dir.cold", NONE, [1, 20, 15, 0], NONE),
+    pin("grep.one_file_dir.warm", NONE, [0, 5, 5, 0], NONE),
     // probe grep.tree_1k: 78
-    pin("grep.tree_1k.cold", NONE, [1, 100, 91, 0], NONE),
-    pin("grep.tree_1k.warm", NONE, [0, 28, 28, 0], NONE),
+    pin("grep.tree_1k.cold", NONE, [1, 92, 87, 0], NONE),
+    pin("grep.tree_1k.warm", NONE, [0, 24, 24, 0], NONE),
     // Markers present.
-    pin("hidden.stat.depth3.cold", NONE, [1, 30, 21, 0], NONE),
-    pin("hidden.list.dir_100.cold", NONE, [1, 31, 22, 0], NONE),
-    pin("hidden.stat.removed.cold", NONE, [1, 27, 19, 0], NONE),
+    pin("hidden.stat.depth3.cold", NONE, [1, 22, 17, 0], NONE),
+    pin("hidden.list.dir_100.cold", NONE, [1, 23, 18, 0], NONE),
+    pin("hidden.stat.removed.cold", NONE, [1, 21, 16, 0], NONE),
 ];
 
 const fn pin(case: &'static str, writer: Counts, control: Counts, workspace: Counts) -> Pin {

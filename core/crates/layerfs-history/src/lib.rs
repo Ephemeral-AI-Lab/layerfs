@@ -30,7 +30,10 @@ pub use contract::path;
 pub use contract::query;
 pub use contract::records;
 
-pub use catalog::{HistoryCatalog, HistoryCatalogConfig, MountMarkers, NamedSnapshot, PublishLane};
+pub use catalog::{
+    ContextTarget, HistoryCatalog, HistoryCatalogConfig, MountMarkers, NamedSnapshot, NodeRecord,
+    PublishLane, ReadContext,
+};
 pub use error::{
     GcHolder, HistoryError, HistoryResult, MountHolders, OpConflict, UnknownOutcomeState,
 };

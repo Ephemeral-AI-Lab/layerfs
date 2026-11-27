@@ -206,6 +206,14 @@ impl StorePorts {
     ) -> Result<Vec<Vec<u8>>, Arc<PortError>> {
         self.attempt(|| self.reader()?.objects_with(cache, ids))
     }
+    /// [`Self::file_lengths`] through the same caller-kept caches (#818 R4).
+    pub fn lengths_with(
+        &self,
+        cache: &mut layerfs_storage::ReadCache,
+        ids: &[ObjectId],
+    ) -> Result<Vec<u64>, Arc<PortError>> {
+        self.attempt(|| self.reader()?.lengths_with(cache, ids))
+    }
 }
 impl AuthenticatedObjects for StorePorts {
     fn read_canonical_batch(&self, ids: &[ObjectId]) -> ContentResult<Vec<Vec<u8>>> {

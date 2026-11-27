@@ -98,6 +98,11 @@ impl Storage {
         kept.0
             .read(workspace, &self.source, &self.capacities(), ids)
     }
+    /// [`Reader::file_lengths`] through caller-kept caches, so a length's
+    /// state object can come from a pack the caller's demands already hold.
+    pub fn lengths_with(&self, cache: &mut ReadCache, ids: &[ObjectId]) -> StorageResult<Vec<u64>> {
+        super::length::read(self, ids, |states| self.read_with(cache, states))
+    }
     /// [`Reader::read_objects`] through kept caches and a fresh arena.
     pub fn read_kept(&self, kept: &mut KeptReads, ids: &[ObjectId]) -> StorageResult<Vec<Vec<u8>>> {
         let mut workspace = Decoder::new()?;

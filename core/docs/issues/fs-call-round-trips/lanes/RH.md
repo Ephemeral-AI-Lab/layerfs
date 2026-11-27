@@ -286,3 +286,306 @@ open per case, `.warm` the repeat on that open (pins' own definitions).
   (`persistence/src/history/admission.rs`, store-service
   `tests/refresh_lookups.rs`, `tests/support/view.rs`, `tests/verify768y_*`),
   left as they are.
+
+## M2 (base: merged M1 tip `cfc9586d05`; read and write pins green there)
+
+Targets (RECORD rule): warm = SPEC target; cold = SPEC target + (cold − probe)
+from the Phase 0 table.
+
+### R4 — one `Cached` for the whole call (both backends)
+
+**Prediction (written before the code).**
+
+- Mechanism: the five reads (and `blame`) build the call's `Cached` before
+  the snapshot resolves and open the root's `TreeTable` through it; `size()`
+  of a file in `stat`/`read` and `Cached::roots`' lengths (grep) read through
+  the same cache (`Storage::lengths_with` beside `read_with`,
+  `ReadSession::lengths_with`, `StorePorts::lengths_with`).
+- Saves a demand only where the root object, the file's state object or the
+  lengths' objects share a pack the call already holds. Predicted per case:
+  0 to −2 PG trips (TreeTable::open's pack is the one the walk's first page
+  sits in on this small tree: −1 likely everywhere; a file's length −0/−1
+  on `stat`/`read` files); SQLite: the same reads' statements. No case may
+  rise. SPEC counts R4 as 0.
+- Memory: the existing per-call `Cached` (3 MiB bound) only.
+
+**Measured (receipts `receipts/R4/`).** PG: every read case unchanged (0,
+within the predicted 0..−2). SQLite: −1 statement on every read case, cold
+and warm (`stat.root` 22 → 21 warm; new pins, D1). History pins unchanged
+(`blame` opens its root through a cache of its own until H3). No new
+message: no sweep. `method_refusal_order`, `sdk_round_trip_equivalence_seeded`,
+`sdk_text_scan`, `sdk_path_reads`, `stat_symlink`, `sdk_grep_reads`,
+`sdk_large_file_budget` green. `sdk_text_scan.rs` follows `reads::read`'s
+signature (no reader argument). Deleted tests: none.
+
+### R3 review fix — caches made at the first demand (`4cc9974dd3`)
+
+The M1 review found `Cached::new` (decode-arena allocation) ahead of the
+hidden-path check. `Cached` now makes its caches at the call's first demand
+(the root's open, where the parent's reader made its arena). Read pins
+unchanged; `method_refusal_order`, `sdk_text_scan` green. `Cached::new` keeps
+its `Result` shape (control's `project/export/walk.rs` calls it).
+
+### R5 — one context statement per read call (PostgreSQL; SQLite default)
+
+**Prediction (written before the code).**
+
+- Mechanism: `HistoryCatalog::read_context(project, target)` with target
+  `main`, a Branch name or a full node id. Persistence overrides it: on
+  PostgreSQL one fenced `read_statement` (`read_context_named` /
+  `read_context_node`) returns the stack, the Branch, the head node's record
+  with its `history_serial`, the Commit's recorded Branch (`branch_any`) and
+  the stack's markers (UNION ALL rows; PG records carry no arrays). SQLite
+  calls `layerfs_history::catalog::read_context_serial`: today's
+  `layer_stack_named`, `branch_named`, `commit`/`layer` in today's order, and
+  leaves the markers and the recorded Branch unread, so the store service
+  reads them where it does today (statement counts and order unchanged,
+  refusal cases included). The commit-prefix path, invalid names and
+  unparsable ids keep today's flow.
+- PostgreSQL warm, every successful read case: −4 trips and −4 statements
+  (project, Branch, Commit row, serial+markers, recorded name → 1):
+  `stat.root` 8 → 4, `stat.depth3` 9 → 5, `stat.depth7` 9 → 5,
+  `read.small_depth3` 10 → 6, `read.2000_lines`/`lines_100_200` 9 → 5,
+  `list.root` 8 → 4, `list.dir_100` 10 → 6, `glob.dir_100` 9 → 5,
+  `glob.tree` 10 → 6, `grep.one_file_dir` 9 → 5, `grep.tree_1k` 28 → 24.
+- PostgreSQL cold: −4 executes and −4 first-use prepares (5 statements
+  prepared today, 1 after): −8 trips, −4 statements, e.g. `stat.root`
+  24 → 16, `stat.depth3` 30 → 22, `grep.tree_1k` 100 → 92;
+  `hidden.stat.depth3`/`hidden.list.dir_100` −8; `hidden.stat.removed`
+  (refused, no recorded name read today) −3 executes −3 prepares = −6.
+- Targets (RECORD rule): warm `stat /` 4 = SPEC 4; cold `stat /` 16 =
+  4 + (24 − 8 − 4 = 12 cold overhead) — on target if measured.
+- History pins: `blame` resolves through the same path: −3 executes
+  (project, Branch, Commit, markers → 1; blame reads no recorded name there),
+  warm −3; cold −3 executes and −2 prepares (the Commit statement stays in
+  use) = −5. `revision`, `diff_files` unchanged.
+- SQLite: every pin unchanged (read and history).
+- Memory: the stack's markers, as `path_removals` loads them today; the row
+  count is one context row plus one row per marker of the stack (no cap: the
+  marker set is what today's statement already loads).
+- New messages `read_context_named`, `read_context_node`: drop and kill sweeps.
+
+**Measured (receipts `receipts/R5/`).**
+
+| Case (PG control) | before warm / cold | predicted | measured warm / cold |
+|---|---|---|---|
+| `stat.root` | 8 / 24 | 4 / 16 | 4 / 16 |
+| `stat.depth3` | 9 / 30 | 5 / 22 | 5 / 22 |
+| `stat.depth7` | 9 / 34 | 5 / 26 | 5 / 26 |
+| `read.small_depth3` | 10 / 31 | 6 / 23 | 6 / 23 |
+| `list.dir_100` | 10 / 31 | 6 / 23 | 6 / 23 |
+| `grep.tree_1k` | 28 / 100 | 24 / 92 | 24 / 92 |
+| `hidden.stat.removed` | — / 27 | — / 21 | — / 21 |
+| `blame.h10` | 223 / 263 | 220 / 258 | 221 / 260 |
+| `blame.h100` | 2,024 / 2,264 | 2,021 / 2,259 | 2,021 / 2,259 |
+
+- Every read case −4 warm, −8 cold, as predicted (all 27 pins); statements
+  −4 each. `blame.h10` names a full Commit id (no Branch read): −2 warm,
+  −3 cold, one fewer than predicted (within 15%). `revision`, `diff_files`
+  unchanged. SQLite: every read and history pin unchanged.
+- Targets (RECORD rule): warm `stat /` 4 = 4; `stat.depth7` cold 26 ≤ 30 +
+  18; `grep.tree_1k` warm 24 ≤ 64, cold 92 ≤ 64 + 33.
+- Sweeps (the two new statements): `sdk_read_fault_rh_{drop,kill}` now run
+  the cold `fs.stat` twice, by Branch (`read_context_named`) and by the head
+  Commit's full id (`read_context_node`): K 102 → 75 each; drop 70
+  `Unknown`, 5 `Failed`; kill 46 exact answers, 29 `Unknown`; both shapes
+  alike; invariants held.
+- Equivalence: `postgresql_statement_schema` (guard pins `read_context`;
+  runtime evidence compares the one statement with the default's reads plus
+  `node_path_removals` and `branch_any` for main, a Branch, a missing
+  Branch, a Commit, a Layer, a missing Commit and a missing project).
+  New `sdk_read_context_rh.rs`: 18 `fs.stat` shapes (no project, no Branch,
+  identity-shaped names, missing Commit/Layer, path refusals after them,
+  prefixes, answers' `at`) give the same outcomes in the same order on
+  SQLite and PostgreSQL.
+- `method_refusal_order`, `sdk_round_trip_equivalence_seeded` and the tests
+  the diff reaches green, one run each.
+- Deleted tests: none.
+
+### H1 — carry rows forward; read each reference once (both backends)
+
+**Prediction (written before the code).**
+
+- Mechanism: one per-call `Rows` (store-service `history/rows.rs`) holds the
+  last few Commit/Layer records read (a small recent window, 8 rows) and a
+  Branch-name memo `HashMap<BranchId, Option<String>>` (bounded by distinct
+  Branches met, ≤ `MAXIMUM_QUERY_WORK`). `operator::files::revision`,
+  `saved::reference` and `saved::record` become `Rows` methods (the free
+  functions keep their reads, with a fresh `Rows`). Blame and revision use one
+  `Rows` per call, seeded with the record (and, from R5's context, the
+  recorded Branch) the resolve already read; blame builds each owner's `ref`
+  from the row it held when it assigned the owner, and carries the older
+  version's `Text` to the next comparison (keyed by content root).
+- Per walked version today: `revision(node)` and `revision(parent)` each read
+  a Commit row and its Branch name (4 reads), + the parent's serial. After:
+  the parent's row only (+ its serial): −3 per version. Owners: −2 per
+  distinct owner line (Commit row + Branch name). `at`: −2 (seeded). Text
+  carry: −1 text read per changed pair (≈ 1–3 object trips each).
+- PostgreSQL control, warm (cold alike, ±prepares):
+  - `blame.h100`: ~100 versions × −3, 51 owners × −2, at −2, ~50 texts ×
+    −1..−3: ≈ −450..−550 → 2,021 → ~1,520 (cold 2,259 → ~1,760).
+  - `blame.h10`: 10 × −3, 6 owners × −2, at −2, 5 texts: ≈ −50..−60 →
+    221 → ~165 (cold 260 → ~205).
+  - `revision.h100`: per node −2 (parent row and root read once; the node's
+    row carried), per item (50) −7 (record's parentRef, baseLayer, ref and
+    comparedTo from held rows and the name memo), at −2: ≈ −550 → 3,794 →
+    ~3,240 (cold 4,022 → ~3,470).
+  - `revision.h10` (cold only): 10 × −2, 5 items × −7, −2: ≈ −57 → 493 → ~436.
+  - `diff_files`: unchanged (H3).
+- SQLite: each saved read is 3 statements (its transaction): ≈ 3× the read
+  savings, plus the text statements: `blame.h100` −~1,400, `blame.h10`
+  −~160, `revision.h100` −~1,650, `revision.h10` −~170 (new pins, D1/O2).
+- Writer role: unchanged.
+- Formula check (bounds only) must still hold; it can only get easier.
+- No new server message: no sweep. Answers identical (`owner`, `origins`,
+  `commit`/`message`, `coverage`, `comparisonCoarse`, revision items).
+
+**Measured (receipts `receipts/H1/`).** PostgreSQL trips, writer + control:
+
+| Case | before warm (cold) | predicted Δ | after warm (cold) | Δ |
+|---|---|---|---|---|
+| `blame.h100` | 199 + 2,021 (200 + 2,259) | −450..−550 | 0 + 1,768 (0 + 2,005) | −452 (−454) |
+| `blame.h10` | 19 + 221 (20 + 260) | −50..−60 | 0 + 193 (0 + 231) | −47 (−49) |
+| `revision.h100` | 92 + 3,794 (93 + 4,022) | −550 | 0 + 3,161 (0 + 3,389) | −725 (−726) |
+| `revision.h10` (cold) | 11 + 493 | −57 | 0 + 420 | −84 |
+| `diff_files` | 0 + 77 (0 + 103) | 0 | unchanged | 0 |
+
+- The Branch-name reads were on the writer's session (`store.history()` in
+  `operator::files::revision`), not the control reader, which the
+  prediction assumed: the name memo now reads them once on the control
+  reader (`published`, as `saved::reference` did), so writer → 0 and the
+  control column falls less than the total. Totals: blame within the
+  predicted range (h10 −47 vs −50..−60, within 15%); revision −725 / −84
+  vs −550 / −57, beyond 15% and better. Diagnosed once: each item's record
+  re-read 5 rows (Commit, parent, base Layer, `ref`, `comparedTo`), not the
+  4 counted, plus the writer's per-node Branch name. Recorded, no change.
+- SQLite (writer + control): `blame.h100` 597 + 6,746 → 0 + 5,829 warm
+  (−1,514; cold 597 + 7,102 → 0 + 6,185), `blame.h10` 57 + 621 → 0 + 548,
+  `revision.h100` 276 + 12,382 → 0 + 10,483 (−2,175), `revision.h10` cold
+  30 + 1,325 → 0 + 1,106; `diff_files` unchanged. New pins (D1, O2).
+- Formula check holds. Answers: `sdk_blame_coarse`, `sdk_file_history`,
+  `history_surface`, `operator_history`, `sdk_history_depth`,
+  `history_wire_codes`, `sdk_method_golden` (blame golden lines),
+  `sdk_round_trip_equivalence_seeded`, `method_refusal_order`,
+  `verify_history_readback`, `sdk_compare` (attribution),
+  `history_ancestry_oracle`, `sdk_file_compare_budget` green.
+- No new server message: no sweep. Deleted tests: none.
+
+### H2 — revision walks once (both backends)
+
+**Prediction (written before the code).**
+
+- Mechanism: `fs.revision`'s walk reads node N's `now` and its parent's
+  `before` (a path walk from each root, and each one's serial when the
+  entry exists); the next node is that parent, so its `now` and serial are
+  the carried `before` and serial (kept before the hidden filter). A
+  `hidden_before` stop ends the walk, so nothing is carried there. The same
+  carry in `fs.list_revisions` (`operator/files.rs`, not pinned).
+  `comparedTo` already costs no read since H1 (held row, name memo).
+- Per walked node: −1 path walk (root open + two lookups + value through
+  the bare reader, ≈ 10–12 trips) and −1 serial: ≈ −11..−13 per node.
+  - `revision.h100` warm control 3,161 → ~1,860 (range 1,860–2,060); cold
+    3,389 → ~2,090.
+  - `revision.h10` cold 420 → ~295.
+  - `blame`, `diff_files`: unchanged.
+- SQLite: the same walk's statements and serial reads per node: about
+  −20..−40 per node: `revision.h100` 10,483 → ~7,000–8,500; `revision.h10`
+  1,106 → ~800–900.
+- Invariants: iteration order unchanged, so `candidateIndex`, boundaries,
+  continuation tokens and `revision_pages` are unchanged;
+  `sdk_file_history.rs` pages pass unchanged. No new message: no sweep.
+
+**Measured (receipts `receipts/H2/`).**
+
+| Case | before | predicted | measured |
+|---|---|---|---|
+| PG `revision.h100` warm (cold) | 3,161 (3,389) | ~1,860–2,060 (~2,090) | 1,705 (1,933) |
+| PG `revision.h10` cold | 420 | ~295 | 260 |
+| SQLite `revision.h100` warm (cold) | 10,483 (10,827) | ~7,000–8,500 | 5,797 (6,141) |
+| SQLite `revision.h10` cold | 1,106 | ~800–900 | 634 |
+
+- −14.6 trips per node on PostgreSQL (−16 at h10), beyond 15% of my
+  −11..−13 and better. Diagnosed once: a path walk through the bare reader
+  costs ≈ 13.5 trips here (root open, two lookups, value, pooled leaves),
+  not 10–12; SPEC's ≈ −13 per node is within 15%. Recorded, no change.
+- `blame`, `diff_files`, writer: unchanged. Formula check holds.
+- `sdk_file_history` (pages unchanged), `history_surface`,
+  `operator_history`, `sdk_history_depth`, `history_wire_codes`,
+  `sdk_method_golden`, `sdk_round_trip_equivalence_seeded`,
+  `method_refusal_order`, `verify_history_readback` green. No new message:
+  no sweep. Deleted tests: none.
+
+### H3 — one per-call cache across versions, plus a directory memo (both backends)
+
+**Prediction (written before the code).**
+
+- Mechanism: `fs.blame`, `fs.revision`, `fs.diff_files` (and the operator's
+  `fs.list_revisions`/`fs.get_storage`) read every version's objects
+  through one call `Cached` (pack bodies, decoded groups, 3 MiB bound):
+  roots, inode pages, directory pages, sizes (`lengths_with`), text windows,
+  ranges, metadata and byte comparisons. Version walks bind names through a
+  per-call directory memo `(DirectoryRoot, PathName) → Option<serial>`
+  (bounded at 4,096 entries; the shape of lane C's `DirectoryMemo`: `get`
+  gives unknown / known-unbound / bound, `insert` refuses when full), so an
+  unchanged directory's pages are not read again. `diff_files` keeps the
+  strict lookup it made (`raw`) instead of walking again when
+  `allowMissing` is false. Store reads (rows, serials) unchanged.
+- PostgreSQL control, warm (cold alike, plus first-use prepares unchanged):
+  - `blame.h100` 1,768 → ~900–1,100 (a version ≈ 17 → ≈ 8: its new root,
+    new inode branch and leaf, values, text through shared packs).
+  - `blame.h10` 193 → ~110–130.
+  - `revision.h100` 1,705 → ~850–1,000; `revision.h10` cold 260 → ~150–180.
+  - `diff_files` 77 → ~50–60 warm (cold 103 → ~75–85).
+- SQLite: the same page reads go: `blame.h100` 5,829 → ~3,000–3,500,
+  `revision.h100` 5,797 → ~3,000–3,500, `diff_files` 187 → ~130 (new pins).
+- Read pins (`sdk_read_round_trips`): unchanged (their walk is unchanged).
+- Exit check: page reads per Commit on `blame.h100` ≤ 8 (control trips per
+  version after the rows: (trips − fixed) / versions).
+- Memory: the existing `Cached` bound (3 MiB) and the memo (≤ 4,096 names of
+  ≤ 255 bytes), both dropped at call end. No new message: no sweep.
+
+**Measured (receipts `receipts/H3/`).**
+
+| Case | PG warm (cold) before → after | predicted | SQLite warm (cold) before → after |
+|---|---|---|---|
+| `blame.h100` | 1,768 (2,005) → 254 (491) | ~900–1,100 | 5,829 (6,185) → 779 (1,135) |
+| `blame.h10` | 193 (231) → 33 (71) | ~110–130 | 548 (589) → 91 (132) |
+| `revision.h100` | 1,705 (1,933) → 253 (481) | ~850–1,000 | 5,797 (6,141) → 769 (1,113) |
+| `revision.h10` (cold) | 260 → 82 | ~150–180 | 634 → 147 |
+| `diff_files` | 77 (103) → 23 (49) | ~50–60 | 187 (218) → 71 (102) |
+
+- Far beyond 15%, better. Diagnosed once: the prediction priced a version
+  at ≈ 8 page reads (SPEC's "new root, inode branch and leaf, values"), but
+  a Commit's new objects sit in one pack and its delta chain's bases in
+  packs the call already read, so after the first versions a version costs
+  its Commit row, its serial and about 0.5 object trips: (254 − 54) / 100 ≈
+  2 control trips per version on `blame.h100`. Exit check (≤ 8 page reads
+  per Commit) holds. Recorded, no change.
+- Answers: the eleven history calls of the pinned scenario (blame h10, h100,
+  `/hist/other.txt`; revision h10, h100, page size 7, other.txt; diff_files
+  with and without attribution) dumped on SQLite at R5 (`de237565ee`, before
+  H1) and at H3, ids and times masked: identical (sha256 prefix
+  `70ba09470f703fa3` both). The dump test was temporary, not committed.
+- Read pins unchanged (their walk binds through the tree as before).
+  `sdk_blame_coarse`, `sdk_file_history`, `history_surface`,
+  `operator_history`, `sdk_history_depth`, `history_wire_codes`,
+  `sdk_method_golden`, `sdk_round_trip_equivalence_seeded`,
+  `method_refusal_order`, `verify_history_readback`, `sdk_compare`,
+  `history_ancestry_oracle`, `sdk_file_compare_budget`,
+  `history_diff_oracle`, `sdk_diff_size`, `sdk_path_reads`, `sdk_text_scan`,
+  `sdk_fs_reads_replay` green.
+- Test adapted (not deleted): `sdk_file_compare_budget.rs` calls
+  `file_facts::changes_bounded`, which now takes the call's `Cached`.
+- The directory memo has lane C's `DirectoryMemo` shape (`get` → unknown /
+  known-unbound / bound, `insert` → `false` when full); H5 wiring can swap
+  in lane C's type. No new message: no sweep. Deleted tests: none.
+
+### M2 milestone checks
+
+Clippy `-D warnings` (all targets) on `layerfs-history`, `layerfs-storage`,
+`layerfs-persistence`, `layerfs-store-service`: clean after two fixes in a
+separate commit (needless borrows in `read/file_compare.rs` from H3; a
+duplicated `allow(dead_code)` in the new `sdk_read_context_rh.rs`).
+`cargo fmt --check` differs only in files this lane did not touch (as at
+M1). History pins, `sdk_read_context_rh`, `sdk_file_compare_budget` rerun
+green (`receipts/M2-lint/`). Host free space 195 GB.

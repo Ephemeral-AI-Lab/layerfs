@@ -52,6 +52,9 @@ fn owners(
     budget: &mut AttributionBudget,
 ) -> Result<Owners, SdkRefusal> {
     let (mut lines, mut from, mut exact) = (BTreeMap::new(), 1u64, true);
+    let mut rows = crate::history::rows::Rows::new(store);
+    // One cache for the file's blame pages (#818 H3).
+    let cached = super::cached::Cached::new(reader)?;
     loop {
         if budget.work == 0 {
             exact = false;
@@ -63,7 +66,8 @@ fn owners(
         };
         let page = blame::blame(
             store,
-            reader,
+            &mut rows,
+            &cached,
             snap,
             path,
             visibility,

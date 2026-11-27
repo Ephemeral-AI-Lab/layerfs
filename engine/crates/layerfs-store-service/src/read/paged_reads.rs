@@ -31,12 +31,14 @@ pub fn pin(
     store: &Arc<Store>,
     snap: &Snap,
     record: &args::NodeRecord,
+    recorded: &Option<Option<String>>,
     answer: args::Answer,
 ) -> args::Answer {
     let SdkValue::Map(mut fields) = answer? else {
         return Err(args::failed("saved read response must be a map"));
     };
-    fields.push(("at".into(), saved::reference_of(store, snap.node, record)?));
+    let at = saved::reference_of(store, snap.node, record, recorded.as_ref())?;
+    fields.push(("at".into(), at));
     super::read_reply::finish(fields)
 }
 

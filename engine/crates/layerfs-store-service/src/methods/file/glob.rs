@@ -1,5 +1,5 @@
 //! `fs.glob`.
-use crate::methods::args::{optional_path, paging, snapshot_full, text, Answer};
+use crate::methods::args::{optional_path, paging, snapshot_in, snapshot_target, text, Answer};
 use crate::read::cached::Cached;
 use crate::{
     read::{paged_reads, query, reads, search, visibility},
@@ -10,12 +10,14 @@ use layerfs_content::compare::memo::Memo;
 
 /// `glob(pattern, { branch, commit?, path?, pageSize?, pagePos? })`: paths matching a `/.lww`-syntax pattern.
 pub fn glob(service: &StoreService, args: &SdkValue) -> Answer {
-    let (stack, reader, snap, saved) = snapshot_full(service, args)?;
+    let (stack, reader, name) = snapshot_target(service, args)?;
+    // The call's caches, from the root's open on (#818 R4).
+    let cached = Cached::new(&reader)?;
+    let (snap, saved) = snapshot_in(service, &stack, &cached, name)?;
     let pattern = text(args, "pattern")?;
     let path = optional_path(args)?;
     let seen = visibility::Visibility::load(&service.store, &stack, &snap, saved.removals)?;
     // One path walk for the call (#818 R3), through its caches and memo.
-    let cached = Cached::new(&reader)?;
     let memo = Memo::new(&cached);
     let entry = visibility::checked(&memo, &snap, &path, &seen)?;
     // The page-independent `removed_count`: the hidden entries this pattern
@@ -32,6 +34,7 @@ pub fn glob(service: &StoreService, args: &SdkValue) -> Answer {
             &service.store,
             &snap,
             &saved.record,
+            &saved.recorded,
             paged_reads::glob(
                 &service.store,
                 &reader,
@@ -49,6 +52,7 @@ pub fn glob(service: &StoreService, args: &SdkValue) -> Answer {
         &service.store,
         &snap,
         &saved.record,
+        &saved.recorded,
         reads::glob(
             memo, &snap, pattern, &path, entry, &seen, &filters, limit, pos,
         )

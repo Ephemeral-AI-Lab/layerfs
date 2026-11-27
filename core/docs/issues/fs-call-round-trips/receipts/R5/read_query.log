@@ -1,0 +1,11 @@
+ 8:07  up 3 days,  6:40, 1 user, load averages: 6.44 6.97 6.53
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.08s
+     Running tests/read_query.rs (target/debug/deps/read_query-1cd0c23c3328b6e9)
+
+running 2 tests
+test exhausted_query_refuses_instead_of_pretending_a_partial_page_is_complete ... ok
+test numbered_pages_count_result_offsets_and_validate_conflicting_legacy_options ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+run_bounded: exit 0 after 0.7 s
