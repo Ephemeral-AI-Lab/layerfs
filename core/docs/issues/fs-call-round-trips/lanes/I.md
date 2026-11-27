@@ -447,3 +447,38 @@ path"); `publish_captured` would answer a definite refusal there.
   `method_refusal_order`, `postgresql_captured_save_fault` (the shared
   flight), `layerfs-storage` `captured_payload_retention` and
   `kept_ids_pooled_chains`, every `layerfs-project` test binary: pass.
+
+## I3b — stopped before coding (needs a session-layer capability)
+
+Prediction (from the I3 table): nested_10k 303 → ~218, flat_10k 342 →
+~248, i.e. both ≤ 250 only with I3b. Not built. Why:
+
+- A `put_entries` or `place_children` unit decides its statements from its
+  dependency check (append the independent prefix, then the first
+  dependent row per row, then the next window). Keeping that check as "one
+  extra wait" inside the same transaction means one write transaction held
+  across two or more flights in one turn. `Session::decided_turn` /
+  `DecidedTurn::send` can send several flights in a turn, but each flight
+  prepares its own uncached texts inside a scoped read transaction
+  (`BEGIN … READ ONLY; SET LOCAL search_path; prepares; COMMIT`): inside an
+  open write transaction that `COMMIT` would commit the unit half way. A
+  prepare before the turn does not help: the statement cache clears when
+  full, so a text can be missing again by the second flight. A safe form
+  needs the session layer (for example: prepare a unit's every text at the
+  start of the turn, before its `BEGIN`, and refuse any prepare while the
+  turn's transaction is open). `session/` is not lane I's.
+- Without it, the alternatives change behaviour and are not lane I's call:
+  (a) the dependency check as a separate fenced read before a one-flight
+  write: not atomic with the write (another session's
+  `discard_abandoned`, or a concurrent unit of the same owner, could land
+  in between and change the answer); (b) an optimistic one-flight unit
+  that asserts "no dependency" server-side and, when it fires (nothing
+  written), continues on today's path in the same call, like the owner's
+  2026-11-25 Commit race fallback: an owner decision for Init.
+- What lane I could build alone: the units with no wait (`complete_files`,
+  `set_directory_roots`, `advance`, `discard` as one data-modifying CTE
+  statement) as single fenced flights with server-side assertions before
+  `COMMIT` (a `Changed` position read from the reply, the abort via a
+  session-local flag, as `publish_flight`'s nonce check does). About −50 at
+  10k (nested ~253, flat ~292): neither reaches 250 without the put and
+  place units. Not started, pending the coordinator's choice.

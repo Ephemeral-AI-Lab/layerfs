@@ -149,13 +149,7 @@ const POSTGRESQL: &[InitPin] = &[
     ),
     // baseline [0, 1,438, 1,317, 37]
     // at I2a [0, 228, 107, 37]; at I3a [0, 168, 85, 19]
-    pin(
-        "dir_600",
-        [0, 155, 94, 19],
-        6490,
-        82511,
-        "f2238ebb0be91b92",
-    ),
+    pin("dir_600", [0, 155, 94, 19], 6490, 82511, "f2238ebb0be91b92"),
     // added at I1 (no baseline row)
     // at I2a [0, 255, 129, 38]; at I3a [0, 189, 105, 18]
     pin(
