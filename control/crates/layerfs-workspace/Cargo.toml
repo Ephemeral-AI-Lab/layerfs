@@ -15,6 +15,10 @@ layerfs-protocol = { path = "../../../engine/crates/layerfs-protocol" }
 layerfs-sandbox = { path = "../layerfs-sandbox" }
 layerfs-store = { path = "../layerfs-store" }
 
+[dev-dependencies]
+
+layerfs-content = { path = "../../../core/crates/layerfs-content" }
+
 [features]
 # The machine calls (2.0, #533): host builds only.
 machine = ["layerfs-machine/machine", "layerfs-sandbox/machine"]

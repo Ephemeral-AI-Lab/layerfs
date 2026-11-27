@@ -1033,6 +1033,7 @@ dependencies = [
 name = "layerfs-workspace"
 version = "2.0.0"
 dependencies = [
+ "layerfs-content",
  "layerfs-history",
  "layerfs-home",
  "layerfs-machine",

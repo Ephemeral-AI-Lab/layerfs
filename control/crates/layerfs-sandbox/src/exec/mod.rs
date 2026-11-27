@@ -3,8 +3,15 @@
 //! (`record`) and its cancel (`cancel`, `workspace.cancel`, and what
 //! close and unmount do with running commands). The daemon supervises no
 //! command: exec and cancel live here and in the Sandbox backend.
-pub mod cancel;
 pub mod id;
-mod pending;
-pub mod record;
+#[doc(hidden)]
+pub mod output;
+pub(crate) mod pending;
 pub mod remote;
+pub mod settle;
+
+// #828 compat: old public module paths, removed in wave 3.
+#[doc(hidden)]
+pub use crate::exec::settle as cancel; // #828 compat
+#[doc(hidden)]
+pub use crate::record::exec as record; // #828 compat

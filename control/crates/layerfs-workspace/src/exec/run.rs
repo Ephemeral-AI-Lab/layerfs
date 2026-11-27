@@ -11,10 +11,10 @@ use layerfs_home::helpers::required;
 use layerfs_home::outcome::{refused, Outcome};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_sandbox::exec::id::ExecId;
-use layerfs_sandbox::exec::record::{ExecRecord, Running};
-use layerfs_sandbox::host::Host;
-use layerfs_sandbox::output::{Place, Spool};
-use layerfs_sandbox::registry::{sandbox, SandboxState};
+use layerfs_sandbox::exec::output::{Place, Spool};
+use layerfs_sandbox::lifecycle::registry::{sandbox, SandboxState};
+use layerfs_sandbox::record::exec::{ExecRecord, Running};
+use layerfs_sandbox::route::machine::Host;
 use layerfs_sandbox::{ExecSlot, Stop};
 
 /// One exec as a host operation carries it.
@@ -157,7 +157,7 @@ pub fn exec(host: &Host, exec: &Exec<'_>) -> Outcome {
     let start = start_folder(&directory, exec.cwd)?;
     // a Sandbox with no runtime is refused before any record is made
     let runtime = state.runtime()?;
-    let place = layerfs_sandbox::output::folder(
+    let place = layerfs_sandbox::exec::output::folder(
         &layerfs_sandbox::backend::select::scratch(runtime),
         &workspace,
     )
@@ -168,14 +168,14 @@ pub fn exec(host: &Host, exec: &Exec<'_>) -> Outcome {
     let running = match exec.workspace {
         Some(_) => None,
         None => {
-            let named = layerfs_sandbox::files::workspaces(&state.directory)?
+            let named = layerfs_sandbox::record::discovery::workspaces(&state.directory)?
                 .into_iter()
                 .find(|(_, record)| record.path() == Some(directory.as_str()))
                 .and_then(|(_, record)| record.name().map(str::to_owned));
             // its stop handle is recorded once the command runs in it
             let record = ExecRecord::new(&id, &workspace, (&directory, named.as_deref()))
                 .started_by(exec.tag, command);
-            let unreached = &mut layerfs_sandbox::exec::cancel::unreached;
+            let unreached = &mut layerfs_sandbox::exec::settle::unreached;
             Some(Running::start(
                 &state.directory,
                 &state.id,
@@ -190,7 +190,7 @@ pub fn exec(host: &Host, exec: &Exec<'_>) -> Outcome {
         form = Some(stop.form());
         // a caller that keeps the record records the handle now
         if let Some(started) = &started {
-            let stop = layerfs_sandbox::exec::record::stop_value(stop);
+            let stop = layerfs_sandbox::record::exec::stop_value(stop);
             let _ = started.send(SdkValue::map([(
                 "exec_started",
                 SdkValue::map([("stop", stop)]),
@@ -223,7 +223,7 @@ pub fn exec(host: &Host, exec: &Exec<'_>) -> Outcome {
         ("exit_code", SdkValue::Int(i64::from(code))),
         ("cancelled", SdkValue::Bool(cancelled && code > 128)),
     ];
-    result.extend(layerfs_sandbox::output::fields(stdout, stderr)?);
+    result.extend(layerfs_sandbox::exec::output::fields(stdout, stderr)?);
     result.push(("exec", SdkValue::text(id.as_str())));
     result.push(("stop", SdkValue::opt_text(form.map(str::to_owned))));
     let took = i64::try_from(begun.elapsed().as_millis()).unwrap_or(i64::MAX);

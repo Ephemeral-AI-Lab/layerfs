@@ -9,8 +9,8 @@
 //! `crate::backend::dispatch::Sandbox` handle. A Sandbox also names its
 //! platform (#529), recorded beside the runtime; every later call follows
 //! the record, not the caller's deployment.
-use crate::host::Deploy;
-use crate::output::{Place, Spool};
+use crate::exec::output::{Place, Spool};
+use crate::route::machine::Deploy;
 #[cfg(target_os = "linux")]
 use crate::Image;
 #[cfg(target_os = "linux")]
@@ -216,7 +216,7 @@ pub fn namespaces_image(deploy: &Deploy) -> Result<(Image, PathBuf), SdkRefusal>
                 .map_err(|error| refused("InvalidInput", format!("deploy.image: {error}")))?;
             // an image this machine already holds unpacked (one copied from
             // Docker, `machine.load`) needs no archive
-            if !crate::image_artifact::unpacked(deploy, &image) {
+            if !crate::image::cache::unpacked(deploy, &image) {
                 crate::namespaces::rootfs::holds(&archive, &image).map_err(in_archive)?;
             }
             image
@@ -234,7 +234,7 @@ pub fn scratch(runtime: &Sandbox) -> String {
 }
 
 /// One command to its end: exit code, stdout, stderr. A stream past the
-/// inline window spills to its file at `place` (`crate::output`); `stdin`
+/// inline window spills to its file at `place` (`crate::exec::output`); `stdin`
 /// is given to the command whole. `slot` names the command for its stop
 /// handle and is told it at spawn.
 pub fn run(
@@ -272,8 +272,8 @@ fn no_helper(sandbox: &str, failure: Box<crate::WireFailure>) -> SdkRefusal {
             "Unsupported",
             format!("Sandbox {sandbox}: {}", failure.cause),
         );
-        return layerfs_home::outcome::with_fix(refusal, crate::state::remove_fix(sandbox));
+        return layerfs_home::outcome::with_fix(refusal, crate::status::state::remove_fix(sandbox));
     }
     let _ = sandbox;
-    crate::daemon::values::wire(failure)
+    crate::route::daemon::refusal::wire(failure)
 }

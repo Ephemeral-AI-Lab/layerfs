@@ -7,11 +7,11 @@ use layerfs_home::outcome::shell_word;
 use layerfs_home::outcome::{refused, with_fix, Outcome};
 use layerfs_machine::worker::Unreached;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
-use layerfs_sandbox::direct;
 use layerfs_sandbox::family::sandbox_of;
-use layerfs_sandbox::host::{Call, Message};
 use layerfs_sandbox::record::{SandboxRecord, WorkspaceRecord};
-use layerfs_sandbox::route::{on_machine, reach, Asked};
+use layerfs_sandbox::route::direct;
+use layerfs_sandbox::route::machine::send::{on_machine, reach, Asked};
+use layerfs_sandbox::route::machine::{Call, Message};
 use std::path::{Path, PathBuf};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -305,9 +305,11 @@ pub fn unmount(home: &Path, events: &mut Events<'_>, request: &UnmountRequest) -
         let dir = at.record.dir(&at.home);
         let by_path = at.path.starts_with('/');
         let kept =
-            (layerfs_sandbox::files::workspaces(&dir)?.into_iter()).find(|(_, w)| match by_path {
-                true => w.path() == Some(at.path.as_str()),
-                false => w.name() == Some(at.path.as_str()),
+            (layerfs_sandbox::record::discovery::workspaces(&dir)?.into_iter()).find(|(_, w)| {
+                match by_path {
+                    true => w.path() == Some(at.path.as_str()),
+                    false => w.name() == Some(at.path.as_str()),
+                }
             });
         if let Some(id) = kept.as_ref().and_then(|(_, w)| w.id()) {
             let force = request.force == Some(true);

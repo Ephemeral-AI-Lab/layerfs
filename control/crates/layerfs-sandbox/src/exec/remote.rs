@@ -4,11 +4,11 @@
 //! `sandbox.host` there (D-11) and a worker that does not answer gives
 //! `unknown`. A worker that answers that the Sandbox does not run there
 //! (`NoSuchSandbox`) confirms its commands ended with it: `ended`.
-use super::cancel::{self, Outcome};
-use super::record::ExecRecord;
-use crate::host::Call;
+use super::settle::{self, Outcome};
+use crate::record::exec::ExecRecord;
 use crate::record::SandboxRecord;
-use crate::route::reach;
+use crate::route::machine::send::reach;
+use crate::route::machine::Call;
 use layerfs_home::events::Events;
 use layerfs_protocol::sdk::SdkRefusal;
 use std::path::Path;
@@ -31,7 +31,13 @@ pub fn remote(
         workspace: Some(found.workspace.clone()),
     };
     // a Sandbox reached directly runs on a machine: its worker answers
-    match reach(home, events, record, call, crate::dispatch::unclosing) {
+    match reach(
+        home,
+        events,
+        record,
+        call,
+        crate::route::machine::dispatch::unclosing,
+    ) {
         Ok(Ok(answer)) => Outcome::read(&answer),
         Ok(Err(refusal)) if refusal.code == "NoSuchSandbox" => Outcome::Ended,
         Ok(Err(_)) | Err(_) => Outcome::Unknown,
@@ -50,5 +56,5 @@ pub fn settle(
 ) -> Result<(), SdkRefusal> {
     let dir = record.dir(home);
     let mut remote = |found: &ExecRecord, grace| remote(events, (home, record), found, grace);
-    cancel::settle(&dir, record.name(), workspace, force, &mut remote)
+    settle::settle(&dir, record.name(), workspace, force, &mut remote)
 }

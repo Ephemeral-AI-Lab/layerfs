@@ -8,10 +8,13 @@ use layerfs_home::events::Events;
 use layerfs_home::helpers;
 use layerfs_home::outcome::{refused, Outcome};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
-use layerfs_sandbox::direct::host;
-use layerfs_sandbox::host::{Call, Message};
 use layerfs_sandbox::record::{SandboxRecord, WorkspaceRecord};
-use layerfs_sandbox::{dispatch, files, unmount_guard};
+use layerfs_sandbox::route::direct::host;
+use layerfs_sandbox::route::machine::{Call, Message};
+use layerfs_sandbox::{
+    record::{discovery, unmount_guard},
+    route::machine::dispatch,
+};
 use layerfs_store::call::store_call;
 use layerfs_store::calls::commit::CommitGet;
 use layerfs_store::calls::{Page, StoreOp};
@@ -153,7 +156,7 @@ pub fn exec_directory(
 ) -> Result<(String, WorkspaceRecord)> {
     let dir = record.dir(home);
     let by_path = at.starts_with('/');
-    let found = (files::workspaces(&dir)?.into_iter()).find(|(_, workspace)| match by_path {
+    let found = (discovery::workspaces(&dir)?.into_iter()).find(|(_, workspace)| match by_path {
         true => workspace.path() == Some(at),
         false => workspace.name() == Some(at),
     });

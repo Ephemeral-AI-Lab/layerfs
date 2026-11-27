@@ -10,89 +10,42 @@
 // unsafe only in backend/namespaces/seccomp.rs (see the backend notes below)
 #![deny(unsafe_code)]
 
+pub use route::daemon::call::{SdkError, SdkResult};
 #[doc(hidden)]
-pub use daemon::internal;
-pub mod daemon;
-pub use daemon::call::{SdkError, SdkResult};
-pub use daemon::failure::{OperationCause, OperationFailure};
-pub use daemon::workspace::{
+pub use route::daemon::channel::internal;
+pub use route::daemon::failure::{OperationCause, OperationFailure};
+pub use route::daemon::workspace::{
     BoundWorkspace, MountFailure, MountedWorkspace, Unmounted, WorkspaceApi,
 };
 #[cfg(unix)]
 #[doc(hidden)]
 pub mod backend;
-mod create;
 #[doc(hidden)]
 pub mod deploy;
-#[doc(hidden)]
-pub mod direct;
-#[doc(hidden)]
-pub mod dispatch;
-#[doc(hidden)]
-pub mod docker;
 #[doc(hidden)]
 pub mod exec;
 #[doc(hidden)]
 pub mod family;
-#[doc(hidden)]
-pub mod files;
-/// The forced close of a `native` Sandbox, from its own records alone.
-pub mod force;
-mod get;
-#[doc(hidden)]
-pub mod host;
-#[doc(hidden)]
-pub mod image_artifact;
-#[doc(hidden)]
-pub mod image_load;
-#[doc(hidden)]
-pub mod image_lock;
-mod image_sweep;
-#[doc(hidden)]
-pub mod image_tar;
-#[doc(hidden)]
-pub mod images;
-pub mod inspect;
-#[doc(hidden)]
-pub mod launch;
+/// A machine's Sandbox images: cache, copy, list, prune and tar reader.
+pub mod image;
 #[doc(hidden)]
 pub mod lifecycle;
 #[doc(hidden)]
-pub mod list;
-#[doc(hidden)]
-pub mod mount_intents;
-#[doc(hidden)]
-pub mod output;
-#[doc(hidden)]
 pub mod record;
-#[doc(hidden)]
-pub mod registry;
-mod remove;
-#[doc(hidden)]
-pub mod reopen;
-#[doc(hidden)]
+/// How a Sandbox call reaches where it runs.
 pub mod route;
-#[doc(hidden)]
-pub mod run_folder;
 #[doc(hidden)]
 pub mod runtime;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 pub mod spawn;
-/// A Sandbox's state and a Workspace's, from records and daemon words.
-pub mod state;
 pub mod status;
-/// What interrupted Sandbox starts and removals left in a run root, removed
-/// where nothing can own it (spec v20).
-pub mod sweep;
-#[doc(hidden)]
-pub mod unmount_guard;
 pub mod users;
 #[cfg(unix)]
-pub use launch::SandboxApi;
+pub use lifecycle::SandboxApi;
 #[cfg(unix)]
-pub use launch::{ProviderCreate, ProviderFailure, ProviderSandbox};
+pub use lifecycle::{ProviderCreate, ProviderFailure, ProviderSandbox};
 #[cfg(unix)]
-pub use launch::{SandboxCause, SandboxPhase};
+pub use lifecycle::{SandboxCause, SandboxPhase};
 
 // Ordinary runtime operations, separate from filesystem admission and data ownership.
 //
@@ -146,3 +99,69 @@ pub use runtime::{
     ProviderLaunchOptions, RuntimeError, SandboxId, SandboxInspection, SandboxRecord,
     SearchPathPolicy, WireFailure, OUTCOME_UNKNOWN,
 };
+
+// #828 compat: old public module paths, removed in wave 3.
+#[doc(hidden)]
+pub mod daemon {
+    //! #828 compat: the old `daemon` module.
+    pub use crate::route::daemon::channel::exchange as channel;
+    pub use crate::route::daemon::channel::{fence, internal, operator, pool};
+    pub use crate::route::daemon::refusal as values;
+    pub use crate::route::daemon::{call, failure, workspace};
+    pub use crate::status::capacity;
+}
+#[doc(hidden)]
+pub mod images {
+    //! #828 compat: the old `images` module.
+    pub use crate::image::list::*;
+    pub use crate::image::prune::{prune, prune_in_worker};
+}
+#[doc(hidden)]
+pub mod inspect {
+    //! #828 compat: the old `inspect` module.
+    pub use crate::route::inspect as owner;
+    pub use crate::route::inspect as route;
+    pub use crate::status::overlay;
+    pub use crate::status::stats as process;
+}
+#[doc(hidden)]
+pub mod launch {
+    //! #828 compat: the old `launch` module.
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    pub use crate::lifecycle::boot as local;
+    pub use crate::lifecycle::network;
+    #[cfg(unix)]
+    pub use crate::lifecycle::startup as create;
+    #[cfg(unix)]
+    pub use crate::lifecycle::{
+        ProviderCreate, ProviderFailure, ProviderSandbox, SandboxApi, SandboxCause, SandboxPhase,
+    };
+}
+#[doc(hidden)]
+pub use crate::exec::output; // #828 compat
+#[doc(hidden)]
+pub use crate::image::cache as image_artifact; // #828 compat
+#[doc(hidden)]
+pub use crate::image::copy::docker; // #828 compat
+#[doc(hidden)]
+pub use crate::image::copy::load as image_load; // #828 compat
+#[doc(hidden)]
+pub use crate::image::copy::lock as image_lock; // #828 compat
+#[doc(hidden)]
+pub use crate::image::tar as image_tar; // #828 compat
+#[doc(hidden)]
+pub use crate::lifecycle::force_remove as force; // #828 compat
+#[doc(hidden)]
+pub use crate::lifecycle::{mount_intents, registry}; // #828 compat
+#[doc(hidden)]
+pub use crate::record::discovery as files; // #828 compat
+#[doc(hidden)]
+pub use crate::record::{reopen, sweep, unmount_guard}; // #828 compat
+#[doc(hidden)]
+pub use crate::route::direct; // #828 compat
+#[doc(hidden)]
+pub use crate::route::machine as host; // #828 compat
+#[doc(hidden)]
+pub use crate::route::machine::dispatch; // #828 compat
+#[doc(hidden)]
+pub use crate::status::{list, run_folder, state}; // #828 compat
