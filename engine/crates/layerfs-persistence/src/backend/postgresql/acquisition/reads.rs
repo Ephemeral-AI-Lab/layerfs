@@ -14,7 +14,10 @@
 //! a sizing read and a second read did before. Rows are put in key order
 //! here, whatever order the joined statement returns them in.
 use crate::backend::{
-    postgresql::session::{rows, transaction::Transaction},
+    postgresql::{
+        history::statements,
+        session::{rows, transaction::Transaction},
+    },
     records::BackendError,
     sqlite::acquisition::{
         metadata_parse,
@@ -23,8 +26,8 @@ use crate::backend::{
 };
 use layerfs_content::{inode_leaf::InodeKind, ObjectId};
 use layerfs_storage::port::acquisition::{
-    Binding, Directory, Entry, EntryKey, FileRoot, HostIdentity, Job, Limits, Owner, Unplaced,
-    EVIDENCE_BYTES,
+    AcquisitionWork, Binding, Directory, Entry, EntryKey, FileRoot, HostIdentity, Job, Limits,
+    Owner, Unplaced, EVIDENCE_BYTES,
 };
 use postgres::{types::FromSql, Row};
 
@@ -34,36 +37,34 @@ const BINDING_ROW_BYTES: usize = 255 + 24;
 const UNPLACED_ROW_BYTES: usize = 255 + 60 + 8;
 const FILE_ROOT_ROW_BYTES: usize = 48;
 
-/// Each window's first column is the marker `1`; `$1` is the operation and
-/// `$2` its owner epoch ([`owned`]), so a window's own parameters start at
-/// `$3`. `{s}` is the Store's schema.
-const UNPLACED: &str = "SELECT 1 AS present,name,kind,host_identity FROM {s}.init_entry WHERE operation_id=$1::bigint AND parent_position=$3::bigint AND position IS NULL AND name>$4::bytea ORDER BY name LIMIT $5::bigint";
+/// Each read's statement key (`history::statements::qualified`): its window
+/// joined `LATERAL` to the live owner row, whose first column is the marker
+/// `1`; `$1` is the operation and `$2` its owner epoch, so a window's own
+/// parameters start at `$3`. `{s}` names the Store's schema.
+const UNPLACED: &str = "acquisition_unplaced";
 /// The leading directories whose paths (and 8 bytes each) fit `$5` bytes,
 /// the first always, among at most `$4` after `$3`.
-const DIRECTORIES: &str = "SELECT 1 AS present,position,host_path FROM (SELECT position,host_path,sum(octet_length(host_path)+8) OVER (ORDER BY position) AS run,row_number() OVER (ORDER BY position) AS n FROM (SELECT position,host_path FROM {s}.init_entry WHERE operation_id=$1::bigint AND kind=2 AND position>$3::bigint ORDER BY position LIMIT $4::bigint) l) j WHERE n=1 OR run<=$5::bigint";
-const DIRECTORY_PATH: &str = "SELECT 1 AS present,host_path FROM {s}.init_entry WHERE operation_id=$1::bigint AND kind=2 AND position=$3::bigint";
+const DIRECTORIES: &str = "acquisition_directories";
+const DIRECTORY_PATH: &str = "acquisition_directory_path";
 /// The leading jobs whose paths (and 68 bytes each) fit `$5` bytes, the
 /// first always, among at most `$4` after `$3`.
-const JOBS: &str = "SELECT 1 AS present,canonical_position,device,inode,evidence,host_path FROM (SELECT canonical_position,device,inode,evidence,host_path,sum(octet_length(host_path)+68) OVER (ORDER BY canonical_position) AS run,row_number() OVER (ORDER BY canonical_position) AS n FROM (SELECT canonical_position,device,inode,evidence,host_path FROM {s}.init_host_file WHERE operation_id=$1::bigint AND canonical_position>$3::bigint ORDER BY canonical_position LIMIT $4::bigint) l) j WHERE n=1 OR run<=$5::bigint";
-const JOB: &str = "SELECT 1 AS present,canonical_position,device,inode,evidence,host_path FROM {s}.init_host_file WHERE operation_id=$1::bigint AND canonical_position=$3::bigint";
-const FILE_ROOTS: &str = "SELECT 1 AS present,canonical_position,aliases,file_root FROM {s}.init_host_file WHERE operation_id=$1::bigint AND canonical_position>$3::bigint ORDER BY canonical_position LIMIT $4::bigint";
-const ENTRIES: &str = "SELECT 1 AS present,parent_position,name,position,kind,canonical_position,metadata_root,content_root FROM {s}.init_entry WHERE operation_id=$1::bigint AND (parent_position,name)>($3::bigint,$4::bytea) ORDER BY parent_position,name LIMIT $5::bigint";
-const BINDINGS: &str = "SELECT 1 AS present,parent_position,name,position,canonical_position FROM {s}.init_entry WHERE operation_id=$1::bigint AND (parent_position,name)>($3::bigint,$4::bytea) ORDER BY parent_position,name LIMIT $5::bigint";
+const JOBS: &str = "acquisition_jobs";
+const JOB: &str = "acquisition_job";
+const FILE_ROOTS: &str = "acquisition_file_roots";
+const ENTRIES: &str = "acquisition_entries";
+const BINDINGS: &str = "acquisition_bindings";
 
 /// One column, with a conversion failure as `Integrity`.
 pub(super) fn get<'a, T: FromSql<'a>>(row: &'a Row, index: usize) -> Result<T, BackendError> {
     row.try_get(index).map_err(|e| rows::error(&e))
 }
 
-/// The statement text of `window` joined to the live owner row: no row when
-/// the owner is not live, one row with a NULL marker for an empty window.
-fn owned(tx: &Transaction<'_>, window: &str) -> String {
-    format!(
-        "SELECT w.* FROM {s}.init_operation o LEFT JOIN LATERAL ({window}) w ON true \
-         WHERE o.operation_id=$1::bigint AND o.owner_epoch=$2::bigint",
-        s = tx.schema
-    )
-    .replace("{s}", tx.schema)
+/// The statement text of `key` in the Store's schema: its window joined to
+/// the live owner row, no row when the owner is not live, one row with a NULL
+/// marker for an empty window.
+pub(super) fn owned(tx: &Transaction<'_>, key: &str) -> Result<String, BackendError> {
+    let sql = statements::qualified(key).ok_or(BackendError::Integrity)?;
+    Ok(sql.replace("{s}", tx.schema))
 }
 
 /// Sends one owned read and returns its window's rows: `Stale` when the
@@ -71,14 +72,14 @@ fn owned(tx: &Transaction<'_>, window: &str) -> String {
 fn read(
     tx: &Transaction<'_>,
     owner: Owner,
-    window: &str,
+    key: &str,
     params: &[&(dyn postgres::types::ToSql + Sync)],
     bytes: u64,
 ) -> Result<Vec<Row>, Failure> {
     let (operation, epoch) = (signed(owner.operation)?, signed(owner.epoch)?);
     let mut all: Vec<&(dyn postgres::types::ToSql + Sync)> = vec![&operation, &epoch];
     all.extend_from_slice(params);
-    let found = tx.typed(&owned(tx, window), &all, 16 + bytes)?;
+    let found = tx.typed(&owned(tx, key)?, &all, 16 + bytes)?;
     let first = found.first().ok_or(Failure::Stale)?;
     if get::<Option<i32>>(first, 0)?.is_none() {
         if found.len() != 1 {
@@ -361,4 +362,9 @@ pub(super) fn bindings(
         ));
     }
     Ok(ordered(out))
+}
+
+/// The operation's charges: the owner row alone (`writes::owner`).
+pub(super) fn work(tx: &Transaction<'_>, owner: Owner) -> Result<AcquisitionWork, Failure> {
+    Ok(super::writes::owner(tx, owner)?.1)
 }
