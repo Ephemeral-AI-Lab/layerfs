@@ -8,8 +8,9 @@
 //! with `detail.related` while Sandboxes run on the machine, and otherwise
 //! stops the VM and removes `worker.json`. A call with nothing to do
 //! answers `{"unchanged":true}`; one that works reports `{ phase, done,
-//! total }` events and leaves no `op` (call surface 2.0). One test, because
-//! it sets the process's environment.
+//! total }` events and leaves no `op` (call surface 2.0). The lima part runs
+//! on macOS only (lima needs macOS). One test, because it sets the
+//! process's environment.
 #![cfg(feature = "machine")]
 use layerfs_api::home::{self, paths, read_record, write_record};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -159,21 +160,37 @@ fn start_and_stop_a_machine() {
         "host worker management requires the matching layerfs CLI on PATH"
     );
 
+    // The lima machine `dev` (start, InUse, stop, a second stop, the start
+    // of a stopped one) runs on macOS only: lima needs macOS, and on Linux
+    // its second stop answers `{"ok":true}`, not `unchanged`. The host
+    // machine's assertions above run on both.
+    if cfg!(target_os = "macos") {
+        lima_power(&home, &tools);
+    }
+
+    std::fs::remove_dir_all(home).unwrap();
+    let _ = std::fs::remove_dir_all(tools);
+    let _ = std::fs::remove_dir_all(cache);
+}
+
+/// The lima machine `dev`'s start and stop with the stand-in `limactl`
+/// in `tools` (macOS only, see the caller).
+fn lima_power(home: &Path, tools: &Path) {
     // a running machine's start answers at once and starts nothing
     std::fs::write(tools.join("state"), "Running\n").unwrap();
     let address = worker();
-    lima(&home, "dev", &[("state", t("running"))]);
+    lima(home, "dev", &[("state", t("running"))]);
     let recorded = SdkValue::map([("address", t(&address.to_string())), ("secret", t("5e"))]);
-    write_record(&paths::worker_record(&home, "dev"), &recorded).unwrap();
-    let (started, phases) = called(&home, "machine.start", "dev").unwrap();
+    write_record(&paths::worker_record(home, "dev"), &recorded).unwrap();
+    let (started, phases) = called(home, "machine.start", "dev").unwrap();
     assert_eq!(json(&started), r#"{"unchanged":true}"#);
     assert!(phases.is_empty(), "{phases:?}");
-    assert!(!paths::machine_dir(&home, "dev").join("start.lock").exists());
-    assert!(!log(&tools).contains("start"), "{}", log(&tools));
+    assert!(!paths::machine_dir(home, "dev").join("start.lock").exists());
+    assert!(!log(tools).contains("start"), "{}", log(tools));
 
     // stop is InUse while a Sandbox runs on it
-    sandbox(&home, "dev", "s1");
-    let refusal = call(&home, "machine.stop", "dev").unwrap_err();
+    sandbox(home, "dev", "s1");
+    let refusal = call(home, "machine.stop", "dev").unwrap_err();
     assert_eq!(refusal.code, "InUse", "{}", refusal.message);
     let related = refusal.detail.get("related").cloned().unwrap_or_default();
     let named = |name: &str| SdkValue::map([("kind", t("sandbox")), ("name", t(name))]);
@@ -187,45 +204,41 @@ fn start_and_stop_a_machine() {
         Some("layerfs sandbox remove s1 && layerfs machine stop dev")
     );
     assert!(!refusal.message.contains('['), "{}", refusal.message);
-    assert!(!log(&tools).contains("stop"), "{}", log(&tools));
-    std::fs::remove_dir_all(paths::sandbox_dir(&home, "s1")).unwrap();
+    assert!(!log(tools).contains("stop"), "{}", log(tools));
+    std::fs::remove_dir_all(paths::sandbox_dir(home, "s1")).unwrap();
 
     // stop stops the VM and forgets its worker; disks and records stay
-    let (stopped, phases) = called(&home, "machine.stop", "dev").unwrap();
+    let (stopped, phases) = called(home, "machine.stop", "dev").unwrap();
     assert_eq!(json(&stopped), r#"{"ok":true}"#);
     assert_eq!(phases, ["check", "stop", "stop"]);
-    assert!(log(&tools)
+    assert!(log(tools)
         .lines()
         .any(|l| l.starts_with("stop layerfs-test-dev")));
-    assert!(!paths::worker_record(&home, "dev").exists());
-    let record = read_record(&paths::machine_record(&home, "dev"))
+    assert!(!paths::worker_record(home, "dev").exists());
+    let record = read_record(&paths::machine_record(home, "dev"))
         .unwrap()
         .unwrap();
     assert_eq!(record.get_text("state"), Some("stopped"));
     assert!(record.get("op").is_none(), "{record:?}");
     // stopping it again has nothing to do
-    let again = call(&home, "machine.stop", "dev").unwrap();
+    let again = call(home, "machine.stop", "dev").unwrap();
     assert_eq!(json(&again), r#"{"unchanged":true}"#);
 
     // a stopped machine's start runs (refused here for the missing bundle)
     let mut phases = Vec::new();
     let mut seen = |event: SdkValue| phases.push(json(&event));
     let args = SdkValue::map([("machine", t("dev"))]);
-    let refusal = layerfs_api::call(Some(&home), "machine.start", args, &mut seen).unwrap_err();
+    let refusal = layerfs_api::call(Some(home), "machine.start", args, &mut seen).unwrap_err();
     assert_eq!(refusal.code, "Unsupported", "{}", refusal.message);
     assert!(refusal.message.contains("bundle"), "{}", refusal.message);
-    assert!(paths::machine_dir(&home, "dev").join("start.lock").exists());
+    assert!(paths::machine_dir(home, "dev").join("start.lock").exists());
     assert_eq!(
         phases,
         [r#"{"progress":{"phase":"bundle","done":0,"total":3}}"#]
     );
     // a start refused before its provider was asked leaves no op
-    let record = read_record(&paths::machine_record(&home, "dev"))
+    let record = read_record(&paths::machine_record(home, "dev"))
         .unwrap()
         .unwrap();
     assert!(record.get("op").is_none(), "{record:?}");
-
-    std::fs::remove_dir_all(home).unwrap();
-    let _ = std::fs::remove_dir_all(tools);
-    let _ = std::fs::remove_dir_all(cache);
 }
