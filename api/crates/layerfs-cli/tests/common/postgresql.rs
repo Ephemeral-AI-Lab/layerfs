@@ -282,38 +282,58 @@ pub fn sent(home: &Fixture, revision: &str, password: &str, id: &str) -> UnixStr
 /// `store`, sent and not yet answered.
 pub fn sent_to(
     home: &Fixture,
-    (store, project, path): (&str, &str, &str),
+    target: (&str, &str, &str),
     revision: &str,
     password: &str,
     id: &str,
 ) -> UnixStream {
+    sent_built(home, |generation| {
+        stat_request(target, (revision, password), id, generation, Vec::new())
+    })
+}
+
+/// The socket of one raw host request, made by `build` from the worker's
+/// generation, sent and not yet answered.
+pub fn sent_built(home: &Fixture, build: impl FnOnce(SdkValue) -> SdkValue) -> UnixStream {
     let socket = UnixStream::connect(&home.paths.socket).unwrap();
     let end = Instant::now() + Duration::from_secs(10);
     let hello = read_host_frame(&socket, MAX_HELLO, Some(end))
         .unwrap()
         .unwrap();
+    let request = build(hello.get("generation").unwrap().clone());
+    write_host_frame(&socket, &request, HOST_MAX_REPLY, end).unwrap();
+    socket
+}
+
+/// A raw `fs.stat` request `id` of `path` in `project` of `store` at the
+/// login (`revision`, `password`), its `fields` holding `extra` after
+/// `branch` and `path`.
+pub fn stat_request(
+    (store, project, path): (&str, &str, &str),
+    (revision, password): (&str, &str),
+    id: &str,
+    generation: SdkValue,
+    extra: Vec<(String, SdkValue)>,
+) -> SdkValue {
+    let mut fields = vec![
+        ("branch".to_owned(), SdkValue::text("main")),
+        ("path".to_owned(), SdkValue::text(path)),
+    ];
+    fields.extend(extra);
     let args = SdkValue::map([
         ("method", SdkValue::text("fs.stat")),
         ("store", SdkValue::text(store)),
         ("project", SdkValue::text(project)),
-        (
-            "fields",
-            SdkValue::map([
-                ("branch", SdkValue::text("main")),
-                ("path", SdkValue::text(path)),
-            ]),
-        ),
+        ("fields", SdkValue::Map(fields)),
         ("login_revision", SdkValue::text(revision)),
         ("password", SdkValue::text(password)),
     ]);
-    let request = SdkValue::map([
+    SdkValue::map([
         ("op", SdkValue::text("store.postgresql_read")),
         ("args", args),
-        ("generation", hello.get("generation").unwrap().clone()),
+        ("generation", generation),
         ("request_id", SdkValue::text(id)),
-    ]);
-    write_host_frame(&socket, &request, HOST_MAX_REPLY, end).unwrap();
-    socket
+    ])
 }
 
 pub fn error_code(answer: &SdkValue) -> Option<&str> {

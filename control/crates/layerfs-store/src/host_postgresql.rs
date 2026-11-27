@@ -48,9 +48,22 @@ pub const RETIRE: &str = "store.postgresql_retire";
 /// session.
 const READS: [&str; 3] = ["fs.read", "fs.stat", "fs.list"];
 
-/// Whether this route serves `method`.
-pub fn serves(method: &str) -> bool {
-    read_method(method).is_some()
+/// Whether read request `args` passes [`serve`]'s checks of the request
+/// alone: six fields, a method this route serves, its accepted `fields`
+/// and non-empty Store, project, login revision and password texts. The
+/// host worker checks it before it hands a read to its PostgreSQL lane,
+/// so a held read is small: every field text but `fields`, whose at most
+/// eight fields are scalar. [`serve`] refuses whatever fails it, before
+/// any session is taken.
+pub fn checks(args: &SdkValue) -> bool {
+    let text = |name| args.get_text(name).is_some_and(|text| !text.is_empty());
+    matches!(args, SdkValue::Map(envelope) if envelope.len() == 6)
+        && (args.get_text("method").and_then(read_method))
+            .zip(args.get("fields"))
+            .is_some_and(|(method, fields)| method.accepts(fields))
+        && ["store", "project", "login_revision", "password"]
+            .into_iter()
+            .all(text)
 }
 
 /// `method`'s argument and answer checks when this route serves it.

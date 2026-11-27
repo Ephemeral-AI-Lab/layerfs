@@ -413,9 +413,13 @@ records.
 `store.postgresql_read` (#819 P-B) carries exactly `method`, `store`,
 `project`, `fields`, `login_revision` and `password`, and serves only its own
 three read methods (`fs.read`, `fs.stat`, `fs.list`). An ordinary thread
-reads it and hands it to the worker's PostgreSQL lane (8 threads, at most
-64 handed over and unanswered), so a PostgreSQL read holds no ordinary
-thread or slot. A lane thread starts the oldest queued read whose Store has
+reads it, checks it (this generation, a valid request ID and the
+arguments `serve` accepts, `host_postgresql::checks`) and hands it to the
+worker's PostgreSQL lane (8 threads, at most 64 handed over and
+unanswered), keeping only the request's `op`, `generation`, `request_id`,
+`trace_step` and `args`; a request that fails the check is answered on
+the ordinary thread with the refusal the lane would give. So a PostgreSQL
+read holds no ordinary thread or slot. A lane thread starts the oldest queued read whose Store has
 a free session slot, so a read of a busy Store waits in the queue on no
 thread and never holds a thread another Store could use. Queued reads whose
 caller closed its socket are dropped unrun. At 64 the ordinary thread
@@ -570,14 +574,16 @@ at most 64 KiB, `HOST_MAX_REQUEST`, and a hello or management frame 4 KiB):
 | --- | --- | --- |
 | ordinary | one request per accepted connection, 16 slots (`ORDINARY.slots`) | 16 × B = 64 MiB |
 | management | 2 slots of 4 KiB frames | 2 × B = 8 MiB (the frame budget; such a frame decodes to far less) |
-| PostgreSQL | reads and single-change writes handed over and not yet answered, 64 (`POSTGRES.slots`), each with its request (and a write's held copy of its header, within the write row's per-header bound) | 64 × B = 256 MiB |
+| PostgreSQL | reads and single-change writes handed over and not yet answered, 64 (`POSTGRES.slots`), each checked on the ordinary thread before it is handed over and held with only `op`, `generation`, `request_id`, `trace_step` and `args`: a write's 7 envelope fields and at most 12 named fields, all scalar (a read's 6 and 8), so at most 3 containers and 24 fields and 21 commas, each request at most W = 3 × 65,536 + 256 × 48 = 208,896 bytes; each of the 8 running calls (`POSTGRES.threads`) holds at most one more copy of part of its request (a write's held header, a read's `fields`), within W | (64 + 8) × W = 15,040,512 bytes, 14.3 MiB |
 | write | 2 intake threads reading a request (2 × B = 8 MiB); held headers, at most `HOST_HELD_WRITES` = 32, each checked before it is held: 5 envelope fields (7 for a PostgreSQL write) and at most 12 named fields, all scalar, so at most 3 × 65,536 + 256 × 38 = 206,336 bytes (32 × 206,336 = 6,602,752 bytes, 6.3 MiB); one change being built per write thread, framed or spilled (4 × B = 16 MiB) | 31,768,576 bytes, 30.3 MiB |
-| total | | 358.3 MiB |
+| total | | 122,306,560 bytes, 116.6 MiB |
 
 These bound the requests and changes the worker decodes, not a call's own
-work (an answer up to 1 MiB, a Store's pages). S2.2 does not change the
-PostgreSQL lane; its 256 MiB is its bound as it stands, since a call is
-handed over before its request's shape is checked. A held PostgreSQL
+work (an answer up to 1 MiB, a Store's pages). The PostgreSQL lane's
+bound holds because a call is handed over only after its request's
+shape is checked: before that check moved to the ordinary thread, a
+handed-over request was bounded only by the frame budget, 64 × B =
+256 MiB. A held PostgreSQL
 session's own memory (a write session's caches and a running call's
 private overlay) is bounded by the session bounds, not by this table.
 

@@ -1,7 +1,7 @@
 //! The host worker's PostgreSQL lane (#819 P-B): PostgreSQL reads and
 //! single-change PostgreSQL writes, handed over by an ordinary thread once
-//! their request is read, run on held sessions
-//! ([`layerfs_store::postgresql::pool`]).
+//! their request is read and checked ([`HostServer::lane_request`]), run
+//! on held sessions ([`layerfs_store::postgresql::pool`]).
 //!
 //! A lane thread starts the oldest queued call whose Store has a free slot
 //! of the call's kind, so a call of a busy Store waits in the queue, on no
@@ -67,7 +67,8 @@ impl HostServer {
             let pending = &mut activity.lanes[POSTGRES.index].pending;
             let mut chosen = None;
             for (at, job) in pending.iter().enumerate() {
-                // a call refused by its request alone takes no slot
+                // every held call passed `runnable` at intake; this lookup
+                // names its Store and kind
                 let store = job
                     .request
                     .as_ref()
@@ -79,7 +80,7 @@ impl HostServer {
                             break;
                         }
                     }
-                    // refused before any session is taken
+                    // draining: refused before any session is taken
                     _ => {
                         chosen = Some((at, None));
                         break;
@@ -99,10 +100,45 @@ impl HostServer {
         }
     }
 
+    /// PostgreSQL `request`, read by an ordinary thread, as its lane holds
+    /// it (`Ok`), or `Err` with the request when the request alone refuses
+    /// it, to be answered on that thread, holding no lane place: the lane
+    /// would refuse it the same way, with no session taken. A held request
+    /// is [`Self::runnable`] with a valid request ID, and keeps only the
+    /// top-level fields a host request is read by (`op`, `generation`,
+    /// `request_id`, `trace_step`, `args`; any other is ignored on every
+    /// path), so it is small: text within its 64 KiB frame and at most 3
+    /// containers and 45 fields and commas (a write's 7 envelope fields and
+    /// 12 named ones, all scalar; a read's 6 and 8), which bounds the
+    /// lane's decoded memory (workers-and-reach.md, per-lane table).
+    pub(in crate::worker_server) fn lane_request(
+        &self,
+        request: SdkValue,
+    ) -> Result<SdkValue, SdkValue> {
+        let identified =
+            (request.get_text("request_id")).is_some_and(|id| (1..=128).contains(&id.len()));
+        if !identified || self.runnable(&request).is_none() {
+            return Err(request);
+        }
+        let SdkValue::Map(fields) = request else {
+            return Err(request);
+        };
+        let kept = fields.into_iter().filter(|(name, value)| {
+            matches!(
+                (name.as_str(), value),
+                ("op" | "generation" | "request_id", SdkValue::Text(_))
+                    | ("trace_step", SdkValue::Bool(_))
+                    | ("args", _)
+            )
+        });
+        Ok(SdkValue::Map(kept.collect()))
+    }
+
     /// The Store and session kind of PostgreSQL call `request` when nothing
     /// in the request alone refuses it: this worker's generation, a read
-    /// method the route serves or a single-change write whose header
-    /// checks, and a Store name. The record is checked when it runs.
+    /// whose arguments pass the route's request checks or a single-change
+    /// write whose header checks, and a Store name. The record is checked
+    /// when it runs.
     fn runnable<'a>(&self, request: &'a SdkValue) -> Option<(&'a str, Kind)> {
         if request.get_text("generation") != Some(self.hello.generation.as_str()) {
             return None;
@@ -110,8 +146,7 @@ impl HostServer {
         let args = request.get("args")?;
         let kind = match request.get_text("op")? {
             layerfs_store::host_postgresql::OP => {
-                layerfs_store::host_postgresql::serves(args.get_text("method")?)
-                    .then_some(Kind::Read)?
+                layerfs_store::host_postgresql::checks(args).then_some(Kind::Read)?
             }
             layerfs_store::host_write::OP => {
                 let (.., body, _) = layerfs_store::host_write::header(args).ok()?;

@@ -231,8 +231,8 @@ const EGRESS: Duration = Duration::from_secs(5);
 /// Serves one Unix connection on a reserved host worker thread: its hello
 /// and request, unless `read` holds a request an ordinary thread already
 /// read, then its operation and answer. A PostgreSQL read or single-change
-/// PostgreSQL write read here is returned for the PostgreSQL lane instead
-/// (#819 P-B), and a streamed write read on the write endpoint for the
+/// PostgreSQL write read here whose request checks is returned for the
+/// PostgreSQL lane instead (#819 P-B), and a streamed write read on the write endpoint for the
 /// write lane (S2.2); a single-change SQLite write runs here. A request
 /// that carries a login is overwritten once answered or held, on every
 /// path.
@@ -252,7 +252,12 @@ pub(super) fn serve_host_connection(
         None => match read_host_request(server, socket, management) {
             Some(request) if endpoint == Endpoint::Ordinary && is_postgres(&request) => {
                 layerfs_store::host_postgresql::harden();
-                return Served::Postgres(request);
+                // checked here, so the lane holds only small requests; one
+                // the request alone refuses is answered on this thread
+                match server.lane_request(request) {
+                    Ok(held) => return Served::Postgres(held),
+                    Err(request) => request,
+                }
             }
             Some(request) => request,
             None => return Served::Answered(false),

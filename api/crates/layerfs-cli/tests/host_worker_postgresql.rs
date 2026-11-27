@@ -902,12 +902,39 @@ fn a_full_postgresql_lane_refuses_at_once_and_drops_gone_callers_unrun() {
     let output = within(sqlite, Duration::from_secs(10)).expect("the SQLite read");
     assert_eq!(decode(&output).get_text("text"), Some("sqlite\n"));
 
+    // a read its arguments alone refuse is checked on the ordinary thread,
+    // before any hand-over: refused for its arguments, not for the full
+    // lane, and it takes no lane place
+    let bogus = vec![("bogus".to_owned(), SdkValue::text("x"))];
+    let invalid = sent_built(&home, |generation| {
+        stat_request(first, (&r1, &one.password), "invalid", generation, bogus)
+    });
+    let end = Instant::now() + Duration::from_secs(10);
+    let refused = read_host_frame(&invalid, HOST_MAX_REPLY, Some(end))
+        .unwrap()
+        .unwrap();
+    assert_eq!(error_code(&refused), Some("InvalidInput"), "{refused:?}");
+    let still = postgresql_when(&home, |p| p.get_int("reads") == Some(64));
+    assert_eq!(still.get_int("reads"), Some(64), "{still:?}");
+
     // Store pg3's twenty callers go away: their reads are dropped unrun,
     // and the room is the next read's
     for slot in &mut open[8..28] {
         drop(slot.take());
     }
-    let late = sent(&home, &r1, &one.password, "late");
+    // the room goes to a read whose frame decodes large (5,000 empty
+    // objects beside its request, about 2.6 MB in the frame budget's
+    // estimate): accepted as before, and held with its request alone
+    let late = sent_built(&home, |generation| {
+        let SdkValue::Map(mut request) =
+            stat_request(first, (&r1, &one.password), "late", generation, Vec::new())
+        else {
+            unreachable!("a request is a map")
+        };
+        let padding = SdkValue::List(vec![SdkValue::Map(Vec::new()); 5000]);
+        request.push(("padding".to_owned(), padding));
+        SdkValue::Map(request)
+    });
     let after = postgresql_when(&home, |p| p.get_int("reads") == Some(45));
     assert_eq!(after.get_int("reads"), Some(45), "{after:?}");
     assert_eq!(after.get_int("queued"), Some(37), "{after:?}");
