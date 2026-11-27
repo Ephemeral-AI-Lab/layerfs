@@ -79,7 +79,7 @@ fn sqlite_open_alone() {
     let open = work(&service);
     let open = [counts(&open[0]), counts(&open[1]), counts(&open[2])];
     let before = work(&service);
-    let listed = service.call("project.list_branches", vec![]);
+    let listed = service.call("branch.list", vec![]);
     assert!(listed.is_ok(), "{listed:?}");
     let call = delta(&work(&service), &before);
     println!(
@@ -114,7 +114,7 @@ fn postgresql_open_alone() {
     let before = work(&service);
     proxy.arm(None);
     let started = Instant::now();
-    let listed = service.call("project.list_branches", vec![]);
+    let listed = service.call("branch.list", vec![]);
     let call_ms = started.elapsed().as_secs_f64() * 1e3;
     let call_wire = proxy.disarm();
     assert!(listed.is_ok(), "{listed:?}");

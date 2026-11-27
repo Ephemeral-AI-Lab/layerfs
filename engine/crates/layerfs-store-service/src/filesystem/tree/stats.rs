@@ -14,7 +14,7 @@ use layerfs_protocol::sdk::SdkValue;
 use std::sync::Arc;
 
 /// Root is excluded; links count by path and symlinks are never followed.
-/// A path hidden by a `project.remove_file` marker is not part of the visible
+/// A path hidden by a `project.hide_path` marker is not part of the visible
 /// tree, so it and its descendants are not counted. Logical bytes are the
 /// pinned publication's recorded total (regular files, once per inode) less
 /// the length of each hidden file with one link that the walk reached: the

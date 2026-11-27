@@ -1,4 +1,4 @@
-//! `project.remove_file` over the public Store method table: one marker hides
+//! `project.hide_path` over the public Store method table: one marker hides
 //! a read and a stat with a `Removed` detail, a listing and a glob omit the
 //! entry and count it, the subtree matches only at `/`, and a post-frontier
 //! re-creation is visible again. The path grammar is refused as `InvalidInput`.
@@ -13,12 +13,12 @@ fn text(value: &str) -> SdkValue {
 }
 
 fn remove(fixture: &Fixture, path: &str) -> SdkValue {
-    fixture.call("project.remove_file", vec![("path", text(path))])
+    fixture.call("project.hide_path", vec![("path", text(path))])
 }
 
 fn read(fixture: &Fixture, path: &str) -> Result<SdkValue, layerfs_protocol::sdk::SdkRefusal> {
     fixture.try_call(
-        "fs.read",
+        "file.read",
         vec![("branch", text("work")), ("path", text(path))],
     )
 }
@@ -56,7 +56,7 @@ fn a_removed_path_is_hidden_in_reads_stat_list_and_glob_until_recreated() {
     assert_eq!(hidden[0].get_int("frontier_serial"), Some(frontier));
     let stat = fixture
         .try_call(
-            "fs.stat",
+            "file.stat",
             vec![("branch", text("work")), ("path", text("/a"))],
         )
         .expect_err("hidden stat");
@@ -68,7 +68,7 @@ fn a_removed_path_is_hidden_in_reads_stat_list_and_glob_until_recreated() {
 
     // A listing omits the entry and counts it; a glob does the same.
     let listed = fixture.call(
-        "fs.list",
+        "file.list",
         vec![("branch", text("work")), ("path", text("/"))],
     );
     let names = paths(&listed);
@@ -77,7 +77,7 @@ fn a_removed_path_is_hidden_in_reads_stat_list_and_glob_until_recreated() {
     assert!(!names.contains(&"/a"), "{names:?}");
     assert_eq!(listed.get_int("removed_count"), Some(1));
     let globbed = fixture.call(
-        "fs.glob",
+        "file.glob",
         vec![
             ("branch", text("work")),
             ("pattern", text("/*")),
@@ -122,7 +122,7 @@ fn the_remove_file_path_grammar_is_refused() {
         "", "/", "//a", "a//b", "a/", "./a", "a/./b", ".", "..", "a/b/", "a/../b",
     ] {
         let refusal = fixture
-            .try_call("project.remove_file", vec![("path", text(bad))])
+            .try_call("project.hide_path", vec![("path", text(bad))])
             .unwrap_err();
         assert_eq!(refusal.code, "InvalidInput", "{bad:?} was accepted");
     }
@@ -146,12 +146,12 @@ fn a_symlink_component_is_refused_while_a_leaf_symlink_is_hidden() {
     // not ill-typed (spec 4.3): the path is merely absent.
     for path in ["/link/f", "/dlink/f"] {
         let refusal = fixture
-            .try_call("project.remove_file", vec![("path", text(path))])
+            .try_call("project.hide_path", vec![("path", text(path))])
             .expect_err("a non-directory component");
         assert_eq!(refusal.code, "InvalidInput", "{path}: {refusal:?}");
     }
     // Reads and stats through that component answer the same way.
-    for method in ["fs.read", "fs.stat"] {
+    for method in ["file.read", "file.stat"] {
         for path in ["/link/f", "/dlink/f"] {
             let refusal = fixture
                 .try_call(method, vec![("branch", text("work")), ("path", text(path))])
@@ -165,7 +165,7 @@ fn a_symlink_component_is_refused_while_a_leaf_symlink_is_hidden() {
     // it (only a symlink is refused).
     let refusal = fixture
         .try_call(
-            "fs.read",
+            "file.read",
             vec![("branch", text("work")), ("path", text("/a.txt/f"))],
         )
         .expect_err("a read below a regular file");
@@ -176,13 +176,13 @@ fn a_symlink_component_is_refused_while_a_leaf_symlink_is_hidden() {
     // A symlink as the final component is an ordinary entry: it stays
     // visible until it is removed, then it is hidden like any other path.
     let present = fixture.call(
-        "fs.stat",
+        "file.stat",
         vec![("branch", text("work")), ("path", text("/link"))],
     );
     assert_eq!(present.get_text("type"), Some("symlink"), "{present:?}");
     let removed = remove(&fixture, "/link");
     assert_eq!(removed.get_text("kind"), Some("Removed"));
-    for method in ["fs.read", "fs.stat"] {
+    for method in ["file.read", "file.stat"] {
         let refusal = fixture
             .try_call(
                 method,
@@ -192,7 +192,7 @@ fn a_symlink_component_is_refused_while_a_leaf_symlink_is_hidden() {
         assert_eq!(refusal.code, "Removed", "{method}: {refusal:?}");
     }
     let listed = fixture.call(
-        "fs.list",
+        "file.list",
         vec![("branch", text("work")), ("path", text("/"))],
     );
     let names = paths(&listed);
@@ -205,7 +205,7 @@ fn a_symlink_component_is_refused_while_a_leaf_symlink_is_hidden() {
 /// A regular file (or a removed file) in a non-final component is not
 /// ill-typed: the name below it cannot exist, so every read spells it
 /// `NoSuchPath` both while the ancestor is live and after
-/// `project.remove_file` hides it. Only an intermediate symlink is
+/// `project.hide_path` hides it. Only an intermediate symlink is
 /// `InvalidInput` (spec 4.3).
 #[test]
 fn a_file_ancestor_is_absent_before_and_after_remove_file() {
@@ -217,7 +217,7 @@ fn a_file_ancestor_is_absent_before_and_after_remove_file() {
     fixture.fork("work");
 
     let assert_absent = |when: &str| {
-        for method in ["fs.read", "fs.stat", "fs.list"] {
+        for method in ["file.read", "file.stat", "file.list"] {
             let refusal = fixture
                 .try_call(
                     method,
@@ -226,7 +226,7 @@ fn a_file_ancestor_is_absent_before_and_after_remove_file() {
                 .expect_err("a name below a regular file");
             assert_eq!(refusal.code, "NoSuchPath", "{when} {method}: {refusal:?}");
         }
-        for method in ["fs.glob", "fs.grep"] {
+        for method in ["file.glob", "file.grep"] {
             let refusal = fixture
                 .try_call(
                     method,
@@ -239,17 +239,6 @@ fn a_file_ancestor_is_absent_before_and_after_remove_file() {
                 .expect_err("a glob or grep below a regular file");
             assert_eq!(refusal.code, "NoSuchPath", "{when} {method}: {refusal:?}");
         }
-        let refusal = fixture
-            .try_call(
-                "fs.diff_files",
-                vec![
-                    ("branch", text("work")),
-                    ("left", SdkValue::map([("path", text("/b.txt"))])),
-                    ("right", SdkValue::map([("path", text("/a.txt/x"))])),
-                ],
-            )
-            .expect_err("a diff side below a regular file");
-        assert_eq!(refusal.code, "NoSuchPath", "{when} diff: {refusal:?}");
     };
 
     // Live-file control: absence, never `InvalidInput`.
@@ -285,7 +274,7 @@ fn remove_file_accepts_a_path_that_exists_only_on_a_branch() {
         ],
     );
     let seen = fixture.call(
-        "fs.read",
+        "file.read",
         vec![("branch", text("work")), ("path", text("/a/b"))],
     );
     assert_eq!(seen.get_text("text"), Some("b\n"), "{seen:?}");
@@ -295,7 +284,7 @@ fn remove_file_accepts_a_path_that_exists_only_on_a_branch() {
     assert_eq!(removed.get_text("path"), Some("a/b"), "{removed:?}");
     let refusal = fixture
         .try_call(
-            "fs.read",
+            "file.read",
             vec![("branch", text("work")), ("path", text("/a/b"))],
         )
         .expect_err("the hidden Branch-only path");
@@ -303,7 +292,7 @@ fn remove_file_accepts_a_path_that_exists_only_on_a_branch() {
     // main's file ancestor is untouched, and the path is still absent there.
     let refusal = fixture
         .try_call(
-            "fs.read",
+            "file.read",
             vec![("branch", text("main")), ("path", text("/a/b"))],
         )
         .expect_err("a name below main's file");

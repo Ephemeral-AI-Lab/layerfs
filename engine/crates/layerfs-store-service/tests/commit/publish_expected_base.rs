@@ -11,12 +11,9 @@ use crate::support;
 use layerfs_protocol::sdk::SdkValue;
 use support::{paths, write, Fixture};
 
-/// One Branch's field from `project.list_branches`.
+/// One Branch's field from `branch.list`.
 fn branch_field(fixture: &Fixture, name: &str, field: &str) -> Option<String> {
-    let page = fixture.call(
-        "project.list_branches",
-        vec![("name", SdkValue::text(name))],
-    );
+    let page = fixture.call("branch.list", vec![("name", SdkValue::text(name))]);
     support::items(&page)
         .first()
         .and_then(|item| item.get_text(field))
@@ -31,7 +28,7 @@ fn main_head(fixture: &Fixture) -> String {
 /// The paths in main's root.
 fn main_paths(fixture: &Fixture) -> Vec<String> {
     let page = fixture.call(
-        "fs.list",
+        "file.list",
         vec![
             ("branch", SdkValue::text("main")),
             ("path", SdkValue::text("/")),
@@ -344,7 +341,7 @@ fn a_tree_main_already_holds_is_no_changes() {
 /// main's published Layers, newest first.
 fn main_layers(fixture: &Fixture) -> Vec<String> {
     let page = fixture.call(
-        "branch.list_commits",
+        "commit.list",
         vec![
             ("branch", SdkValue::text("main")),
             ("limit", SdkValue::Int(100)),
@@ -471,7 +468,7 @@ fn two_threads_publishing_one_expected_base_race_cleanly() {
         // The winner's file is in main; the loser's is not, and its Branch
         // did not move.
         let read = fixture.call(
-            "fs.read",
+            "file.read",
             vec![
                 ("branch", SdkValue::text("main")),
                 ("path", SdkValue::text(winner_file.as_str())),

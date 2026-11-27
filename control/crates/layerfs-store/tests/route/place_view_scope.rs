@@ -9,36 +9,33 @@ use layerfs_store::admin::route::place_view::{admits, scoped};
 
 #[test]
 fn only_the_exclusive_removals_read_the_place_view() {
-    for method in ["branch.remove", "project.remove_file"] {
+    for method in ["branch.remove", "project.hide_path"] {
         assert!(admits(method), "{method}");
     }
     for method in [
         "store.stats",
         "project.stats",
-        "project.list_branches",
+        "branch.list",
         "branch.fork",
-        "branch.list_commits",
-        "branch.get_commit",
+        "commit.list",
+        "commit.get",
         "branch.merge",
         "branch.publish",
-        "branch.diff_commits",
-        "branch.diff_branches",
         "commit.diff",
-        "fs.read",
-        "fs.revision",
-        "fs.list",
-        "fs.stat",
-        "fs.grep",
-        "fs.glob",
-        "fs.diff_files",
-        "fs.blame",
-        "fs.write",
-        "fs.edit",
-        "fs.mkdir",
-        "fs.rm",
-        "fs.cp",
-        "fs.mv",
-        "fs.apply",
+        "file.read",
+        "file.history",
+        "file.list",
+        "file.stat",
+        "file.grep",
+        "file.glob",
+        "file.blame",
+        "file.write",
+        "file.edit",
+        "file.mkdir",
+        "file.rm",
+        "file.cp",
+        "file.mv",
+        "file.apply",
     ] {
         assert!(
             !admits(method),

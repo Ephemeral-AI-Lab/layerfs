@@ -87,18 +87,9 @@ fn walk(fixture: &Fixture, from: &str, to: &str, cursor: Option<&str>) -> Vec<Pa
 fn pages(fixture: &Fixture, from: &str, to: &str, size: i64) -> Vec<SdkValue> {
     let (mut out, mut cursor) = (Vec::new(), SdkValue::Null);
     loop {
-        let page = fixture.call(
-            "branch.diff_commits",
-            vec![
-                ("from", SdkValue::text(from)),
-                ("to", SdkValue::text(to)),
-                ("pageSize", SdkValue::Int(size)),
-                ("cursor", cursor.clone()),
-                ("hunks", SdkValue::Bool(false)),
-            ],
-        );
+        let page = super::commit_diff(fixture, from, to, size, &cursor, false);
         out.extend(items(&page).iter().cloned());
-        cursor = page.get("nextCursor").cloned().unwrap_or(SdkValue::Null);
+        cursor = page.get("next").cloned().unwrap_or(SdkValue::Null);
         if matches!(cursor, SdkValue::Null) {
             return out;
         }
@@ -108,7 +99,7 @@ fn pages(fixture: &Fixture, from: &str, to: &str, size: i64) -> Vec<SdkValue> {
 fn flags(item: &SdkValue) -> (String, String, bool, bool, bool) {
     (
         item.get_text("path").unwrap().to_owned(),
-        item.get_text("kind").unwrap().to_owned(),
+        item.get_text("change").unwrap().to_owned(),
         item.get_bool("content"),
         item.get_bool("identity"),
         item.get_bool("metadata"),
@@ -190,14 +181,14 @@ fn a_resumed_walk_lists_what_the_whole_walk_lists_after_its_cursor() {
         (kind, content, identity, metadata)
     };
     let modified =
-        |content, identity, metadata| ("Modified".to_owned(), content, identity, metadata);
-    assert_eq!(flag("/a/f3").0, "Removed");
-    assert_eq!(flag("/a/f8").0, "Added");
-    assert_eq!(flag("/c").0, "Removed");
-    assert_eq!(flag("/c/deep/x").0, "Removed");
-    assert_eq!(flag("/d").0, "Added");
-    assert_eq!(flag("/a/link").0, "Removed");
-    assert_eq!(flag("/a/link2").0, "Added");
+        |content, identity, metadata| ("modified".to_owned(), content, identity, metadata);
+    assert_eq!(flag("/a/f3").0, "removed");
+    assert_eq!(flag("/a/f8").0, "added");
+    assert_eq!(flag("/c").0, "removed");
+    assert_eq!(flag("/c/deep/x").0, "removed");
+    assert_eq!(flag("/d").0, "added");
+    assert_eq!(flag("/a/link").0, "removed");
+    assert_eq!(flag("/a/link2").0, "added");
     // the same bytes in a new inode (written now, so its time differs too)
     assert_eq!(flag("/a/f4"), modified(false, true, true));
     // equal content with another mode: metadata only

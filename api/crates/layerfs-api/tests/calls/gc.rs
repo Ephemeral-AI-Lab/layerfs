@@ -839,7 +839,7 @@ fn store_repair_mount_holders_is_an_explicit_two_step_operator_call() {
     let open = OpenArgs::of_record(&home, "shop", &record).unwrap();
     // The fixture's main Branch is the Branch the project recorded, read from
     // the name index. `store.repair_mount_holders` is what must resolve the
-    // name `main` through `project.list_branches` (spec 4.4: a listing names
+    // name `main` through `branch.list` (spec 4.4: a listing names
     // the recorded Branch, not a null main id).
     let (stack, branch) = with_service(&open, |service| {
         let stack = lookup::project(&service.store, "api")?;

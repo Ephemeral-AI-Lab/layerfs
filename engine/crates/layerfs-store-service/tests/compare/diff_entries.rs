@@ -54,16 +54,7 @@ fn changes() -> Vec<SdkValue> {
 }
 
 fn diff(fixture: &Fixture, from: &str, to: &str, size: i64, cursor: &SdkValue) -> SdkValue {
-    fixture.call(
-        "branch.diff_commits",
-        vec![
-            ("from", SdkValue::text(from)),
-            ("to", SdkValue::text(to)),
-            ("pageSize", SdkValue::Int(size)),
-            ("cursor", cursor.clone()),
-            ("hunks", SdkValue::Bool(false)),
-        ],
-    )
+    super::commit_diff(fixture, from, to, size, cursor, false)
 }
 
 #[test]
@@ -77,7 +68,7 @@ fn the_same_changes_cost_the_same_in_a_small_and_a_large_tree() {
         let before = fixture.work();
         let value = diff(&fixture, &from, &to, 1000, &SdkValue::Null);
         let work = fixture.since(before);
-        assert!(!value.get_bool("hasMore"));
+        assert!(!super::more(&value));
         let listed = items(&value).len();
         println!(
             "SDK_DIFF_ENTRIES files={} listed={listed} diff={work:?}",
@@ -130,10 +121,10 @@ fn paged(files: usize) -> Vec<u64> {
         let value = diff(&fixture, &from, &to, 20, &cursor);
         pages.push(fixture.since(before).statements);
         listed += items(&value).len();
-        if !value.get_bool("hasMore") {
+        if !super::more(&value) {
             break;
         }
-        cursor = value.get("nextCursor").cloned().unwrap();
+        cursor = value.get("next").cloned().unwrap();
     }
     assert_eq!(listed, files, "every change once");
     fixture.cleanup();

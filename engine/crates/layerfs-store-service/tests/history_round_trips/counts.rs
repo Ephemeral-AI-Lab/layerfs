@@ -1,9 +1,10 @@
 //! #818 history pins (lane RH owns this file): the counted SQL work of
-//! `fs.blame`, `fs.revision` and `fs.diff_files` through the method table on
-//! the Store as the SDK opens it, on SQLite and on PostgreSQL.
+//! `file.blame` and `file.history` through the method table on the Store as
+//! the SDK opens it, on SQLite and on PostgreSQL. The `diff_files` case named
+//! in the notes below left with the `fs.diff_files` method (#830).
 //!
 //! Setup (not counted): the #818 probe's Store (`fs_call_round_trips.rs`):
-//! Init, Branch `work`, then 100 `fs.write` Commits alternating
+//! Init, Branch `work`, then 100 `file.write` Commits alternating
 //! `/hist/a.txt` (one line appended each time) and `/hist/other.txt`. `hN`
 //! is the history up to the N-th of those Commits (V = N Commits on the
 //! Branch above its base Layer). Each case runs on a **new Store open**
@@ -76,9 +77,6 @@ const SQLITE: &[Pin] = &[
     // probe revision.h100: 12,658
     pin("revision.h100.cold", NONE, [0, 0, 1113, 203], NONE),
     pin("revision.h100.warm", NONE, [0, 0, 769, 203], NONE),
-    // probe diff_files.h10_vs_h99: 198
-    pin("diff_files.h10_vs_h99.cold", NONE, [0, 0, 102, 15], NONE),
-    pin("diff_files.h10_vs_h99.warm", NONE, [0, 0, 71, 15], NONE),
 ];
 
 /// PostgreSQL: `[connects, round_trips, statements, transactions]` per
@@ -133,9 +131,6 @@ const POSTGRESQL: &[Pin] = &[
     // probe revision.h100: 3,890
     pin("revision.h100.cold", NONE, [1, 92, 79, 0], NONE),
     pin("revision.h100.warm", NONE, [0, 48, 48, 0], NONE),
-    // probe diff_files.h10_vs_h99: 88
-    pin("diff_files.h10_vs_h99.cold", NONE, [1, 48, 38, 0], NONE),
-    pin("diff_files.h10_vs_h99.warm", NONE, [0, 22, 22, 0], NONE),
 ];
 
 /// `(method, F, W, K)`: cold PostgreSQL round trips at V versions are at
@@ -218,22 +213,15 @@ fn scenarios(store: &mut Store) -> Vec<Measured> {
         let again = warm.then(|| fields.clone());
         rt::cold_warm(store, &mut out, name, method, "", fields, again);
     };
-    case("blame.h10", "fs.blame", vec![branch(), a(), at(10)], true);
-    case("blame.h100", "fs.blame", vec![branch(), a()], true);
+    case("blame.h10", "file.blame", vec![branch(), a(), at(10)], true);
+    case("blame.h100", "file.blame", vec![branch(), a()], true);
     case(
         "revision.h10",
-        "fs.revision",
+        "file.history",
         vec![branch(), a(), at(10)],
         false,
     );
-    case("revision.h100", "fs.revision", vec![branch(), a()], true);
-    let selector = |id: &str| SdkValue::map([("commit", t(id)), ("path", t("/hist/a.txt"))]);
-    case(
-        "diff_files.h10_vs_h99",
-        "fs.diff_files",
-        vec![("left", selector(&ids[9])), ("right", selector(&ids[98]))],
-        true,
-    );
+    case("revision.h100", "file.history", vec![branch(), a()], true);
     for m in &out {
         assert!(
             !m.outcome.starts_with("refused"),

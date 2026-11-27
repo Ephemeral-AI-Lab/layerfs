@@ -19,7 +19,7 @@ fn text(lines: usize, seed: &str) -> String {
 fn grep(fixture: &Fixture, path: &str) -> Work {
     let call = || {
         fixture.call(
-            "fs.grep",
+            "file.grep",
             vec![
                 ("branch", SdkValue::text("edited")),
                 ("pattern", SdkValue::text("NEVER_PRESENT")),

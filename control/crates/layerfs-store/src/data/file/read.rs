@@ -1,4 +1,4 @@
-//! `file.read`, and what the `file` family's reads share: each one `fs.*` Store call at a Branch's
+//! `file.read`, and what the `file` family's reads share: each one `file.*` Store call at a Branch's
 //! head or at the Commit `--at` names (an id or a prefix of 8 or more of
 //! its characters, which the Store resolves). Answers carry the Commit
 //! read as its full id. A paged read's cursor carries its filters and that
@@ -179,7 +179,7 @@ pub fn read(home: &Path, events: &mut Events<'_>, request: &FileRead) -> Outcome
         .int("startLine", Some(start))
         .int("endLine", Some(end))
         .boolean("binary", Some(true));
-    let value = run(home, events, &request.project, "fs.read", args)?;
+    let value = run(home, events, &request.project, "file.read", args)?;
     let binary = value.get_bool("binary");
     let unless_binary = |key: &str| match binary {
         true => SdkValue::Null,

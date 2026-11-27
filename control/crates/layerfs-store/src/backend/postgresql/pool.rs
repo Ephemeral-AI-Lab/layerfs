@@ -74,7 +74,7 @@ pub const WRITES_PER_PROCESS: usize = PER_PROCESS / 2;
 /// What a session serves.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Kind {
-    /// `fs.read`, `fs.stat` and `fs.list` on a read service.
+    /// `file.read`, `file.stat` and `file.list` on a read service.
     Read,
     /// File writes on a writable service.
     Write,

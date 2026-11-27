@@ -226,7 +226,7 @@ pub struct FileApply {
     pub guard: Guard,
 }
 
-/// One `fs.*` Store method with its engine arguments (camelCase; an absent
+/// One `file.*` Store method with its engine arguments (camelCase; an absent
 /// value is not sent), as a file call built them.
 #[derive(Clone, Debug)]
 pub struct FileOp {

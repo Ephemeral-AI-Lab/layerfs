@@ -54,7 +54,7 @@ pub struct CommitDiff {
     pub cursor: Option<String>,
 }
 
-/// One page of `branch.list_commits`, as the Store takes it.
+/// One page of `commit.list`, as the Store takes it.
 #[derive(Clone, Debug, Default)]
 pub struct CommitPage {
     /// The Branch, or main.

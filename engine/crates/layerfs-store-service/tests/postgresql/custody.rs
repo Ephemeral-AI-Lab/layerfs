@@ -559,7 +559,7 @@ fn a_path_removed_between_snapshot_and_admission_is_hidden_in_that_mount() {
     let remover = store.open();
     let (bound, removed) = paused.run(branch, 0, || {
         code(&remover.call(
-            "project.remove_file",
+            "project.hide_path",
             vec![("path", SdkValue::text("/victim"))],
         ))
     });
@@ -600,7 +600,7 @@ fn exclusive_operations_after_the_admission_meet_the_intent() {
             "the intent committed while the reply is held"
         );
         let path = code(&remover.call(
-            "project.remove_file",
+            "project.hide_path",
             vec![("path", SdkValue::text("/victim"))],
         ));
         let gone = code(&remover.call("branch.remove", vec![("branch", SdkValue::text("work"))]));
@@ -634,7 +634,7 @@ fn exclusive_operations_after_the_admission_meet_the_intent() {
     // Now the removal lands and a later mount hides the path.
     assert_eq!(
         code(&remover.call(
-            "project.remove_file",
+            "project.hide_path",
             vec![("path", SdkValue::text("/victim"))],
         )),
         "Ok"

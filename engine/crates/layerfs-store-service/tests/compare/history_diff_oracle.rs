@@ -3,7 +3,7 @@
 //!
 //! Random histories of writes, edits, removals, renames and copies of files
 //! and directories, with forks and merges, are compared Commit against Commit
-//! with `branch.diff_commits` and against an in-test walk of both whole trees
+//! with `commit.diff` and against an in-test walk of both whole trees
 //! (the walk the daemon used before). Each saved tree's every binding must be
 //! among the recorded hints, or the change walk could miss a path.
 //!
@@ -237,49 +237,47 @@ fn walked(reader: &dyn AuthenticatedObjects, from: ObjectId, to: ObjectId) -> Ve
                 continue;
             }
         }
-        let side = |e: Option<EntryFacts>| e.map_or("-".to_owned(), |e| e.serial.to_string());
-        out.push(format!("{path} {} {}", side(before), side(after)));
+        out.push(shown(&path, before, after));
     }
     out
 }
 
+/// One listed change as `commit.diff` shows it: the path, how it changed and
+/// whether the inode differs.
+fn shown(path: &str, before: Option<EntryFacts>, after: Option<EntryFacts>) -> String {
+    let (change, identity) = match (before, after) {
+        (None, _) => ("added", false),
+        (_, None) => ("removed", false),
+        (Some(x), Some(y)) => ("modified", x.serial != y.serial),
+    };
+    format!("{path} {change} {identity}")
+}
+
 /// The daemon's listing, all pages of `page` items.
 fn listed(fixture: &Fixture, from: &str, to: &str, page: i64) -> (Vec<String>, ObjectId, ObjectId) {
-    let (mut out, mut pos) = (Vec::new(), 0i64);
+    let (mut out, mut cursor) = (Vec::new(), SdkValue::Null);
     loop {
-        let reply = fixture.call(
-            "branch.diff_commits",
-            vec![
-                ("from", SdkValue::text(from)),
-                ("to", SdkValue::text(to)),
-                ("pageSize", SdkValue::Int(page)),
-                ("pagePos", SdkValue::Int(pos)),
-            ],
-        );
-        let side = |item: &SdkValue, name: &str| match item.get(name) {
-            Some(SdkValue::Null) | None => "-".to_owned(),
-            Some(facts) => facts.get_int("inode").unwrap().to_string(),
-        };
+        let reply = super::commit_diff(fixture, from, to, page, &cursor, false);
         for item in items(&reply) {
             out.push(format!(
                 "{} {} {}",
                 item.get_text("path").unwrap(),
-                side(item, "before"),
-                side(item, "after")
+                item.get_text("change").unwrap(),
+                item.get_bool("identity")
             ));
         }
         let root = |name: &str| {
-            let hex = reply.get(name).unwrap().get_text("root").unwrap();
+            let hex = reply.get_text(name).unwrap();
             let bytes: Vec<u8> = (0..hex.len())
                 .step_by(2)
                 .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap())
                 .collect();
             ObjectId::from_bytes(&bytes).unwrap()
         };
-        match reply.get_int("nextPagePos") {
-            Some(next) => pos = next,
-            None => return (out, root("from"), root("to")),
+        if !super::more(&reply) {
+            return (out, root("fromRoot"), root("toRoot"));
         }
+        cursor = reply.get("next").cloned().unwrap();
     }
 }
 

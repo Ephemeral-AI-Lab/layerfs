@@ -11,7 +11,7 @@
 //! and one `RELINK_HEAD` line with each new Commit's identity.
 //! `LAYERFS_364_RELINK_LIMIT` relinks only that many files.
 //! `LAYERFS_364_RELINK_ROUNDS=2` relinks again over the first relink's
-//! Commit and then pages `branch.diff_commits` between the two (range 16's
+//! Commit and then pages `commit.diff` between the two (range 16's
 //! relink-over-relink verify), printing one `RELINK_DIFF` line and
 //! `RELINK_DIFF_PAGE` lines for the first, every 25th and the last page.
 //! `LAYERFS_364_RELINK_TIMES=now` leaves each new file its write time, as
@@ -301,12 +301,12 @@ fn clean_relink_commit() {
             let (page_started, page_statements) = (std::time::Instant::now(), statements(&service));
             let page = call(
                 &service,
-                "branch.diff_commits",
+                "commit.diff",
                 vec![
+                    ("ref", SdkValue::text(second)),
                     ("from", SdkValue::text(first)),
-                    ("to", SdkValue::text(second)),
-                    ("pageSize", SdkValue::Int(200)),
-                    ("cursor", cursor.clone()),
+                    ("limit", SdkValue::Int(200)),
+                    ("after", cursor.clone()),
                 ],
             );
             pages += 1;
@@ -318,7 +318,7 @@ fn clean_relink_commit() {
             let after = statements(&service);
             let spent = after.0 + after.1 - page_statements.0 - page_statements.1;
             each.push((page_started.elapsed().as_secs_f64() * 1e3, spent, listed));
-            cursor = page.get("nextCursor").cloned().unwrap_or(SdkValue::Null);
+            cursor = page.get("next").cloned().unwrap_or(SdkValue::Null);
             if matches!(cursor, SdkValue::Null) {
                 break;
             }

@@ -1,6 +1,6 @@
 //! A file written to other bytes and back to its own is no content change,
 //! though its root may differ: a root depends on how the file was built
-//! (#352 F-073, range 058: `diff_commits` listed a reconciled file whose bytes
+//! (#352 F-073, range 058: `diff_commits`, now `commit.diff`, listed a reconciled file whose bytes
 //! were the same at both Commits).
 use crate::support;
 
@@ -64,11 +64,11 @@ fn head(reply: &SdkValue) -> String {
     reply.get_text("head").unwrap().to_owned()
 }
 
-/// The `PATH` item `diff_commits` lists between two Commits, if any.
+/// The `PATH` item `commit.diff` lists from `from` to `to`, if any.
 fn item(fixture: &Fixture, from: &str, to: &str) -> Option<SdkValue> {
     let diff = fixture.call(
-        "branch.diff_commits",
-        vec![("from", SdkValue::text(from)), ("to", SdkValue::text(to))],
+        "commit.diff",
+        vec![("ref", SdkValue::text(to)), ("from", SdkValue::text(from))],
     );
     items(&diff)
         .iter()
@@ -76,17 +76,10 @@ fn item(fixture: &Fixture, from: &str, to: &str) -> Option<SdkValue> {
         .cloned()
 }
 
-fn diff_files(fixture: &Fixture, from: &str, to: &str) -> SdkValue {
-    let side = |at: &str| {
-        SdkValue::map([
-            ("path", SdkValue::text(PATH)),
-            ("commit", SdkValue::text(at)),
-        ])
-    };
-    fixture.call(
-        "fs.diff_files",
-        vec![("left", side(from)), ("right", side(to))],
-    )
+/// Whether `PATH` holds the same bytes at `from` and `to`: `commit.diff`
+/// lists no content change for it.
+fn content_equal(fixture: &Fixture, from: &str, to: &str) -> bool {
+    item(fixture, from, to).is_none_or(|item| !item.get_bool("content"))
 }
 
 fn committed(fixture: &Fixture, changes: &[Change<'_>], id: u8) -> String {
@@ -110,12 +103,9 @@ fn a_file_written_away_and_back_through_the_store_is_no_content_change() {
     let changed = item(&fixture, &start, &away).expect("the edit is listed");
     assert!(changed.get_bool("content"), "{changed:?}");
     if let Some(listed) = item(&fixture, &start, &back) {
-        assert_eq!(listed.get_text("kind"), Some("Modified"), "{listed:?}");
+        assert_eq!(listed.get_text("change"), Some("modified"), "{listed:?}");
         assert!(!listed.get_bool("content"), "{listed:?}");
     }
-    let files = diff_files(&fixture, &start, &back);
-    assert_eq!(files.get_text("kind"), Some("Equal"), "{files:?}");
-    assert!(files.get_bool("contentEqual"), "{files:?}");
 
     // One byte at the end, the same length: still a content change.
     let mut last = original.clone();
@@ -123,7 +113,7 @@ fn a_file_written_away_and_back_through_the_store_is_no_content_change() {
     let flipped = head(&fixture.apply("work", vec![write(PATH, last)]));
     let listed = item(&fixture, &back, &flipped).expect("the flipped byte is listed");
     assert!(listed.get_bool("content"), "{listed:?}");
-    assert!(!diff_files(&fixture, &back, &flipped).get_bool("contentEqual"));
+    assert!(!content_equal(&fixture, &back, &flipped));
     fixture.cleanup();
 }
 
@@ -147,7 +137,7 @@ fn a_file_saved_away_and_back_by_rename_over_is_no_content_change() {
     let listed = item(&fixture, &start, &back).expect("the new inode is listed");
     assert!(listed.get_bool("identity"), "{listed:?}");
     assert!(!listed.get_bool("content"), "{listed:?}");
-    assert!(diff_files(&fixture, &start, &back).get_bool("contentEqual"));
+    assert!(content_equal(&fixture, &start, &back));
     fixture.cleanup();
 }
 
@@ -174,8 +164,7 @@ fn a_merge_of_two_sides_that_wrote_the_same_bytes_does_not_conflict() {
     let ours = head(&fixture.apply("ours", vec![write(PATH, same.clone())]));
     fixture.apply("theirs", vec![write(PATH, edited(&original, 100_000, 10))]);
     let theirs = head(&fixture.apply("theirs", vec![write(PATH, same)]));
-    let files = diff_files(&fixture, &ours, &theirs);
-    assert!(files.get_bool("contentEqual"), "{files:?}");
+    assert!(content_equal(&fixture, &ours, &theirs));
 
     let merged = fixture
         .try_call(
@@ -188,7 +177,6 @@ fn a_merge_of_two_sides_that_wrote_the_same_bytes_does_not_conflict() {
         )
         .unwrap_or_else(|refusal| panic!("equal sides conflicted: {refusal:?}"));
     assert_eq!(merged.get_text("kind"), Some("Merged"), "{merged:?}");
-    let files = diff_files(&fixture, &ours, "merged");
-    assert!(files.get_bool("contentEqual"), "{files:?}");
+    assert!(content_equal(&fixture, &ours, "merged"));
     fixture.cleanup();
 }

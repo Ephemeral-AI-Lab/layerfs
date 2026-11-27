@@ -77,21 +77,17 @@ fn a_removed_branch_is_hidden_and_holds_its_name() {
     let refused = branch_remove::remove(&fixture.service.store, &stack, "gone")
         .expect_err("a repeat is NoSuchBranch");
     assert_eq!(refused.code, "NoSuchBranch", "{refused:?}");
-    let refused = refusal(
-        &fixture,
-        "branch.list_commits",
-        vec![("branch", text("gone"))],
-    );
+    let refused = refusal(&fixture, "commit.list", vec![("branch", text("gone"))]);
     assert_eq!(refused.code, "NoSuchBranch");
     let refused = refusal(
         &fixture,
-        "fs.read",
+        "file.read",
         vec![("branch", text("gone")), ("path", text("/a.txt"))],
     );
     assert_eq!(refused.code, "NoSuchBranch");
 
     // The Branch is gone from the listing.
-    let listed = fixture.call("project.list_branches", Vec::new());
+    let listed = fixture.call("branch.list", Vec::new());
     let SdkValue::List(items) = listed.get("items").expect("items") else {
         panic!("{listed:?}");
     };

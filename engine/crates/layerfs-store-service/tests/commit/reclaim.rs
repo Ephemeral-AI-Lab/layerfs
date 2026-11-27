@@ -148,7 +148,7 @@ fn a_commit_answers_before_its_reclamation_and_reclaim_drains_it_once() {
     // The committed file reads back after its overlay rows are gone: its
     // size, and lines deep inside it (line n holds n - 1).
     let read = fixture.call(
-        "fs.read",
+        "file.read",
         vec![
             ("branch", SdkValue::text("lane")),
             ("path", SdkValue::text("/new71.bin")),

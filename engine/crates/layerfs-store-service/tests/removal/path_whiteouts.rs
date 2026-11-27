@@ -1,5 +1,5 @@
 //! T5.5 whiteout builders: a tree derived from a node at or below a
-//! `project.remove_file` frontier records the removed path's absence, while a
+//! `project.hide_path` frontier records the removed path's absence, while a
 //! post-frontier re-creation stays visible. Covers a one-shot Commit, a
 //! Workspace Commit bound before the marker, every one-shot tree creator, and
 //! a merge whose sides are hidden, re-created, or both.
@@ -18,12 +18,12 @@ fn text(value: &str) -> SdkValue {
 }
 
 fn remove(fixture: &Fixture, path: &str) -> SdkValue {
-    fixture.call("project.remove_file", vec![("path", text(path))])
+    fixture.call("project.hide_path", vec![("path", text(path))])
 }
 
 fn read(fixture: &Fixture, branch: &str, path: &str) -> Result<SdkValue, SdkRefusal> {
     fixture.try_call(
-        "fs.read",
+        "file.read",
         vec![("branch", text(branch)), ("path", text(path))],
     )
 }
@@ -64,7 +64,7 @@ fn a_one_shot_commit_after_remove_stays_absent() {
     fixture.apply("work", vec![write("/y", "y\n")]);
     absent(&fixture, "work", "/a");
     let listed = fixture.call(
-        "fs.list",
+        "file.list",
         vec![("branch", text("work")), ("path", text("/"))],
     );
     let names = paths(&listed);
@@ -92,7 +92,7 @@ fn a_marker_under_a_live_mount_is_refused_and_materializes_after_it_closes() {
     fixture.fork("work");
     fixture.workspace_commit("work", &[Change::Create("/w", b"w")], 31, || {
         let refusal = fixture
-            .try_call("project.remove_file", vec![("path", text("/a"))])
+            .try_call("project.hide_path", vec![("path", text("/a"))])
             .expect_err("a marker under a live mount");
         assert_eq!(refusal.code, "MountsActive", "{refusal:?}");
         let holders = match refusal.detail.get("holders") {
@@ -115,7 +115,7 @@ fn a_marker_under_a_live_mount_is_refused_and_materializes_after_it_closes() {
     assert_eq!(visible(&fixture, "work", "/w"), "w");
     assert_eq!(visible(&fixture, "work", "/v"), "v");
     let listed = fixture.call(
-        "fs.list",
+        "file.list",
         vec![("branch", text("work")), ("path", text("/"))],
     );
     let names = paths(&listed);
@@ -172,12 +172,15 @@ fn one_shot_creators_see_a_removed_path_as_absent_and_recreate_it_visibly() {
     // Removing or moving from a hidden path is the absence the tree has;
     // edit and a cp source are `Removed` (T5.6, §4.3).
     let refusal = fixture
-        .try_call("fs.rm", vec![("branch", text("rm")), ("path", text("/a"))])
+        .try_call(
+            "file.rm",
+            vec![("branch", text("rm")), ("path", text("/a"))],
+        )
         .expect_err("hidden rm");
     assert_eq!(refusal.code, "NoSuchPath", "{refusal:?}");
     let refusal = fixture
         .try_call(
-            "fs.mv",
+            "file.mv",
             vec![
                 ("branch", text("mvfrom")),
                 ("from", text("/a")),
@@ -188,7 +191,7 @@ fn one_shot_creators_see_a_removed_path_as_absent_and_recreate_it_visibly() {
     assert_eq!(refusal.code, "NoSuchPath", "{refusal:?}");
     let refusal = fixture
         .try_call(
-            "fs.cp",
+            "file.cp",
             vec![
                 ("branch", text("cpfrom")),
                 ("from", text("/a")),
@@ -199,7 +202,7 @@ fn one_shot_creators_see_a_removed_path_as_absent_and_recreate_it_visibly() {
     assert_eq!(refusal.code, "Removed", "{refusal:?}");
     let refusal = fixture
         .try_call(
-            "fs.edit",
+            "file.edit",
             vec![
                 ("branch", text("edit")),
                 ("path", text("/a")),
@@ -213,7 +216,7 @@ fn one_shot_creators_see_a_removed_path_as_absent_and_recreate_it_visibly() {
     // Writing, moving or copying to the path, or writing it, is a visible
     // re-creation.
     fixture.call(
-        "fs.mv",
+        "file.mv",
         vec![
             ("branch", text("mvto")),
             ("from", text("/b")),
@@ -224,7 +227,7 @@ fn one_shot_creators_see_a_removed_path_as_absent_and_recreate_it_visibly() {
     absent(&fixture, "mvto", "/b");
 
     fixture.call(
-        "fs.cp",
+        "file.cp",
         vec![
             ("branch", text("cpto")),
             ("from", text("/b")),
@@ -235,7 +238,7 @@ fn one_shot_creators_see_a_removed_path_as_absent_and_recreate_it_visibly() {
     assert_eq!(visible(&fixture, "cpto", "/b"), "b\n");
 
     fixture.call(
-        "fs.write",
+        "file.write",
         vec![
             ("branch", text("write")),
             ("path", text("/a")),
@@ -300,7 +303,7 @@ fn a_merge_keeps_a_post_frontier_re_creation() {
     fixture.apply("old", vec![write("/o", "o\n")]);
     remove(&fixture, "/a");
     fixture.call(
-        "fs.write",
+        "file.write",
         vec![
             ("branch", text("new")),
             ("path", text("/a")),
@@ -345,16 +348,19 @@ fn a_removed_directory_is_absent_and_can_be_recreated() {
     remove(&fixture, "/d");
 
     let refusal = fixture
-        .try_call("fs.rm", vec![("branch", text("rm")), ("path", text("/d"))])
+        .try_call(
+            "file.rm",
+            vec![("branch", text("rm")), ("path", text("/d"))],
+        )
         .expect_err("hidden directory rm");
     assert_eq!(refusal.code, "NoSuchPath", "{refusal:?}");
 
     fixture.call(
-        "fs.mkdir",
+        "file.mkdir",
         vec![("branch", text("mkdir")), ("path", text("/d"))],
     );
     let stat = fixture.call(
-        "fs.stat",
+        "file.stat",
         vec![("branch", text("mkdir")), ("path", text("/d"))],
     );
     assert_eq!(stat.get_text("type"), Some("dir"), "{stat:?}");

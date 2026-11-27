@@ -191,7 +191,7 @@ fn seed(home: &Path) {
                 .collect();
             engine(
                 service,
-                "fs.write",
+                "file.write",
                 SdkValue::map([
                     ("project", text("app")),
                     ("branch", text(&name)),

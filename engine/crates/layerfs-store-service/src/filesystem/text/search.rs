@@ -1,4 +1,4 @@
-//! Literal search for `fs.grep`: the standard library's substring search over
+//! Literal search for `file.grep`: the standard library's substring search over
 //! a whole text part, with line numbers counted across the gaps and line
 //! bounds found only around a match. A call scans each content once.
 use super::window::{self, after_last_newline, newlines, Line, Open};

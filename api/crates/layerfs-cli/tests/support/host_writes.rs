@@ -309,7 +309,7 @@ pub fn content_request(exchange: &super::fixture::Exchange, id: &str, path: &str
         ("path", SdkValue::text(path)),
         ("streamed", SdkValue::Bool(true)),
     ]);
-    write_request(exchange, id, "fs.write", "content", fields)
+    write_request(exchange, id, "file.write", "content", fields)
 }
 
 /// `content`'s data frames, its end and the input's end.

@@ -1,4 +1,4 @@
-//! The `project.remove_file` path grammar and its keys, read through the
+//! The `project.hide_path` path grammar and its keys, read through the
 //! public contract. Moved out of `contract/path.rs`: product source holds no
 //! tests (the product-boundary guard).
 

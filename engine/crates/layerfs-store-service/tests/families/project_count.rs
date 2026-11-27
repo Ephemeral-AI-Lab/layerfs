@@ -41,7 +41,7 @@ fn project_reads_are_independent_of_project_count() {
         }
         let stat = || {
             fixture.call(
-                "fs.stat",
+                "file.stat",
                 vec![
                     ("branch", SdkValue::text("main")),
                     ("path", SdkValue::text("/a.txt")),

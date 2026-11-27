@@ -1,6 +1,6 @@
 //! A history walk's versions of one path, resolved in windows (#818 H5).
 //!
-//! Blame and `fs.revision` look the same path up in every version they
+//! Blame and `file.history` look the same path up in every version they
 //! walk. Where the Store pays a round trip per demand and serves per-object
 //! reads at once, a version the walk reaches opens a window: that version
 //! and the Commits the walk's row window holds after it ([`Rows::upcoming`]),
@@ -24,7 +24,7 @@
 //! A window also reads ahead what the walk reads at its versions (#818 H6),
 //! through the same per-object reads: its regular files' lengths in one
 //! demand, then for blame the roots of the texts it compares while their
-//! comparisons fit its byte budget, for `fs.revision` its entries' metadata,
+//! comparisons fit its byte budget, for `file.history` its entries' metadata,
 //! at most [`ROOTS`] roots and [`super::cached::ROOT_BYTES`] held in one
 //! demand. Each read
 //! ahead is kept or held by the call's caches and served where the walk asks
@@ -80,7 +80,7 @@ pub enum Ahead {
     /// older version whose file differs, while the comparisons' bytes fit
     /// `budget`; their lengths and texts' roots.
     Texts { newer: ObjectId, budget: u64 },
-    /// `fs.revision`: the entries' lengths and metadata.
+    /// `file.history`: the entries' lengths and metadata.
     Facts,
 }
 

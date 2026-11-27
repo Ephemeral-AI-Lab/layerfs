@@ -1,14 +1,14 @@
-//! `branch.list`: one Branch by name, else one page of Branches
-//! (engine method `project.list_branches`).
+//! `branch.list`: one Branch by name, else one page of Branches (`branch.get`
+//! sends it with the name).
 use crate::families::args::{invalid, project, Answer};
 use crate::history::listing;
 use crate::StoreService;
 use layerfs_protocol::sdk::SdkValue;
 
-/// `list_branches({ name?, prefix?, excludePrefix?, after?, limit? })`: the
+/// `list({ name?, prefix?, excludePrefix?, after?, limit? })`: the
 /// one Branch `name`, else one page of every Branch and main in name order,
 /// read through the name index from `after` on.
-pub fn list_branches(service: &StoreService, args: &SdkValue) -> Answer {
+pub fn list(service: &StoreService, args: &SdkValue) -> Answer {
     let stack = project(service, args)?;
     let word = |name: &str| match args.get(name) {
         None | Some(SdkValue::Null) => Ok(None),

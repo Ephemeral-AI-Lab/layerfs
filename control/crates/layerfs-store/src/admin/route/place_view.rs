@@ -27,7 +27,7 @@ use std::path::Path;
 /// intents with the view: the exclusive removals. A shared intent (a file
 /// write's private Workspace, a merge) conflicts only with operation intents,
 /// which record no place.
-pub const ADMITTING: [&str; 2] = ["branch.remove", "project.remove_file"];
+pub const ADMITTING: [&str; 2] = ["branch.remove", "project.hide_path"];
 
 /// Whether Store method `method` reads the place view ([`ADMITTING`]).
 #[must_use]

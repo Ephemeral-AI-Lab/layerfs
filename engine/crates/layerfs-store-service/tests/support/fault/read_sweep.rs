@@ -1,8 +1,8 @@
 //! The fault sweep the `sdk_read_fault_rh_*` binaries run (#818 lane RH):
 //! one SDK read call on PostgreSQL through [`FaultProxy`], first clean (to
 //! count the `K` server messages it causes), then once per message `N` in
-//! `0..K` with one fault injected at `N`. The call is `fs.stat` of a visible
-//! path on Branch `work` of a project that holds a `project.remove_file`
+//! `0..K` with one fault injected at `N`. The call is `file.stat` of a visible
+//! path on Branch `work` of a project that holds a `project.hide_path`
 //! marker, on a newly opened Store service (cold: the control reader
 //! connects and prepares inside the window), so the window holds every
 //! message R1 changed: the Branch-by-name read and the marker read, each one
@@ -11,7 +11,7 @@
 //! (`read_context_named`) and then the Branch's head Commit by its full
 //! identity (`read_context_node`).
 //!
-//! [`sweep_blame`] runs the same sweep over a cold `fs.blame` of a file
+//! [`sweep_blame`] runs the same sweep over a cold `file.blame` of a file
 //! that 18 Commits changed (#818 H4): its walk reads the Commits' rows and
 //! serials in two `lineage_chain_window` statements (16, then the rest),
 //! each one fenced statement, with its prepare.
@@ -44,7 +44,7 @@ type Named<'a> = (&'static str, &'a str);
 
 fn stat(service: &Service, (argument, value): Named<'_>) -> Result<SdkValue, SdkRefusal> {
     service.call(
-        "fs.stat",
+        "file.stat",
         vec![
             (argument, SdkValue::text(value)),
             ("path", SdkValue::text(PATH)),
@@ -59,7 +59,7 @@ fn outcome(result: &Result<SdkValue, SdkRefusal>) -> String {
     }
 }
 
-/// The sweep: `fault` at every server message of the cold `fs.stat`.
+/// The sweep: `fault` at every server message of the cold `file.stat`.
 pub fn sweep(tag: &str, fault: Fault) {
     let Some(store) = TestStore::postgres(tag, SEED) else {
         return;
@@ -69,7 +69,7 @@ pub fn sweep(tag: &str, fault: Fault) {
     let direct = store.open();
     let removed = direct
         .call(
-            "project.remove_file",
+            "project.hide_path",
             vec![("path", SdkValue::text("/dir/gone"))],
         )
         .unwrap();
@@ -102,7 +102,7 @@ const VERSIONS: usize = 18;
 
 fn blame(service: &Service) -> Result<SdkValue, SdkRefusal> {
     service.call(
-        "fs.blame",
+        "file.blame",
         vec![
             ("branch", SdkValue::text(BRANCH)),
             ("path", SdkValue::text("/dir/blamed.txt")),
@@ -110,7 +110,7 @@ fn blame(service: &Service) -> Result<SdkValue, SdkRefusal> {
     )
 }
 
-/// The sweep over a cold `fs.blame` whose walk reads windows (#818 H4).
+/// The sweep over a cold `file.blame` whose walk reads windows (#818 H4).
 pub fn sweep_blame(tag: &str, fault: Fault) {
     let Some(store) = TestStore::postgres(tag, SEED) else {
         return;
@@ -123,7 +123,7 @@ pub fn sweep_blame(tag: &str, fault: Fault) {
         text.push_str(&format!("v{n}\n"));
         direct
             .call(
-                "fs.write",
+                "file.write",
                 vec![
                     ("branch", SdkValue::text(BRANCH)),
                     ("path", SdkValue::text("/dir/blamed.txt")),

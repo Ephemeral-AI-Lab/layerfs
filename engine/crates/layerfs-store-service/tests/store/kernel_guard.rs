@@ -178,7 +178,7 @@ fn open_concurrent_child() {
     call("branch.fork", vec![("name", SdkValue::text(&branch))]);
     for step in 0..20 {
         call(
-            "fs.write",
+            "file.write",
             vec![
                 ("branch", SdkValue::text(&branch)),
                 ("path", SdkValue::text(format!("/agent-{id}-{step}.txt"))),
@@ -393,7 +393,7 @@ fn three_processes_open_direct_and_commit_concurrently() {
         let list = layerfs_store_service::families::call(
             &service,
             &layerfs_protocol::sdk::SdkCall {
-                method: "branch.list_commits".to_owned(),
+                method: "commit.list".to_owned(),
                 args: layerfs_protocol::sdk::SdkValue::map([
                     (
                         "project",

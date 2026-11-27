@@ -1,4 +1,4 @@
-//! `fs.list`.
+//! `file.list`.
 use crate::families::args::{optional_path, paging, snapshot_in, snapshot_target, Answer};
 use crate::filesystem::cache::Cached;
 use crate::{

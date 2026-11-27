@@ -662,7 +662,7 @@ pub struct PathRemovalRecord {
     pub removed_ms: i64,
 }
 
-/// Whether a `project.remove_file` call advanced the marker or found it current.
+/// Whether a `project.hide_path` call advanced the marker or found it current.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PathRemovalKind {
     /// The marker advanced to a new frontier.
@@ -671,7 +671,7 @@ pub enum PathRemovalKind {
     UpToDate,
 }
 
-/// One `project.remove_file` request: the project, the normalized path and the
+/// One `project.hide_path` request: the project, the normalized path and the
 /// time the caller observed.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PathRemovalRequest {
@@ -683,7 +683,7 @@ pub struct PathRemovalRequest {
     pub removed_ms: i64,
 }
 
-/// One `project.remove_file` result: the stored marker values.
+/// One `project.hide_path` result: the stored marker values.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PathRemovalOutcome {
     /// Whether the call advanced the marker or found it current.

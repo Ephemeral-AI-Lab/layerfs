@@ -1,5 +1,5 @@
 //! #41 T6: the Store service's `branch.remove`, `project.delete` and
-//! `project.remove_file` admit the Store's intents and report the holders.
+//! `project.hide_path` admit the Store's intents and report the holders.
 use crate::installed;
 use crate::support;
 
@@ -254,7 +254,7 @@ fn a_mount_refuses_every_removal_through_the_service() {
     assert_eq!(refused.code, "MountsActive", "{refused:?}");
 
     let refused = fixture
-        .try_call("project.remove_file", vec![("path", text("/a.txt"))])
+        .try_call("project.hide_path", vec![("path", text("/a.txt"))])
         .expect_err("the mount holds");
     assert_eq!(refused.code, "MountsActive", "{refused:?}");
 

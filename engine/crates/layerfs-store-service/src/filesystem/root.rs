@@ -40,7 +40,7 @@ pub struct Snap {
     pub serial: u64,
 }
 
-/// A node's serial with its project's `project.remove_file` markers, read
+/// A node's serial with its project's `project.hide_path` markers, read
 /// together; `None` when the node has no row.
 pub type Removals = Result<Option<(u64, Vec<PathRemovalRecord>)>, Arc<PortError>>;
 

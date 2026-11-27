@@ -14,12 +14,12 @@ fn text(value: &str) -> SdkValue {
 }
 
 fn remove(fixture: &Fixture, path: &str) -> SdkValue {
-    fixture.call("project.remove_file", vec![("path", text(path))])
+    fixture.call("project.hide_path", vec![("path", text(path))])
 }
 
 fn read(fixture: &Fixture, branch: &str, path: &str) -> Result<SdkValue, SdkRefusal> {
     fixture.try_call(
-        "fs.read",
+        "file.read",
         vec![("branch", text(branch)), ("path", text(path))],
     )
 }
@@ -28,10 +28,6 @@ fn visible(fixture: &Fixture, branch: &str, path: &str) -> String {
     let value =
         read(fixture, branch, path).unwrap_or_else(|refusal| panic!("{branch}{path}: {refusal:?}"));
     value.get_text("text").unwrap_or_default().to_owned()
-}
-
-fn selector(path: &str) -> SdkValue {
-    SdkValue::map([("path", text(path))])
 }
 
 fn head(fixture: &Fixture, method: &str, fields: Vec<(&str, SdkValue)>) -> String {
@@ -62,7 +58,7 @@ fn revision_stops_at_a_hidden_version_and_refuses_a_hidden_anchor() {
     fixture.apply("work", vec![write("/a", "one\nTWO\n")]);
     let second = head(
         &fixture,
-        "fs.write",
+        "file.write",
         vec![
             ("branch", text("work")),
             ("path", text("/a")),
@@ -74,7 +70,7 @@ fn revision_stops_at_a_hidden_version_and_refuses_a_hidden_anchor() {
     // The anchor itself is hidden.
     let refusal = fixture
         .try_call(
-            "fs.revision",
+            "file.history",
             vec![
                 ("branch", text("work")),
                 ("commit", text(&second)),
@@ -88,7 +84,7 @@ fn revision_stops_at_a_hidden_version_and_refuses_a_hidden_anchor() {
     // hidden version instead of skipping past it.
     let third = head(
         &fixture,
-        "fs.write",
+        "file.write",
         vec![
             ("branch", text("work")),
             ("path", text("/a")),
@@ -96,7 +92,7 @@ fn revision_stops_at_a_hidden_version_and_refuses_a_hidden_anchor() {
         ],
     );
     let revision = fixture.call(
-        "fs.revision",
+        "file.history",
         vec![("branch", text("work")), ("path", text("/a"))],
     );
     let found = items(&revision);
@@ -121,7 +117,7 @@ fn blame_stops_at_a_hidden_version_and_refuses_a_hidden_anchor() {
     fixture.apply("work", vec![write("/a", "one\nTWO\n")]);
     let second = head(
         &fixture,
-        "fs.write",
+        "file.write",
         vec![
             ("branch", text("work")),
             ("path", text("/a")),
@@ -132,7 +128,7 @@ fn blame_stops_at_a_hidden_version_and_refuses_a_hidden_anchor() {
 
     let refusal = fixture
         .try_call(
-            "fs.blame",
+            "file.blame",
             vec![
                 ("branch", text("work")),
                 ("commit", text(&second)),
@@ -144,7 +140,7 @@ fn blame_stops_at_a_hidden_version_and_refuses_a_hidden_anchor() {
 
     let third = head(
         &fixture,
-        "fs.write",
+        "file.write",
         vec![
             ("branch", text("work")),
             ("path", text("/a")),
@@ -152,7 +148,7 @@ fn blame_stops_at_a_hidden_version_and_refuses_a_hidden_anchor() {
         ],
     );
     let blame = fixture.call(
-        "fs.blame",
+        "file.blame",
         vec![("branch", text("work")), ("path", text("/a"))],
     );
     let Some(SdkValue::List(lines)) = blame.get("lines") else {
@@ -177,7 +173,7 @@ fn grep_omits_hidden_hits_and_refuses_a_hidden_target() {
 
     let refusal = fixture
         .try_call(
-            "fs.grep",
+            "file.grep",
             vec![
                 ("branch", text("work")),
                 ("pattern", text("needle")),
@@ -190,7 +186,7 @@ fn grep_omits_hidden_hits_and_refuses_a_hidden_target() {
     // A hidden file's hits are omitted, and a paged call does not let them
     // consume the page.
     let page = fixture.call(
-        "fs.grep",
+        "file.grep",
         vec![
             ("branch", text("work")),
             ("pattern", text("needle")),
@@ -201,7 +197,7 @@ fn grep_omits_hidden_hits_and_refuses_a_hidden_target() {
     assert_eq!(found.len(), 1, "{page:?}");
     assert_eq!(found[0].get_text("path"), Some("/b"));
     let paged = fixture.call(
-        "fs.grep",
+        "file.grep",
         vec![
             ("branch", text("work")),
             ("pattern", text("needle")),
@@ -215,7 +211,7 @@ fn grep_omits_hidden_hits_and_refuses_a_hidden_target() {
 
     // A post-frontier re-creation is searched again.
     fixture.call(
-        "fs.write",
+        "file.write",
         vec![
             ("branch", text("work")),
             ("path", text("/a")),
@@ -223,7 +219,7 @@ fn grep_omits_hidden_hits_and_refuses_a_hidden_target() {
         ],
     );
     let again = fixture.call(
-        "fs.grep",
+        "file.grep",
         vec![
             ("branch", text("work")),
             ("pattern", text("needle")),
@@ -231,96 +227,6 @@ fn grep_omits_hidden_hits_and_refuses_a_hidden_target() {
         ],
     );
     assert_eq!(items(&again).len(), 2, "{again:?}");
-    fixture.cleanup();
-}
-
-#[test]
-fn file_diff_reports_hidden_sides_as_removed_added_and_both() {
-    let fixture = Fixture::new("t56-diff", |source| {
-        fs::write(source.join("a"), "a\n").unwrap();
-        fs::write(source.join("b"), "b\n").unwrap();
-        fs::write(source.join("c"), "c\n").unwrap();
-        3
-    });
-    fixture.fork("work");
-    let frontier_a = remove(&fixture, "/a").get_int("frontier_serial").unwrap();
-    let frontier_c = remove(&fixture, "/c").get_int("frontier_serial").unwrap();
-
-    // Left visible, right hidden: Removed with a hidden right side object.
-    let removed = fixture.call(
-        "fs.diff_files",
-        vec![
-            ("branch", text("work")),
-            ("left", selector("/b")),
-            ("right", selector("/a")),
-        ],
-    );
-    assert_eq!(
-        removed.get_text("changeKind"),
-        Some("Removed"),
-        "{removed:?}"
-    );
-    assert_eq!(removed.get("left").unwrap().get_text("path"), Some("/b"));
-    let right = removed.get("right").unwrap();
-    assert!(right.get_bool("removed"));
-    assert_eq!(right.get_text("path"), Some("/a"));
-    assert_eq!(right.get_int("frontier_serial"), Some(frontier_a));
-
-    // Left hidden, right visible: Added.
-    let added = fixture.call(
-        "fs.diff_files",
-        vec![
-            ("branch", text("work")),
-            ("left", selector("/a")),
-            ("right", selector("/b")),
-        ],
-    );
-    assert_eq!(added.get_text("changeKind"), Some("Added"), "{added:?}");
-    assert!(added.get("left").unwrap().get_bool("removed"));
-
-    // Both hidden: Removed with both side objects.
-    let both = fixture.call(
-        "fs.diff_files",
-        vec![
-            ("branch", text("work")),
-            ("left", selector("/a")),
-            ("right", selector("/c")),
-        ],
-    );
-    assert_eq!(both.get_text("changeKind"), Some("Removed"), "{both:?}");
-    assert_eq!(
-        both.get("left").unwrap().get_int("frontier_serial"),
-        Some(frontier_a)
-    );
-    assert_eq!(
-        both.get("right").unwrap().get_int("frontier_serial"),
-        Some(frontier_c)
-    );
-
-    // A genuinely absent side is still NoSuchPath when allowMissing is false.
-    let refusal = fixture
-        .try_call(
-            "fs.diff_files",
-            vec![
-                ("branch", text("work")),
-                ("left", selector("/b")),
-                ("right", selector("/absent")),
-            ],
-        )
-        .expect_err("absent diff side");
-    assert_eq!(refusal.code, "NoSuchPath", "{refusal:?}");
-
-    // A hidden side beats allowMissing.
-    let hidden_missing = fixture.call(
-        "fs.diff_files",
-        vec![
-            ("branch", text("work")),
-            ("left", selector("/b")),
-            ("right", selector("/a")),
-            ("allowMissing", SdkValue::Bool(false)),
-        ],
-    );
-    assert_eq!(hidden_missing.get_text("changeKind"), Some("Removed"));
     fixture.cleanup();
 }
 
@@ -341,7 +247,7 @@ fn one_shot_edit_and_cp_from_a_hidden_path_refuse_removed() {
     // edit and cp-from are `Removed`, not `NoSuchPath`.
     let refusal = fixture
         .try_call(
-            "fs.edit",
+            "file.edit",
             vec![
                 ("branch", text("edit")),
                 ("path", text("/a")),
@@ -353,7 +259,7 @@ fn one_shot_edit_and_cp_from_a_hidden_path_refuse_removed() {
     hidden_frontier(&refusal);
     let refusal = fixture
         .try_call(
-            "fs.cp",
+            "file.cp",
             vec![
                 ("branch", text("cpfrom")),
                 ("from", text("/a")),
@@ -365,12 +271,15 @@ fn one_shot_edit_and_cp_from_a_hidden_path_refuse_removed() {
 
     // rm and mv-from treat it as absent (the tree has no entry there).
     let refusal = fixture
-        .try_call("fs.rm", vec![("branch", text("rm")), ("path", text("/a"))])
+        .try_call(
+            "file.rm",
+            vec![("branch", text("rm")), ("path", text("/a"))],
+        )
         .expect_err("hidden rm");
     assert_eq!(refusal.code, "NoSuchPath", "{refusal:?}");
     let refusal = fixture
         .try_call(
-            "fs.mv",
+            "file.mv",
             vec![
                 ("branch", text("mvfrom")),
                 ("from", text("/a")),
@@ -383,7 +292,7 @@ fn one_shot_edit_and_cp_from_a_hidden_path_refuse_removed() {
     // A never-existing path stays NoSuchPath for edit and rm.
     let refusal = fixture
         .try_call(
-            "fs.edit",
+            "file.edit",
             vec![
                 ("branch", text("edit")),
                 ("path", text("/missing")),
@@ -395,7 +304,7 @@ fn one_shot_edit_and_cp_from_a_hidden_path_refuse_removed() {
     assert_eq!(refusal.code, "NoSuchPath", "edit: {refusal:?}");
     let refusal = fixture
         .try_call(
-            "fs.rm",
+            "file.rm",
             vec![("branch", text("rm")), ("path", text("/missing"))],
         )
         .expect_err("absent rm");
@@ -403,7 +312,7 @@ fn one_shot_edit_and_cp_from_a_hidden_path_refuse_removed() {
 
     // cp-to a hidden path is a visible re-creation.
     fixture.call(
-        "fs.cp",
+        "file.cp",
         vec![
             ("branch", text("cpto")),
             ("from", text("/b")),
@@ -431,7 +340,7 @@ fn paged_list_and_glob_skip_hidden_entries_before_paging() {
 
     // A non-paged listing omits the hidden entries and counts both.
     let listed = fixture.call(
-        "fs.list",
+        "file.list",
         vec![("branch", text("work")), ("path", text("/"))],
     );
     assert_eq!(paths(&listed), vec!["/b", "/c"], "{listed:?}");
@@ -440,7 +349,7 @@ fn paged_list_and_glob_skip_hidden_entries_before_paging() {
     // Each page skips hidden entries before its page slot and reports the
     // same page-independent removed_count.
     let first = fixture.call(
-        "fs.list",
+        "file.list",
         vec![
             ("branch", text("work")),
             ("path", text("/")),
@@ -451,7 +360,7 @@ fn paged_list_and_glob_skip_hidden_entries_before_paging() {
     assert_eq!(paths(&first), vec!["/b"], "{first:?}");
     assert_eq!(first.get_int("removed_count"), Some(2));
     let second = fixture.call(
-        "fs.list",
+        "file.list",
         vec![
             ("branch", text("work")),
             ("path", text("/")),
@@ -464,7 +373,7 @@ fn paged_list_and_glob_skip_hidden_entries_before_paging() {
 
     // A legacy numeric page also counts only visible matches.
     let legacy = fixture.call(
-        "fs.list",
+        "file.list",
         vec![
             ("branch", text("work")),
             ("path", text("/")),
@@ -476,7 +385,7 @@ fn paged_list_and_glob_skip_hidden_entries_before_paging() {
 
     // A glob omits hidden matches and counts them on every page.
     let globbed = fixture.call(
-        "fs.glob",
+        "file.glob",
         vec![
             ("branch", text("work")),
             ("pattern", text("/*")),
@@ -497,7 +406,7 @@ fn paged_list_and_glob_skip_hidden_entries_before_paging() {
     assert_eq!(globbed.get_int("removed_count"), Some(2));
 
     let glob_first = fixture.call(
-        "fs.glob",
+        "file.glob",
         vec![
             ("branch", text("work")),
             ("pattern", text("/*")),
@@ -509,7 +418,7 @@ fn paged_list_and_glob_skip_hidden_entries_before_paging() {
     assert_eq!(items(&glob_first).len(), 1, "{glob_first:?}");
     assert_eq!(glob_first.get_int("removed_count"), Some(2));
     let glob_second = fixture.call(
-        "fs.glob",
+        "file.glob",
         vec![
             ("branch", text("work")),
             ("pattern", text("/*")),
@@ -524,7 +433,7 @@ fn paged_list_and_glob_skip_hidden_entries_before_paging() {
 }
 
 #[test]
-fn branch_diff_treats_a_hidden_side_as_absent_on_both_routes() {
+fn commit_diff_treats_a_hidden_side_as_absent_in_both_directions() {
     let fixture = Fixture::new("t56-branch-diff", |source| {
         fs::write(source.join("a"), "a\n").unwrap();
         fs::write(source.join("b"), "b\n").unwrap();
@@ -535,7 +444,7 @@ fn branch_diff_treats_a_hidden_side_as_absent_on_both_routes() {
     remove(&fixture, "/a");
     // `right` re-creates /a above the frontier; `left` stays at the hidden base.
     fixture.call(
-        "fs.write",
+        "file.write",
         vec![
             ("branch", text("right")),
             ("path", text("/a")),
@@ -543,54 +452,34 @@ fn branch_diff_treats_a_hidden_side_as_absent_on_both_routes() {
         ],
     );
 
-    let kind_of = |value: &SdkValue| -> Option<String> {
+    let change_of = |value: &SdkValue| -> Option<String> {
         let Some(SdkValue::List(items)) = value.get("items") else {
             return None;
         };
         items
             .iter()
             .find(|item| item.get_text("path") == Some("/a"))
-            .and_then(|item| item.get_text("kind"))
+            .and_then(|item| item.get_text("change"))
             .map(str::to_owned)
     };
 
-    // The legacy offset route: a hidden left side is an addition, not a spurious
-    // modification or removal.
-    let legacy = fixture.call(
-        "branch.diff_branches",
-        vec![("from", text("left")), ("to", text("right"))],
+    // A hidden `from` side is an addition, not a spurious modification or
+    // removal.
+    let forward = fixture.call(
+        "commit.diff",
+        vec![("ref", text("right")), ("from", text("left"))],
     );
-    assert_eq!(kind_of(&legacy).as_deref(), Some("Added"), "{legacy:?}");
+    assert_eq!(change_of(&forward).as_deref(), Some("added"), "{forward:?}");
 
-    // The extended (page/continuation) route applies the same per-side rule.
-    let extended = fixture.call(
-        "branch.diff_branches",
-        vec![
-            ("from", text("left")),
-            ("to", text("right")),
-            ("page", SdkValue::Int(1)),
-        ],
-    );
-    assert_eq!(kind_of(&extended).as_deref(), Some("Added"), "{extended:?}");
-
-    // The reverse direction lists the same path as Removed on both routes.
-    let legacy = fixture.call(
-        "branch.diff_branches",
-        vec![("from", text("right")), ("to", text("left"))],
-    );
-    assert_eq!(kind_of(&legacy).as_deref(), Some("Removed"), "{legacy:?}");
-    let extended = fixture.call(
-        "branch.diff_branches",
-        vec![
-            ("from", text("right")),
-            ("to", text("left")),
-            ("page", SdkValue::Int(1)),
-        ],
+    // The reverse direction lists the same path as removed.
+    let reverse = fixture.call(
+        "commit.diff",
+        vec![("ref", text("left")), ("from", text("right"))],
     );
     assert_eq!(
-        kind_of(&extended).as_deref(),
-        Some("Removed"),
-        "{extended:?}"
+        change_of(&reverse).as_deref(),
+        Some("removed"),
+        "{reverse:?}"
     );
     fixture.cleanup();
 }

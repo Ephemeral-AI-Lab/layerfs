@@ -49,7 +49,7 @@ fn fork(service: &StoreService, branch: &str) -> Result<SdkValue, SdkRefusal> {
 fn stat(service: &StoreService, branch: &str, path: &str) -> SdkValue {
     call(
         service,
-        "fs.stat",
+        "file.stat",
         [
             ("branch", SdkValue::text(branch)),
             ("path", SdkValue::text(path)),
@@ -84,7 +84,7 @@ fn seed_work(
 fn write(service: &StoreService) -> Result<SdkValue, SdkRefusal> {
     call(
         service,
-        "fs.write",
+        "file.write",
         [
             ("branch", SdkValue::text("work")),
             ("path", SdkValue::text("/written")),
@@ -161,7 +161,7 @@ fn failed_first_write_leaves_the_slot_empty_for_a_later_call() {
 
     let absent = call(
         &service,
-        "fs.stat",
+        "file.stat",
         [
             ("branch", SdkValue::text("work")),
             ("path", SdkValue::text("/written")),

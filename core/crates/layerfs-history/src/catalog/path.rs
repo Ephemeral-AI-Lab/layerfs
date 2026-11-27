@@ -1,4 +1,4 @@
-//! The `project.remove_file` path grammar and its keys.
+//! The `project.hide_path` path grammar and its keys.
 //!
 //! The call accepts an absolute POSIX path and stores it as the normalized
 //! relative path (`/a` and `a` are the same). A path is refused when it is

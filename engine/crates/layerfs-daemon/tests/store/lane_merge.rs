@@ -307,7 +307,7 @@ fn mounted_writes(
 
 fn write(fixture: &Fixture, path: &str, text: &str) {
     fixture.sdk.call(
-        "fs.write",
+        "file.write",
         vec![
             ("branch", SdkValue::text(LANE)),
             ("path", SdkValue::text(path)),
@@ -320,7 +320,7 @@ fn read(fixture: &Fixture, path: &str) -> Option<String> {
     fixture
         .sdk
         .try_call(
-            "fs.read",
+            "file.read",
             vec![
                 ("branch", SdkValue::text(LANE)),
                 ("path", SdkValue::text(path)),

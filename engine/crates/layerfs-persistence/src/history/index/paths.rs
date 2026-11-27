@@ -1,4 +1,4 @@
-//! The `project.remove_file` marker: one `path_removed` row per project and
+//! The `project.hide_path` marker: one `path_removed` row per project and
 //! path key, advanced in one write transaction with the project's epoch.
 
 use super::super::counters::position;
@@ -56,7 +56,7 @@ pub(crate) fn mark(
     Ok(())
 }
 
-/// Applies one `project.remove_file` marker, or reports it current.
+/// Applies one `project.hide_path` marker, or reports it current.
 pub(crate) fn remove_path(
     tx: &Transaction<'_>,
     request: &PathRemovalRequest,

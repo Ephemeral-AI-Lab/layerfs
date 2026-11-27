@@ -1,4 +1,4 @@
-//! `fs.blame` of a file past its line-by-line bound (2,000 lines or 48 KiB) compares two versions by
+//! `file.blame` of a file past its line-by-line bound (2,000 lines or 48 KiB) compares two versions by
 //! the bytes they share at both ends. A line of the newer version goes back to the older one only
 //! where the older text starts a line at the same place: a line split in two, or one that lost its
 //! first characters, is new text and keeps the Commit that wrote it. Within the bound it matches
@@ -22,7 +22,7 @@ fn lines(a: usize, b: usize) -> String {
 }
 
 /// Writes `before` as `/file.txt`, forks a Branch and rewrites the file on it through `steps`, one
-/// Commit each: the new text and the lines of the last text that Commit wrote. Then checks `fs.blame`
+/// Commit each: the new text and the lines of the last text that Commit wrote. Then checks `file.blame`
 /// of the last text, page by page: every line has its text and leads to the Commit that wrote it, or
 /// to the base Layer when no step did.
 fn check(label: &str, before: &str, steps: &[(&str, &[usize])], coarse: bool) {
@@ -34,7 +34,7 @@ fn check(label: &str, before: &str, steps: &[(&str, &[usize])], coarse: bool) {
     let mut origins = vec![fork.get_text("base").unwrap().to_owned()];
     for (text, _) in steps {
         let reply = f.call(
-            "fs.write",
+            "file.write",
             vec![
                 ("branch", t("work")),
                 ("path", t("/file.txt")),
@@ -49,7 +49,7 @@ fn check(label: &str, before: &str, steps: &[(&str, &[usize])], coarse: bool) {
     for _ in 0..64 {
         let Some(from) = next else { break };
         let page = f.call(
-            "fs.blame",
+            "file.blame",
             vec![
                 ("branch", t("work")),
                 ("path", t("/file.txt")),

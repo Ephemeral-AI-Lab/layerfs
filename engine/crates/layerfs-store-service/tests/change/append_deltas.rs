@@ -65,7 +65,7 @@ fn log(first_line: u64, len: usize) -> Vec<u8> {
 fn write(fixture: &Fixture, branch: &str, bytes: Vec<u8>) -> DeltaCounters {
     let before = fixture.service.store.save_counters().delta;
     let reply = fixture.call(
-        "fs.write",
+        "file.write",
         vec![
             ("branch", SdkValue::text(branch)),
             ("path", SdkValue::text("/big.bin")),

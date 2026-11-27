@@ -1,11 +1,11 @@
 //! #818 write pins (lane W owns this file): the counted SQL work of the SDK
-//! write calls `fs.write`, `fs.edit`, `fs.mkdir`, `fs.cp`, `fs.mv`, `fs.rm`
-//! and `fs.apply`, through the method table on the Store as the SDK opens
+//! write calls `file.write`, `file.edit`, `file.mkdir`, `file.cp`, `file.mv`, `file.rm`
+//! and `file.apply`, through the method table on the Store as the SDK opens
 //! it, on SQLite and on PostgreSQL. Each call binds a private Workspace,
 //! commits once (the fused one-message Commit) and closes it.
 //!
 //! Setup (not counted): the #818 probe's Store (`fs_call_round_trips.rs`):
-//! Init of 10 × 100 files and the rest, Branch `work`, 100 `fs.write`
+//! Init of 10 × 100 files and the rest, Branch `work`, 100 `file.write`
 //! Commits. Then, in the probe's order, each case runs on a **new Store
 //! open** (`.cold`: first use of every session and statement, and for a
 //! create the Store's first serial reservation, `POOL_BLOCK` = 4,096), and
@@ -361,13 +361,13 @@ fn scenarios(store: &mut Store) -> Vec<Measured> {
     };
     case(
         "write.new_file",
-        "fs.write",
+        "file.write",
         vec![branch(), path("/src/d05/new.txt"), bytes("new\n")],
         vec![branch(), path("/src/d05/new2.txt"), bytes("new2\n")],
     );
     case(
         "write.overwrite",
-        "fs.write",
+        "file.write",
         vec![branch(), path("/src/d05/f050.txt"), bytes("changed\n")],
         vec![
             branch(),
@@ -377,7 +377,7 @@ fn scenarios(store: &mut Store) -> Vec<Measured> {
     );
     case(
         "edit.2000_lines",
-        "fs.edit",
+        "file.edit",
         vec![
             branch(),
             path("/text/big.txt"),
@@ -393,13 +393,13 @@ fn scenarios(store: &mut Store) -> Vec<Measured> {
     );
     case(
         "mkdir",
-        "fs.mkdir",
+        "file.mkdir",
         vec![branch(), path("/newdir")],
         vec![branch(), path("/newdir2")],
     );
     case(
         "cp.file",
-        "fs.cp",
+        "file.cp",
         vec![
             branch(),
             ("from", t("/src/d05/f051.txt")),
@@ -413,7 +413,7 @@ fn scenarios(store: &mut Store) -> Vec<Measured> {
     );
     case(
         "mv.file",
-        "fs.mv",
+        "file.mv",
         vec![
             branch(),
             ("from", t("/newdir/copy.txt")),
@@ -427,19 +427,19 @@ fn scenarios(store: &mut Store) -> Vec<Measured> {
     );
     case(
         "rm.file",
-        "fs.rm",
+        "file.rm",
         vec![branch(), path("/newdir/moved.txt")],
         vec![branch(), path("/newdir/moved2.txt")],
     );
     case(
         "apply.10_writes",
-        "fs.apply",
+        "file.apply",
         apply("/src/d06", "a"),
         apply("/src/d06", "b"),
     );
     case(
         "rm.dir_100_recursive",
-        "fs.rm",
+        "file.rm",
         vec![
             branch(),
             path("/src/d07"),
@@ -453,7 +453,7 @@ fn scenarios(store: &mut Store) -> Vec<Measured> {
     );
     case(
         "apply.10_dirs",
-        "fs.apply",
+        "file.apply",
         apply_dirs("p.txt"),
         apply_dirs("q.txt"),
     );

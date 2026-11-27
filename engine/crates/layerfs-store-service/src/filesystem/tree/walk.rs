@@ -21,7 +21,7 @@ use layerfs_protocol::sdk::SdkRefusal;
 const DIRECTORY_WINDOW: usize = 64;
 const DIRECTORY_BYTES: usize = 8192;
 /// A wide walk's names a page (#818 R6): where the Store pays a round trip
-/// per demand (PostgreSQL), `fs.grep` and `fs.glob` let the page's byte
+/// per demand (PostgreSQL), `file.grep` and `file.glob` let the page's byte
 /// bound decide, up to this many names; `DIRECTORY_BYTES` is unchanged.
 pub const WIDE_DIRECTORY_WINDOW: usize = 256;
 type Child = (PathName, u64, Option<InodeValue>);

@@ -202,7 +202,7 @@ fn main_resolves_to_the_branch_add_project_recorded() {
         ("name", SdkValue::text("main")),
     ]);
     let listed = with_service(&open, |_| {
-        layerfs_store::admin::open::service::call("project.list_branches", &open, asked)
+        layerfs_store::admin::open::service::call("branch.list", &open, asked)
     })
     .unwrap();
     let Some(SdkValue::List(items)) = listed.get("items") else {

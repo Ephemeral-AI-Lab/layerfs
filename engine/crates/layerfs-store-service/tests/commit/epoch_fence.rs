@@ -1,5 +1,5 @@
 //! #41 T6.5: the writer-side `project_epoch` fence on the Workspace Commit
-//! path. `fs.write` (and the SDK `commit` method) go through
+//! path. `file.write` (and the SDK `commit` method) go through
 //! `files::commit` -> `BoundWorkspace::commit` -> `HistoryCatalog::commit_branch`,
 //! so a fence refusal must arrive as the spec's `Conflict`, not as a generic
 //! failure, and an ordinary write must be unaffected.
@@ -16,7 +16,7 @@ fn text(value: &str) -> SdkValue {
 
 fn write(fixture: &Fixture, content: &str) -> Result<SdkValue, SdkRefusal> {
     fixture.try_call(
-        "fs.write",
+        "file.write",
         vec![
             ("branch", text("work")),
             ("path", text("/a.txt")),
@@ -26,7 +26,7 @@ fn write(fixture: &Fixture, content: &str) -> Result<SdkValue, SdkRefusal> {
 }
 
 fn commits(fixture: &Fixture) -> usize {
-    support::items(&fixture.call("branch.list_commits", vec![("branch", text("work"))])).len()
+    support::items(&fixture.call("commit.list", vec![("branch", text("work"))])).len()
 }
 
 #[test]

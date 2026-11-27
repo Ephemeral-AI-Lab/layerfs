@@ -18,7 +18,7 @@ pub struct ProjectHidePath {
 /// marker frontier; it writes a marker, not a Commit, and frees no bytes.
 /// A path already hidden answers `unchanged`.
 pub fn hide_path(home: &Path, events: &mut Events<'_>, request: &ProjectHidePath) -> Outcome {
-    let value = match on_project(home, events, &request.project, StoreOp::RemoveFile(request)) {
+    let value = match on_project(home, events, &request.project, StoreOp::HidePath(request)) {
         Ok(value) => value,
         Err(refusal) => {
             // The detail names the project inside its Store, as the Store

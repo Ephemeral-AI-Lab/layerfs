@@ -1,4 +1,4 @@
-//! `fs.glob`.
+//! `file.glob`.
 use crate::families::args::{optional_path, paging, snapshot_in, snapshot_target, text, Answer};
 use crate::filesystem::cache::Cached;
 use crate::{

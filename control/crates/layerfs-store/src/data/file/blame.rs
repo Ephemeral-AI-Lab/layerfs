@@ -47,7 +47,7 @@ pub fn blame(home: &Path, events: &mut Events<'_>, request: &FileBlame) -> Outco
         .text("path", &request.path)
         .int("fromLine", Some(start))
         .int("lineCount", Some(end - start + 1));
-    let value = run(home, events, &request.project, "fs.blame", args)?;
+    let value = run(home, events, &request.project, "file.blame", args)?;
     let lines = match value.get("lines") {
         Some(SdkValue::List(lines)) => lines.as_slice(),
         _ => &[],

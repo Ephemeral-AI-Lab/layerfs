@@ -2,7 +2,7 @@
 //! `smallFileThreshold`, up to 1 MiB) keeps whole files above the default size,
 //! and its payload chain budgets scale with that cutoff (#472). The second
 //! version of such a file is saved, as a delta against the first, through
-//! `fs.apply`, `fs.write` and a Workspace Commit; Project Init of two similar
+//! `file.apply`, `file.write` and a Workspace Commit; Project Init of two similar
 //! large files succeeds. Under the fixed 512 KiB / 256 KiB budgets these Saves
 //! failed with a dependency-work `Integrity` error, and after #473 stored every
 //! second version whole.
@@ -110,7 +110,7 @@ fn whole_file_deltas(fixture: &Fixture) -> u64 {
 
 fn assert_size(fixture: &Fixture, path: &str, size: usize) {
     let stat = fixture.call(
-        "fs.stat",
+        "file.stat",
         vec![
             ("branch", SdkValue::text("w")),
             ("path", SdkValue::text(path)),
@@ -129,7 +129,7 @@ fn assert_text_at(fixture: &Fixture, path: &str, expected: &[u8], offset: usize)
     let number = expected[..offset].iter().filter(|b| **b == b'\n').count();
     let line = expected.split(|b| *b == b'\n').nth(number).unwrap();
     let reply = fixture.call(
-        "fs.read",
+        "file.read",
         vec![
             ("branch", SdkValue::text("w")),
             ("path", SdkValue::text(path)),
@@ -170,7 +170,7 @@ fn fs_write_stores_a_second_large_incompressible_version_as_a_delta() {
     let fixture = with_first_version("budget-write", mebibyte_cutoff(), &first);
     let before = whole_file_deltas(&fixture);
     let reply = fixture.call(
-        "fs.write",
+        "file.write",
         vec![
             ("branch", SdkValue::text("w")),
             ("path", SdkValue::text("/big")),

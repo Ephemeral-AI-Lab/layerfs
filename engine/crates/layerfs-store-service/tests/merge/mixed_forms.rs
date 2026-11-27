@@ -152,7 +152,7 @@ fn branch_delta_applies(fixture: &Fixture, root: &str) -> u64 {
 fn read(fixture: &Fixture, branch: &str, path: &str) -> String {
     fixture
         .call(
-            "fs.read",
+            "file.read",
             vec![("branch", text(branch)), ("path", text(path))],
         )
         .get_text("text")

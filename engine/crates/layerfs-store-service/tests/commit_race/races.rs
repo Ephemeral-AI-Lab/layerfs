@@ -12,7 +12,7 @@
 //!   the head's bytes are its own writer's.
 //! * Identical new content published by several sessions at once: three
 //!   Workspaces on their own Branches, two Workspaces on one Branch writing
-//!   the same path with the same bytes, and a direct `fs.write` (a Save of
+//!   the same path with the same bytes, and a direct `file.write` (a Save of
 //!   the same bytes) on another service. Every one succeeds, every tree reads
 //!   the bytes back, `object_location` has no object twice (read from the
 //!   private test database), and the Store's audit is clean.
@@ -215,7 +215,7 @@ fn identical_objects(store: &TestStore) {
         write(workspace, "/same-big", &big);
         write(workspace, "/same-small", &small);
     }
-    // One more party: a direct Save of the same bytes through `fs.write` on
+    // One more party: a direct Save of the same bytes through `file.write` on
     // the last service, in the same moment.
     let writer = services.last().unwrap();
     let gate = Gate::new(bound.len() + 1);
@@ -234,7 +234,7 @@ fn identical_objects(store: &TestStore) {
         let direct_handle = scope.spawn(move || {
             assert!(gate.wait(), "every party reached the gate");
             writer.call(
-                "fs.write",
+                "file.write",
                 vec![
                     ("branch", SdkValue::text("direct")),
                     ("path", SdkValue::text("/same-big")),

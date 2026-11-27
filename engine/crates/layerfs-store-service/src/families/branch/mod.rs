@@ -5,7 +5,7 @@ mod merge;
 mod publish;
 mod remove;
 pub use fork::fork;
-pub use list::list_branches;
+pub use list::list;
 pub use merge::merge;
 pub use publish::publish;
 pub use remove::remove;

@@ -395,7 +395,7 @@ pub fn head(
 }
 
 /// The id of Branch `name` of project `project` in the Store `args` names,
-/// read with `project.list_branches`' exact name lookup.
+/// read with `branch.list`' exact name lookup.
 pub fn branch_named(
     args: &OpenArgs,
     project: &str,
@@ -405,7 +405,7 @@ pub fn branch_named(
         ("project", SdkValue::text(project)),
         ("name", SdkValue::text(name)),
     ]);
-    let listed = with_service(args, |_| call("project.list_branches", args, asked))?;
+    let listed = with_service(args, |_| call("branch.list", args, asked))?;
     let id = match listed.get("items") {
         Some(SdkValue::List(items)) => items.first().and_then(|item| item.get_text("id")),
         _ => None,

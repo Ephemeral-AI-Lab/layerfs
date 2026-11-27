@@ -93,12 +93,12 @@ fn streamed(
 }
 
 fn commits(fixture: &Fixture) -> usize {
-    let listed = fixture.call("branch.list_commits", vec![("branch", t("feat"))]);
+    let listed = fixture.call("commit.list", vec![("branch", t("feat"))]);
     support::items(&listed).len()
 }
 
 fn read(fixture: &Fixture, path: &str) -> String {
-    let value = fixture.call("fs.read", vec![("branch", t("feat")), ("path", t(path))]);
+    let value = fixture.call("file.read", vec![("branch", t("feat")), ("path", t(path))]);
     value.get_text("text").unwrap().to_owned()
 }
 
@@ -122,11 +122,11 @@ fn streamed_content_and_changes_commit_once_and_lost_input_commits_nothing() {
         ("path", t("/big.txt")),
         ("streamed", SdkValue::Bool(true)),
     ];
-    let answer = streamed(&fixture, "fs.write", fields.clone(), &mut source).unwrap();
+    let answer = streamed(&fixture, "file.write", fields.clone(), &mut source).unwrap();
     assert_eq!(answer.get_text("kind"), Some("Committed"));
     assert_eq!(commits(&fixture), 1);
     let stat = fixture.call(
-        "fs.stat",
+        "file.stat",
         vec![("branch", t("feat")), ("path", t("/big.txt"))],
     );
     assert_eq!(stat.get_int("size"), Some(200_005));
@@ -136,7 +136,7 @@ fn streamed_content_and_changes_commit_once_and_lost_input_commits_nothing() {
         Item::Piece(b"tail\n".to_vec()),
         Item::EndContent,
     ]);
-    let answer = streamed(&fixture, "fs.write", fields, &mut again).unwrap();
+    let answer = streamed(&fixture, "file.write", fields, &mut again).unwrap();
     assert_eq!(answer.get_text("kind"), Some("UpToDate"));
     assert_eq!(commits(&fixture), 1);
 
@@ -147,7 +147,7 @@ fn streamed_content_and_changes_commit_once_and_lost_input_commits_nothing() {
         ("path", t("/old.txt")),
         ("streamed", SdkValue::Bool(true)),
     ];
-    streamed(&fixture, "fs.write", fields, &mut prefix).unwrap();
+    streamed(&fixture, "file.write", fields, &mut prefix).unwrap();
     assert_eq!(read(&fixture, "/old.txt"), "01234");
     assert_eq!(commits(&fixture), 2);
 
@@ -170,7 +170,7 @@ fn streamed_content_and_changes_commit_once_and_lost_input_commits_nothing() {
     ]);
     streamed(
         &fixture,
-        "fs.apply",
+        "file.apply",
         vec![("branch", t("feat"))],
         &mut apply,
     )
@@ -199,7 +199,7 @@ fn streamed_content_and_changes_commit_once_and_lost_input_commits_nothing() {
         let mut stopped = Script::new(items);
         let refusal = streamed(
             &fixture,
-            "fs.apply",
+            "file.apply",
             vec![("branch", t("feat"))],
             &mut stopped,
         )
@@ -215,7 +215,7 @@ fn streamed_content_and_changes_commit_once_and_lost_input_commits_nothing() {
     ]);
     let refusal = streamed(
         &fixture,
-        "fs.apply",
+        "file.apply",
         vec![("branch", t("feat"))],
         &mut refused,
     )
@@ -228,7 +228,7 @@ fn streamed_content_and_changes_commit_once_and_lost_input_commits_nothing() {
     // without a source the streamed form is refused, as before
     let r = fixture
         .try_call(
-            "fs.apply",
+            "file.apply",
             vec![
                 ("branch", t("feat")),
                 (

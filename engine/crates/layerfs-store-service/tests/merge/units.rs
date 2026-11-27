@@ -90,7 +90,7 @@ fn view(fixture: &Fixture, root: &str) -> Vec<String> {
 }
 
 fn root_of(fixture: &Fixture, branch: &str) -> String {
-    let commits = fixture.call("branch.list_commits", vec![("branch", text(branch))]);
+    let commits = fixture.call("commit.list", vec![("branch", text(branch))]);
     support::items(&commits)[0]
         .get_text("root")
         .unwrap()
@@ -133,7 +133,7 @@ fn int(value: &SdkValue, name: &str) -> i64 {
 fn read(fixture: &Fixture, branch: &str, path: &str) -> Option<String> {
     fixture
         .try_call(
-            "fs.read",
+            "file.read",
             vec![("branch", text(branch)), ("path", text(path))],
         )
         .ok()
@@ -213,9 +213,9 @@ fn a_unit_both_sides_changed_comes_whole_from_the_later_side() {
         Some("1, ours\n2\n3, theirs\n")
     );
     // The record keeps the units the merge ran with.
-    let commits = fixture.call("branch.list_commits", vec![("branch", text("m"))]);
+    let commits = fixture.call("commit.list", vec![("branch", text("m"))]);
     let head = support::items(&commits)[0].get_text("commit").unwrap();
-    let record = fixture.call("branch.get_commit", vec![("commit", text(head))]);
+    let record = fixture.call("commit.get", vec![("commit", text(head))]);
     let recorded = record.get("units").expect("units");
     assert_eq!(
         recorded,

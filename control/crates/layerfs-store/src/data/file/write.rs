@@ -1,4 +1,4 @@
-//! `file.write`, and what the `file` family's writes share: each one `fs.*` Store call that makes one
+//! `file.write`, and what the `file` family's writes share: each one `file.*` Store call that makes one
 //! Commit on a Branch (never main). `--expected` is the head guard: the
 //! head the call's private Workspace bound to must be that Commit, else it
 //! is refused `Conflict` naming the head as `commit`. Each answers the
@@ -134,5 +134,5 @@ pub fn write(home: &Path, events: &mut Events<'_>, request: &FileWrite) -> Outco
         Content::Bytes(bytes) => args.put("bytes", SdkValue::Bytes(bytes.clone())),
         Content::Text(text) => args.put("content", SdkValue::text(text)),
     };
-    commit(home, events, &request.project, "fs.write", args)
+    commit(home, events, &request.project, "file.write", args)
 }

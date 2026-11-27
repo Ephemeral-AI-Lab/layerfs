@@ -144,7 +144,7 @@ pub(crate) fn delete_stack(
     })
 }
 
-/// `project.remove_file`: admission first, then the marker and epoch bump in
+/// `project.hide_path`: admission first, then the marker and epoch bump in
 /// the same write transaction.
 pub(crate) fn remove_path(
     provider: &HistoryProvider,

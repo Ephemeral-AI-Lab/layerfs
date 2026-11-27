@@ -288,12 +288,12 @@ pub fn raw(home: &Fixture, revision: &str, password: &str) -> SdkValue {
         .unwrap()
 }
 
-/// The socket of one raw `fs.stat` request `id`, sent and not yet answered.
+/// The socket of one raw `file.stat` request `id`, sent and not yet answered.
 pub fn sent(home: &Fixture, revision: &str, password: &str, id: &str) -> UnixStream {
     sent_to(home, ("pg", "p", "/a.txt"), revision, password, id)
 }
 
-/// The socket of one raw `fs.stat` request `id` of `path` in `project` of
+/// The socket of one raw `file.stat` request `id` of `path` in `project` of
 /// `store`, sent and not yet answered.
 pub fn sent_to(
     home: &Fixture,
@@ -320,7 +320,7 @@ pub fn sent_built(home: &Fixture, build: impl FnOnce(SdkValue) -> SdkValue) -> U
     socket
 }
 
-/// A raw `fs.stat` request `id` of `path` in `project` of `store` at the
+/// A raw `file.stat` request `id` of `path` in `project` of `store` at the
 /// login (`revision`, `password`), its `fields` holding `extra` after
 /// `branch` and `path`.
 pub fn stat_request(
@@ -336,7 +336,7 @@ pub fn stat_request(
     ];
     fields.extend(extra);
     let args = SdkValue::map([
-        ("method", SdkValue::text("fs.stat")),
+        ("method", SdkValue::text("file.stat")),
         ("store", SdkValue::text(store)),
         ("project", SdkValue::text(project)),
         ("fields", SdkValue::Map(fields)),

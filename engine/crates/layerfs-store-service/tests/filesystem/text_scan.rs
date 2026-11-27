@@ -1,4 +1,4 @@
-//! `fs.grep` and the saved-file reader preserve the window-at-a-time scan's results
+//! `file.grep` and the saved-file reader preserve the window-at-a-time scan's results
 //! (#354, #352 F-035). The SDK read adds an immutable header and can stop earlier
 //! to fit that complete response, while preserving exact prefixes and line continuity.
 //! The whole-buffer scan reads blocks of 16 windows and searches
@@ -300,7 +300,7 @@ fn boolean(value: &SdkValue, key: &str) -> bool {
 
 fn grep(fixture: &Fixture, path: &str, pattern: &str, limit: i64) -> (Vec<Item>, i64, bool) {
     let reply = fixture.call(
-        "fs.grep",
+        "file.grep",
         vec![
             ("branch", SdkValue::text("main")),
             ("pattern", SdkValue::text(pattern)),
@@ -444,8 +444,8 @@ fn grep_and_read_give_the_window_scan_results() {
             if let Some(end) = end {
                 fields.push(("endLine", SdkValue::Int(end as i64)));
             }
-            let public = fixture.try_call("fs.read", fields);
-            // The call's caches and its one path lookup, as `fs.read` makes
+            let public = fixture.try_call("file.read", fields);
+            // The call's caches and its one path lookup, as `file.read` makes
             // them (#818 R3).
             let cached = layerfs_store_service::filesystem::cache::Cached::new(&reader).unwrap();
             let entry =
@@ -507,7 +507,7 @@ fn pinned_public_windows_reconstruct_utf8_without_line_gaps() {
         if let Some(pin) = pin.as_deref() {
             args.push(("commit", SdkValue::text(pin)));
         }
-        let reply = fixture.call("fs.read", args);
+        let reply = fixture.call("file.read", args);
         let reference = reply.get("at").unwrap().get_text("id").unwrap();
         match &pin {
             Some(pin) => assert_eq!(pin, reference),

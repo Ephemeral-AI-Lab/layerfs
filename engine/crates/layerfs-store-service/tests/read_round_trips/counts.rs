@@ -1,15 +1,15 @@
 //! #818 read pins (lane RH owns this file): the counted SQL work of the SDK
-//! read calls `fs.stat`, `fs.read`, `fs.list`, `fs.glob` and `fs.grep`,
+//! read calls `file.stat`, `file.read`, `file.list`, `file.glob` and `file.grep`,
 //! through the method table on the Store as the SDK opens it, on SQLite and
 //! on PostgreSQL.
 //!
 //! Setup (not counted): the #818 probe's Store (`fs_call_round_trips.rs`):
 //! Init of 10 × 100 files, a depth-7 file and a 2,000-line file, Branch
-//! `work`, 100 `fs.write` Commits. Then each case runs on a **new Store
+//! `work`, 100 `file.write` Commits. Then each case runs on a **new Store
 //! open** (`.cold`: every session connects and prepares at first use, no
 //! object cached), and the same call once more on that open (`.warm`: what a
 //! repeated call costs with today's 64 KiB object cache and the sessions'
-//! prepared statements). Last, one `project.remove_file` puts a marker on
+//! prepared statements). Last, one `project.hide_path` puts a marker on
 //! the project, and three `hidden.*` cases run cold with markers present,
 //! so a skipped walk cannot hide a regression.
 //!
@@ -105,7 +105,7 @@ const SQLITE: &[Pin] = &[
     // probe grep.tree_1k: 131
     pin("grep.tree_1k.cold", NONE, [0, 0, 138, 5], NONE),
     pin("grep.tree_1k.warm", NONE, [0, 0, 59, 5], NONE),
-    // Markers present (one `project.remove_file` of /src/d09/f099.txt).
+    // Markers present (one `project.hide_path` of /src/d09/f099.txt).
     pin("hidden.stat.depth3.cold", NONE, [0, 0, 35, 5], NONE),
     pin("hidden.list.dir_100.cold", NONE, [0, 0, 36, 5], NONE),
     pin("hidden.stat.removed.cold", NONE, [0, 0, 31, 4], NONE),
@@ -128,8 +128,8 @@ const SQLITE: &[Pin] = &[
 ///   Branch reads are one context statement: −4 round trips and statements
 ///   warm (`stat.root` 8 → 4); cold −8, four prepares fewer too;
 ///   `hidden.stat.removed` −6 cold (it reads no recorded Branch).
-/// - #818 R6 (batch): `fs.grep` and `fs.glob` take folder pages of up to
-///   256 names and `fs.grep` windows of up to 256 files, roots in demands of
+/// - #818 R6 (batch): `file.grep` and `file.glob` take folder pages of up to
+///   256 names and `file.grep` windows of up to 256 files, roots in demands of
 ///   at most 256 and the existing 4 MiB (byte bounds unchanged):
 ///   `grep.tree_1k` cold 92 → 62, warm 24 → 15; the globs and
 ///   `grep.one_file_dir` unchanged. SQLite unchanged.
@@ -221,30 +221,30 @@ fn scenarios(store: &mut Store) -> Vec<Measured> {
             Some(fields),
         );
     };
-    case("stat.root", "fs.stat", vec![branch(), path("/")]);
+    case("stat.root", "file.stat", vec![branch(), path("/")]);
     case(
         "stat.depth3",
-        "fs.stat",
+        "file.stat",
         vec![branch(), path("/src/d05/f050.txt")],
     );
     case(
         "stat.depth7",
-        "fs.stat",
+        "file.stat",
         vec![branch(), path("/deep/a/b/c/d/e/leaf.txt")],
     );
     case(
         "read.small_depth3",
-        "fs.read",
+        "file.read",
         vec![branch(), path("/src/d05/f050.txt")],
     );
     case(
         "read.2000_lines",
-        "fs.read",
+        "file.read",
         vec![branch(), path("/text/big.txt")],
     );
     case(
         "read.lines_100_200",
-        "fs.read",
+        "file.read",
         vec![
             branch(),
             path("/text/big.txt"),
@@ -252,37 +252,37 @@ fn scenarios(store: &mut Store) -> Vec<Measured> {
             ("endLine", SdkValue::Int(200)),
         ],
     );
-    case("list.root", "fs.list", vec![branch(), path("/")]);
+    case("list.root", "file.list", vec![branch(), path("/")]);
     case(
         "list.dir_100",
-        "fs.list",
+        "file.list",
         vec![branch(), path("/src/d05"), ("pageSize", SdkValue::Int(100))],
     );
     case(
         "glob.dir_100",
-        "fs.glob",
+        "file.glob",
         vec![branch(), path("/src/d05"), ("pattern", t("f0*"))],
     );
     case(
         "glob.tree",
-        "fs.glob",
+        "file.glob",
         vec![branch(), path("/"), ("pattern", t("*"))],
     );
     case(
         "grep.one_file_dir",
-        "fs.grep",
+        "file.grep",
         vec![branch(), path("/text"), ("pattern", t("needle"))],
     );
     case(
         "grep.tree_1k",
-        "fs.grep",
+        "file.grep",
         vec![branch(), path("/"), ("pattern", t("needle"))],
     );
 
     // A marker on the project (not counted), then reads with it present.
     let opened = store.open("remove");
     let removed = opened
-        .call("project.remove_file", vec![path("/src/d09/f099.txt")])
+        .call("project.hide_path", vec![path("/src/d09/f099.txt")])
         .unwrap();
     assert_eq!(removed.get_text("kind"), Some("Removed"));
     opened.stop();
@@ -290,7 +290,7 @@ fn scenarios(store: &mut Store) -> Vec<Measured> {
         store,
         &mut out,
         "hidden.stat.depth3",
-        "fs.stat",
+        "file.stat",
         "ok",
         vec![branch(), path("/src/d05/f050.txt")],
         None,
@@ -299,7 +299,7 @@ fn scenarios(store: &mut Store) -> Vec<Measured> {
         store,
         &mut out,
         "hidden.list.dir_100",
-        "fs.list",
+        "file.list",
         "ok",
         vec![branch(), path("/src/d09"), ("pageSize", SdkValue::Int(100))],
         None,
@@ -308,7 +308,7 @@ fn scenarios(store: &mut Store) -> Vec<Measured> {
         store,
         &mut out,
         "hidden.stat.removed",
-        "fs.stat",
+        "file.stat",
         "refused Removed",
         vec![branch(), path("/src/d09/f099.txt")],
         None,

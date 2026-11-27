@@ -9,10 +9,10 @@ use crate::rt;
 use layerfs_protocol::sdk::{SdkCall, SdkRefusal, SdkValue};
 use rt::{t, Opened, Store};
 
-/// `fs.write` with exactly `fields` (no project added).
+/// `file.write` with exactly `fields` (no project added).
 fn write(opened: &Opened, fields: Vec<(&str, SdkValue)>) -> Result<SdkValue, SdkRefusal> {
     let call = SdkCall {
-        method: "fs.write".into(),
+        method: "file.write".into(),
         args: SdkValue::Map(
             fields
                 .into_iter()

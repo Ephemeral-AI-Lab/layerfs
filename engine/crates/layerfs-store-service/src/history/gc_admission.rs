@@ -129,7 +129,7 @@ pub fn branch_removal(stack: &LayerStackRecord, branch: &BranchRecord) -> GcInte
     .with_phase(Some("retire"))
 }
 
-/// A `project.delete` or `project.remove_file` intent at project scope.
+/// A `project.delete` or `project.hide_path` intent at project scope.
 pub fn project_removal(stack: &LayerStackRecord) -> GcIntent {
     let op = op_id();
     owned(

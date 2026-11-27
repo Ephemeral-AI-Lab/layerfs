@@ -227,7 +227,7 @@ fn postgresql_open_costs_on_the_wire() {
         drop(attached);
 
         // the same mount as it ran before #64: a Store service open (its
-        // fully checked writer), then `project.list_branches` by name on its
+        // fully checked writer), then `branch.list` by name on its
         // control reader, opened at that first read
         let opened = open_store_observed(
             layerfs_persistence::StoreSelection::Postgres(selection.clone()),

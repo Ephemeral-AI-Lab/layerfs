@@ -294,7 +294,7 @@ pub fn commit(host: &Host, path: Option<&str>, force: bool, expected: Option<&st
             ("project", SdkValue::text(&host.project)),
             ("commit", SdkValue::text(text)),
         ]);
-        layerfs_store::admin::open::service::call("branch.get_commit", &open, args)
+        layerfs_store::admin::open::service::call("commit.get", &open, args)
     };
     commit_with(
         host,
@@ -306,8 +306,7 @@ pub fn commit(host: &Host, path: Option<&str>, force: bool, expected: Option<&st
                     ("project", SdkValue::text(&host.project)),
                     ("name", SdkValue::text(name?)),
                 ]);
-                let listed =
-                    layerfs_store::admin::open::service::call("project.list_branches", &open, args);
+                let listed = layerfs_store::admin::open::service::call("branch.list", &open, args);
                 listed_head(&listed.ok()?, id)
             },
             &mut resolve,
@@ -321,7 +320,7 @@ pub fn commit(host: &Host, path: Option<&str>, force: bool, expected: Option<&st
 pub type BranchHead<'a> = dyn FnMut(BranchId, Option<&str>) -> Option<String> + 'a;
 
 /// The head `branch get` answers (its `commit`) of the one Branch a
-/// `project.list_branches` answer lists, when that Branch is `id`.
+/// `branch.list` answer lists, when that Branch is `id`.
 pub fn listed_head(listed: &SdkValue, id: BranchId) -> Option<String> {
     let item = match listed.get("items") {
         Some(SdkValue::List(items)) => items.first()?,
@@ -332,7 +331,7 @@ pub fn listed_head(listed: &SdkValue, id: BranchId) -> Option<String> {
         .flatten()
 }
 
-/// Reads the Commit a text names (`branch.get_commit`'s answer): F-hist's
+/// Reads the Commit a text names (`commit.get`'s answer): F-hist's
 /// resolver, a full id or a prefix of 8 or more of its characters.
 pub type Resolve<'a> = dyn FnMut(&str) -> Outcome + 'a;
 

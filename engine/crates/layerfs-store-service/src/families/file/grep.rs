@@ -1,4 +1,4 @@
-//! `fs.grep`.
+//! `file.grep`.
 use crate::families::args::{
     invalid, optional_path, paging, snapshot_in, snapshot_target, text, Answer,
 };

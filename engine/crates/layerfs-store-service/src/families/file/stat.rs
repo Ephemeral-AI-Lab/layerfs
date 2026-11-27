@@ -1,4 +1,4 @@
-//! `fs.stat`.
+//! `file.stat`.
 use crate::families::args::{path, snapshot_in, snapshot_target, Answer};
 use crate::filesystem::cache::Cached;
 use crate::{

@@ -55,7 +55,7 @@ fn control(service: &Service) -> u64 {
 
 fn remove(service: &Service, path: &str) {
     service
-        .call("project.remove_file", vec![("path", SdkValue::text(path))])
+        .call("project.hide_path", vec![("path", SdkValue::text(path))])
         .unwrap_or_else(|refusal| panic!("remove {path}: {refusal:?}"));
 }
 

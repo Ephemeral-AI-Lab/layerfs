@@ -174,7 +174,7 @@ fn recorded_branch_merges_merge_again() {
             .map(|_| {
                 let commits = call(
                     &service,
-                    "branch.list_commits",
+                    "commit.list",
                     vec![("branch", SdkValue::text(format!("replay-m{index}")))],
                 )
                 .unwrap();

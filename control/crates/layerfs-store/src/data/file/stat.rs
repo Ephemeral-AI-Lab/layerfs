@@ -12,7 +12,7 @@ pub fn stat(home: &Path, events: &mut Events<'_>, request: &FileStat) -> Outcome
     let mut args = Args::default();
     args.at(&request.branch, request.at.as_deref())
         .text("path", &request.path);
-    let value = run(home, events, &request.project, "fs.stat", args)?;
+    let value = run(home, events, &request.project, "file.stat", args)?;
     Ok(SdkValue::map([
         ("type", take(&value, "type")),
         ("size", take(&value, "size")),

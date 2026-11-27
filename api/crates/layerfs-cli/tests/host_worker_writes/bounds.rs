@@ -177,7 +177,7 @@ fn the_worker_refuses_a_spilled_change_past_its_budget_before_effect() {
     let mut frames = write_request(
         &exchange,
         "00000000000000000000000000b0d6e7",
-        "fs.apply",
+        "file.apply",
         "changes",
         fields,
     );

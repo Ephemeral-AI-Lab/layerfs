@@ -439,7 +439,7 @@ fn read_at(home: &std::path::Path, revision: &str) -> layerfs_home::reply::outco
         .unwrap()
         .expect("a saved login");
     let request = SdkValue::map([
-        ("method", SdkValue::text("fs.stat")),
+        ("method", SdkValue::text("file.stat")),
         ("store", SdkValue::text("pgs")),
         ("project", SdkValue::text("app")),
         (

@@ -32,7 +32,7 @@ fn listed(answer: &SdkValue) -> Vec<(String, String)> {
         .collect()
 }
 
-/// A file and a directory removed by `project.remove_file` markers at the
+/// A file and a directory removed by `project.hide_path` markers at the
 /// bound node are absent from `changes`, subtree and all; a visible
 /// change is still listed, and a post-bound re-creation is an addition.
 #[test]

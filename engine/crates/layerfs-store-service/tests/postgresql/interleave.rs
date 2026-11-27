@@ -10,7 +10,7 @@
 //! * a mount of a live Branch is admitted (`StaleStore` only on a service
 //!   opened before an admitted compaction; that service is then replaced);
 //!   on PostgreSQL its row and its three keys are there right after;
-//! * `project.remove_file` is admitted exactly when no mount of the project
+//! * `project.hide_path` is admitted exactly when no mount of the project
 //!   is live, `branch.remove` exactly when no mount of that Branch is live,
 //!   and a compaction only when no mount is live;
 //! * every path removed is hidden in every Workspace mounted after it;
@@ -306,7 +306,7 @@ fn schedule(store: &TestStore, seed: u64, steps: usize) {
             let s = rng.below(slots.len());
             let victim = format!("/v{}", rng.below(VICTIMS));
             let answer = code(&slots[s].service.call(
-                "project.remove_file",
+                "project.hide_path",
                 vec![("path", SdkValue::text(victim.clone()))],
             ));
             if answer == "StaleStore" {
@@ -545,7 +545,7 @@ fn path_race(store: TestStore, label: &str) {
         let victim = format!("/v{}", n % VICTIMS);
         let start = ms(origin);
         let answer = code(&service.call(
-            "project.remove_file",
+            "project.hide_path",
             vec![("path", SdkValue::text(victim.clone()))],
         ));
         Timed {

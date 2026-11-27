@@ -5,7 +5,7 @@
 //!   project epoch a Commit reads at its start and checks again before it
 //!   commits: a Commit lands or is refused `Conflict` ("project epoch") with
 //!   nothing published; every removal answered `Removed` is gone.
-//! * `project.remove_file` while a Workspace is mounted: refused
+//! * `project.hide_path` while a Workspace is mounted: refused
 //!   `MountsActive` (the marker is project-wide), so no mounted Workspace
 //!   ever loses a file under it; once unmounted the marker lands, later
 //!   Commits do not resurrect the path, and a re-creation after it shows.
@@ -192,7 +192,7 @@ fn path_removals(store: &TestStore) {
                 (0..VICTIMS)
                     .map(|n| {
                         remover.call(
-                            "project.remove_file",
+                            "project.hide_path",
                             vec![("path", SdkValue::text(format!("/victim{n}")))],
                         )
                     })
@@ -238,7 +238,7 @@ fn path_removals(store: &TestStore) {
     let remover = gc.as_ref().unwrap_or(&committer);
     remover
         .call(
-            "project.remove_file",
+            "project.hide_path",
             vec![("path", SdkValue::text("/victim0"))],
         )
         .unwrap_or_else(|refusal| {

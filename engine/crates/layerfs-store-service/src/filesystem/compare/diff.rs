@@ -1,15 +1,15 @@
-//! Differences between saved snapshots: two files, two Commits, two Branches.
+//! Differences between saved snapshots, for `commit.diff`.
 //!
 //! Tree differences use Content's bounded directory listings and grouped inode
-//! demands; file differences use its bounded line difference. A directory whose
-//! only change is its children is not listed, as in the simulator. Every answer
-//! fits one control record: tree differences resume after `nextPagePos`, and a file's
-//! lines that do not fit the remaining budget are left out (`hunksOmitted`)
-//! for a two-file difference to show.
-use super::super::root::{self, answer, existing, kind_name, Kind, Snap};
+//! demands; a changed text file's lines use its bounded line difference. A
+//! directory whose only change is its children is not listed, as in the
+//! simulator. Every answer fits one control record: tree differences resume
+//! after `nextPagePos`, and lines that do not fit the remaining budget are left
+//! out (`hunksOmitted`).
+use super::super::root::{self, kind_name, Snap};
 use super::super::tree::positional::REPLY_BUDGET;
 use super::super::tree::visibility::Visibility;
-use crate::lookup::{self as args, invalid, refuse, Answer, Arg};
+use crate::lookup::{self as args, invalid, Arg};
 use crate::store::{CatalogHints, Store, StorePorts};
 use layerfs_content::compare::tree::{same_inode, same_metadata};
 use layerfs_content::compare::{
@@ -19,7 +19,6 @@ use layerfs_content::compare::{
 use layerfs_content::filesystem::name::path::PathName;
 use layerfs_content::object::inode_leaf::InodeKind;
 use layerfs_content::AuthenticatedObjects;
-use layerfs_history::LayerStackRecord;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::sync::Arc;
 
@@ -80,72 +79,6 @@ pub fn same_content(
         )
     })
     .map_err(args::content)
-}
-
-/// `fs.diff_files({ left: { path, commit? }, right: { path, commit? } },
-/// { branch })`.
-/// One side of a two-file difference: a checked path at a snapshot name.
-pub struct Selector<'a> {
-    pub path: String,
-    pub at: &'a str,
-}
-
-/// The line difference of two regular files, each at its own snapshot; the
-/// left side is resolved before the right one is used.
-pub fn diff_files(
-    store: &Arc<Store>,
-    stack: &LayerStackRecord,
-    left: Arg<Selector<'_>>,
-    right: Arg<Selector<'_>>,
-) -> Answer {
-    let reader = root::reader(store, stack);
-    let side = |selector: Arg<Selector<'_>>| -> Result<(String, Snap, EntryFacts, Option<String>), SdkRefusal> {
-        let Selector { path, at } = selector?;
-        let snap = root::resolve(store, stack, &reader, at)?;
-        let entry = existing(reader.as_ref(), &snap, &path)?;
-        if entry.value.kind == InodeKind::Directory {
-            return Err(refuse(
-                "IsDirectory",
-                format!("{path} is a directory"),
-                SdkValue::map([("path", SdkValue::text(path.as_str()))]),
-            ));
-        }
-        let content = root::text(reader.as_ref(), Some(entry))?;
-        Ok((path, snap, entry, content))
-    };
-    let (left, right) = (side(left)?, side(right)?);
-    let show = |(path, snap, entry, _): &(String, Snap, EntryFacts, Option<String>)| {
-        SdkValue::map([
-            ("path", SdkValue::text(path.as_str())),
-            ("snapshot", SdkValue::text(snap.label.as_str())),
-            ("inode", SdkValue::Int(entry.serial as i64)),
-        ])
-    };
-    let same_inode = left.2.serial == right.2.serial;
-    let (kind, equal, lines) = match (&left.3, &right.3) {
-        (Some(l), Some(r)) if l == r => ("Equal", true, Some(SdkValue::List(Vec::new()))),
-        (Some(l), Some(r)) => {
-            let mut budget = REPLY_BUDGET;
-            ("Text", false, hunks(&line_diff(l, r), &mut budget))
-        }
-        _ => {
-            let equal = same_content(reader.as_ref(), &left.2, &right.2)?;
-            (
-                if equal { "Equal" } else { "Binary" },
-                equal,
-                Some(SdkValue::List(Vec::new())),
-            )
-        }
-    };
-    answer(vec![
-        ("kind", SdkValue::text(kind)),
-        ("left", show(&left)),
-        ("right", show(&right)),
-        ("contentEqual", SdkValue::Bool(equal)),
-        ("sameInode", SdkValue::Bool(same_inode)),
-        ("hunksOmitted", SdkValue::Bool(lines.is_none())),
-        ("hunks", lines.unwrap_or_default()),
-    ])
 }
 
 fn facts(entry: Option<EntryFacts>) -> SdkValue {
@@ -236,11 +169,10 @@ pub(crate) fn change(
     ])))
 }
 
-/// Where a page starts and what it lists: the caller's offset or its cursor
-/// (the last path an earlier page listed), and whether line hunks are wanted.
+/// Where a page starts and what it lists: the caller's cursor (the last path
+/// an earlier page listed), and whether line hunks are wanted.
 pub struct Request {
     pub limit: usize,
-    pub pos: u64,
     pub cursor: Option<String>,
     pub hunks: bool,
     /// Only this path and what is under it, when given.
@@ -275,20 +207,14 @@ pub(crate) fn within(path: &str, scope: Option<&str>) -> Within {
     }
 }
 
-/// The page after the listed one: offset and cursor, `Null` when complete.
-pub(crate) struct Next {
-    pub(crate) pos: SdkValue,
-    pub(crate) cursor: SdkValue,
-}
-
 /// Component order of the walk: each directory before its children, names in
 /// byte order.
 fn order(a: &str, b: &str) -> std::cmp::Ordering {
     a.split('/').cmp(b.split('/'))
 }
 
-/// The listed changes from `left` to `right` after the offset or cursor, within
-/// the reply budget, and where the next page starts. Content's change walk reads
+/// The listed changes from `left` to `right` after the cursor, within the
+/// reply budget, and the next page's cursor (`Null` when complete). Content's change walk reads
 /// what changed; without recorded bindings it is the full walk of both trees.
 pub(crate) fn changes(
     store: &Arc<Store>,
@@ -296,14 +222,10 @@ pub(crate) fn changes(
     left: &Snap,
     right: &Snap,
     request: Arg<Request>,
-) -> Result<(Vec<SdkValue>, Next), SdkRefusal> {
+) -> Result<(Vec<SdkValue>, SdkValue), SdkRefusal> {
     let request = request?;
     if left.root == right.root {
-        let done = Next {
-            pos: SdkValue::Null,
-            cursor: SdkValue::Null,
-        };
-        return Ok((Vec::new(), done));
+        return Ok((Vec::new(), SdkValue::Null));
     }
     let hints = CatalogHints::new(store.history());
     // One memo for the page: lookups share the B-trees' upper pages.
@@ -355,7 +277,7 @@ fn component(cursor: &str, path: &str) -> Result<Option<PathName>, SdkRefusal> {
     }
 }
 
-/// Lists the differing pairs after the offset or cursor, at most `limit` and
+/// Lists the differing pairs after the cursor, at most `limit` and
 /// within budget. A cursor resumes the walk: pairs at or before it are passed
 /// over and only the directories on its path are entered, so a later page
 /// does not walk what earlier pages listed.
@@ -365,10 +287,9 @@ fn emit(
     request: &Request,
     left_seen: &Visibility,
     right_seen: &Visibility,
-) -> Result<(Vec<SdkValue>, Next), SdkRefusal> {
-    let (limit, pos) = (request.limit, request.pos);
-    let skip = if request.cursor.is_some() { 0 } else { pos };
-    let (mut items, mut seen, mut budget, mut more) = (Vec::new(), 0u64, REPLY_BUDGET, false);
+) -> Result<(Vec<SdkValue>, SdkValue), SdkRefusal> {
+    let limit = request.limit;
+    let (mut items, mut budget, mut more) = (Vec::new(), REPLY_BUDGET, false);
     let mut work = layerfs_content::filesystem::tree::attribute::AttributeReadWork::default();
     let mut last = None;
     while let Some(pair) = walk.next_pair().map_err(args::content)? {
@@ -440,114 +361,37 @@ fn emit(
             _ => before != after,
         };
         if pair_differs && !children_only {
-            if seen < skip {
-                seen += 1;
-            } else {
-                let cost = path.len() + ITEM_COST;
-                if items.len() == limit || cost > budget {
-                    more = true;
-                    break;
-                }
-                budget -= cost;
-                let kind = match (before, after) {
-                    (None, _) => ChangeKind::Added,
-                    (_, None) => ChangeKind::Removed,
-                    _ => ChangeKind::Modified,
-                };
-                let listed = PathChange {
-                    path: path.clone(),
-                    kind,
-                    left: before,
-                    right: after,
-                };
-                if let Some(item) = change(reader, &listed, &mut budget, request.hunks)? {
-                    items.push(item);
-                    last = Some(path.clone());
-                }
+            let cost = path.len() + ITEM_COST;
+            if items.len() == limit || cost > budget {
+                more = true;
+                break;
+            }
+            budget -= cost;
+            let kind = match (before, after) {
+                (None, _) => ChangeKind::Added,
+                (_, None) => ChangeKind::Removed,
+                _ => ChangeKind::Modified,
+            };
+            let listed = PathChange {
+                path: path.clone(),
+                kind,
+                left: before,
+                right: after,
+            };
+            if let Some(item) = change(reader, &listed, &mut budget, request.hunks)? {
+                items.push(item);
+                last = Some(path.clone());
             }
         }
         walk.enter(&pair).map_err(args::content)?;
     }
-    let next = Next {
-        pos: args::next_page(pos, items.len(), more),
-        cursor: match (more, last) {
-            (true, Some(path)) => SdkValue::Text(path),
-            (true, None) => request
-                .cursor
-                .clone()
-                .map_or(SdkValue::Null, SdkValue::Text),
-            (false, _) => SdkValue::Null,
-        },
+    let next = match (more, last) {
+        (true, Some(path)) => SdkValue::Text(path),
+        (true, None) => request
+            .cursor
+            .clone()
+            .map_or(SdkValue::Null, SdkValue::Text),
+        (false, _) => SdkValue::Null,
     };
     Ok((items, next))
-}
-
-fn listed(
-    store: &Arc<Store>,
-    reader: &StorePorts,
-    from: &Snap,
-    to: &Snap,
-    request: Arg<Request>,
-    sides: [SdkValue; 2],
-) -> Answer {
-    let (items, next) = changes(store, reader, from, to, request)?;
-    let [from, to] = sides;
-    answer(vec![
-        ("kind", SdkValue::text("ok")),
-        ("from", from),
-        ("to", to),
-        ("items", SdkValue::List(items)),
-        (
-            "hasMore",
-            SdkValue::Bool(!matches!(next.pos, SdkValue::Null)),
-        ),
-        ("nextPagePos", next.pos),
-        ("nextCursor", next.cursor),
-    ])
-}
-
-/// The changes from Commit `from` to Commit `to`, one page.
-pub fn diff_commits(
-    store: &Arc<Store>,
-    reader: &StorePorts,
-    from: &Snap,
-    to: &Snap,
-    request: Arg<Request>,
-) -> Answer {
-    if !matches!(from.kind, Kind::Commit | Kind::Layer)
-        || !matches!(to.kind, Kind::Commit | Kind::Layer)
-    {
-        return Err(invalid("diff_commits takes saved Commit or Layer ids"));
-    }
-    let side = |snap: &Snap| {
-        SdkValue::map([
-            ("commit", SdkValue::text(args::node_text(snap.node))),
-            ("root", SdkValue::text(args::hex(snap.root.as_bytes()))),
-        ])
-    };
-    listed(store, reader, from, to, request, [side(from), side(to)])
-}
-
-/// The changes from Branch (or main) `from` to `to`, one page; the names
-/// label the sides.
-pub fn diff_branches(
-    store: &Arc<Store>,
-    reader: &StorePorts,
-    (from, from_name): (&Snap, &str),
-    (to, to_name): (&Snap, &str),
-    request: Arg<Request>,
-) -> Answer {
-    let named = |snap: &Snap| matches!(snap.kind, Kind::Main | Kind::Branch);
-    if !named(from) || !named(to) {
-        return Err(invalid("diff_branches takes Branches or main"));
-    }
-    let side = |snap: &Snap, name: &str| {
-        SdkValue::map([
-            ("ref", SdkValue::text(name)),
-            ("label", SdkValue::text(snap.label.as_str())),
-            ("root", SdkValue::text(args::hex(snap.root.as_bytes()))),
-        ])
-    };
-    let sides = [side(from, from_name), side(to, to_name)];
-    listed(store, reader, from, to, request, sides)
 }

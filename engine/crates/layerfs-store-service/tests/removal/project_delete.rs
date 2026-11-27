@@ -42,7 +42,7 @@ fn delete_marks_once_and_hides_the_project() {
     );
 
     // A hidden project resolves to NoSuchProject on every Store call.
-    for method in ["project.list_branches", "project.stats"] {
+    for method in ["branch.list", "project.stats"] {
         let refused = f.try_call(method, vec![]).unwrap_err();
         assert_eq!(refused.code, "NoSuchProject", "{method}: {refused:?}");
     }

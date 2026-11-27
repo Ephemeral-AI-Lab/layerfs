@@ -1,4 +1,4 @@
-//! The `project.remove_file` visibility filter's marker-read classification,
+//! The `project.hide_path` visibility filter's marker-read classification,
 //! moved out of `read/visibility.rs`: product source holds no tests (the
 //! product-boundary guard).
 

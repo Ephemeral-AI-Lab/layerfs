@@ -46,7 +46,7 @@ pub const RETIRE: &str = "store.postgresql_retire";
 /// The methods this route serves: its own list, so that a method the
 /// SQLite host route adds (a write) never reaches a PostgreSQL read-only
 /// session.
-const READS: [&str; 3] = ["fs.read", "fs.stat", "fs.list"];
+const READS: [&str; 3] = ["file.read", "file.stat", "file.list"];
 
 /// Whether read request `args` passes [`serve`]'s checks of the request
 /// alone: six fields, a method this route serves, its accepted `fields`

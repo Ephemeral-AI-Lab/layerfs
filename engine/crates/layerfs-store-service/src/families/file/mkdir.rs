@@ -1,4 +1,4 @@
-//! `fs.mkdir`.
+//! `file.mkdir`.
 use crate::families::args::{commit, single, Answer};
 use crate::StoreService;
 use layerfs_protocol::sdk::SdkValue;

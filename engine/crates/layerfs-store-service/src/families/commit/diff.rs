@@ -36,7 +36,6 @@ pub fn diff(service: &StoreService, args: &SdkValue) -> Answer {
     let after = args.get_text("after").map(run::path).transpose()?;
     let request = Request {
         limit: listing::limit(args)?,
-        pos: 0,
         cursor: after,
         hunks: args.get_bool("hunks"),
         scope,
@@ -47,7 +46,7 @@ pub fn diff(service: &StoreService, args: &SdkValue) -> Answer {
         Some(from) => {
             let from = root::resolve(store, &stack, &reader, &node_text(from))?;
             let (items, next) = diff::changes(store, &reader, &from, &to, Ok(request))?;
-            (items, next.cursor, Some(from))
+            (items, next, Some(from))
         }
         None => {
             let (items, next) = added(store, &reader, &to, &request)?;

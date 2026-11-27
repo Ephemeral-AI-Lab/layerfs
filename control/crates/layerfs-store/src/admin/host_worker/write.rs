@@ -1,4 +1,4 @@
-//! The host worker's file writes: each one `fs.*` method on a host-machine
+//! The host worker's file writes: each one `file.*` method on a host-machine
 //! sqlite Store, or on a PostgreSQL Store whose record holds a login
 //! revision (#819 P-B writes), its content or changes streamed in bounded
 //! frames.
@@ -27,7 +27,13 @@ use std::path::Path;
 pub const OP: &str = "store.write";
 
 const METHODS: [&str; 7] = [
-    "fs.write", "fs.edit", "fs.mkdir", "fs.rm", "fs.cp", "fs.mv", "fs.apply",
+    "file.write",
+    "file.edit",
+    "file.mkdir",
+    "file.rm",
+    "file.cp",
+    "file.mv",
+    "file.apply",
 ];
 
 /// The fields a write request's header may carry; content and changes
@@ -222,10 +228,10 @@ pub(crate) fn routed(
         return direct(args, input);
     }
     let body = match (method, input.as_ref().map(|input| input.kind)) {
-        ("fs.write", Some(InputKind::Content)) => "content",
-        ("fs.apply", Some(InputKind::Changes)) => "changes",
+        ("file.write", Some(InputKind::Content)) => "content",
+        ("file.apply", Some(InputKind::Changes)) => "changes",
         // content already read (a scoped apply): the direct route takes it
-        ("fs.write" | "fs.apply", _) => return direct(args, input),
+        ("file.write" | "file.apply", _) => return direct(args, input),
         (_, None) => "none",
         (_, Some(_)) => return direct(args, input),
     };
@@ -337,7 +343,7 @@ pub(crate) fn routed(
 
 /// The deferred input, for the one method that reads it.
 fn take(method: &str) -> Option<Input> {
-    matches!(method, "fs.write" | "fs.apply")
+    matches!(method, "file.write" | "file.apply")
         .then(|| INPUT.with(|held| held.borrow_mut().take()))
         .flatten()
 }
@@ -377,8 +383,8 @@ pub fn header(request: &SdkValue) -> Result<(&str, &str, &str, &str, &SdkValue),
         return Err(invalid());
     };
     let expected = match method {
-        "fs.write" => "content",
-        "fs.apply" => "changes",
+        "file.write" => "content",
+        "file.apply" => "changes",
         _ if METHODS.contains(&method) => "none",
         _ => {
             return Err(refused(

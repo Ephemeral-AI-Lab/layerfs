@@ -1619,7 +1619,7 @@ fn export_omits_a_path_hidden_by_hide_path() {
     );
 
     // The marker is written through the Store engine, the route the fs calls
-    // use (engine method `project.remove_file`, the call `project.hide_path`).
+    // use (the call `project.hide_path`, which the engine method of that name runs).
     layerfs_store::admin::open::service::with_service(
         &layerfs_store::admin::open::args::OpenArgs {
             home: Some(home.clone()),
@@ -1629,7 +1629,7 @@ fn export_omits_a_path_hidden_by_hide_path() {
         },
         |service| {
             let call = layerfs_protocol::sdk::SdkCall {
-                method: "project.remove_file".to_owned(),
+                method: "project.hide_path".to_owned(),
                 args: SdkValue::map([("project", t("app")), ("path", t("/a.txt"))]),
             };
             layerfs_store_service::methods::call(service, &call)

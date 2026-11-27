@@ -13,7 +13,7 @@ fn refused(fixture: &Fixture, method: &str, path: &str) -> SdkRefusal {
         ("branch", SdkValue::text("feat")),
         ("path", SdkValue::text(path)),
     ];
-    if method == "fs.write" {
+    if method == "file.write" {
         fields.push(("content", SdkValue::text("x")));
     }
     fixture
@@ -32,10 +32,10 @@ fn a_write_refusal_names_its_cause() {
     fixture.fork("feat");
 
     // The read calls already tell the two apart.
-    assert_eq!(refused(&fixture, "fs.read", "/link").code, "NotFile");
+    assert_eq!(refused(&fixture, "file.read", "/link").code, "NotFile");
 
-    assert_eq!(refused(&fixture, "fs.write", "/dir").code, "IsDirectory");
-    let link = refused(&fixture, "fs.write", "/link");
+    assert_eq!(refused(&fixture, "file.write", "/dir").code, "IsDirectory");
+    let link = refused(&fixture, "file.write", "/link");
     assert_eq!(
         (link.code.as_str(), link.message.as_str()),
         ("NotFile", "expected a regular file")
@@ -45,11 +45,11 @@ fn a_write_refusal_names_its_cause() {
     // the name grammar, on the way to the entry and at the entry itself.
     let long = format!("/{}", "n".repeat(256));
     for (method, path) in [
-        ("fs.write", "/a\\b"),
-        ("fs.write", "/dir/a\\b"),
-        ("fs.write", long.as_str()),
-        ("fs.mkdir", "/a\\b"),
-        ("fs.rm", "/a\\b"),
+        ("file.write", "/a\\b"),
+        ("file.write", "/dir/a\\b"),
+        ("file.write", long.as_str()),
+        ("file.mkdir", "/a\\b"),
+        ("file.rm", "/a\\b"),
     ] {
         let r = refused(&fixture, method, path);
         assert_eq!(
@@ -59,20 +59,17 @@ fn a_write_refusal_names_its_cause() {
         );
     }
     // The read route answers the same input the same way.
-    assert_eq!(refused(&fixture, "fs.stat", "/a\\b").code, "InvalidInput");
+    assert_eq!(refused(&fixture, "file.stat", "/a\\b").code, "InvalidInput");
 
-    let commits = fixture.call(
-        "branch.list_commits",
-        vec![("branch", SdkValue::text("feat"))],
-    );
+    let commits = fixture.call("commit.list", vec![("branch", SdkValue::text("feat"))]);
     assert!(support::items(&commits).is_empty());
     fixture.cleanup();
 }
 
 /// A name below a file or a symlink (which is not followed) is refused
-/// `NotDirectory` at that entry by every write call, as `fs.mkdir` answers.
+/// `NotDirectory` at that entry by every write call, as `file.mkdir` answers.
 /// Such a call keeps no Store call Workspace: more of them than the Store
-/// has call Workspaces leave a valid write working. `fs.mkdir` never took
+/// has call Workspaces leave a valid write working. `file.mkdir` never took
 /// one, so only the other calls count toward that number.
 #[test]
 fn a_write_through_a_non_directory_is_not_directory() {
@@ -87,19 +84,19 @@ fn a_write_through_a_non_directory_is_not_directory() {
     let t = SdkValue::text;
     let cases = [
         (
-            "fs.write",
+            "file.write",
             vec![("path", t("/a.txt/x")), ("content", t("x"))],
             "/a.txt",
         ),
         (
-            "fs.write",
+            "file.write",
             vec![("path", t("/dlink/x")), ("content", t("x"))],
             "/dlink",
         ),
-        ("fs.rm", vec![("path", t("/a.txt/x"))], "/a.txt"),
-        ("fs.mkdir", vec![("path", t("/a.txt/x"))], "/a.txt"),
+        ("file.rm", vec![("path", t("/a.txt/x"))], "/a.txt"),
+        ("file.mkdir", vec![("path", t("/a.txt/x"))], "/a.txt"),
         (
-            "fs.edit",
+            "file.edit",
             vec![
                 ("path", t("/dlink/inner.txt")),
                 ("oldText", t("inner")),
@@ -108,18 +105,18 @@ fn a_write_through_a_non_directory_is_not_directory() {
             "/dlink",
         ),
         (
-            "fs.cp",
+            "file.cp",
             vec![("from", t("/a.txt")), ("to", t("/dlink/c.txt"))],
             "/dlink",
         ),
         (
-            "fs.mv",
+            "file.mv",
             vec![("from", t("/dir/inner.txt")), ("to", t("/a.txt/y"))],
             "/a.txt",
         ),
     ];
     let calls = layerfs_store_service::OwnerConfig::default().namespaces + 1;
-    let held_a_workspace = cases.iter().filter(|(method, ..)| *method != "fs.mkdir");
+    let held_a_workspace = cases.iter().filter(|(method, ..)| *method != "file.mkdir");
     for (method, fields, at) in cases.iter().chain(held_a_workspace.cycle().take(calls)) {
         let mut fields = fields.clone();
         fields.push(("branch", t("feat")));
@@ -133,7 +130,7 @@ fn a_write_through_a_non_directory_is_not_directory() {
         );
     }
     fixture.call(
-        "fs.write",
+        "file.write",
         vec![
             ("branch", t("feat")),
             ("path", t("/after.txt")),
@@ -159,49 +156,49 @@ fn a_write_refusal_is_a_plain_sentence() {
     };
     let cases = [
         (
-            "fs.rm",
+            "file.rm",
             vec![("path", t("/nope"))],
             "NoSuchPath",
             "/nope does not exist",
         ),
         (
-            "fs.cp",
+            "file.cp",
             vec![("from", t("/nope")), ("to", t("/b"))],
             "NoSuchPath",
             "/nope does not exist",
         ),
         (
-            "fs.mv",
+            "file.mv",
             vec![("from", t("/nope")), ("to", t("/b"))],
             "NoSuchPath",
             "/nope does not exist",
         ),
         (
-            "fs.mv",
+            "file.mv",
             vec![("from", t("/a.txt")), ("to", t("/dup.txt"))],
             "Exists",
             "/dup.txt already exists",
         ),
         (
-            "fs.write",
+            "file.write",
             vec![("path", t("/x/y.txt")), ("content", t("x"))],
             "NoSuchPath",
             "/x does not exist",
         ),
         (
-            "fs.mkdir",
+            "file.mkdir",
             vec![("path", t("/a.txt"))],
             "NotDirectory",
             "/a.txt is not a folder",
         ),
         (
-            "fs.edit",
+            "file.edit",
             edit("/a.txt", "zz"),
             "NoMatch",
             "the old text is not in /a.txt",
         ),
         (
-            "fs.edit",
+            "file.edit",
             edit("/dup.txt", "x"),
             "AmbiguousMatch",
             "the old text occurs 3 times in /dup.txt; replace all of them or give more context",
@@ -298,11 +295,11 @@ fn a_failed_read_keeps_no_store_call_workspace() {
     fs::remove_file(host.directory.join("overlay.sqlite")).unwrap();
     let fixture = Fixture::open(host);
 
-    // `fs.edit` resolves the file, then reads its damaged contents.
+    // `file.edit` resolves the file, then reads its damaged contents.
     let edit = || {
         fixture
             .try_call(
-                "fs.edit",
+                "file.edit",
                 vec![
                     ("branch", SdkValue::text("feat")),
                     ("path", SdkValue::text("/dir/inner.txt")),

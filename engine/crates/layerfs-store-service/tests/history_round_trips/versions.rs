@@ -6,9 +6,9 @@
 //! refuses there, as before.
 //!
 //! A window also reads ahead what the walk reads at its versions (#818 H6):
-//! lengths, blame's texts, the revisions' metadata; `fs.diff_files` reads
-//! both sides' files together. A damaged text past the point where the walk
-//! stops never surfaces either, and one the call reaches refuses there.
+//! lengths, blame's texts, the revisions' metadata. A damaged text past the
+//! point where the walk stops never surfaces either, and one the call reaches
+//! refuses there.
 //!
 //! The product's windows ([`Batching::Provider`], on PostgreSQL with the
 //! storage reader's per-object demands, #818 lane S) are held to the walk
@@ -21,7 +21,6 @@ use layerfs_history::HistoryName;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_store_service::filesystem::{
     cache::Cached,
-    compare::{diff::Selector, file_rows},
     paged::{query, revision},
     root,
     text::blame,
@@ -40,7 +39,7 @@ fn stack(service: &StoreService) -> layerfs_history::LayerStackRecord {
         .expect("the project")
 }
 
-/// `fs.blame` of `file` at `name`, as the method runs it, with `batching`.
+/// `file.blame` of `file` at `name`, as the method runs it, with `batching`.
 fn blame(
     service: &StoreService,
     name: &str,
@@ -81,7 +80,7 @@ fn blame_from(
     )
 }
 
-/// `fs.revision` of `file` at `name` on Branch `work`, with `batching`.
+/// `file.history` of `file` at `name` on Branch `work`, with `batching`.
 fn revisions(
     service: &StoreService,
     name: &str,
@@ -112,55 +111,16 @@ fn revisions(
     )
 }
 
-/// `fs.diff_files` of `file` between `left` and `right`, with `batching`.
-fn diff(
-    service: &StoreService,
-    file: &str,
-    left: &str,
-    right: &str,
-    batching: Batching,
-) -> Result<SdkValue, SdkRefusal> {
-    let side = |at| {
-        Ok(Selector {
-            path: file.to_owned(),
-            at,
-        })
-    };
-    file_rows::diff(
-        &service.store,
-        &stack(service),
-        side(left),
-        side(right),
-        file_rows::Options {
-            include_attribution: false,
-            allow_missing: false,
-            page: query::result_page(&SdkValue::Map(Vec::new()))?,
-            extended: true,
-            batching,
-        },
-    )
-}
-
-/// The answer or refusal, with both modes required to agree; returns it.
+/// The answer or refusal, with both modes required to agree and a window
+/// read; returns it.
 fn alike(
     label: &str,
-    call: impl Fn(Batching) -> Result<SdkValue, SdkRefusal>,
-) -> Result<SdkValue, SdkRefusal> {
-    alike_in(label, true, call)
-}
-
-/// [`alike`], requiring a window to be read when `windowed_call`.
-fn alike_in(
-    label: &str,
-    windowed_call: bool,
     call: impl Fn(Batching) -> Result<SdkValue, SdkRefusal>,
 ) -> Result<SdkValue, SdkRefusal> {
     let alone = call(Batching::Alone);
     let before = windows_resolved();
     let windowed = call(Batching::Provider);
-    if windowed_call {
-        assert!(windows_resolved() > before, "{label}: a window was read");
-    }
+    assert!(windows_resolved() > before, "{label}: a window was read");
     assert_eq!(windowed, alone, "{label}: windows answer as the lone walk");
     alone
 }
@@ -193,7 +153,7 @@ fn windows_answer_as_the_lone_walk() {
     opened.stop();
 }
 
-/// The root of the Commit a `fs.write` reply names.
+/// The root of the Commit a `file.write` reply names.
 fn root_of(service: &StoreService, reply: &SdkValue) -> Vec<u8> {
     let id = rt::commit_id(reply);
     let node = layerfs_store_service::lookup::node(&id).unwrap();
@@ -239,7 +199,7 @@ fn damaged_version(label: &str, damage: Damage) {
     let write = |file: &str, text: String| {
         opened
             .call(
-                "fs.write",
+                "file.write",
                 vec![
                     ("branch", t(rt::BRANCH)),
                     path(file),
@@ -343,7 +303,7 @@ fn a_missing_pack_refuses_only_where_the_walk_reaches_it() {
     damaged_version("versions_pack_rh", Damage::Pack);
 }
 
-/// The object id of `file`'s content in the tree of the Commit a `fs.write`
+/// The object id of `file`'s content in the tree of the Commit a `file.write`
 /// reply names.
 fn content_of(service: &StoreService, reply: &SdkValue, file: &str) -> Vec<u8> {
     let root = layerfs_content::ObjectId::from_bytes(&root_of(service, reply)).unwrap();
@@ -367,11 +327,11 @@ fn a_damaged_text_refuses_only_where_the_call_reaches_it() {
     rt::fork_work(&opened);
     // 20 Commits of `/hist/b.txt`: its first line never changes, its second
     // is new each time.
-    let (mut commits, mut texts) = (Vec::new(), Vec::new());
+    let mut texts = Vec::new();
     for n in 0..20 {
         let reply = opened
             .call(
-                "fs.write",
+                "file.write",
                 vec![
                     ("branch", t(rt::BRANCH)),
                     path("/hist/b.txt"),
@@ -383,13 +343,11 @@ fn a_damaged_text_refuses_only_where_the_call_reaches_it() {
             )
             .unwrap();
         texts.push(content_of(&opened.service, &reply, "/hist/b.txt"));
-        commits.push(rt::commit_id(&reply));
     }
     opened.stop();
-    // The text of the 10th Commit from the head: blame of line 2, a
-    // one-item revision page and the diff of the head with its parent stop
-    // before it; blame of line 1, the whole revision list and a diff with
-    // that Commit reach it.
+    // The text of the 10th Commit from the head: blame of line 2 and a
+    // one-item revision page stop before it; blame of line 1 and the whole
+    // revision list reach it.
     let at = texts.len() - 10;
     let mut admin = postgres::Client::connect(&store.url, postgres::NoTls).unwrap();
     admin
@@ -406,26 +364,17 @@ fn a_damaged_text_refuses_only_where_the_call_reaches_it() {
     let opened = store.open("damaged");
     let service = &opened.service;
     let b = "/hist/b.txt";
-    let head = commits[commits.len() - 1].as_str();
-    let parent = commits[commits.len() - 2].as_str();
-    let damaged = commits[at].as_str();
     let stops = alike("blame line 2", |m| blame_from(service, rt::BRANCH, b, 2, m));
     assert!(stops.is_ok(), "line 2's walk stops before: {stops:?}");
     let page = alike("revision page", |m| {
         revisions(service, rt::BRANCH, b, Some(1), m)
     });
     assert!(page.is_ok(), "the page ends before the damage: {page:?}");
-    let near = alike_in("diff near", false, |m| diff(service, b, head, parent, m));
-    assert!(near.is_ok(), "the diff reads no damaged side: {near:?}");
     let reached = alike("blame line 1", |m| blame_from(service, rt::BRANCH, b, 1, m));
     assert!(reached.is_err(), "line 1's walk reaches it: {reached:?}");
     let listed = alike("revision list", |m| {
         revisions(service, rt::BRANCH, b, None, m)
     });
     assert!(listed.is_err(), "the list reaches it: {listed:?}");
-    for (label, left, right) in [("diff left", damaged, head), ("diff right", head, damaged)] {
-        let refused = alike_in(label, false, |m| diff(service, b, left, right, m));
-        assert!(refused.is_err(), "{label}: a damaged side: {refused:?}");
-    }
     opened.stop();
 }

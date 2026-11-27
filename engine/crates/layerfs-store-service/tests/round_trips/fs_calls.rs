@@ -1,4 +1,4 @@
-//! #818 probe: time, client round trips and statements of every `fs.*`
+//! #818 probe: time, client round trips and statements of every `file.*`
 //! Store call and of Namespace Init, through the SDK's own call route
 //! (`open_store_observed` with the SDK's reader capacity and cache, then
 //! `methods::call`), in the arm `FS818_ARM` names:
@@ -12,7 +12,7 @@
 //!
 //! `FS818_GROUP` selects `reads`, `history`, `writes` or `w0`; each group
 //! runs in its own process from the same setup (Init of the tree, a `work`
-//! Branch, 100 `fs.write` Commits), so each command stays under two minutes.
+//! Branch, 100 `file.write` Commits), so each command stays under two minutes.
 //! `FS818_CASES` (comma-separated case names) optionally runs only those
 //! cases of the group, in group order: a skipped case changes what the
 //! caches hold for the later ones, so such a run is labelled.
@@ -233,28 +233,28 @@ fn fs_calls() {
             "reads" => {
                 go(
                     "stat.depth3",
-                    "fs.stat",
+                    "file.stat",
                     vec![branch(), path("/src/d05/f050.txt")],
                 );
                 go(
                     "stat.depth7",
-                    "fs.stat",
+                    "file.stat",
                     vec![branch(), path("/deep/a/b/c/d/e/leaf.txt")],
                 );
-                go("stat.root", "fs.stat", vec![branch(), path("/")]);
+                go("stat.root", "file.stat", vec![branch(), path("/")]);
                 go(
                     "read.small_depth3",
-                    "fs.read",
+                    "file.read",
                     vec![branch(), path("/src/d05/f050.txt")],
                 );
                 go(
                     "read.2000_lines",
-                    "fs.read",
+                    "file.read",
                     vec![branch(), path("/text/big.txt")],
                 );
                 go(
                     "read.lines_100_200",
-                    "fs.read",
+                    "file.read",
                     vec![
                         branch(),
                         path("/text/big.txt"),
@@ -264,87 +264,80 @@ fn fs_calls() {
                 );
                 go(
                     "list.dir_100",
-                    "fs.list",
+                    "file.list",
                     vec![branch(), path("/src/d05"), ("pageSize", SdkValue::Int(100))],
                 );
-                go("list.root", "fs.list", vec![branch(), path("/")]);
+                go("list.root", "file.list", vec![branch(), path("/")]);
                 go(
                     "glob.dir_100",
-                    "fs.glob",
+                    "file.glob",
                     vec![branch(), path("/src/d05"), ("pattern", t("f0*"))],
                 );
                 go(
                     "glob.tree",
-                    "fs.glob",
+                    "file.glob",
                     vec![branch(), path("/"), ("pattern", t("*"))],
                 );
                 go(
                     "grep.one_file_dir",
-                    "fs.grep",
+                    "file.grep",
                     vec![branch(), path("/text"), ("pattern", t("needle"))],
                 );
                 go(
                     "grep.tree_1k",
-                    "fs.grep",
+                    "file.grep",
                     vec![branch(), path("/"), ("pattern", t("needle"))],
-                );
-                let selector =
-                    |id: &str| SdkValue::map([("commit", t(id)), ("path", t("/hist/a.txt"))]);
-                go(
-                    "diff_files.h10_vs_h99",
-                    "fs.diff_files",
-                    vec![("left", selector(&ids[9])), ("right", selector(&ids[98]))],
                 );
             }
             "history" => {
                 let at = |n: usize| ("commit", t(&ids[n - 1]));
                 go(
                     "blame.h10",
-                    "fs.blame",
+                    "file.blame",
                     vec![branch(), path("/hist/a.txt"), at(10)],
                 );
                 go(
                     "blame.h100",
-                    "fs.blame",
+                    "file.blame",
                     vec![branch(), path("/hist/a.txt")],
                 );
                 go(
                     "revision.h100",
-                    "fs.revision",
+                    "file.history",
                     vec![branch(), path("/hist/a.txt")],
                 );
                 // Appended at P0 (smaller shapes for the delay arms, D14):
                 // measured after the baseline cases on the same open.
                 go(
                     "blame.h20",
-                    "fs.blame",
+                    "file.blame",
                     vec![branch(), path("/hist/a.txt"), at(20)],
                 );
                 go(
                     "revision.h10",
-                    "fs.revision",
+                    "file.history",
                     vec![branch(), path("/hist/a.txt"), at(10)],
                 );
                 go(
                     "revision.h20",
-                    "fs.revision",
+                    "file.history",
                     vec![branch(), path("/hist/a.txt"), at(20)],
                 );
             }
             "writes" => {
                 go(
                     "write.new_file",
-                    "fs.write",
+                    "file.write",
                     vec![branch(), path("/src/d05/new.txt"), bytes("new\n")],
                 );
                 go(
                     "write.overwrite",
-                    "fs.write",
+                    "file.write",
                     vec![branch(), path("/src/d05/f050.txt"), bytes("changed\n")],
                 );
                 go(
                     "edit.2000_lines",
-                    "fs.edit",
+                    "file.edit",
                     vec![
                         branch(),
                         path("/text/big.txt"),
@@ -352,10 +345,10 @@ fn fs_calls() {
                         ("newText", t("LINE 1000\n")),
                     ],
                 );
-                go("mkdir", "fs.mkdir", vec![branch(), path("/newdir")]);
+                go("mkdir", "file.mkdir", vec![branch(), path("/newdir")]);
                 go(
                     "cp.file",
-                    "fs.cp",
+                    "file.cp",
                     vec![
                         branch(),
                         ("from", t("/src/d05/f051.txt")),
@@ -364,7 +357,7 @@ fn fs_calls() {
                 );
                 go(
                     "mv.file",
-                    "fs.mv",
+                    "file.mv",
                     vec![
                         branch(),
                         ("from", t("/newdir/copy.txt")),
@@ -373,13 +366,13 @@ fn fs_calls() {
                 );
                 go(
                     "rm.file",
-                    "fs.rm",
+                    "file.rm",
                     vec![branch(), path("/newdir/moved.txt")],
                 );
-                go("apply.10_writes", "fs.apply", apply("/src/d06", "a"));
+                go("apply.10_writes", "file.apply", apply("/src/d06", "a"));
                 go(
                     "rm.dir_100_recursive",
-                    "fs.rm",
+                    "file.rm",
                     vec![
                         branch(),
                         path("/src/d07"),
@@ -453,13 +446,13 @@ fn w0(arm: &mut Arm) {
     let cases: Vec<(&str, &str, Fields, Fields)> = vec![
         (
             "write.new_file",
-            "fs.write",
+            "file.write",
             vec![branch(), path("/src/d05/new.txt"), bytes("new\n")],
             vec![branch(), path("/src/d05/new2.txt"), bytes("new2\n")],
         ),
         (
             "write.overwrite",
-            "fs.write",
+            "file.write",
             vec![branch(), path("/src/d05/f050.txt"), bytes("changed\n")],
             vec![
                 branch(),
@@ -469,7 +462,7 @@ fn w0(arm: &mut Arm) {
         ),
         (
             "edit.2000_lines",
-            "fs.edit",
+            "file.edit",
             vec![
                 branch(),
                 path("/text/big.txt"),
@@ -485,13 +478,13 @@ fn w0(arm: &mut Arm) {
         ),
         (
             "mkdir",
-            "fs.mkdir",
+            "file.mkdir",
             vec![branch(), path("/newdir")],
             vec![branch(), path("/newdir2")],
         ),
         (
             "cp.file",
-            "fs.cp",
+            "file.cp",
             vec![
                 branch(),
                 ("from", t("/src/d05/f051.txt")),
@@ -505,7 +498,7 @@ fn w0(arm: &mut Arm) {
         ),
         (
             "mv.file",
-            "fs.mv",
+            "file.mv",
             vec![
                 branch(),
                 ("from", t("/newdir/copy.txt")),
@@ -519,19 +512,19 @@ fn w0(arm: &mut Arm) {
         ),
         (
             "rm.file",
-            "fs.rm",
+            "file.rm",
             vec![branch(), path("/newdir/moved.txt")],
             vec![branch(), path("/newdir/moved2.txt")],
         ),
         (
             "apply.10_writes",
-            "fs.apply",
+            "file.apply",
             apply("/src/d06", "a"),
             apply("/src/d06", "b"),
         ),
         (
             "rm.dir_100_recursive",
-            "fs.rm",
+            "file.rm",
             vec![
                 branch(),
                 path("/src/d07"),

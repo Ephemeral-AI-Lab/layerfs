@@ -16,7 +16,7 @@ pub fn edit(home: &Path, events: &mut Events<'_>, request: &FileEdit) -> Outcome
         .text("oldText", &request.old_string)
         .text("newText", &request.new_string)
         .boolean("replaceAll", Some(request.replace_all));
-    let value = run(home, events, &request.project, "fs.edit", args).map_err(|refusal| {
+    let value = run(home, events, &request.project, "file.edit", args).map_err(|refusal| {
         match refusal.code == "AmbiguousMatch" {
             true => with_fix(
                 refusal,

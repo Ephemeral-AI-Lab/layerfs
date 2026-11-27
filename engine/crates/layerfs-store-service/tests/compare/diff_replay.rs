@@ -9,9 +9,9 @@
 //! `DIFF_PAGE` line per page and one `DIFF_REPLAY` line for the whole
 //! difference, its time the sum of the calls'; `LAYERFS_364_DIFF_OUT=<path>` writes every page's reply there,
 //! to compare two builds' answers byte for byte. `LAYERFS_364_DIFF_PAGES`
-//! stops after that many pages; `LAYERFS_364_DIFF_CURSOR` and `_POS` start
-//! from an earlier run's next page, to split a difference too long for one
-//! process.
+//! stops after that many pages; `LAYERFS_364_DIFF_CURSOR` starts from an
+//! earlier run's next page, to split a difference too long for one process.
+//! The pages are `commit.diff` pages.
 use crate::installed;
 
 use layerfs_persistence::{PersistenceConfig, SqlitePersistenceProfile};
@@ -73,24 +73,25 @@ fn diff_replay() {
     let service = StoreService::new(opened, &owner);
     let mut out = var("OUT").map(|out| std::fs::File::create(out).unwrap());
     let mut cursor = var("CURSOR").map_or(SdkValue::Null, SdkValue::Text);
-    let mut pos: i64 = var("POS").map_or(0, |pos| pos.parse().unwrap());
     let (mut pages, mut entries) = (0u64, 0usize);
     let first = work(&service);
     let mut ms = 0.0;
     loop {
         let before = work(&service);
         let at = std::time::Instant::now();
+        let mut args = vec![
+            ("project".into(), SdkValue::text("dsh")),
+            ("ref".into(), SdkValue::text(&to)),
+            ("from".into(), SdkValue::text(&from)),
+            ("limit".into(), SdkValue::Int(size)),
+            ("hunks".into(), SdkValue::Bool(false)),
+        ];
+        if !matches!(cursor, SdkValue::Null) {
+            args.push(("after".into(), cursor.clone()));
+        }
         let call = SdkCall {
-            method: "branch.diff_commits".into(),
-            args: SdkValue::Map(vec![
-                ("project".into(), SdkValue::text("dsh")),
-                ("from".into(), SdkValue::text(&from)),
-                ("to".into(), SdkValue::text(&to)),
-                ("pageSize".into(), SdkValue::Int(size)),
-                ("pagePos".into(), SdkValue::Int(pos)),
-                ("cursor".into(), cursor.clone()),
-                ("hunks".into(), SdkValue::Bool(false)),
-            ]),
+            method: "commit.diff".into(),
+            args: SdkValue::Map(args),
         };
         let page = layerfs_store_service::families::call(&service, &call).unwrap();
         let call_ms = at.elapsed().as_secs_f64() * 1e3;
@@ -111,13 +112,9 @@ fn diff_replay() {
         }
         pages += 1;
         entries += listed;
-        cursor = page.get("nextCursor").cloned().unwrap_or(SdkValue::Null);
-        pos = match page.get("nextPagePos") {
-            Some(SdkValue::Int(next)) => *next,
-            _ => 0,
-        };
+        cursor = page.get("next").cloned().unwrap_or(SdkValue::Null);
         if matches!(cursor, SdkValue::Null) || pages == most {
-            println!("DIFF_NEXT pos={pos} cursor={cursor:?}");
+            println!("DIFF_NEXT cursor={cursor:?}");
             break;
         }
     }

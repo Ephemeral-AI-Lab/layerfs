@@ -1,4 +1,4 @@
-//! #818 R6: `fs.grep` and `fs.glob` on a large-file tree, pinned on both
+//! #818 R6: `file.grep` and `file.glob` on a large-file tree, pinned on both
 //! backends: the probe's tree (10 folders of 100 files, a 2,000-line text)
 //! plus `/big/` with a small file and four text files of 1, 4, 16 and
 //! 64 MiB on Branch `work`, each chunked and ending in one `needle` line.
@@ -141,7 +141,7 @@ fn scenarios(store: &mut Store) -> Option<Vec<Measured>> {
     for mib in [1, 4, 16, 64] {
         opened
             .call(
-                "fs.write",
+                "file.write",
                 vec![
                     branch(),
                     path(&format!("/big/b{mib:02}.txt")),
@@ -168,12 +168,12 @@ fn scenarios(store: &mut Store) -> Option<Vec<Measured>> {
     };
     case(
         "grep.large",
-        "fs.grep",
+        "file.grep",
         vec![branch(), path("/"), ("pattern", t("needle"))],
     );
     case(
         "glob.large",
-        "fs.glob",
+        "file.glob",
         vec![branch(), path("/big"), ("pattern", t("*"))],
     );
     Some(out)
