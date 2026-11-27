@@ -635,23 +635,36 @@ frames, so neither the CLI nor the worker holds the whole input; there is
 no new size limit. Input that is not a regular file (a pipe, FIFO or
 terminal) is first copied into a private unnamed file under the home
 (`machine/<host>/spool/`, removed on any exit), which takes disk equal to
-the input on the home's filesystem while the call runs; so the worker
-reads at disk speed, and a slow producer is never timed out. One `file
+the input on the home's filesystem until it is sent (or, on the direct
+route, read); so the worker reads at disk speed, and a slow producer is
+never timed out. The copy is made without checking free space first: on a
+nearly full disk it fails and the call runs in the caller, but a copy that
+fits can leave too little room for the Commit itself, which is then
+refused `Capacity`, nothing committed. One `file
 apply` change is still built whole by the CLI (the engine needs an edit's
 text whole), a write's content included; its content then streams. A list
 with any other change past the worker's budget for one change (4 MiB
 decoded) runs in the caller instead, decided before anything is sent. A
-scoped `file apply --scope` runs in the caller. The worker runs writes on
-4 write threads of their own, so writes never take the threads of reads.
-Calls wait: a write queued behind busy write threads sends nothing until
-the worker asks for its input, and is never timed out for waiting; under
-heavier load further callers wait to connect, and only past their connect
-bound are refused `Unavailable`, naming the load, before sending anything.
+scoped `file apply --scope` runs in the caller. A write that streams
+input (`write`, an unscoped `apply`) goes to the worker's own write
+socket, `writes.sock`, and runs on 4 write threads of their own; the
+single-change writes (`edit`, `mkdir`, `rm`, `cp`, `mv`) go to the
+ordinary socket and run as reads do. So held writes never take a place or
+thread of reads. Calls wait: a write queued behind busy write threads
+sends nothing until the worker asks for its input, and is never timed out
+for waiting; past 32 held writes further writers wait to connect, and only
+past their connect bound (30 s) are refused `Unavailable`, naming the
+load, before sending anything. A held writer that is killed gives its
+place back within seconds. A worker that is stuck leaves the CLI waiting
+with nothing effective sent: until the input's end is sent nothing can
+commit, so Ctrl-C is safe.
 While the worker drains, a write not yet running is refused `Unavailable`
 before any effect; a running one finishes. Input that delivers less than
 262,076 bytes (four engine records) in 30 s of the worker reading it is
-refused `Unavailable`, nothing committed (only a caller other than the
-CLI can be that slow); keepalives do not count as input.
+refused `Unavailable`, nothing committed; keepalives do not count as
+input. The CLI copies only pipes, FIFOs and terminals, never a regular
+file, so a regular file on a stalled filesystem (a hung network mount, for
+one) can still meet this rule.
 A call whose Store or socket path does not qualify reads its input whole
 and runs in the caller, as before; so does a single-change write whose
 arguments pass 64 KiB. Input that stops before its end (a killed CLI, a

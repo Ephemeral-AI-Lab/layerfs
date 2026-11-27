@@ -38,6 +38,7 @@ fn management_drains_independently_of_full_ordinary_pool() {
     assert!(worker.wait(Duration::from_secs(5)).success());
     assert!(home.paths.try_hold().unwrap().is_some());
     assert!(!home.paths.socket.exists());
+    assert!(!home.paths.writes.exists());
     assert!(!home.paths.control.exists());
 }
 
@@ -56,5 +57,6 @@ fn idle_worker_releases_endpoints_even_after_abandoned_hellos() {
     assert!(last_call.elapsed() >= Duration::from_secs(59));
     assert!(home.paths.try_hold().unwrap().is_some());
     assert!(!home.paths.socket.exists());
+    assert!(!home.paths.writes.exists());
     assert!(!home.paths.control.exists());
 }

@@ -8,6 +8,11 @@ mod proof;
 use std::collections::BTreeSet;
 use std::time::Duration;
 
+/// An idle worker's sockets: its three listeners (ordinary, streamed
+/// writes, management) and its wake pair.
+#[cfg(target_os = "linux")]
+const IDLE_SOCKETS: usize = 5;
+
 #[test]
 fn a_killed_cli_caller_does_not_strand_the_other_nine() {
     let home = proof::create();
@@ -17,7 +22,7 @@ fn a_killed_cli_caller_does_not_strand_the_other_nine() {
     proof::assert_reads(proof::spawn_reads(&home, 1, false));
     #[cfg(target_os = "linux")]
     proof::wait_for("the idle worker sockets", || {
-        (proof::sockets(worker.pid()) == 4).then_some(())
+        (proof::sockets(worker.pid()) == IDLE_SOCKETS).then_some(())
     });
     let gate = proof::lock_store(&home);
 
@@ -34,7 +39,7 @@ fn a_killed_cli_caller_does_not_strand_the_other_nine() {
     assert_eq!(settled.get_int("stores"), Some(1));
     #[cfg(target_os = "linux")]
     proof::wait_for("ordinary descriptors released", || {
-        (proof::sockets(worker.pid()) == 4).then_some(())
+        (proof::sockets(worker.pid()) == IDLE_SOCKETS).then_some(())
     });
     assert_eq!(proof::commits(&home), before);
     home.drain();

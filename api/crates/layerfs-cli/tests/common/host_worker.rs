@@ -66,11 +66,30 @@ impl Fixture {
     }
 
     pub fn dial(&self, control: bool) -> Exchange {
-        let endpoint = if control {
+        self.dial_at(if control {
             &self.paths.control
         } else {
             &self.paths.socket
-        };
+        })
+    }
+
+    /// Dials the streamed write endpoint.
+    pub fn dial_writes(&self) -> Exchange {
+        self.dial_at(&self.paths.writes)
+    }
+
+    /// Reads the hello on `socket`, connected to an endpoint, by `wait`.
+    pub fn greeted(&self, socket: UnixStream, wait: Duration) -> Exchange {
+        let hello = read_host_frame(&socket, MAX_HELLO, Some(Instant::now() + wait))
+            .unwrap()
+            .expect("host hello");
+        assert!(hello.get_bool("ready"));
+        assert_eq!(hello.get_text("kind"), Some("host"));
+        assert_eq!(hello.get_text("home_id"), Some(self.paths.home_id.as_str()));
+        Exchange { socket, hello }
+    }
+
+    fn dial_at(&self, endpoint: &Path) -> Exchange {
         let deadline = Instant::now() + IO;
         let socket = loop {
             match UnixStream::connect(endpoint) {
@@ -87,13 +106,7 @@ impl Fixture {
                 Err(error) => panic!("{} was not ready: {error}", endpoint.display()),
             }
         };
-        let hello = read_host_frame(&socket, MAX_HELLO, Some(deadline))
-            .unwrap()
-            .expect("host hello");
-        assert!(hello.get_bool("ready"));
-        assert_eq!(hello.get_text("kind"), Some("host"));
-        assert_eq!(hello.get_text("home_id"), Some(self.paths.home_id.as_str()));
-        Exchange { socket, hello }
+        self.greeted(socket, deadline.saturating_duration_since(Instant::now()))
     }
 
     pub fn ping(&self) -> SdkValue {

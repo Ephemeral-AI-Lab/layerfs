@@ -30,12 +30,17 @@ pub fn within_budget(body: &[u8]) -> bool {
     budget(body).is_ok()
 }
 
-/// Whether `value` printed as JSON would be [`within_budget`], computed
+/// Whether change `value`, printed as JSON in the change frame the worker
+/// decodes (`{"change": value}`), would be [`within_budget`], computed
 /// from the value without printing it: the CLI checks a `file apply`
-/// change this way before sending, holding no copy of its text.
+/// change this way before sending, holding no copy of its text. The frame
+/// adds one level and its own cost; a spilled change, decoded without it,
+/// is then within the budget too.
 pub fn value_within_budget(value: &SdkValue) -> bool {
     let mut cost = Cost { bytes: 0 };
-    cost.value(value, 0).is_some()
+    cost.container(0, 1, true).is_some()
+        && cost.text(b"change").is_some()
+        && cost.value(value, 1).is_some()
 }
 
 /// [`budget`]'s count over a value: three per printed byte, 256 per

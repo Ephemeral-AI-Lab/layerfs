@@ -33,6 +33,11 @@ const READY_POLL: Duration = Duration::from_millis(15);
 /// queued behind 8 calls of ordinary length still gets a pool thread (§16.1
 /// C7), while a stopped or wedged worker gives a pre-send `Unavailable` (§11).
 const CALL_HELLO_WAIT: Duration = Duration::from_secs(30);
+/// Streamed writes the worker holds at once, running or waiting for a
+/// write thread: past it the write endpoint accepts no caller, which waits
+/// in its listen queue and, past [`CALL_HELLO_WAIT`], is refused
+/// `Unavailable` before it sends anything (§11).
+pub const HOST_HELD_WRITES: usize = 32;
 /// The caller's environment a spawned host worker keeps: `PATH` and `HOME`
 /// for the platform's ordinary process lookups, `TMPDIR` for SQLite's
 /// temporary files, the locale, and OpenSSL's trust-store overrides for a
@@ -62,7 +67,26 @@ pub(super) struct Greeted {
     pub(super) began: Instant,
 }
 
-/// Canonical home authority and its two endpoints.
+/// Which of the worker's endpoints a caller dials.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum Endpoint {
+    Ordinary,
+    Control,
+    /// Streamed file writes only (S2.2).
+    Writes,
+}
+
+impl Endpoint {
+    fn of(control: bool) -> Self {
+        if control {
+            Self::Control
+        } else {
+            Self::Ordinary
+        }
+    }
+}
+
+/// Canonical home authority and its three endpoints.
 pub struct HostPaths {
     cli: Option<(PathBuf, String)>,
     /// Canonical pathname of the existing home.
@@ -73,6 +97,8 @@ pub struct HostPaths {
     pub socket: PathBuf,
     /// Management endpoint with independent admission.
     pub control: PathBuf,
+    /// Streamed write endpoint with independent admission.
+    pub writes: PathBuf,
 }
 
 /// Ownership of the stable lifetime lock. Drop only after removing the sockets.
@@ -157,14 +183,22 @@ impl HostPaths {
             cli: None,
             socket: paths::host_worker_socket(&canonical),
             control: paths::host_worker_control(&canonical),
+            writes: paths::host_worker_writes(&canonical),
             home_id: file.id,
             home: canonical,
         })
     }
 
-    /// Pre-dial routing check. Both endpoint names must fit the kernel limit.
+    /// Pre-dial routing check. Every endpoint name must fit the kernel limit.
     pub fn fits(&self) -> bool {
-        host_socket::path_fits(&self.socket) && host_socket::path_fits(&self.control)
+        self.endpoints()
+            .iter()
+            .all(|path| host_socket::path_fits(path))
+    }
+
+    /// The ordinary, write and management endpoints.
+    pub fn endpoints(&self) -> [&Path; 3] {
+        [&self.socket, &self.writes, &self.control]
     }
 
     pub(super) fn verify_directories(&self) -> Result<(), SdkRefusal> {
@@ -242,8 +276,17 @@ impl HostPaths {
     /// Recovers a stale socket and binds a private endpoint while holding
     /// its home's worker lifetime lock.
     pub fn bind(&self, control: bool, guard: &HostGuard) -> Result<UnixListener, SdkRefusal> {
+        self.bind_at(Endpoint::of(control), guard)
+    }
+
+    /// [`Self::bind`] for the streamed write endpoint.
+    pub fn bind_writes(&self, guard: &HostGuard) -> Result<UnixListener, SdkRefusal> {
+        self.bind_at(Endpoint::Writes, guard)
+    }
+
+    fn bind_at(&self, endpoint: Endpoint, guard: &HostGuard) -> Result<UnixListener, SdkRefusal> {
         self.check_guard(guard)?;
-        let path = self.endpoint(control);
+        let path = self.endpoint(endpoint);
         let name = path
             .file_name()
             .ok_or_else(|| unavailable("bind", "missing socket name"))?;
@@ -258,7 +301,7 @@ impl HostPaths {
         Ok(listener)
     }
 
-    /// Removes both socket files under the lifetime lock after listeners close.
+    /// Removes every socket file under the lifetime lock after listeners close.
     pub fn remove_endpoints(&self, guard: &HostGuard) -> Result<(), SdkRefusal> {
         self.check_guard(guard)?;
         let remove = |path: &Path| {
@@ -269,15 +312,16 @@ impl HostPaths {
                 .map_err(|error| unavailable("remove socket", error))
         };
         let ordinary = remove(&self.socket);
+        let writes = remove(&self.writes);
         let management = remove(&self.control);
-        ordinary.and(management)
+        ordinary.and(writes).and(management)
     }
 
-    fn endpoint(&self, control: bool) -> &Path {
-        if control {
-            &self.control
-        } else {
-            &self.socket
+    fn endpoint(&self, endpoint: Endpoint) -> &Path {
+        match endpoint {
+            Endpoint::Ordinary => &self.socket,
+            Endpoint::Control => &self.control,
+            Endpoint::Writes => &self.writes,
         }
     }
 
@@ -367,12 +411,13 @@ impl HostPaths {
         expected_generation: Option<&str>,
         valid: impl FnOnce(&SdkValue) -> bool,
     ) -> Result<Option<SdkValue>, SdkRefusal> {
-        let Some(greeted) = self.greet(control, start, op, args, expected_generation)? else {
+        let endpoint = Endpoint::of(control);
+        let Some(greeted) = self.greet(endpoint, start, op, args, expected_generation)? else {
             return Ok(None);
         };
         let max = if control { MAX_HELLO } else { HOST_MAX_REQUEST };
         let body = host_frame::encode(greeted.request.get(), max)?;
-        let path = self.endpoint(control);
+        let path = self.endpoint(endpoint);
         let answer = send_request(
             &greeted.stream,
             path,
@@ -391,17 +436,18 @@ impl HostPaths {
         Ok(Some(answer))
     }
 
-    /// Connects to `control`'s endpoint (starting a worker when `start`),
-    /// checks the peer and reads the hello under one rule for every call:
-    /// starting a worker and management wait [`READY_WAIT`]; an ordinary
-    /// call to a running worker waits [`CALL_HELLO_WAIT`] for a pool thread,
-    /// then is refused `Unavailable` before anything was sent. None when no
+    /// Connects to `endpoint` (starting a worker when `start`), checks the
+    /// peer and reads the hello under one rule for every call: starting a
+    /// worker and management wait [`READY_WAIT`]; an ordinary call or a
+    /// streamed write to a running worker waits [`CALL_HELLO_WAIT`] for a
+    /// pool thread or a write place, then is refused `Unavailable` naming
+    /// that load before anything was sent. None when no
     /// worker accepts and `start` is false. A request carrying a login
     /// (#819 P-B) is overwritten on every path, the early returns included;
     /// the caller's [`Greeted::request`] guard overwrites it after sending.
     pub(super) fn greet(
         &self,
-        control: bool,
+        endpoint: Endpoint,
         start: bool,
         op: &str,
         args: SdkValue,
@@ -410,7 +456,8 @@ impl HostPaths {
         let secret = args.get("password").is_some();
         let args = layerfs_home::wipe::Guard::new(args, secret);
         self.check_paths()?;
-        let path = self.endpoint(control);
+        let control = endpoint == Endpoint::Control;
+        let path = self.endpoint(endpoint);
         let began = Instant::now();
         let end = began + READY_WAIT;
         let id = token()?;
@@ -444,12 +491,19 @@ impl HostPaths {
             host_check_peer(&stream)?;
             let hello = Self::read_hello(&stream, Some(hello_by)).map_err(|error| {
                 if queued && Instant::now() >= hello_by {
+                    let wait = CALL_HELLO_WAIT.as_secs();
                     unavailable(
                         "admission",
-                        format!(
-                            "no call thread was free within {} s: earlier calls are busy or the worker is not responding",
-                            CALL_HELLO_WAIT.as_secs()
-                        ),
+                        match endpoint {
+                            Endpoint::Writes => format!(
+                                "no write place was free within {wait} s: the worker holds its \
+                                 {HOST_HELD_WRITES} streamed writes or is not responding"
+                            ),
+                            _ => format!(
+                                "no call thread was free within {wait} s: earlier calls are busy \
+                                 or the worker is not responding"
+                            ),
+                        },
                     )
                 } else {
                     error

@@ -33,9 +33,9 @@ fn check_readers(callers: usize, accepted: i64) {
         proof::wait_for("all caller sockets to connect", || {
             reads.iter().all(proof::Cli::connected).then_some(())
         });
-        // Two listeners and the wake pair plus accepted ordinary sockets
+        // Three listeners and the wake pair plus accepted ordinary sockets
         // and up to two reserved management connections.
-        assert!(proof::sockets(worker.pid()) <= 4 + accepted as usize + 2);
+        assert!(proof::sockets(worker.pid()) <= 5 + accepted as usize + 2);
         assert_eq!(proof::threads(worker.pid()), idle_threads);
     }
     drop(gate);

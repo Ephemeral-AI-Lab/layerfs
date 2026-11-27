@@ -231,21 +231,24 @@ const EGRESS: Duration = Duration::from_secs(5);
 /// Serves one Unix connection on a reserved host worker thread: its hello
 /// and request, unless `read` holds a request an ordinary thread already
 /// read, then its operation and answer. A PostgreSQL read read here is
-/// returned for the PostgreSQL lane instead (#819 P-B), and a file write
-/// for the write lane (S2.2).
+/// returned for the PostgreSQL lane instead (#819 P-B), and a streamed
+/// write read on the write endpoint for the write lane (S2.2); a
+/// single-change write runs here.
 #[cfg(all(feature = "machine", any(target_os = "macos", target_os = "linux")))]
 pub(super) fn serve_host_connection(
     server: &super::host::HostServer,
     socket: &std::os::unix::net::UnixStream,
-    management: bool,
+    endpoint: super::host::Endpoint,
     read: Option<SdkValue>,
     admitted: &mut bool,
 ) -> super::host::Served {
-    use super::host::Served;
+    use super::host::{Endpoint, Served};
+    let management = endpoint == Endpoint::Control;
+    let writes = endpoint == Endpoint::Writes;
     let request = match read {
         Some(request) => request,
         None => match read_host_request(server, socket, management) {
-            Some(request) if !management && is_postgres_read(&request) => {
+            Some(request) if endpoint == Endpoint::Ordinary && is_postgres_read(&request) => {
                 layerfs_store::host_postgresql::harden();
                 return Served::Postgres(request);
             }
@@ -254,9 +257,10 @@ pub(super) fn serve_host_connection(
         },
     };
     let mut refusal = None;
-    if !management && request.get_text("op") == Some(layerfs_store::host_write::OP) {
-        match held_write(server, socket, &request) {
-            Some(Ok(held)) => return Served::Write(held),
+    if !management {
+        match held_write(server, socket, &request, writes) {
+            Some(Ok(held)) if writes => return Served::Write(held),
+            Some(Ok(held)) => return Served::Answered(server.answer_write(&held, admitted)),
             Some(Err(error)) => refusal = Some(error),
             None => {}
         }
@@ -367,15 +371,30 @@ fn answer_host_request(
 }
 
 /// A `store.write` request with a valid id, this generation and a map of
-/// arguments, held with its connection for the write lane (§11). Anything
-/// else is answered as an ordinary request; a connection that cannot be
-/// held is refused, nothing run.
+/// arguments whose header checks (method, body, field names and scalar
+/// values), held with its connection: on the write endpoint a streamed
+/// write, for the write lane (§11); on the ordinary endpoint a
+/// single-change write, run on its thread. A write of the other kind, any
+/// other operation on the write endpoint, a header that does not check
+/// and a connection that cannot be held are refused, nothing run. A
+/// request without a valid id, generation or arguments is answered (or
+/// not) as an ordinary request, which never reaches an operation.
 #[cfg(all(feature = "machine", any(target_os = "macos", target_os = "linux")))]
 fn held_write(
     server: &super::host::HostServer,
     socket: &std::os::unix::net::UnixStream,
     request: &SdkValue,
+    writes: bool,
 ) -> Option<Result<super::host::Held, SdkRefusal>> {
+    let unsupported = |why: &str| Some(Err(refused("Unsupported", why)));
+    const ONLY_STREAMED: &str = "the host worker's write endpoint serves only streamed file writes";
+    if request.get_text("op") != Some(layerfs_store::host_write::OP) {
+        return if writes {
+            unsupported(ONLY_STREAMED)
+        } else {
+            None
+        };
+    }
     let request_id = request
         .get_text("request_id")
         .filter(|id| !id.is_empty() && id.len() <= 128)?;
@@ -385,6 +404,19 @@ fn held_write(
     let args @ SdkValue::Map(_) = request.get("args")? else {
         return None;
     };
+    // checked before the write is held: a held write keeps only a header
+    // within its bound (scalar fields of a 64 KiB request)
+    let body = match layerfs_store::host_write::header(args) {
+        Ok((_, _, _, body, _)) => body,
+        Err(refusal) => return Some(Err(refusal)),
+    };
+    match (body != "none", writes) {
+        (true, false) => {
+            return unsupported("a streamed file write goes to the host worker's write endpoint")
+        }
+        (false, true) => return unsupported(ONLY_STREAMED),
+        _ => {}
+    }
     Some(match socket.try_clone() {
         Ok(stream) => Ok(super::host::Held {
             stream,

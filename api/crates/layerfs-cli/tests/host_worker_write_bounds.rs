@@ -43,7 +43,7 @@ fn a_write_read_while_the_worker_drains_is_refused_unrun() {
     );
     let before = commits(path, "shop/api", "work");
     // greeted before the drain, its request read after it
-    let exchange = home.dial(false);
+    let exchange = home.dial_writes();
     home.drain();
     let mut socket: &UnixStream = exchange.socket();
     let frames = content_frames(&exchange, "00000000000000000000000000d7a1d0", b"late\n");
@@ -175,7 +175,7 @@ fn the_worker_refuses_a_spilled_change_past_its_budget_before_effect() {
         ("oldText", changes[0].get("old_string").unwrap().clone()),
         ("newText", SdkValue::text("x")),
     ]));
-    let exchange = home.dial(false);
+    let exchange = home.dial_writes();
     let fields = SdkValue::map([("branch", SdkValue::text("work"))]);
     let mut frames = write_request(
         &exchange,

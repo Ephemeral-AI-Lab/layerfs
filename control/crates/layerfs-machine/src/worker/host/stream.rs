@@ -327,8 +327,9 @@ fn not_committed(op: &str, id: &str, why: &str) -> SdkRefusal {
 }
 
 impl HostPaths {
-    /// Makes one ordinary call whose input `body` streams after its request,
-    /// launching a worker if the home has none. A failure before the end
+    /// Makes one streamed write on the write endpoint: its input `body`
+    /// streams after its request, launching a worker if the home has none.
+    /// A failure before the end
     /// frame is written is a definite refusal (the worker's own, when it
     /// refused early); after it, a missing or invalid answer is `Unknown`.
     pub fn call_streamed(
@@ -338,8 +339,9 @@ impl HostPaths {
         body: &mut dyn FnMut(&mut StreamSender<'_>) -> Result<(), SdkRefusal>,
         valid: impl FnOnce(&SdkValue) -> bool,
     ) -> Outcome {
-        let path = &self.socket;
-        let Some(greeted) = self.greet(false, true, op, args, None)? else {
+        // the write endpoint: a held write never takes an ordinary place
+        let path = &self.writes;
+        let Some(greeted) = self.greet(super::Endpoint::Writes, true, op, args, None)? else {
             return Err(unavailable("start", "no accepting host endpoint"));
         };
         let (stream, id, began) = (greeted.stream, greeted.id, greeted.began);

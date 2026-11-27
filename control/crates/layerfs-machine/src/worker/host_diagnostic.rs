@@ -66,7 +66,7 @@ impl HostPaths {
         if let Err(error) = self.verify_directories() {
             return Unreachable(HostProbe::Endpoint, error);
         }
-        for path in [&self.socket, &self.control] {
+        for path in [&self.socket, &self.writes, &self.control] {
             match existing_socket(path) {
                 Ok(None) if path == &self.control => return Absent,
                 // Never dialled: a call treats it as absent once no worker

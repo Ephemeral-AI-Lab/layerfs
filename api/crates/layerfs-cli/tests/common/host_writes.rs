@@ -348,7 +348,7 @@ pub fn raw_answer(socket: &UnixStream) -> SdkValue {
 
 /// One raw streamed write on the worker's socket, its answer never read.
 pub fn unread_write(home: &Fixture, id: &str, content: &[u8]) {
-    let exchange = home.dial(false);
+    let exchange = home.dial_writes();
     let mut socket: &UnixStream = exchange.socket();
     socket
         .write_all(&content_frames(&exchange, id, content))

@@ -27,10 +27,11 @@ are kept in the home's secret folder; see
 
 ### Host worker lifecycle
 
-A host worker on macOS or Linux can create `worker.sock` and
-`worker.ctl` in the private `machine/macos-host/` (macOS) or `machine/linux-host/` (Linux) directory. These sockets
+A host worker on macOS or Linux can create `worker.sock` (calls),
+`writes.sock` (streamed file writes) and `worker.ctl` (management) in the
+private `machine/macos-host/` (macOS) or `machine/linux-host/` (Linux) directory. These sockets
 accept the UID that owns the home. The worker keeps `worker.lock` through
-shutdown, releases both sockets after draining its connections, and becomes
+shutdown, releases its sockets after draining its connections, and becomes
 eligible to exit after one minute with no calls and no waiting connections.
 Status checks (`machine doctor`, `machine get --with live`) do not keep it
 running. A call made while the worker is busy waits up to 30 seconds for a
@@ -62,7 +63,7 @@ steps.
     layerfs-<id8>-<sandbox>/   one run folder per Sandbox
     layerfs-<id8>-<sandbox>.root/  its private root (Linux; empty from outside)
     images/<64 hex>.2/         an unpacked image, with <64 hex>.2.lock and <64 hex>.2.json
-  machine/<host>/spool/        0700: a piped CLI write's input while it streams to the
+  machine/<host>/spool/        0700: a piped CLI write's input until it is sent to the
                                host worker, in unnamed files (unlinked at once); disk
                                equal to the input, on the home's filesystem
   machine/<host>/retained/     host worker write outcomes a caller may not know,

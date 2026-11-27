@@ -1,12 +1,18 @@
-//! The CLI's value-based budget check (#819 round 5) agrees with the
-//! worker's check of the same value's printed JSON, at and past each
-//! bound, so a list the CLI streams is never refused for size.
+//! The CLI's value-based budget check (#819 rounds 5 and 6) agrees with
+//! the worker's check of the change frame it decodes, `{"change": value}`
+//! printed, at and past each bound, so a list the CLI streams is never
+//! refused for size.
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::json;
 use layerfs_machine::worker::{value_within_budget, within_budget};
 
+/// The change frame's JSON text the worker checks.
+fn framed(value: &SdkValue) -> String {
+    json::print(&SdkValue::map([("change", value.clone())]))
+}
+
 fn agrees(value: &SdkValue) -> bool {
-    let printed = within_budget(json::print(value).as_bytes());
+    let printed = within_budget(framed(value).as_bytes());
     assert_eq!(value_within_budget(value), printed, "{value:?}");
     printed
 }
@@ -41,9 +47,9 @@ fn the_value_check_matches_the_printed_check_at_every_bound() {
         ),
     ]);
     assert!(agrees(&small));
-    // depth: 32 levels pass, 33 do not
-    assert!(agrees(&nested(32)));
-    assert!(!agrees(&nested(33)));
+    // depth: the frame is one of the 32 levels, so 31 pass, 32 do not
+    assert!(agrees(&nested(31)));
+    assert!(!agrees(&nested(32)));
     // width: 128 fields pass, 129 do not
     assert!(agrees(&object(128)));
     assert!(!agrees(&object(129)));
@@ -51,10 +57,17 @@ fn the_value_check_matches_the_printed_check_at_every_bound() {
     let around =
         |len: usize, fill: &str| SdkValue::map([("oldText", SdkValue::text(fill.repeat(len)))]);
     let mut fits = 0;
-    for len in (1_397_850..1_398_000).step_by(7) {
+    // `{"change":{"oldText":"x…"}}`: 3 × (len + 25) + 4 × 256 <= 4 MiB,
+    // so len <= 1,397,735
+    for len in (1_397_650..1_397_800).step_by(7) {
         fits += usize::from(agrees(&around(len, "x")));
     }
-    assert!(fits > 0 && fits < 22, "the bound was not crossed");
+    assert_eq!(fits, 13, "the bound was not crossed where computed");
+    // the frame's own cost counts: the same change unframed would fit
+    let past = around(1_397_736, "x");
+    assert!(!value_within_budget(&past));
+    assert!(within_budget(json::print(&past).as_bytes()));
+    assert!(!within_budget(framed(&past).as_bytes()));
     for len in (699_000..699_100).step_by(3) {
         agrees(&around(len, "\n"));
     }

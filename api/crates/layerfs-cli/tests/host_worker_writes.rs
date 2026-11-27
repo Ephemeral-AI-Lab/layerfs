@@ -230,7 +230,7 @@ fn lost_inputs_and_unread_answers_leave_inspectable_evidence() {
 
     // a raw caller gone mid-stream, after `go`: a definite refusal it
     // never reads; nothing commits and nothing is kept
-    let exchange = home.dial(false);
+    let exchange = home.dial_writes();
     let id = "000000000000000000000000000dead0";
     let mut socket: &UnixStream = exchange.socket();
     socket

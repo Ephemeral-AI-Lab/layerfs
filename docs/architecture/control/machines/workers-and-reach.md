@@ -126,7 +126,7 @@ output to `/layerfs/data/log/worker.log` (`$LAYERFS_WORKER_LOG`; folder
 | `apple-container` | `0.0.0.0:7070` | `--publish 127.0.0.1:<port>:7070` at create |
 | `docker` (macOS) | `0.0.0.0:7070` | `-p 127.0.0.1::7070`, read back with `docker port` |
 | `docker` (Linux) | `127.0.0.1:<free port>` | nothing: host network |
-| `host` (macOS, Linux) | no TCP port: the host worker listens on `machine/<host machine>/worker.sock` and `worker.ctl` ([below](#host-worker-exchange-20-implementation-plan)) | eligible CLI Store reads go to the host worker; other calls run in the caller's process |
+| `host` (macOS, Linux) | no TCP port: the host worker listens on `machine/<host machine>/worker.sock`, `writes.sock` and `worker.ctl` ([below](#host-worker-exchange-20-implementation-plan)) | eligible CLI Store reads go to the host worker; other calls run in the caller's process |
 
 Every host-side address is loopback; the secret guards the worker on every
 bind address. `layerfs worker` reads its two settings, makes its root
@@ -386,9 +386,10 @@ process reaches it, so Workspace calls skip the worker
 ## Host worker exchange (2.0 implementation plan)
 
 The host exchange is versioned independently of the guest exchange. The
-ordinary socket is `worker.sock` and the management socket is `worker.ctl`
-in the host machine directory. Each listener has its own admission
-capacity. A saturated ordinary listener leaves its backlog in the kernel,
+ordinary socket is `worker.sock`, the streamed write socket is
+`writes.sock` and the management socket is `worker.ctl`, in the host
+machine directory. Each listener has its own admission capacity. A
+saturated ordinary or write listener leaves its backlog in the kernel,
 while management retains two slots.
 
 Both peers check the other's effective UID before sending or reading frames.
@@ -403,8 +404,10 @@ Each request uses the guest envelope's `op` and `args` keys and adds a
 `generation` echo and a `request_id` correlation token. A final answer
 echoes the request ID and has exactly one of `ok` and `error`.
 `ping`, `store.close`, `store.postgresql_retire` and `drain` are
-management operations. `store.call`, `store.postgresql_read` and `store.write` (file writes)
-are ordinary operations. The host resolves Store authority from its own home
+management operations. `store.call`, `store.postgresql_read` and a
+single-change `store.write` are ordinary operations; a streamed
+`store.write` is the write socket's only operation, and each socket
+refuses the other's writes `Unsupported`. The host resolves Store authority from its own home
 records.
 
 `store.postgresql_read` (#819 P-B) carries exactly `method`, `store`,
@@ -466,12 +469,13 @@ closes every waiting connection, also before anything was sent.
 The worker counts only ordinary calls toward its idle clock: a `ping` from
 doctor or `machine get --with live` observes it without keeping it alive
 (§8.3, §12). It is idle after 60 s without a call and with nothing in flight,
-including connections accepted but not yet admitted. It then first removes
-both socket names under its lifetime lock, so no new caller can join a listen
+including connections accepted but not yet admitted and held writes. It
+then first removes every socket name under its lifetime lock, so no new
+caller can join a listen
 queue, keeps serving anything already queued (a `connect` that resolved the
 name just before is in the queue within microseconds; the worker keeps reading
-for 1 s, `UNPUBLISHED`), and drains only when it is quiet with both queues
-empty. A caller after the removal finds no endpoint and can start the next
+for 1 s, `UNPUBLISHED`), and drains only when it is quiet with every listen
+queue empty. A caller after the removal finds no endpoint and can start the next
 worker only once this worker releases `worker.lock`. The old worker keeps
 that lock while it serves a call accepted in its last 1 s window and while it
 closes and checkpoints its Stores, so the next start is not guaranteed within
@@ -506,16 +510,22 @@ folder (`machine/<host>/spool/`, 0700; an existing folder that is not this
 user's or not private is not used), named `<pid>-<nanoseconds>-<n>`, and
 unlinked at once, so no exit, a signal's included, leaves it behind (the
 spooler also removes a name whose process is gone). The copy takes disk
-equal to the input, on the home's filesystem, until the call ends. So the
-worker always reads at disk speed: a slow or interactive producer is never
-timed out by the worker's progress rule. The request header is checked
-(`request_fits`) before the copy. If the file cannot be made or written (a
-full disk, say), the part already read and the rest of the input run
-direct, as without a worker.
+equal to the input, on the home's filesystem, until it is sent: the CLI
+closes the file once its input thread has read the last byte for sending
+(or, on the direct route, once it was read whole), not when the answer
+comes. So the worker always reads at disk speed: a slow or interactive
+producer is never timed out by the worker's progress rule. The request
+header is checked (`request_fits`) before the copy. If the file cannot be
+made or written (a full disk, say), the part already read and the rest of
+the input run direct, as without a worker. There is no free-space check
+before the copy: a copy that fits can leave the Store too little room for
+the Commit, which is then refused `Capacity` before any effect (a known
+residual risk on a nearly full disk, accepted in round 6 of #819).
 
-Memory. A content's size does not change it: the caller holds one read
-piece being sent plus at most two queued by its input thread, the worker
-one frame. `file apply` changes are the exception. The caller's input
+Memory. A content's size does not change it: the caller holds at most
+`QUEUED` + 2 = 4 pieces of 262,076 bytes (about 1 MiB): two queued by its
+input thread, the one that thread is reading and the one being sent; the
+worker one frame. `file apply` changes are the exception. The caller's input
 thread builds each list element whole from the input and converts it to
 the Store's form by moving its values; changes pass to the sender through a
 rendezvous channel, so the caller holds one change being read, one being
@@ -526,7 +536,10 @@ included, plus 1.4 MB. A write's content then leaves its change and
 travels as data frames. Any other change is printed once and must fit the
 worker's budget for one change, the frame budget: a decoded-size estimate
 of 4 MiB (three bytes per text byte plus 256 per container, field and
-element), 128 fields per object and 32 levels. A change larger than a 64
+element), 128 fields per object and 32 levels, measured on the change
+frame the worker decodes, `{"change": …}` included (one more level and
+545 more units than the change alone, so a spilled change, decoded without
+it, fits too). A change larger than a 64
 KiB frame is sent spilled; the worker builds it from its data frames under
 that budget, holding one frame and the value, and refuses one past it
 `InvalidInput` before any effect. The caller checks before sending
@@ -537,31 +550,55 @@ never a refusal). A caller that sends an over-budget change anyway is
 refused by the worker before effect. Object fields are checked for
 duplicate names by sorting, O(n log n) in the width. The caller keeps
 sending `wait` while it parses a large element, since parsing runs on its
-input thread. The write lane's own memory, beside the ordinary lane's: at
-most 4 spilled changes being built (4 × 4 MiB decoded estimate, one per
-write thread) and at most 32 held request maps (64 KiB each, 2 MiB). (The
-review cited a 64 MiB connection budget; no such bound is in this tree's
-code or docs, so none is claimed here.)
+input thread.
 
-A write needs a Commit per call, not a held connection. The worker reads a
-`store.write` request on an ordinary thread, checks its request ID,
-generation and arguments there, and then hands it, with its connection, to
-a separate write lane: 4 write threads (`WRITE_THREADS`). A write never
-runs on an ordinary thread, so however many writes stream, small reads
-keep all 8 ordinary threads. Calls wait (§11): held writes count against
-the ordinary listener's accept limit (`ACCEPTED`, 32 connections of the
-ordinary lane and held writes together, beside the lane's 16 slots), so
-under load further callers wait in the listen queue, and past their hello
-bound get only the hello's `Unavailable` naming the load, before they send
-anything. A held write waits for a write thread with nothing sent but its
-request: its caller sends input only after the worker's `go` frame
+The worker's decoded request memory, per lane, in the frame budget's
+decoded-size estimate (`B` = 4 MiB, `DECODED_BUDGET`; a request frame is
+at most 64 KiB, `HOST_MAX_REQUEST`, and a hello or management frame 4 KiB):
+
+| Lane | What it holds decoded | Bound |
+| --- | --- | --- |
+| ordinary | one request per accepted connection, 16 slots (`ORDINARY.slots`) | 16 × B = 64 MiB |
+| management | 2 slots of 4 KiB frames | 2 × B = 8 MiB (the frame budget; such a frame decodes to far less) |
+| PostgreSQL | reads handed over and not yet answered, 64 (`POSTGRES.slots`), each with its request | 64 × B = 256 MiB |
+| write | 2 intake threads reading a request (2 × B = 8 MiB); held headers, at most `HOST_HELD_WRITES` = 32, each checked before it is held: 5 envelope fields and at most 12 named fields, all scalar, so at most 3 × 65,536 + 256 × 34 = 205,312 bytes (32 × 205,312 = 6,569,984 bytes, 6.3 MiB); one change being built per write thread, framed or spilled (4 × B = 16 MiB) | 31,735,808 bytes, 30.3 MiB |
+| total | | 358.3 MiB |
+
+These bound the requests and changes the worker decodes, not a call's own
+work (an answer up to 1 MiB, a Store's pages). S2.2 does not change the
+PostgreSQL lane; its 256 MiB is its bound as it stands, since a read is
+handed over before its request's shape is checked.
+
+A write needs a Commit per call, not a held connection. The CLI knows a
+write's route before it dials. A single-change write (`body` none) goes
+to the ordinary socket and runs on the ordinary thread that read it, as a
+read does. A streamed write goes to the write socket, `writes.sock`
+(same run folder, same peer UID check and hello as the others): one of 2
+intake threads reads its request and checks its request ID, generation
+and header (method, body, field names and scalar values) there, and then
+holds it, with its connection, for a separate write lane: 4 write threads
+(`WRITE_THREADS`). So however many writes are held, they take no ordinary
+place or thread, and small reads keep all 8 ordinary threads. Calls wait
+(§11): the write socket accepts only while its connections and held
+writes together are below `HOST_HELD_WRITES` (32), so further writers
+wait in its listen queue and, past their 30 s hello bound
+(`CALL_HELLO_WAIT`), get only the hello's `Unavailable` naming the load
+("no write place was free within 30 s"), before they send anything. A
+held write waits for a write thread with nothing sent but its request:
+its caller sends input only after the worker's `go` frame
 (`{"request_id", "go": true}`), sent when a write thread starts reading
 it, and waits for it without a time bound, so a queued write is never
-timed out. A refusal instead of `go` is definite. After `go` the caller's
-sends have no time bound either: the worker is reading, and its Store work
-may take as long as a direct call's. A write read once the worker drains,
-or still waiting for a thread then, is refused `Unavailable` before any
-effect.
+timed out. A refusal instead of `go` is definite. A waiting write whose
+caller went away (a killed CLI) is dropped unrun by the same check the
+PostgreSQL lane uses (`peer_gone`), when a write thread looks for work
+and, while the write socket is full, at least every 5 s (`IDLE_CHECK`), so
+its place goes to the next writer. After `go` the caller's sends have no
+time bound either: the worker is reading, and its Store work may take as
+long as a direct call's. A worker that is stuck before `go` or before the
+input's end leaves the CLI waiting with nothing effective sent: nothing
+commits before the end frame, so Ctrl-C is safe. A write read once the
+worker drains, or still waiting for a thread then, is refused
+`Unavailable` before any effect.
 
 Minimum progress (§11): once the worker reads a write's input, the input
 must deliver 262,076 bytes (`STREAM_PROGRESS`, four engine records, frame
@@ -571,7 +608,9 @@ work or the wait for a write thread. A `wait` frame is not progress, so a
 caller that sends keepalives but no input, or slower input, is refused
 `Unavailable` ("delivered less than 262076 bytes (four engine records) in
 30 s of waiting; nothing was committed"). The CLI streams from a regular
-file, so only a misbehaving caller meets this rule. A caller whose input
+file and copies only pipes, FIFOs and terminals, so a regular file on a
+stalled filesystem (a hung network mount) can still meet this rule; so
+can a misbehaving caller. A caller whose input
 produced nothing for 10 seconds sends `wait`, which only shows the worker
 is still there. The end frame's counts must match what was received. The
 worker commits only after reading it, so input that stops earlier commits
@@ -579,15 +618,14 @@ nothing. A change refused mid-stream answers at once and closes; the
 caller, whose next send fails, reads that early refusal. The request's
 frame and the end frame bound the custody boundary. Before the end frame
 is completely written the caller reports a definite refusal; after it, a
-missing or invalid answer is `Unknown` with the request ID. Held writes
-are not PostgreSQL reads: the PostgreSQL lane's check for a caller that
-went away never looks at them.
+missing or invalid answer is `Unknown` with the request ID.
 
 Drain (`machine stop`, idle exit) never stops an admitted write (§8.3): a
 running write reads its whole input and finishes as admitted, and the
 worker exits after it. Held writes not yet running are refused unrun. The
-drain answer counts the running writes (`writes_running`); a drain asked
-again while draining answers the same account. `machine stop` does not
+drain answer counts the admitted writes still running (`writes_running`),
+never one taken and then refused by the drain; a drain asked again while
+draining answers the same account. `machine stop` does not
 wait for them: it reports `running_writes` and `running_writes_note` ("N
 writes still running; see worker.log") and, while a running write holds
 its Store, `InUse` naming the worker as a holder.

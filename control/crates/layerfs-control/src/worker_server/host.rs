@@ -1,7 +1,8 @@
-//! Host worker on the real home, with separate admission for management.
+//! Host worker on the real home, with separate admission for management
+//! and for streamed writes.
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::outcome::{failed, refused, Outcome};
-use layerfs_machine::worker::{HostHello, HostPaths};
+use layerfs_machine::worker::{HostHello, HostPaths, HOST_HELD_WRITES};
 use nix::poll::{poll, PollFd, PollFlags};
 use std::collections::VecDeque;
 use std::io::{self, Read, Write};
@@ -33,17 +34,22 @@ const ORDINARY: Lane = Lane {
     threads: 8,
     name: "layerfs-host-call",
 };
-/// Connections of the ordinary lane and held streamed writes together: the
-/// ordinary listener accepts only below it (and below the lane's own
-/// `slots`), so under load further callers wait in the listen queue, past
-/// it refused by their own hello bound before they send anything (§11).
-/// Bounds the write lane to this many held requests (64 KiB each).
-pub(super) const ACCEPTED: usize = 32;
 const CONTROL: Lane = Lane {
     index: 1,
     slots: 2,
     threads: 2,
     name: "layerfs-host-control",
+};
+/// Streamed writes' own endpoint (S2.2): its threads read each hello and
+/// request and hold the write for a write thread. Its listener accepts only
+/// while its connections and held writes together are below
+/// [`HOST_HELD_WRITES`], so further writers wait in its listen queue and,
+/// past their hello bound, are refused before they send anything (§11).
+const WRITES: Lane = Lane {
+    index: 3,
+    slots: HOST_HELD_WRITES,
+    threads: 2,
+    name: "layerfs-host-intake",
 };
 /// PostgreSQL reads (#819 P-B), handed over by an ordinary thread once their
 /// request is read, so they never occupy an ordinary thread or slot while
@@ -83,7 +89,7 @@ struct Queue {
 }
 
 struct Activity {
-    lanes: [Queue; 3],
+    lanes: [Queue; 4],
     last_call: Instant,
     admitted: usize,
     draining: bool,
@@ -106,11 +112,13 @@ impl Activity {
     }
 
     /// Whether `lane`'s listener may accept: below its slots and, for the
-    /// ordinary lane, below [`ACCEPTED`] with the held writes counted.
+    /// write endpoint, with the held writes counted.
     fn accepts(&self, lane: Lane) -> bool {
-        let outstanding = self.lanes[lane.index].outstanding;
+        let mut outstanding = self.lanes[lane.index].outstanding;
+        if lane.index == WRITES.index {
+            outstanding += self.writes.held();
+        }
         outstanding < lane.slots
-            && (lane.index != ORDINARY.index || outstanding + self.writes.held() < ACCEPTED)
     }
 
     /// Nothing in flight, counting connections accepted but not admitted
@@ -129,7 +137,7 @@ pub(super) struct HostServer {
     home_id: String,
     identity: Vec<(&'static str, SdkValue)>,
     activity: Mutex<Activity>,
-    queued: [Condvar; 3],
+    queued: [Condvar; 4],
     /// Wakes a write thread: a write is held, or the worker drains.
     writable: Condvar,
     wake: UnixStream,
@@ -179,7 +187,7 @@ impl HostServer {
                     super::connection::serve_host_connection(
                         self,
                         stream,
-                        lane.index == CONTROL.index,
+                        endpoint(lane),
                         request,
                         admitted,
                     )
@@ -357,7 +365,7 @@ impl HostServer {
                 super::connection::serve_host_connection(
                     self,
                     &stream,
-                    false,
+                    Endpoint::Ordinary,
                     request,
                     &mut admitted,
                 )
@@ -401,8 +409,7 @@ impl HostServer {
 
     fn listen(
         &self,
-        ordinary: &UnixListener,
-        control: &UnixListener,
+        [ordinary, writes, control]: [&UnixListener; 3],
         mut wake_read: UnixStream,
         unpublish: &dyn Fn(),
     ) -> io::Result<()> {
@@ -412,7 +419,7 @@ impl HostServer {
         };
         // §8.3 idle exit: first remove the socket names, so no new caller can
         // join a listen queue; keep serving whatever is already queued; drain
-        // only once quiet with both queues empty. A caller after the removal
+        // only once quiet with every listen queue empty. A caller after the removal
         // finds no endpoint and starts the next worker once this one exits.
         let mut unpublished: Option<Instant> = None;
         loop {
@@ -431,6 +438,7 @@ impl HostServer {
                     Some(at)
                         if at.elapsed() >= UNPUBLISHED
                             && !queued(ordinary)?
+                            && !queued(writes)?
                             && !queued(control)? =>
                     {
                         self.drain(&mut activity);
@@ -438,6 +446,12 @@ impl HostServer {
                     }
                     _ => {}
                 }
+            }
+            // a full write endpoint accepts again once a waiting writer
+            // that went away is dropped: checked here, at least every
+            // `IDLE_CHECK`
+            if !activity.accepts(WRITES) {
+                activity.writes.purge_gone();
             }
             let interests = |lane: Lane| {
                 if activity.accepts(lane) {
@@ -450,6 +464,7 @@ impl HostServer {
                 PollFd::new(wake_read.as_fd(), PollFlags::POLLIN),
                 PollFd::new(control.as_fd(), interests(CONTROL)),
                 PollFd::new(ordinary.as_fd(), interests(ORDINARY)),
+                PollFd::new(writes.as_fd(), interests(WRITES)),
             ];
             drop(activity);
             let check = if unpublished.is_some() {
@@ -469,6 +484,7 @@ impl HostServer {
             for (events, listener, lane) in [
                 (events[1], control, CONTROL),
                 (events[2], ordinary, ORDINARY),
+                (events[3], writes, WRITES),
             ] {
                 if events.intersects(PollFlags::POLLHUP | PollFlags::POLLERR | PollFlags::POLLNVAL)
                 {
@@ -512,12 +528,15 @@ impl HostServer {
         admitted: &mut bool,
     ) -> Outcome {
         // Admission and drain share one lock. Store work later runs after
-        // admission, outside this lock, on the ordinary pool.
+        // admission, outside this lock, on the ordinary pool. Drain needs no
+        // admission: it is answered while draining too.
+        if control && op == "drain" {
+            return self.drain_answer();
+        }
         let stores =
             (control && op == "ping").then(|| layerfs_store::open::host_store_count(&self.home));
         enum Operation {
             Ping,
-            Drain,
             CloseStore,
             StoreCall,
             PostgresRead,
@@ -525,7 +544,6 @@ impl HostServer {
         }
         let operation = match (control, op) {
             (true, "ping") => Operation::Ping,
-            (true, "drain") => Operation::Drain,
             (true, layerfs_store::host_maintenance::CLOSE) => Operation::CloseStore,
             (false, layerfs_store::host_read::OP) => Operation::StoreCall,
             (false, layerfs_store::host_postgresql::OP) => Operation::PostgresRead,
@@ -537,10 +555,6 @@ impl HostServer {
                 ))
             }
         };
-        // drain needs no admission: it is answered while draining too
-        if let Operation::Drain = operation {
-            return self.drain_answer();
-        }
         let activity = self.admit(admitted)?;
         match operation {
             Operation::Ping => {
@@ -596,10 +610,6 @@ impl HostServer {
                         .map(|(key, value)| (key.to_owned(), value))
                         .collect(),
                 ))
-            }
-            Operation::Drain => {
-                drop(activity);
-                self.drain_answer()
             }
             Operation::CloseStore => {
                 drop(activity);
@@ -745,10 +755,10 @@ fn purge_gone(activity: &mut Activity) {
 
 /// Whether the caller of `stream` has closed or reset its end: a hang-up,
 /// an error, or end of file seen by a peek that consumes nothing. Bytes the
-/// caller sends are not a close: a streamed P-B write (#819, Step 7) may
-/// send more after its request, and stays queued. That step must also
-/// handle macOS, where `poll` may report `POLLHUP` once the caller shuts
-/// down only its write side, which is not a close of the read side.
+/// caller sends are not a close. A held write's caller sends nothing after
+/// its request until its `go` and never shuts down only its write side
+/// (which macOS `poll` may report as `POLLHUP`), so this serves both the
+/// queued PostgreSQL reads and the writes waiting for a write thread.
 fn peer_gone(stream: &UnixStream) -> bool {
     use nix::sys::socket::{recv, MsgFlags};
     let mut ready = [PollFd::new(stream.as_fd(), PollFlags::POLLIN)];
@@ -778,6 +788,23 @@ fn peer_gone(stream: &UnixStream) -> bool {
     }
 }
 
+/// Which endpoint a connection came in on.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum Endpoint {
+    Ordinary,
+    Control,
+    /// Streamed writes only (S2.2).
+    Writes,
+}
+
+fn endpoint(lane: Lane) -> Endpoint {
+    match lane.index {
+        index if index == CONTROL.index => Endpoint::Control,
+        index if index == WRITES.index => Endpoint::Writes,
+        _ => Endpoint::Ordinary,
+    }
+}
+
 /// What one connection came to on its thread.
 pub(super) enum Served {
     /// Answered (`true`) or ended without an answer.
@@ -787,8 +814,8 @@ pub(super) enum Served {
     /// Handed to the PostgreSQL lane or the write lane, which answers and
     /// accounts it.
     HandedOver,
-    /// A `store.write` whose request was read, held for a write thread with
-    /// its connection.
+    /// A streamed `store.write` read on the write endpoint, held for a write
+    /// thread with its connection.
     Write(Held),
 }
 
@@ -828,15 +855,15 @@ fn log(message: &str) {
 }
 
 fn run(
-    ordinary: UnixListener,
-    control: UnixListener,
+    listeners: [UnixListener; 3],
     hello: HostHello,
     home: PathBuf,
     home_id: String,
     unpublish: &dyn Fn(),
 ) -> io::Result<super::Served> {
-    ordinary.set_nonblocking(true)?;
-    control.set_nonblocking(true)?;
+    for listener in &listeners {
+        listener.set_nonblocking(true)?;
+    }
     let (wake_read, wake) = UnixStream::pair()?;
     wake_read.set_nonblocking(true)?;
     wake.set_nonblocking(true)?;
@@ -853,7 +880,7 @@ fn run(
     let served = std::thread::scope(|scope| {
         let result = (|| {
             let server = &server;
-            for lane in [CONTROL, ORDINARY, POSTGRES] {
+            for lane in [CONTROL, ORDINARY, WRITES, POSTGRES] {
                 for _ in 0..lane.threads {
                     std::thread::Builder::new()
                         .name(lane.name.to_owned())
@@ -868,11 +895,11 @@ fn run(
                     .name("layerfs-host-write".to_owned())
                     .spawn_scoped(scope, move || server.work_writes())?;
             }
-            server.listen(&ordinary, &control, wake_read, unpublish)
+            let [ordinary, writes, control] = &listeners;
+            server.listen([ordinary, writes, control], wake_read, unpublish)
         })();
         server.drain(&mut server.lock());
-        drop(ordinary);
-        drop(control);
+        drop(listeners);
         // Scope exit joins accepted connections before releasing the owner.
         result
     });
@@ -896,17 +923,20 @@ pub fn serve_host(home: &Path) -> Result<super::Served, SdkRefusal> {
     })?;
     let run = (|| {
         let hello = HostHello::own(&paths)?;
-        let (ordinary, control) = {
+        let listeners = {
             let _home = layerfs_home::home::lock::take(home)?;
             layerfs_machine::record::MachineRecord::admit_host(
                 home,
                 layerfs_home::names::HOST_MACHINE,
             )?;
-            (paths.bind(false, &guard)?, paths.bind(true, &guard)?)
+            [
+                paths.bind(false, &guard)?,
+                paths.bind_writes(&guard)?,
+                paths.bind(true, &guard)?,
+            ]
         };
         run(
-            ordinary,
-            control,
+            listeners,
             hello,
             paths.home.clone(),
             paths.home_id.clone(),

@@ -33,7 +33,7 @@ fn held_write(
     went: std::sync::mpsc::Sender<String>,
     send: Receiver<()>,
 ) -> std::thread::JoinHandle<SdkValue> {
-    let exchange = home.dial(false);
+    let exchange = home.dial_writes();
     std::thread::spawn(move || {
         let mut socket: &UnixStream = exchange.socket();
         socket
@@ -135,7 +135,7 @@ fn a_stalled_input_is_refused_after_its_waiting_bound_despite_keepalives() {
     let before = commits(path, "shop/api", "work");
     // after `go`, a little input, then only keepalives: they do not renew
     // the worker's 30 s minimum-progress bound
-    let exchange = home.dial(false);
+    let exchange = home.dial_writes();
     let id = "000000000000000000000000057a11ed";
     let mut socket: &UnixStream = exchange.socket();
     socket

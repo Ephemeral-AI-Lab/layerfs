@@ -13,7 +13,7 @@ may run, and how to add one, within [Machines](README.md).
 
 | Platform | How | Tool | Hosts | Backend | Kernel | sqlite calls | Worker binds | Options |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `host` | built in | none | macOS, Linux (the profile also lists Windows, where no host machine is built) | macOS `process` (`Process`); Linux `namespaces` | macOS `nfs`; Linux `fuse` | in process; eligible CLI reads in the host worker | Unix sockets `worker.sock`, `worker.ctl` in the machine folder | none |
+| `host` | built in | none | macOS, Linux (the profile also lists Windows, where no host machine is built) | macOS `process` (`Process`); Linux `namespaces` | macOS `nfs`; Linux `fuse` | in process; eligible CLI reads in the host worker | Unix sockets `worker.sock`, `writes.sock`, `worker.ctl` in the machine folder | none |
 | `docker` | built in | `docker` | macOS, Linux | `namespaces` in the worker container | `fuse` | worker | `0.0.0.0:7070` (macOS); host network on Linux | none |
 | `apple-container` | created | `container` | macOS | `namespaces` | `fuse` | worker | `0.0.0.0:7070` | `cpus`, `memory`, `disk`, `image`, `os_image` |
 | `lima` | created | `limactl` | macOS | `namespaces` | `fuse` | worker | `127.0.0.1:7070` | `cpus`, `memory`, `disk`, `image`, `os_image` |
@@ -335,8 +335,8 @@ kind or kernel route is an engine change, not a platform.
 
 ### Host worker socket transport
 
-The host worker transport uses two owner-only Unix sockets under the host
-machine directory. Directories may permit traversal by Sandbox processes
+The host worker transport uses three owner-only Unix sockets under the host
+machine directory: ordinary calls, streamed file writes and management. Directories may permit traversal by Sandbox processes
 without granting them read or write access. Each socket remains mode 0600.
 Doctor and `machine get --with live` report a leftover socket (no listener,
 or not yet 0600) as health `stale`, a notice on `machine.worker.endpoint`,

@@ -4,14 +4,19 @@
 //!
 //! Every input the CLI streams is a regular file: a pipe, FIFO or terminal
 //! is first copied into an unnamed private file ([`spool`]), which takes
-//! disk equal to the input on the home's filesystem until the call ends.
-//! So the worker reads at disk speed, and a `file apply` list is checked
-//! before anything is sent: a list with a change past the worker's budget
-//! for one change (4 MiB decoded, 128 fields per object, 32 levels) runs
-//! direct ([`fits_worker`]), a route, never a refusal.
+//! disk equal to the input on the home's filesystem until it is sent: the
+//! file is closed once its last byte is read for sending (or, on the
+//! direct route, read whole), never held to the answer. So the worker
+//! reads at disk speed, and a `file apply` list is checked before
+//! anything is sent: a list with a change past the worker's budget for one
+//! change (4 MiB decoded, 128 fields per object, 32 levels, counted with
+//! the `{"change": …}` frame around it) runs direct ([`fits_worker`]), a
+//! route, never a refusal.
 //!
-//! Memory. `file write` content: the CLI holds at most [`QUEUED`] pieces
-//! of [`STREAM_PIECE`] bytes plus the one it sends, the worker one frame.
+//! Memory. `file write` content: the CLI holds at most [`QUEUED`] + 2
+//! pieces of [`STREAM_PIECE`] bytes (about 1 MiB): the queued ones, the
+//! one its input thread is reading and the one it sends; the worker one
+//! frame.
 //! `file apply`: each element is parsed, then converted by moving its
 //! values, so the CLI holds one change being read and, through a
 //! rendezvous channel, one change being sent, plus that change's printed
@@ -156,12 +161,25 @@ fn send_change(change: SdkValue, sender: &mut StreamSender<'_>) -> Result<(), Sd
 /// content excepted: it streams). Read before anything is sent, so a list
 /// with a larger change is routed direct; the offset is restored. One
 /// element is held at a time and measured without printing it. A list
-/// that does not parse is left to the streamed call, which refuses it.
-pub(crate) fn fits_worker(file: &mut std::fs::File) -> Result<bool, SdkRefusal> {
+/// that does not parse is left to the streamed call, which refuses it. A
+/// failed read or seek routes direct too, never to a refusal of its own:
+/// the direct route reads the input again and meets any lasting failure
+/// itself. (Were the offset not restored, the direct route would read the
+/// list from inside it, which is not a list: it is refused, never
+/// committed in part.)
+pub(crate) fn fits_worker(file: &mut std::fs::File) -> bool {
     use std::io::{Seek, SeekFrom};
-    let start = file.stream_position().map_err(unreadable)?;
+    let Ok(start) = file.stream_position() else {
+        return false;
+    };
     let fits = {
-        let mut input = BufReader::with_capacity(64 << 10, &mut *file);
+        let mut input = BufReader::with_capacity(
+            64 << 10,
+            Watched {
+                file: &mut *file,
+                failed: false,
+            },
+        );
         let mut fits = true;
         let _ = each_element(&mut input, &mut |change| {
             let (change, content) = split_content(change)?;
@@ -169,10 +187,23 @@ pub(crate) fn fits_worker(file: &mut std::fs::File) -> Result<bool, SdkRefusal> 
             fits = layerfs_machine::worker::value_within_budget(&change);
             Ok(fits)
         });
-        fits
+        fits && !input.get_ref().failed
     };
-    file.seek(SeekFrom::Start(start)).map_err(unreadable)?;
-    Ok(fits)
+    file.seek(SeekFrom::Start(start)).is_ok() && fits
+}
+
+/// A file read that notes whether any read failed.
+struct Watched<'a> {
+    file: &'a mut std::fs::File,
+    failed: bool,
+}
+
+impl Read for Watched<'_> {
+    fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+        let read = self.file.read(buffer);
+        self.failed |= read.is_err();
+        read
+    }
 }
 
 /// An input that is not a regular file, copied in bounded pieces into an
@@ -180,7 +211,7 @@ pub(crate) fn fits_worker(file: &mut std::fs::File) -> Result<bool, SdkRefusal> 
 /// is made 0600 with an exclusive create in the host machine's `spool`
 /// folder (0700, owned by this user, else not used) and unlinked at once,
 /// so no exit, a signal's included, leaves it behind; it takes disk equal
-/// to the input until the call ends. When it cannot be made or written,
+/// to the input until it is sent. When it cannot be made or written,
 /// the input read so far and the rest are returned with no file: the call
 /// then runs direct, as without a worker.
 pub(crate) fn spool(

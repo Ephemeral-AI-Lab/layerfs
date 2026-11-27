@@ -61,12 +61,18 @@ pub fn host_worker_socket(home: &Path) -> PathBuf {
     machine_dir(home, crate::names::HOST_MACHINE).join("worker.sock")
 }
 
+/// The native worker's endpoint for streamed file writes, with admission
+/// of its own: a held write never takes a place of the ordinary endpoint.
+pub fn host_worker_writes(home: &Path) -> PathBuf {
+    machine_dir(home, crate::names::HOST_MACHINE).join("writes.sock")
+}
+
 /// The native worker's management endpoint, with independent admission.
 pub fn host_worker_control(home: &Path) -> PathBuf {
     machine_dir(home, crate::names::HOST_MACHINE).join("worker.ctl")
 }
 
-/// Stable lock held by the worker until both endpoints have been removed.
+/// Stable lock held by the worker until its endpoints have been removed.
 pub fn host_worker_lock(home: &Path) -> PathBuf {
     machine_dir(home, crate::names::HOST_MACHINE).join("worker.lock")
 }

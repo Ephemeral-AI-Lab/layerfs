@@ -87,9 +87,17 @@ pub fn deferred() -> bool {
 /// text when UTF-8 else bytes; changes as the Store's list.
 fn materialize(input: Input, args: &mut Vec<(String, SdkValue)>) -> Result<(), SdkRefusal> {
     let mut bytes = Vec::new();
-    let mut source = input.source;
-    source.read_to_end(&mut bytes).map_err(input_error)?;
-    match input.kind {
+    let Input {
+        kind,
+        mut source,
+        file,
+    } = input;
+    // a spool file is freed once read, before the call runs
+    drop(file);
+    let read = source.read_to_end(&mut bytes).map_err(input_error);
+    drop(source);
+    read?;
+    match kind {
         InputKind::Content => {
             args.retain(|(name, _)| name != "content" && name != "bytes");
             args.push(match String::from_utf8(bytes) {
@@ -231,17 +239,19 @@ pub(crate) fn routed(
         let file = input.as_ref().and_then(|held| held.file.as_ref());
         let fits = match file.map(std::fs::File::try_clone) {
             Some(Ok(mut file)) => crate::host_stream::fits_worker(&mut file),
-            _ => Ok(false),
+            _ => false,
         };
-        match fits {
-            Ok(true) => {}
-            Ok(false) => return direct(args, input),
-            Err(error) => return Some(Err(error)),
+        if !fits {
+            return direct(args, input);
         }
     }
     Some(match input {
         None => paths.call_validated(OP, header, valid_answer),
-        Some(Input { kind, source, .. }) => {
+        Some(Input { kind, source, file }) => {
+            // the source alone reads the input from here: the spool's
+            // other descriptor goes now, and the file with the source, once
+            // its last byte is read, never after the answer
+            drop(file);
             let mut source = Some(source);
             let mut send = |sender: &mut layerfs_machine::worker::StreamSender<'_>| {
                 crate::host_stream::send(kind, &mut source, sender)
@@ -276,8 +286,10 @@ fn valid_answer(value: &SdkValue) -> bool {
         && matches!(value.get("head"), Some(SdkValue::Null | SdkValue::Text(_)))
 }
 
-/// Checks one write request's header on the worker: its method, body and
-/// field names. The engine checks every value as for a direct call.
+/// Checks one write request's header on the worker: its method, body,
+/// field names, and that every field value is a scalar (null, a boolean, a
+/// number or text), so a held header stays within its decoded bound. The
+/// engine checks every value as for a direct call.
 pub fn header(request: &SdkValue) -> Result<(&str, &str, &str, &str, &SdkValue), SdkRefusal> {
     let invalid = || refused("InvalidInput", "invalid native Store write request");
     match request {
@@ -306,10 +318,16 @@ pub fn header(request: &SdkValue) -> Result<(&str, &str, &str, &str, &SdkValue),
             ))
         }
     };
+    let scalar = |value: &SdkValue| {
+        matches!(
+            value,
+            SdkValue::Null | SdkValue::Bool(_) | SdkValue::Int(_) | SdkValue::Text(_)
+        )
+    };
     if body != expected
         || !listed
             .iter()
-            .all(|(name, _)| FIELDS.contains(&name.as_str()))
+            .all(|(name, value)| FIELDS.contains(&name.as_str()) && scalar(value))
     {
         return Err(invalid());
     }
