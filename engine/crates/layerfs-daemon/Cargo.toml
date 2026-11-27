@@ -27,3 +27,15 @@ layerfs-os = { path = "../layerfs-os" }
 [dev-dependencies]
 blake3 = { version = "=1.8.5", default-features = false }
 layerfs-project = { path = "../layerfs-project" }
+
+[[test]]
+name = "mounted_commit_concurrency"
+path = "tests/standalone/mounted_commit_concurrency.rs"
+
+[[test]]
+name = "mounted_commit_cycles"
+path = "tests/standalone/mounted_commit_cycles.rs"
+
+[[test]]
+name = "unmount_stalled"
+path = "tests/standalone/unmount_stalled.rs"

@@ -2,10 +2,10 @@
 #[path = "resource_growth/allocation.rs"]
 mod allocation;
 #[allow(dead_code)]
-#[path = "../tests/support/complete_bytes.rs"]
+#[path = "../tests/support/complete/bytes.rs"]
 mod bytes;
 #[allow(dead_code)]
-#[path = "../tests/support/complete_fixture.rs"]
+#[path = "../tests/support/complete/fixture.rs"]
 mod fixture;
 #[path = "resource_growth/observe.rs"]
 mod observe;
@@ -17,7 +17,7 @@ mod produce;
 #[global_allocator]
 static ALLOCATOR: allocation::Observed = allocation::Observed;
 #[allow(dead_code)]
-#[path = "../tests/support/host_install.rs"]
+#[path = "../tests/support/install/host.rs"]
 mod support;
 use layerfs_history::{BranchId, WorkspaceId};
 use layerfs_store_service::{store::BindRequest, Owner, OwnerConfig};

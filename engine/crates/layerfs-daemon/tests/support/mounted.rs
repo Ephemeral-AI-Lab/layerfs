@@ -1,9 +1,4 @@
 //! One real kernel serving assembly over an installed Store, for mounted proofs.
-use layerfs_daemon::{
-    control::{Failure, KernelConfig, KernelServing, Service, Success},
-    store::Store,
-    Owner, OwnerConfig,
-};
 use layerfs_history::{BranchId, WorkspaceId};
 use layerfs_protocol::daemon::{
     MountPhase, ReadyMount, Reply, Request, WorkspaceStatus, WorkspaceToken,
@@ -16,6 +11,10 @@ use std::{
     path::{Path, PathBuf},
     sync::{Arc, Condvar, Mutex},
     time::{Duration, Instant},
+};
+use {
+    layerfs_daemon::workspace::{Failure, KernelConfig, KernelServing, Service, Success},
+    layerfs_store_service::{store::Store, Owner, OwnerConfig},
 };
 
 /// Runtime command identity: every inode's owner, never the mount owner.

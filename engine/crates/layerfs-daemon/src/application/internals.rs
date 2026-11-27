@@ -10,12 +10,14 @@
 //! reads belongs here, behind this module's one name.
 
 #[doc(hidden)]
-pub use super::owner::{
+pub use super::connection::retained::{
+    RetainedFailure, RetainedFailures, RetainedSnapshot, LIMIT, TTL,
+};
+#[doc(hidden)]
+pub use super::startup::lifecycle::{
     disposition, recovery_request, AdmissionClass, Disposition, Finished, Phase, SlotClass,
     SlotCounts, SlotTicket, Slots, RESERVED_SLOTS,
 };
-#[doc(hidden)]
-pub use super::retained::{RetainedFailure, RetainedFailures, RetainedSnapshot, LIMIT, TTL};
 
 #[doc(hidden)]
-pub use crate::operator::workspace::changes_of;
+pub use crate::operator::list_changes::changes_of;
