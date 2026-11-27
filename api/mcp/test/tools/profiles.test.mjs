@@ -5,9 +5,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { table } from "@layerfs/node";
 import { ToolSchema } from "@modelcontextprotocol/sdk/types.js";
-import { bucketOf, check, tools } from "../src/profiles.js";
-import { toolsOf } from "../src/tools.js";
-import { document, render, splice } from "../scripts/gen-profiles.mjs";
+import { bucketOf, check, tools } from "../../src/profiles.js";
+import { toolsOf } from "../../src/tools.js";
+import { document, render, splice } from "../../../scripts/mcp-profiles.mjs";
 
 const nameOf = (spec) => `${spec.family}.${spec.call}`;
 

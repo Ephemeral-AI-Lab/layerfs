@@ -47,7 +47,7 @@ const stub = {
 };
 const key = Symbol.for("layerfs.lp53b.export.native");
 globalThis[key] = stub;
-const nativeUrl = new URL("../src/native.js", import.meta.url).href;
+const nativeUrl = new URL("../../src/native.js", import.meta.url).href;
 const hooks = registerHooks({
   resolve(url, context, next) {
     if (new URL(url, context.parentURL).href === nativeUrl) {
@@ -65,7 +65,7 @@ const hooks = registerHooks({
 });
 let sdk;
 try {
-  sdk = await import("../src/index.js?lp53b-stub");
+  sdk = await import("../../src/index.js?lp53b-stub");
 } finally {
   hooks.deregister();
   delete globalThis[key];
@@ -205,7 +205,7 @@ function checkTree(destination) {
 test("native Node export: default main, selected Branch, callbacks, refusals and scope", {
   timeout: 60_000, skip: process.env.LP53_EXPORT_NATIVE !== "1" && "NOT_RUN: set LP53_EXPORT_NATIVE=1 after LP53a",
 }, async () => {
-  const real = await import("../src/index.js");
+  const real = await import("../../src/index.js");
   const f = fixture();
   const lfs = real.client({ home: f.home });
   try {

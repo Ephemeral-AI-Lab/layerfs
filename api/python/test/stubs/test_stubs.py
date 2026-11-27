@@ -1,7 +1,7 @@
 """The typing of the package (#35, F6): `py.typed` and the `.pyi` stubs that
-tools/gen_stubs.py writes from the call table must not drift from it, and a
-type checker must accept the samples in typed_samples/ok.py and report
-exactly the lines of typed_samples/bad.py marked `# E`. Build first, as for
+scripts/python_stubs.py writes from the call table must not drift from it, and a
+type checker must accept the samples in stubs/ok.py and report
+exactly the lines of stubs/bad.py marked `# E`. Build first, as for
 test_calls.py. The type-checker tests are skipped when mypy is not installed.
 """
 
@@ -14,13 +14,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
+HERE = Path(__file__).resolve().parents[1]  # api/python/test
 PACKAGE = HERE.parent / "src" / "layerfs"
 sys.path.insert(0, str(HERE.parent / "src"))
 
 import layerfs  # noqa: E402
 
-spec = importlib.util.spec_from_file_location("gen_stubs", HERE.parent / "tools" / "gen_stubs.py")
+spec = importlib.util.spec_from_file_location("gen_stubs", HERE.parent.parent / "scripts" / "python_stubs.py")
 gen_stubs = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(gen_stubs)
 
@@ -111,11 +111,11 @@ def mypy(path, *extra):
 @unittest.skipUnless(MYPY, "NOT_RUN: mypy is not installed")
 class Checked(unittest.TestCase):
     def test_the_sample_that_uses_the_package_correctly_passes_strict_mypy(self):
-        code, out = mypy(HERE / "typed_samples" / "ok.py")
+        code, out = mypy(HERE / "stubs" / "ok.py")
         self.assertEqual(code, 0, out)
 
     def test_the_sample_that_misuses_it_fails_on_exactly_the_marked_lines(self):
-        path = HERE / "typed_samples" / "bad.py"
+        path = HERE / "stubs" / "bad.py"
         marked = {n for n, line in enumerate(path.read_text().splitlines(), 1) if "  # E:" in line}
         code, out = mypy(path)
         self.assertEqual(code, 1, out)

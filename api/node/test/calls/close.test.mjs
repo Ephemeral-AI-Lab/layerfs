@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, writeFileSync, chmodSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import layerfs, { client, close, table } from "../src/index.js";
+import layerfs, { client, close, table } from "../../src/index.js";
 
 const temp = (tag) => {
   const dir = mkdtempSync(join(tmpdir(), `layerfs-node-${tag}-`));

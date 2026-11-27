@@ -11,10 +11,10 @@ import { createServer, connect } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { client } from "../src/index.js";
+import { client } from "../../src/index.js";
 
 const hostMachine = process.platform === "darwin" ? "macos-host" : "linux-host";
-const root = fileURLToPath(new URL("../../../", import.meta.url));
+const root = fileURLToPath(new URL("../../../../", import.meta.url));
 const target = process.env.CARGO_TARGET_DIR ? resolve(root, process.env.CARGO_TARGET_DIR) : join(root, "target");
 const command = join(target, "debug", "layerfs");
 
@@ -128,7 +128,7 @@ test("exec output: the stdout and stderr functions, and stream: true without the
     assert.equal(err.join(""), "oops\n");
 
     // stream: true and no functions: this process's own stdout and stderr
-    const script = `import { client } from ${JSON.stringify(new URL("../src/index.js", import.meta.url).href)};
+    const script = `import { client } from ${JSON.stringify(new URL("../../src/index.js", import.meta.url).href)};
       await client().workspace.exec(${JSON.stringify(ws)}, "cat README.md; echo oops >&2", { stream: true });`;
     const child = spawnSync(process.execPath, ["--input-type=module", "-e", script], {
       env: { ...process.env, LAYERFS_HOME: home },

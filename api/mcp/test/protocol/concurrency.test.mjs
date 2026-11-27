@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { call, connect, value, workspace } from "./helpers.mjs";
+import { call, connect, value, workspace } from "../helpers.mjs";
 
 const files = Object.fromEntries(Array.from({ length: 10 }, (_, index) => [`f${index}.txt`, `file ${index}\n`]));
 

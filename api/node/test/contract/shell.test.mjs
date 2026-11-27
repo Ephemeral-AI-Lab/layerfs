@@ -10,11 +10,11 @@ import { mkdtempSync, writeFileSync, chmodSync, rmSync, existsSync } from "node:
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { client, table, LayerFSError } from "../src/index.js";
-import { decode } from "../src/values.js";
-import { refusalOf } from "./contract/refusal.mjs";
+import { client, table, LayerFSError } from "../../src/index.js";
+import { decode } from "../../src/values.js";
+import { refusalOf } from "./refusal.mjs";
 
-const root = fileURLToPath(new URL("../../../", import.meta.url));
+const root = fileURLToPath(new URL("../../../../", import.meta.url));
 const target = process.env.CARGO_TARGET_DIR ? resolve(root, process.env.CARGO_TARGET_DIR) : join(root, "target");
 const command = join(target, "debug", "layerfs");
 

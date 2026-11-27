@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync, chmodSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import layerfs, { client, table, families, LayerFSError } from "../src/index.js";
+import layerfs, { client, table, families, LayerFSError } from "../../src/index.js";
 
 const hostMachine = process.platform === "darwin" ? "macos-host" : "linux-host";
 const temp = (tag) => {

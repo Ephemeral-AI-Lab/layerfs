@@ -6,16 +6,16 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import * as layerfs from "../src/index.js";
-import { families, table } from "../src/index.js";
-import { render } from "../../scripts/gen-node-types.mjs";
+import * as layerfs from "../../src/index.js";
+import { families, table } from "../../src/index.js";
+import { render } from "../../../scripts/node-types.mjs";
 
 const here = (path) => fileURLToPath(new URL(path, import.meta.url));
-const manifest = JSON.parse(readFileSync(here("../package.json"), "utf8"));
+const manifest = JSON.parse(readFileSync(here("../../package.json"), "utf8"));
 
 test("the licence is the repository's MIT, shipped with the package", () => {
-  const licence = readFileSync(here("../LICENSE"), "utf8");
-  assert.equal(licence, readFileSync(here("../../../LICENSE"), "utf8"), "the package LICENSE is the repository's");
+  const licence = readFileSync(here("../../LICENSE"), "utf8");
+  assert.equal(licence, readFileSync(here("../../../../LICENSE"), "utf8"), "the package LICENSE is the repository's");
   assert.match(licence, /^MIT License/);
   assert.equal(manifest.license, "MIT");
   assert.ok(manifest.files.includes("LICENSE"));
@@ -35,13 +35,13 @@ test("the package names its repository, platform and npm page", () => {
 });
 
 test("index.d.ts is exactly what the call table generates", () => {
-  assert.equal(readFileSync(here("../src/index.d.ts"), "utf8"), render(table), "run node api/scripts/node-types.mjs");
+  assert.equal(readFileSync(here("../../src/index.d.ts"), "utf8"), render(table), "run node api/scripts/node-types.mjs");
   assert.equal(manifest.types, "./src/index.d.ts");
   assert.equal(manifest.exports["."].types, "./src/index.d.ts");
 });
 
 test("every family is a named export, as the typings declare it", () => {
-  const types = readFileSync(here("../src/index.d.ts"), "utf8");
+  const types = readFileSync(here("../../src/index.d.ts"), "utf8");
   for (const family of families) {
     assert.equal(layerfs[family], layerfs.default[family], `${family} is a named export`);
     assert.equal(typeof layerfs[family]?.[table.find((c) => c.family === family).call], "function", family);
@@ -50,7 +50,7 @@ test("every family is a named export, as the typings declare it", () => {
 });
 
 test("every call, argument and option of the table is in the typings", () => {
-  const types = readFileSync(here("../src/index.d.ts"), "utf8");
+  const types = readFileSync(here("../../src/index.d.ts"), "utf8");
   const pascal = (word) => word.replace(/(^|_)([a-z])/g, (_, __, letter) => letter.toUpperCase());
   // the annotation each table kind is written as; a call's own options
   // interface must name its options with exactly these (#691: `branch.publish`
@@ -96,12 +96,12 @@ test("every call, argument and option of the table is in the typings", () => {
 
 test("the package ships its source, typings, addon and licence, and requires Node 22", () => {
   assert.equal(manifest.engines.node, ">=22");
-  const pack = spawnSync("npm", ["pack", "--dry-run", "--json", "--ignore-scripts"], { cwd: here(".."), encoding: "utf8", timeout: 60_000 });
+  const pack = spawnSync("npm", ["pack", "--dry-run", "--json", "--ignore-scripts"], { cwd: here("../.."), encoding: "utf8", timeout: 60_000 });
   assert.equal(pack.status, 0, pack.stderr);
   const files = JSON.parse(pack.stdout)[0].files.map((file) => file.path).sort();
   // `--ignore-scripts` keeps this runnable before the addon is built; when it
   // is built, the tarball must carry it, and nothing else may appear.
   const expected = ["LICENSE", "README.md", "package.json", "src/errors.js", "src/index.d.ts", "src/index.js", "src/native.js", "src/values.js"];
-  if (existsSync(here("../layerfs.node"))) expected.push("layerfs.node");
+  if (existsSync(here("../../layerfs.node"))) expected.push("layerfs.node");
   assert.deepEqual(files, expected.sort(), `the tarball is exactly ${expected.join(", ")}`);
 });

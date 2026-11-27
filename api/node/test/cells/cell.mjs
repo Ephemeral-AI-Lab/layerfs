@@ -33,7 +33,7 @@ import { mkdtempSync, chmodSync, readFileSync, rmSync, writeFileSync } from "nod
 import { loadavg, tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
-import { client } from "../../../src/index.js";
+import { client } from "../../src/index.js";
 import { CF, IDENTITY, command, parseIdentity, parseTimed, timedLine, verifier, sha256 } from "./workloads.mjs";
 
 const hostMachine = process.platform === "darwin" ? "macos-host" : "linux-host";
@@ -100,7 +100,7 @@ const kindOf = (value) => value?.kind ?? value?.outcome ?? null;
 
 try {
   if (process.env.LFS533_DAEMON) {
-    const binary = process.env.LFS533_LAYERFS ?? new URL("../../../../../target/debug/layerfs", import.meta.url).pathname;
+    const binary = process.env.LFS533_LAYERFS ?? new URL("../../../../target/debug/layerfs", import.meta.url).pathname;
     await step("machine.update", async () =>
       execFileSync(binary, ["machine", "update", hostMachine, "--daemon", process.env.LFS533_DAEMON], {
         env: { PATH: process.env.PATH, HOME: process.env.HOME, LAYERFS_HOME: home },

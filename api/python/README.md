@@ -73,7 +73,7 @@ perl -e 'alarm 100; exec @ARGV' python3 -m unittest discover -s api/python/test
 `layerfs` command, which `api/node/test/contract/shell.test.mjs` compares with Node. The
 temp homes need a filesystem with SQLite locks (ext4, xfs, btrfs; not
 tmpfs): point `TMPDIR` at one. `test_stubs.py` runs `mypy --strict` over
-`test/typed_samples` when mypy is installed.
+`test/stubs` when mypy is installed.
 
 The test command runs under a wall limit of at most 120 s (here 100 s;
 macOS has no `timeout`, so `perl`'s `alarm` ends it).

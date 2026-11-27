@@ -23,7 +23,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-HERE = Path(__file__).resolve().parent
+HERE = Path(__file__).resolve().parents[1]  # api/python/test
 sys.path.insert(0, str(HERE.parent / "src"))
 
 HAS_NATIVE = importlib.machinery.PathFinder.find_spec("layerfs._native", [str(HERE.parent / "src/layerfs")]) is not None

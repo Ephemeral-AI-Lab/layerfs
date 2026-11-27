@@ -5,9 +5,9 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, readdirSync, rmSyn
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { createServer } from "node:net";
-import { client, table } from "../src/index.js";
+import { client, table } from "../../src/index.js";
 const hostMachine = process.platform === "darwin" ? "macos-host" : "linux-host";
-const fixture = readFileSync(new URL("../../test/disabled-platforms.json", import.meta.url), "utf8");
+const fixture = readFileSync(new URL("../../../crates/layerfs-api/tests/support/disabled-platforms.json", import.meta.url), "utf8");
 function snapshot(root, dir = root) {
   return readdirSync(dir, { withFileTypes: true }).sort((a,b) => a.name.localeCompare(b.name)).flatMap(e => {
     const path = join(dir, e.name);

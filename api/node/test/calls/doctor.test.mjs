@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, mkdirSync, writeFileSync, chmodSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import layerfs, { table, LayerFSError } from "../src/index.js";
+import layerfs, { table, LayerFSError } from "../../src/index.js";
 
 test("home.doctor reports a home without making it, as a table call", async () => {
   const names = table.filter((spec) => spec.call === "doctor").map((spec) => `${spec.family}.${spec.call}`);
