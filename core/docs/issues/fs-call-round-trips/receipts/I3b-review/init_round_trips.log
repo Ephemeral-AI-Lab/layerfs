@@ -1,0 +1,13 @@
+   Compiling layerfs-persistence v2.0.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/.claude/worktrees/agent-a94dd2e4813bcb1a9/engine/crates/layerfs-persistence)
+   Compiling layerfs-project v2.0.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/.claude/worktrees/agent-a94dd2e4813bcb1a9/engine/crates/layerfs-project)
+   Compiling layerfs-store-service v2.0.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/.claude/worktrees/agent-a94dd2e4813bcb1a9/engine/crates/layerfs-store-service)
+    Finished `test` profile [optimized + debuginfo] target(s) in 3.25s
+     Running tests/init_round_trips.rs (target/debug/deps/init_round_trips-5911cc4a3d18ecc5)
+
+running 2 tests
+test sqlite_init_counts ... ok
+test postgresql_init_counts ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.97s
+
+run_bounded: exit 0 after 6.9 s

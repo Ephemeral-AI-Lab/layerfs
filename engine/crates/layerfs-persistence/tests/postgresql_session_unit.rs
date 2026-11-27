@@ -278,6 +278,71 @@ fn unit_commits_rolls_back_and_guards() {
     assert_eq!(after.write_commits, before.write_commits);
     assert_eq!(barrier_keys(&schema), 0);
 
+    // After a refused flight rolled the unit back, a further flight of the
+    // turn is refused with nothing sent: it would run outside the unit.
+    let before = work(&handles);
+    let after_rollback = postgresql_unit(&handles, |turn| {
+        let prepared = turn.prepare(&[&texts.insert])?;
+        let begin = turn.begin.clone();
+        let insert = |k: &'static i64| Request::Statement {
+            sql: &texts.insert,
+            params: match *k {
+                9 => &[&9_i64, &10_i64],
+                _ => &[&10_i64, &10_i64],
+            },
+            bytes: 16,
+        };
+        let (nine, ten) = (insert(&9), insert(&10));
+        let (replies, trusted) =
+            turn.send(&prepared, &[Request::Simple(&begin), insert(&9)], true)?;
+        assert!(trusted && replies.iter().all(Result::is_ok));
+        let (replies, trusted) = turn.send(&prepared, &[nine], true)?;
+        assert!(
+            trusted && replies.iter().any(Result::is_err),
+            "duplicate key"
+        );
+        turn.count(false);
+        Ok(turn.send(&prepared, &[ten], false).err())
+    });
+    let after = work(&handles);
+    assert_eq!(after_rollback, Ok(Some(BackendError::Integrity)));
+    assert_eq!(rows(&schema).len(), 4, "the unit was rolled back");
+    assert_eq!(
+        after.round_trips - before.round_trips,
+        3,
+        "2 flights + rollback"
+    );
+    assert_eq!(after.statements - before.statements, 3);
+    assert_eq!(after.rollbacks - before.rollbacks, 1);
+    assert_eq!(barrier_keys(&schema), 0);
+
+    // A first flight that sends nothing (its statement cannot be encoded)
+    // began no transaction and took no barrier: no ROLLBACK goes out, and
+    // the unit sends nothing more.
+    let before = work(&handles);
+    let unsent = postgresql_unit(&handles, |turn| {
+        let prepared = turn.prepare(&[&texts.insert])?;
+        let (replies, trusted) = turn.send(
+            &prepared,
+            &[Request::Statement {
+                sql: &texts.insert,
+                params: &[&"not an int8", &10_i64],
+                bytes: 16,
+            }],
+            true,
+        )?;
+        assert!(trusted && replies.iter().all(Result::is_err), "unsent");
+        let begin = turn.begin.clone();
+        Ok(turn.send(&prepared, &[Request::Simple(&begin)], true).err())
+    });
+    let after = work(&handles);
+    assert_eq!(unsent, Ok(Some(BackendError::Integrity)));
+    assert_eq!(after.round_trips, before.round_trips, "nothing sent");
+    assert_eq!(after.statements, before.statements);
+    assert_eq!(after.rollbacks, before.rollbacks);
+    assert_eq!(rows(&schema).len(), 4);
+    assert_eq!(barrier_keys(&schema), 0);
+
     // The session is usable after both.
     let answer = postgresql_unit(&handles, |turn| unit(turn, &texts, 7, 8));
     assert_eq!(answer, Ok(5));

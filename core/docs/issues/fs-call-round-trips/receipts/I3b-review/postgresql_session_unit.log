@@ -1,0 +1,12 @@
+   Compiling layerfs-persistence v2.0.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/.claude/worktrees/agent-a94dd2e4813bcb1a9/engine/crates/layerfs-persistence)
+    Finished `test` profile [optimized + debuginfo] target(s) in 2.69s
+     Running tests/postgresql_session_unit.rs (target/debug/deps/postgresql_session_unit-23af6df66964ddb8)
+
+running 3 tests
+test unit_commits_rolls_back_and_guards ... ok
+test unit_drop_at_every_message ... ok
+test unit_kill_at_every_message ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.26s
+
+run_bounded: exit 0 after 6.6 s

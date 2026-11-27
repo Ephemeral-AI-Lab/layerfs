@@ -180,13 +180,18 @@ the last flight ends with the unit's own `COMMIT`. The flights are counted
 as ordinary flights; the caller counts the unit's one transaction
 (`count_unit`). One attempt: a lost reply quarantines the session, and
 nothing is resent. A refused or unsent request is followed by `ROLLBACK`
-and the leftover barrier release in one more round trip. A turn that ends
+and the leftover barrier release in one more round trip. The exception is a
+first flight that sent nothing: it began no transaction and took no
+barrier, so nothing more is sent. After a failed flight, a further
+`send_in_unit` in the turn is refused as `Integrity` with nothing sent,
+because it would run outside the closed transaction. A turn that ends
 with the unit still open rolls it back the same way and counts it as rolled
 back; it never commits. A panic between the unit's flights closes the
 connection instead. While a unit is open, the turn's ordinary `send`, a
 second `prepare_unit` and a call inside the thread's held lane are refused
 as `Integrity`. `postgresql_session_unit.rs` covers a committed unit, a
-refused unit, the guards, and drop and kill sweeps at every message of a
+refused unit, the guards (including a flight after a rollback and a first
+flight that sent nothing), and drop and kill sweeps at every message of a
 two-flight unit: the rows are either the committed result or untouched. No
 product path opens a unit yet.
 
