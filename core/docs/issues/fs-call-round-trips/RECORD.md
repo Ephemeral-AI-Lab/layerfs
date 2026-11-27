@@ -545,3 +545,61 @@ cache, launcher records) were left alone.
   `docs/architecture/engine/store/postgresql.md` resolved keeping both lanes'
   Statement-mode uses. Init pins, write pins and equivalence green on the tip
   (`receipts/M3/merge-WI-*.log`).
+- Lane RH `bd564456cf` H4 + `55f5d4fedc` M2 review fixes → merge `f10b477d40`,
+  Production LOC 230,428 -> 230,600 (+172). History/read pins, equivalence and
+  `method_refusal_order` green on the tip (`receipts/M3/merge-RH-*.log`).
+  - H4 (PG warm, cold): blame.h100 254 → 59 (491 → 296), blame.h10 33 → 16,
+    revision.h100 253 → 72 (11% over the ~55–65 range: `fs.revision` reads a
+    serial only where the path exists, so the window saves less; diagnosed,
+    recorded), revision.h10 cold 82 → 66. SQLite unchanged. Sweep
+    `lineage_chain_window` 492 messages drop + kill.
+  - Review fixes: Branch-name memo ≤ 1,024; one `Cached` for diff_files with
+    attribution; `DirectoryMemo` bounded when full; corrupt-Store refusal order
+    restored (a corrupt recorded Branch costs one extra read, corrupt Store only).
+  - **Residual fault-only order difference (R5), for the owner:** a failure of
+    the context statement itself refuses before an invalid `path` argument
+    refusal. (Before R5 this already held when the fault hit the project read;
+    only a fault exactly on the old marker read refused after `path`.) Removing
+    it needs a second statement per read or checking `path` first, which would
+    reorder healthy `NoSuchProject`/`NoSuchBranch` vs `InvalidInput`; neither done.
+  - Ownership of persistence `history/catalog.rs` and
+    `sql/postgresql/queries/history/` passed to lane W at this merge.
+- **H5/H6 refusal-order blocker and decision (orchestrator).**
+  `AuthenticatedObjects::read_canonical_batch` returns one result per demand, so
+  a damaged object in any version of a batched window fails the whole window,
+  including versions past where today's blame/revision walk stops (and blame's
+  batched text fetch / diff_files' two-sided planning likewise): a corrupt-Store
+  order change. Options: (1) per-object read results, an additive read-port
+  method with a default; (2) accept the corruption-only order change (owner);
+  (3) bounded windows for revision only (partial). **Taken: (1)** — no answer,
+  order, format or custody change; additive core method per SPEC §5.
+  - RH `2a9a328930`: `AuthenticatedObjects::read_canonical_each` +
+    `reads_each_at_once()` (default false; one-by-one default, no re-read).
+    LOC +6 (layerfs-content). The batched read lives in core storage's shared
+    read path (`layerfs-storage` `read/objects.rs`, `fetch.rs`, `prefetch.rs`,
+    `length.rs`, `encoding/pack_cache.rs`, `encoding/pool/read.rs`; both
+    engines), not in lane W's PG provider. Exact per-object errors there are a
+    sizeable refactor: new **lane S** (orchestrator decision) implements it in
+    parallel; RH builds the H5/H6 wiring on the port, gated on
+    `reads_each_at_once()`, with a test-only reader to force batching for the
+    corruption-order tests.
+  - Lane S constraints (parent session): SPEC §5 core rules — additive only
+    (existing read paths and signatures unchanged), no format change, SQLite
+    statement pins unchanged unless a listed pure dedupe, memory bounded by the
+    existing `ReadCache`/`KeptReads` limits, one attempt. Lane S's added core
+    files and LOC go into RECORD and the layout listing; its diff is part of the
+    M3 independent review.
+- Lane I `fc914d59e0` I3b part A on lane W's session capability: `put_entries`
+  and `place_children` as one transaction over several flights of one writer
+  turn (new `acquisition/unit.rs`); waits = the D17 dependency check (kept, same
+  order) and a dependent row's `BIND_HOST_FILE`. **Init 10k: nested 215, flat
+  247 PG trips (≤ 250 target met;** baseline 10,955 / 31,039). 1k nested 99, flat
+  106; hardlink_window 298; wide_hardlinks 709. SQLite unchanged. First
+  measurement 218 / 251 vs predicted ~213 / ~243 (16–20% smaller reductions):
+  diagnosed once (the old generation fence rides in the BEGIN batch, not its own
+  trip); then a revised prediction for a shared prepare (the first unit prepares
+  every acquisition write text) ~215 / ~247, measured exactly. **Note:** that
+  shared prepare is close to I3d (not taken, D13) but runs only when Init runs,
+  not at every Store open, so D13's per-open trip does not apply; recorded.
+  Sweeps: `postgresql_acquisition_units` 156 + 156; placement 72 + 72; flights
+  251 + 251. Production LOC +375 (layerfs-persistence).
