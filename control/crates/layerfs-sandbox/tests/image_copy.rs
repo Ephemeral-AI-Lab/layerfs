@@ -19,7 +19,9 @@ use layerfs_sandbox_backend::{rootfs, Image};
 use standin::Standin;
 use std::fs;
 use std::io::Read;
+use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
+use std::time::{Duration, Instant};
 
 const ID: &str = "sha256:1111111111111111111111111111111111111111111111111111111111111111";
 const HEX: &str = "1111111111111111111111111111111111111111111111111111111111111111";
@@ -543,6 +545,67 @@ fn prune_refuses_an_image_in_use_and_keeps_the_default() {
         out.get("removed"),
         Some(&SdkValue::List(vec![SdkValue::text(ID)]))
     );
+}
+
+/// `prune --unused` decides an image is unused under that image's lock, not
+/// from the specs it read before it started: a create that takes its shared
+/// hold and writes its spec while prune is still removing an earlier image
+/// keeps the image it names.
+#[test]
+fn an_unused_prune_keeps_an_image_a_create_named_while_it_ran() {
+    let (_scratch, standin, root) = setup("copy-prune-late-spec");
+    run(&standin, &root, "demo/pg:17").0.unwrap();
+    let second = "sha256:3333333333333333333333333333333333333333333333333333333333333333";
+    standin.image(second, &["demo/b:1"], ("linux", architecture()), 10);
+    run(&standin, &root, "demo/b:1").0.unwrap();
+    let dir = cache::cache(&root);
+    let first_dir = dir.join(format!("{HEX}.2"));
+    let second_dir = dir.join("3333333333333333333333333333333333333333333333333333333333333333.2");
+    // the first image's removal takes long enough for a create to run;
+    // removal starts by making the directory 0700
+    let bulk = first_dir.join("usr/share/bulk");
+    fs::create_dir_all(&bulk).unwrap();
+    for i in 0..20_000 {
+        fs::write(bulk.join(format!("f{i}")), b"x").unwrap();
+    }
+    fs::set_permissions(&first_dir, fs::Permissions::from_mode(0o755)).unwrap();
+    let mode = |p: &Path| fs::metadata(p).ok().map(|m| m.permissions().mode() & 0o777);
+    let tar = root.join("flat.tar");
+    fs::write(&tar, filtered(&export())).unwrap();
+    let image = Image::parse(second).unwrap();
+    let create = {
+        let (first_dir, second_dir, dir) = (first_dir.clone(), second_dir.clone(), dir.clone());
+        std::thread::spawn(move || {
+            let start = Instant::now();
+            while mode(&first_dir) == Some(0o755) {
+                assert!(
+                    start.elapsed() < Duration::from_secs(20),
+                    "prune never started"
+                );
+            }
+            assert!(
+                first_dir.exists(),
+                "the first image was gone before the create ran"
+            );
+            // a create's order: shared hold, spec, release
+            let (_, hold) = rootfs::ensure_held(&tar, &image, &dir).unwrap();
+            let sandbox = dir.parent().unwrap().join("lfs-test-sb2/config");
+            fs::create_dir_all(&sandbox).unwrap();
+            fs::write(
+                sandbox.join("helper.spec"),
+                format!("root=/x\nlower={}\n", second_dir.display()),
+            )
+            .unwrap();
+            drop(hold);
+        })
+    };
+    let out = prune(&root, None, true, None).unwrap();
+    create.join().unwrap();
+    assert_eq!(
+        out.get("removed"),
+        Some(&SdkValue::List(vec![SdkValue::text(ID)]))
+    );
+    assert!(second_dir.is_dir());
 }
 
 /// v19: `machine.capacity`'s `reclaimable_image_bytes` is what `machine
