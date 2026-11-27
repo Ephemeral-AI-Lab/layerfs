@@ -5,8 +5,7 @@ mod drain;
 mod first_call;
 #[path = "../support/host_worker.rs"]
 mod fixture;
-mod idle_ping;
-mod idle_queue;
+mod idle;
 mod machine_stop;
 mod maintenance;
 mod peer;

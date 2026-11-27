@@ -652,3 +652,4 @@ control/crates/layerfs-store/tests/restore_install.rs,test,
 control/crates/layerfs-store/tests/restored_records.rs,test,
 control/crates/layerfs-store/tests/store_ops.rs,test,
 control/crates/layerfs-store/tests/store_steps.rs,test,
+control/crates/layerfs-machine/src/worker/host/start.rs,prod,150

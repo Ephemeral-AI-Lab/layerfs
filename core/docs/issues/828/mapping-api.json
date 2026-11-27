@@ -2363,15 +2363,15 @@
   },
   {
    "old": "api/crates/layerfs-cli/tests/host_worker_idle_ping.rs",
-   "new": "api/crates/layerfs-cli/tests/host_worker/idle_ping.rs",
-   "change": "rename",
-   "note": "test added at #818/#835"
+   "new": "api/crates/layerfs-cli/tests/host_worker/idle.rs",
+   "change": "merge",
+   "note": "test added at #818/#835; joined into idle.rs when #837's first_call.rs took the folder to 13 files"
   },
   {
    "old": "api/crates/layerfs-cli/tests/host_worker_idle_queue.rs",
-   "new": "api/crates/layerfs-cli/tests/host_worker/idle_queue.rs",
-   "change": "rename",
-   "note": "test added at #818/#835"
+   "new": "api/crates/layerfs-cli/tests/host_worker/idle.rs",
+   "change": "merge",
+   "note": "test added at #818/#835; joined into idle.rs when #837's first_call.rs took the folder to 13 files"
   },
   {
    "old": "api/crates/layerfs-cli/tests/host_worker_load.rs",

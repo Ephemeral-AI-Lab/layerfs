@@ -329,6 +329,13 @@ folder small enough to read at a glance, named for what its code does.
     request. Only `cargo check` runs while restructuring. Full checks run
     once at the end; the nightly FUSE and mount tests are reported as a gap.
     The fan-out uses background subagents. See `restructure-plan.md`.
+- Store backup providers (owner, 2026-11-27, during implementation): keep
+  one folder per provider: `local_folder/` (`driver.rs`), and `r2/` and
+  `s3/` (`settings.rs`, `url.rs`). This is an accepted exception to the
+  3-file minimum. Auth is shared today (`bucket/auth.rs`,
+  `s3_api/sign.rs`), so the planned `bucket/provider.rs`, per-provider
+  `auth.rs`/`checks.rs` and local-folder `url.rs`/`settings.rs` are not
+  built; they arrive with the provider feature.
 - Still open: construction `reference/` and `reference_index/` names
   (reference-count effects; "reference" also means overlay reference pieces).
 

@@ -1560,3 +1560,4 @@ engine/crates/layerfs-workspace/tests/read_ahead.rs,test,
 engine/crates/layerfs-workspace/tests/recognize.rs,test,
 engine/crates/layerfs-workspace/tests/shared_cache_client.rs,test,
 engine/crates/layerfs-workspace/tests/sibling_lengths.rs,test,
+engine/crates/layerfs-bridge/src/process/inherit.rs,prod,60

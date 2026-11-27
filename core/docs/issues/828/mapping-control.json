@@ -52,6 +52,10 @@
   {
    "folder": "control/crates/layerfs-store/src/data/file",
    "reason": "rule 1 file family: one file per call, no count limit (14 calls + requests.rs)"
+  },
+  {
+   "folder": "control/crates/layerfs-store/src/backup/providers/",
+   "reason": "owner 2026-11-27: keep one folder per provider (local_folder/ driver.rs; r2/ and s3/ settings.rs + url.rs) although each holds fewer than 3 files; they hold only what differs per provider today (auth is shared: bucket/auth.rs, s3_api/sign.rs); the Provider trait and per-provider auth arrive with the provider feature"
   }
  ],
  "rows": [
