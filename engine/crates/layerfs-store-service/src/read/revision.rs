@@ -3,6 +3,7 @@ use super::{
     file_facts, query,
     revision_pages::{self, Boundary, Key},
     snapshot,
+    versions::{Batching, Versions},
     visibility::Visibility,
 };
 use crate::history::{lookup as args, rows::Rows};
@@ -41,6 +42,8 @@ pub struct Request<'a> {
     pub branch: &'a str,
     pub continuation: Option<&'a str>,
     pub stack: LayerStackId,
+    /// Whether the walk looks its versions up in windows (#818 H5).
+    pub batching: Batching,
 }
 
 /// A complete page or Capacity: never advance past unreturned matches.
@@ -63,6 +66,7 @@ pub fn list(
         branch,
         continuation,
         stack,
+        batching,
     } = request;
     let provenance = match traversal {
         "provenance" => true,
@@ -76,6 +80,7 @@ pub fn list(
     // Every node's objects go through the call's caches and directory memo
     // (#818 H3).
     let reader = &super::cached::Cached::new(reader)?;
+    let mut lookups = Versions::new(store, reader, path, batching);
     let anchor = rows.record(start)?.clone();
     // The walk's Commits in windows where the Store batches reads (#818 H4).
     rows.walk(query::MAXIMUM_QUERY_WORK as usize + 1);
@@ -153,7 +158,10 @@ pub fn list(
         let previous = parent(&mut rows, node, provenance)?;
         let (now, serial) = match carried.take() {
             Some((held, found, serial)) if held == node => (found, serial),
-            _ => (reader.entry(rows.record(node)?.root(), path)?, None),
+            _ => {
+                let root = rows.record(node)?.root();
+                (lookups.entry(&rows, node, root)?, None)
+            }
         };
         // A node the marker hides is never a returned version: the walk stops
         // at the first one rather than listing it or walking past it.
@@ -169,7 +177,8 @@ pub fn list(
         let mut hidden_before = false;
         let before = previous
             .map(|p| {
-                let found = reader.entry(rows.walked(p)?.root(), path)?;
+                let root = rows.walked(p)?.root();
+                let found = lookups.entry(&rows, p, root)?;
                 let serial = found.map(|_| rows.serial(p)).transpose()?;
                 carried = Some((p, found, serial));
                 if serial.is_some_and(|serial| visibility.hidden_at(path, serial).is_some()) {

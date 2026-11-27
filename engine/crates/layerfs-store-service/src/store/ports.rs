@@ -60,6 +60,23 @@ impl PortError {
         ContentError::ProviderFailure { what }
     }
 }
+impl PortError {
+    /// Whether this failure is the requested object's own (#818 H5): it is
+    /// missing, or its stored bytes do not authenticate or decode. Anything
+    /// else (the session, admission, transport, a bound) fails the demand.
+    pub fn object_owned(&self) -> bool {
+        matches!(
+            self,
+            Self::Storage(
+                StorageError::ObjectMissing(_)
+                    | StorageError::Content(_)
+                    | StorageError::Integrity(_)
+                    | StorageError::Unpublished(_)
+                    | StorageError::VisibilityCeiling { .. }
+            )
+        )
+    }
+}
 impl std::error::Error for PortError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
@@ -70,6 +87,8 @@ impl std::error::Error for PortError {
         }
     }
 }
+/// One object's read in a per-object demand: its bytes or its own failure.
+pub type ObjectRead = Result<Vec<u8>, Arc<PortError>>;
 /// Fresh demand custody for one operation, never stored in the immutable cache.
 pub struct StorePorts {
     store: Arc<Store>,
@@ -154,6 +173,15 @@ impl StorePorts {
         &self,
         call: impl FnOnce() -> Result<T, Arc<PortError>>,
     ) -> Result<T, Arc<PortError>> {
+        self.attempt_keeping(call, |_| true)
+    }
+    /// [`Self::attempt`], retaining as this operation's failure only the
+    /// failures `retain` names.
+    fn attempt_keeping<T>(
+        &self,
+        call: impl FnOnce() -> Result<T, Arc<PortError>>,
+        retain: impl FnOnce(&PortError) -> bool,
+    ) -> Result<T, Arc<PortError>> {
         self.attempting
             .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
             .map_err(|_| Arc::new(PortError::ConcurrentDemand))?;
@@ -162,6 +190,9 @@ impl StorePorts {
             return Err(error);
         }
         call().inspect_err(|error| {
+            if !retain(error) {
+                return;
+            }
             // Retain this original failure even if an earlier observer poisoned
             // the mutex. Subsequent access still reports the poison explicitly.
             let mut first = self
@@ -205,6 +236,40 @@ impl StorePorts {
         ids: &[ObjectId],
     ) -> Result<Vec<Vec<u8>>, Arc<PortError>> {
         self.attempt(|| self.reader()?.objects_with(cache, ids))
+    }
+    /// Each object's own result, in request order (#818 H5): an object's
+    /// own failure ([`PortError::object_owned`]) is returned for it and is
+    /// not retained as this operation's failure, so the other objects and
+    /// the operation's later demands go on; any other failure fails the
+    /// call and is retained, as [`Self::objects_with`] retains it. The
+    /// objects are read one by one, each a point demand, until the storage
+    /// reader serves such a demand at once (`Storage::read_each_with`).
+    pub fn objects_each_with(
+        &self,
+        cache: &mut layerfs_storage::ReadCache,
+        ids: &[ObjectId],
+    ) -> Result<Vec<ObjectRead>, Arc<PortError>> {
+        let mut each = Vec::with_capacity(ids.len());
+        for id in ids {
+            let read = self.attempt_keeping(
+                || self.reader()?.objects_with(cache, std::slice::from_ref(id)),
+                |error| !error.object_owned(),
+            );
+            each.push(match read {
+                Ok(mut bytes) if bytes.len() == 1 => Ok(bytes.pop().unwrap_or_default()),
+                Ok(_) => Err(Arc::new(PortError::Storage(StorageError::Integrity(
+                    "object demand cardinality",
+                )))),
+                Err(error) if error.object_owned() => Err(error),
+                Err(error) => return Err(error),
+            });
+        }
+        Ok(each)
+    }
+    /// Whether [`Self::objects_each_with`] reads its objects in one demand:
+    /// not until the storage reader does.
+    pub fn reads_each_at_once(&self) -> bool {
+        false
     }
     /// [`Self::file_lengths`] through the same caller-kept caches (#818 R4).
     pub fn lengths_with(

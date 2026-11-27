@@ -6,80 +6,42 @@ use crate::history::lookup as args;
 use crate::store::{PortError, StorePorts};
 use layerfs_bridge::control::SdkRefusal;
 use layerfs_content::{
-    compare::{EntryFacts, TreeTable},
+    compare::{DirectoryMemo, EntryFacts, TreeTable},
     file::{mapping::FILE_STATE_CANONICAL_BYTES, FileView},
     filesystem::{
         directory::read::lookup, path::PathName, sorted::DirectoryRoot, FilesystemRootId,
     },
     object::inode_leaf::InodeKind,
     policy::WHOLE_FILE_CANONICAL_OVERHEAD,
-    AuthenticatedObjects, ContentResult, ObjectId,
+    AuthenticatedObjects, ContentError, ContentResult, ObjectId,
 };
 use layerfs_storage::ReadCache;
-use std::{cell::RefCell, collections::HashMap, sync::Arc};
+use std::{
+    cell::{RefCell, RefMut},
+    collections::HashMap,
+    sync::Arc,
+};
 
 /// The caches are made at the call's first demand, not with the call: a
 /// failure to make them is that demand's failure, so it refuses where a
 /// demand's failure always did, never ahead of a lookup refusal (#818 R3
 /// review).
+///
+/// An object a per-object read ([`AuthenticatedObjects::read_canonical_each`])
+/// found missing, mismatched or undecodable keeps its error for the call
+/// (#818 H5): a later demand that names it gets that error back and the
+/// object is never read again, so a window read ahead of a walk refuses only
+/// where the walk reaches the object, and no failed read is attempted twice.
 pub struct Cached<'a> {
     ports: &'a StorePorts,
     cache: RefCell<Option<ReadCache>>,
     directories: RefCell<DirectoryMemo>,
+    failed: RefCell<HashMap<ObjectId, ContentError>>,
 }
 
-/// Names a call has bound in saved directories, by the directory's root
-/// (#818 H3). A directory root's contents never change, so an equal root
-/// binds a name to the same serial in every version that holds it. The shape
-/// is lane C's `DirectoryMemo` (`layerfs_content::compare::across`), which
-/// replaces it once that lands: `get` answers unknown (`None`), known unbound
-/// (`Some(None)`) or bound; `insert` keeps nothing more once full.
-pub struct DirectoryMemo {
-    entries: HashMap<ObjectId, HashMap<PathName, Option<u64>>>,
-    len: usize,
-    capacity: usize,
-}
-
-impl DirectoryMemo {
-    /// Names a history call keeps at most.
-    pub const CAPACITY: usize = 4_096;
-
-    /// An empty memo keeping at most `capacity` names (0 keeps none).
-    pub fn new(capacity: usize) -> Self {
-        Self {
-            entries: HashMap::new(),
-            len: 0,
-            capacity,
-        }
-    }
-
-    /// The binding of `name` in `directory`, when known.
-    pub fn get(&self, directory: DirectoryRoot, name: &PathName) -> Option<Option<u64>> {
-        self.entries.get(&directory.0)?.get(name).copied()
-    }
-
-    /// Keeps a binding; `false` when the memo is full.
-    pub fn insert(
-        &mut self,
-        directory: DirectoryRoot,
-        name: PathName,
-        binding: Option<u64>,
-    ) -> bool {
-        if self.len >= self.capacity {
-            return false;
-        }
-        if self
-            .entries
-            .entry(directory.0)
-            .or_default()
-            .insert(name, binding)
-            .is_none()
-        {
-            self.len += 1;
-        }
-        true
-    }
-}
+/// Names a history call's directory memo keeps at most (#818 H3): lane C's
+/// [`DirectoryMemo`], shared by a call's lone walks and its version windows.
+pub const MEMO: usize = 4_096;
 
 impl<'a> Cached<'a> {
     /// The call's caches over `ports`. Nothing is made yet, so this does
@@ -88,8 +50,24 @@ impl<'a> Cached<'a> {
         Ok(Self {
             ports,
             cache: RefCell::new(None),
-            directories: RefCell::new(DirectoryMemo::new(DirectoryMemo::CAPACITY)),
+            directories: RefCell::new(DirectoryMemo::new(MEMO)),
+            failed: RefCell::new(HashMap::new()),
         })
+    }
+
+    /// The call's directory memo, for a window of versions (#818 H5).
+    pub fn memo(&self) -> RefMut<'_, DirectoryMemo> {
+        self.directories.borrow_mut()
+    }
+
+    /// The recorded failure of the first of `ids` a per-object read found
+    /// failed, in request order.
+    fn recorded(&self, ids: &[ObjectId]) -> Option<ContentError> {
+        let failed = self.failed.borrow();
+        if failed.is_empty() {
+            return None;
+        }
+        ids.iter().find_map(|id| failed.get(id).cloned())
     }
 
     /// The entry at a checked absolute `path` of the saved tree `root`,
@@ -226,7 +204,52 @@ pub fn batches(lengths: &[u64]) -> Vec<std::ops::Range<usize>> {
 
 impl AuthenticatedObjects for Cached<'_> {
     fn read_canonical_batch(&self, ids: &[ObjectId]) -> ContentResult<Vec<Vec<u8>>> {
+        if let Some(error) = self.recorded(ids) {
+            return Err(error);
+        }
         self.with(|cache| self.ports.objects_with(cache, ids))
             .map_err(|error| error.object_demand())
+    }
+
+    /// Each object's own result (#818 H5), through the call's caches: an
+    /// object's own failure is recorded and returned for it; a failure of the
+    /// demand itself (the session, the transport) fails the call. An object
+    /// recorded failed is not read again.
+    fn read_canonical_each(&self, ids: &[ObjectId]) -> ContentResult<Vec<ContentResult<Vec<u8>>>> {
+        let wanted: Vec<ObjectId> = {
+            let failed = self.failed.borrow();
+            ids.iter()
+                .filter(|id| !failed.contains_key(id))
+                .copied()
+                .collect()
+        };
+        let mut read = self
+            .with(|cache| self.ports.objects_each_with(cache, &wanted))
+            .map_err(|error| error.object_demand())?
+            .into_iter();
+        let mut each = Vec::with_capacity(ids.len());
+        for id in ids {
+            if let Some(error) = self.recorded(std::slice::from_ref(id)) {
+                each.push(Err(error));
+                continue;
+            }
+            let found = read
+                .next()
+                .ok_or(ContentError::BatchCardinality {
+                    requested: wanted.len(),
+                    returned: each.len(),
+                })?
+                .map_err(|error| {
+                    let error = error.object_demand();
+                    self.failed.borrow_mut().insert(*id, error.clone());
+                    error
+                });
+            each.push(found);
+        }
+        Ok(each)
+    }
+
+    fn reads_each_at_once(&self) -> bool {
+        self.ports.reads_each_at_once()
     }
 }

@@ -24,6 +24,7 @@ pub fn revision(service: &StoreService, args: &SdkValue) -> Answer {
             branch,
             continuation: args.get_text("continuation"),
             stack: stack.id,
+            batching: crate::read::versions::Batching::Provider,
         },
     )
 }

@@ -6,6 +6,7 @@
 use super::{
     cached::Cached,
     snapshot::{self, Snap},
+    versions::{Batching, Versions},
     visibility::Visibility,
     window,
 };
@@ -164,7 +165,9 @@ fn owners(
 /// from the row held when the owner was assigned; and each version's text
 /// is read once, carried from the older side of one comparison to the newer
 /// side of the next. `reader` is the call's caches, which every version's
-/// objects go through, with its directory memo (#818 H3).
+/// objects go through, with its directory memo (#818 H3). Each older
+/// version's path is looked up through [`Versions`], in windows where
+/// `batching` reads them so (#818 H5).
 #[allow(clippy::too_many_arguments)]
 pub fn blame(
     rows: &mut Rows<'_>,
@@ -174,7 +177,9 @@ pub fn blame(
     visibility: &Visibility,
     window: Window,
     limits: &mut Limits,
+    batching: Batching,
 ) -> Answer {
+    let mut lookups = Versions::new(rows.store(), reader, path, batching);
     let tip = snapshot::existing(reader, snap, path)?;
     if let Some(frontier) = visibility.hidden(path) {
         return Err(Visibility::refusal(path, frontier));
@@ -258,8 +263,9 @@ pub fn blame(
         // attributes the remaining lines to the newest visible version.
         let older = match parent {
             Some(p) => {
-                let found = reader
-                    .entry(rows.walked(p)?.root(), path)?
+                let root = rows.walked(p)?.root();
+                let found = lookups
+                    .entry(rows, p, root)?
                     .filter(|e| e.value.kind == InodeKind::RegularFile);
                 match found {
                     Some(_) if visibility.hidden_at(path, rows.serial(p)?).is_some() => None,

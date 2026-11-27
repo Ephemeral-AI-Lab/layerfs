@@ -709,3 +709,58 @@ Tests (once each): `sdk_read_context_corrupt_rh`, `sdk_read_context_rh`,
 `history_surface`, `postgresql_statement_schema`, `compare_across`, the
 content unit test: green. Pins unchanged. Clippy `-D warnings` clean on
 content, history, persistence, store-service. Deleted tests: none.
+
+### H5 port (`2a9a328930`) and lane S
+
+`AuthenticatedObjects::read_canonical_each` / `reads_each_at_once` (default:
+point reads one by one; `false`). The storage reader that serves a
+per-object demand at once is lane S's (`H5-per-object-reads.md` in the
+notes folder); until it merges, every reader reports `false` and no window
+is read in the product.
+
+### H5 wiring — path windows (`read/versions.rs`)
+
+**Prediction (written before any measurement; measurable only after lane S
+merges, when `reads_each_at_once` turns true on the PostgreSQL reader).**
+PostgreSQL control, warm (cold +1–2 prepares and the first-use gap):
+
+- `blame.h100` 59 → ~25–35: the path lookups of each row window's versions
+  become 1 roots demand + inode height (~2) + 1 value block + memo misses
+  (0 for content-only edits) per window (3 windows), and the version's new
+  pack, fetched there, serves the later text reads from the pack cache.
+- `blame.h10` 16 → ~10–14 (one window); `revision.h100` 72 → ~30–40;
+  `revision.h10` cold 66 → ~50–60; `diff_files` 23 unchanged (H6).
+- SQLite: unchanged (no row windows, no per-object demand).
+- Now (before lane S): every pin unchanged on both backends.
+
+**Built and checked (receipts `receipts/H5/`).**
+
+- `read/versions.rs` (`Versions`, `Batching::{Provider, Forced}`): a version
+  the walk reaches opens a window with the Commits `Rows::upcoming` holds
+  after it; `PathAcross` resolves it through an adapter whose every demand
+  is `Cached::read_canonical_each`. Outcomes: answers kept per version; a
+  data failure (an object's own, or a page that does not decode) marks the
+  window's versions to be walked alone; a demand failure refuses at once;
+  a strict-walk refusal walks that version alone.
+- `Cached` records each object's own failure from a per-object read and
+  serves it to any later demand naming the object, which is never read
+  again. `StorePorts::objects_each_with` keeps an object's own failure out
+  of the operation's retained failure (custody keeps the rest), one point
+  demand per object until lane S's storage reader; `reads_each_at_once`
+  false until then. H3's memo is now lane C's `DirectoryMemo` (`MEMO`
+  4,096).
+- `blame::blame` and `revision::Request` take `Batching`; the methods and
+  attribution pass `Provider`.
+- New `sdk_history_versions_rh.rs` (PostgreSQL, `Forced`): the pinned
+  scenario's blame (h100, h10, other.txt) and revision (h100, h10, page 7)
+  answer identically windowed and alone, a window read each time; with one
+  version's tree root location deleted 10 Commits below the head, blame of a
+  file whose walk stops at the head's parent and a one-item revision page
+  answer as before, and blame of a file whose walk reaches it refuses
+  identically. Mutation check: refusing on any window failure fails that
+  test (`blame stops before`), so the test discriminates.
+- No new server message (a per-object read is the existing object demand):
+  no new sweep; `sdk_history_fault_rh_{drop,kill}` rerun green.
+- Pins unchanged (both backends). History, read and compare tests,
+  `sdk_round_trip_equivalence_seeded`, `method_refusal_order` green.
+- Deleted tests: none.

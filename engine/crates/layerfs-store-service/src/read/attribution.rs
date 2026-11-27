@@ -76,6 +76,7 @@ fn owners(
                 count: Ok(2000),
             },
             &mut limits,
+            super::versions::Batching::Provider,
         )?;
         budget.work = limits.versions;
         budget.bytes = limits.bytes;

@@ -1,0 +1,11 @@
+ 9:57  up 3 days,  8:30, 1 user, load averages: 7.62 7.12 7.32
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.08s
+     Running tests/sdk_history_versions_rh.rs (target/debug/deps/sdk_history_versions_rh-d42b3278d3ba02a5)
+
+running 2 tests
+test a_damaged_version_refuses_only_where_the_walk_reaches_it ... ok
+test windows_answer_as_the_lone_walk ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.43s
+
+run_bounded: exit 0 after 4.0 s

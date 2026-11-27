@@ -34,5 +34,6 @@ pub fn blame(service: &StoreService, args: &SdkValue) -> Answer {
             versions: crate::read::query::MAXIMUM_QUERY_WORK,
             bytes: 64 * 1024 * 1024,
         },
+        crate::read::versions::Batching::Provider,
     )
 }
