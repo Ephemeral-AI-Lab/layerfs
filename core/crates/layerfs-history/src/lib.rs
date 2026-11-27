@@ -17,18 +17,23 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
-mod contract;
-pub use contract::authority::{
+mod admission;
+pub mod catalog;
+pub mod error;
+pub mod identity;
+pub mod records;
+
+pub use admission::authority::{
     compare_place, ordered_token_parts, Liveness, PlaceAuthority, PlaceOrder, PlaceRecord,
     PlaceView, SandboxPlace, ORDERED_TOKEN_PREFIX,
 };
-pub use contract::catalog;
-pub use contract::error;
-pub use contract::holder::MountHolderView;
-pub use contract::identity;
-pub use contract::path;
-pub use contract::query;
-pub use contract::records;
+pub use admission::holder::MountHolderView;
+
+// #828 compat: old public module paths, removed in wave 3.
+#[doc(hidden)]
+pub use catalog::path; // #828 compat
+#[doc(hidden)]
+pub use catalog::query; // #828 compat
 
 pub use catalog::{
     ChainRow, ContextTarget, HistoryCatalog, HistoryCatalogConfig, MountMarkers, NamedSnapshot,

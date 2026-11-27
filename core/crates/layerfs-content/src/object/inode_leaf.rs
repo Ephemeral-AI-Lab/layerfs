@@ -29,7 +29,7 @@
 //! both forms may coexist in one leaf.
 
 use crate::error::{ContentError, ContentResult};
-use crate::filesystem::attributes::PortableMetadata;
+use crate::filesystem::tree::attribute::PortableMetadata;
 use crate::object::ObjectId;
 
 /// Width of one inode value.
@@ -112,7 +112,7 @@ impl InodeMetadata {
     /// portable keys keep their grammar answers; anything else is absent.
     pub fn inline_value(
         &self,
-        key: &crate::filesystem::attributes::keys::AttributeKey,
+        key: &crate::filesystem::tree::attribute::keys::AttributeKey,
         kind: InodeKind,
     ) -> ContentResult<Option<Vec<u8>>> {
         match self {
@@ -133,8 +133,8 @@ impl InodeMetadata {
     /// The attribute keys an inline value logically carries.
     pub fn inline_keys(
         &self,
-    ) -> ContentResult<Vec<crate::filesystem::attributes::keys::AttributeKey>> {
-        use crate::filesystem::attributes::keys::AttributeKey;
+    ) -> ContentResult<Vec<crate::filesystem::tree::attribute::keys::AttributeKey>> {
+        use crate::filesystem::tree::attribute::keys::AttributeKey;
         match self {
             Self::Root(_) => Ok(Vec::new()),
             Self::Inline(_) => Ok(vec![

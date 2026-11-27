@@ -20,7 +20,7 @@ use std::collections::VecDeque;
 use crate::error::ContentResult;
 use crate::file::cdc::MAXIMUM_CHUNK_BYTES;
 use crate::file::mapping::extents::Walk;
-use crate::file::mapping::types::FileState;
+use crate::file::mapping::node::FileState;
 use crate::object::ObjectId;
 
 /// Acquires one mapping page: its identity, and whether it is the tree's root.

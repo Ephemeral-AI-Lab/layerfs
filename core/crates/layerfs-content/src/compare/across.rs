@@ -38,14 +38,14 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 
 use super::tree::{EntryFacts, TreeTable, DIRECTORY_WINDOW};
 use crate::error::{ContentError, ContentResult};
-use crate::filesystem::decoded::{self, Role};
-use crate::filesystem::directory::read::{lookup_counted, DirectoryReadWork};
-use crate::filesystem::inode::read::{lookup_many, lookup_tables, InodeReadWork, InodeTable};
 use crate::filesystem::limits::{MAXIMUM_PAGE_BYTES, MAXIMUM_TREE_LEVEL};
-use crate::filesystem::path::PathName;
+use crate::filesystem::name::path::PathName;
 use crate::filesystem::root::{FilesystemRoot, FilesystemRootId};
-use crate::filesystem::sorted::format::{CompactDirectory, Format, Wire};
-use crate::filesystem::sorted::DirectoryRoot;
+use crate::filesystem::tree::directory::read::{lookup_counted, DirectoryReadWork};
+use crate::filesystem::tree::inode::read::{lookup_many, lookup_tables, InodeReadWork, InodeTable};
+use crate::filesystem::tree::pages::decoded::{self, Role};
+use crate::filesystem::tree::pages::format::{CompactDirectory, Format, Wire};
+use crate::filesystem::tree::pages::DirectoryRoot;
 use crate::object::inode_leaf::{InodeKind, InodeValue};
 use crate::object::{AuthenticatedObjects, ObjectId};
 

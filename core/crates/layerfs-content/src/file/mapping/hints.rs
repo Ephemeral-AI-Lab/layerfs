@@ -21,7 +21,7 @@
 
 use crate::error::{ContentError, ContentResult};
 use crate::file::mapping::codec::decode_node_with_context;
-use crate::file::mapping::types::{ExtentNode, FileState};
+use crate::file::mapping::node::{ExtentNode, FileState};
 use crate::object::ObjectId;
 
 /// Branch pages one [`PageHints::collect`] reads before it stops collecting.

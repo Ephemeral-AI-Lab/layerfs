@@ -6,7 +6,7 @@
 //! mutation, instead of being silently re-interpreted or converted.
 
 use crate::error::{ContentError, ContentResult};
-use crate::filesystem::identity::{InodeIdentity, InodeScope};
+use crate::filesystem::name::identity::{InodeIdentity, InodeScope};
 use crate::object::{codec, ObjectId, ObjectRole};
 
 /// Width of a filesystem-root value, excluding the canonical envelope.

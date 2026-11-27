@@ -1,5 +1,5 @@
 //! External captured resident fixture adapter. No production provider is selected.
-use layerfs_content::filesystem::rows::RowSource;
+use layerfs_content::filesystem::construction::input::RowSource;
 use layerfs_content::filesystem::{
     DirectoryChangeLookup, DirectoryChangeSource, DirectoryHeader, DirectoryHeaderSource,
     DirectoryUpdate, FilesystemInput, InodeRowSource, PathName, SerialRowSource,

@@ -10,7 +10,7 @@ use layerfs_telemetry::timer::{Active, TimingScope};
 
 use crate::error::{ContentError, ContentResult};
 use crate::file::mapping::codec::decode_node_with_context;
-use crate::file::mapping::types::{ExtentNode, ExtentSlice, FileState, NodeSummary};
+use crate::file::mapping::node::{ExtentNode, ExtentSlice, FileState, NodeSummary};
 use crate::object::{AuthenticatedObjects, ObjectId};
 
 /// The frontier of one forward pass: pending subtrees and the current leaf.

@@ -10,14 +10,14 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::time::Instant;
 
-use layerfs_content::filesystem::attributes::codec::AttributeEntry;
-use layerfs_content::filesystem::attributes::keys::AttributeKey;
-use layerfs_content::filesystem::attributes::patch::{
+use layerfs_content::filesystem::construction::reference::backing::{FileBacking, OrderingBacking};
+use layerfs_content::filesystem::tree::attribute::codec::AttributeEntry;
+use layerfs_content::filesystem::tree::attribute::keys::AttributeKey;
+use layerfs_content::filesystem::tree::attribute::patch::{
     apply_patches, visit_keys, AttributePatch, AttributePatchWork,
 };
-use layerfs_content::filesystem::attributes::portable::PortableMetadata;
-use layerfs_content::filesystem::attributes::value::emit_value;
-use layerfs_content::filesystem::references::backing::{FileBacking, OrderingBacking};
+use layerfs_content::filesystem::tree::attribute::portable::PortableMetadata;
+use layerfs_content::filesystem::tree::attribute::value::emit_value;
 use layerfs_content::filesystem::{
     build_filesystem_timed, update_filesystem_timed, DirectoryUpdate, FilesystemInput,
     FilesystemObjects, FilesystemPhases, FilesystemRead, FilesystemResources, FilesystemResult,
@@ -240,7 +240,7 @@ fn base(
                 .expect("mode bytes"),
             )
             .expect("mode value");
-            layerfs_content::filesystem::attributes::build::build_attribute_tree(
+            layerfs_content::filesystem::tree::attribute::build::build_attribute_tree(
                 &mut objects,
                 vec![Ok(AttributeEntry {
                     key: AttributeKey::new("portable".to_owned(), b"mode".to_vec())
@@ -363,7 +363,7 @@ fn inode_lookup_page(attribute: &AttributeRun) -> ObjectId {
 /// each page with the public codec until it finds the serial, so the identity the
 /// row reports is the page it actually read.
 fn root_inode(reader: &Bag, table: ObjectId) -> ContentResult<(InodeValue, ObjectId)> {
-    use layerfs_content::filesystem::inode::codec::{decode_inode_page, InodePage};
+    use layerfs_content::filesystem::tree::inode::codec::{decode_inode_page, InodePage};
     let canonical = reader.read_canonical(table)?;
     match decode_inode_page(&canonical)? {
         InodePage::Leaf { entries, .. } => entries
@@ -400,7 +400,7 @@ fn attribute_readback(bag: &Bag, patched_root: ObjectId) -> String {
     let Some(value_root) = found else {
         return "attribute absent".to_owned();
     };
-    match layerfs_content::filesystem::attributes::value::read_value(
+    match layerfs_content::filesystem::tree::attribute::value::read_value(
         bag,
         value_root,
         layerfs_content::filesystem::limits::MAXIMUM_ATTRIBUTE_VALUE_BYTES,

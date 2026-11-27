@@ -17,13 +17,13 @@
 #![deny(missing_docs)]
 
 pub mod compare;
-mod contract;
-pub use contract::error;
+pub mod error;
 pub mod file;
 pub mod filesystem;
 pub mod merge;
 pub mod object;
-pub use contract::policy;
+pub mod policy;
+pub(crate) mod verify;
 
 pub use error::{ContentError, ContentResult};
 pub use file::{
@@ -42,7 +42,7 @@ pub use file::{
     EditRecordExpected as ConstructionRecordExpected, EditRecordKey as ConstructionRecordKey,
     IndexedEditBacking as IndexedConstructionBacking, IndexedRecordPage,
 };
-pub use filesystem::inode::InodeChange;
+pub use filesystem::tree::inode::InodeChange;
 pub use filesystem::{
     build_filesystem, build_filesystem_streamed_backed, build_filesystem_streamed_backed_timed,
     update_filesystem, update_filesystem_streamed_backed, update_filesystem_streamed_backed_timed,

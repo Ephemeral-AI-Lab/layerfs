@@ -7,7 +7,7 @@
 
 use std::collections::BTreeMap;
 
-use layerfs_content::filesystem::references::backing::OrderingBacking;
+use layerfs_content::filesystem::construction::reference::backing::OrderingBacking;
 use layerfs_content::filesystem::{FilesystemObjects, FilesystemResources, PathName};
 use layerfs_content::object::inode_leaf::{InodeKind, InodeValue};
 use layerfs_content::{
@@ -407,7 +407,7 @@ pub struct BackingCounters {
 /// Failures are injected per capability so a test can hold one exact step at a
 /// time; nothing here is product code and the product has no test hooks.
 pub struct RecordingBacking {
-    inner: layerfs_content::filesystem::references::backing::FileBacking,
+    inner: layerfs_content::filesystem::construction::reference::backing::FileBacking,
     shared: std::rc::Rc<std::cell::RefCell<BackingCounters>>,
     /// Fail the append whose one-based ordinal is this value.
     pub fail_append_at: Option<u64>,
@@ -429,7 +429,9 @@ impl RecordingBacking {
     /// A recording backing over a fresh local directory.
     pub fn new(directory: impl AsRef<std::path::Path>) -> Self {
         Self {
-            inner: layerfs_content::filesystem::references::backing::FileBacking::new(directory),
+            inner: layerfs_content::filesystem::construction::reference::backing::FileBacking::new(
+                directory,
+            ),
             shared: std::rc::Rc::new(std::cell::RefCell::new(BackingCounters::default())),
             fail_append_at: None,
             fail_read_at: None,
@@ -443,7 +445,7 @@ impl RecordingBacking {
     /// A recording backing with a fixed physical ceiling.
     pub fn with_capacity(directory: impl AsRef<std::path::Path>, bytes: u64) -> Self {
         Self {
-            inner: layerfs_content::filesystem::references::backing::FileBacking::with_capacity(
+            inner: layerfs_content::filesystem::construction::reference::backing::FileBacking::with_capacity(
                 directory, bytes,
             ),
             shared: std::rc::Rc::new(std::cell::RefCell::new(BackingCounters::default())),
@@ -517,11 +519,13 @@ impl AliasProbe {
     }
 }
 
-impl layerfs_content::filesystem::references::backing::OrderingBacking for RecordingBacking {
+impl layerfs_content::filesystem::construction::reference::backing::OrderingBacking
+    for RecordingBacking
+{
     fn create_run(
         &mut self,
     ) -> layerfs_content::ContentResult<
-        Box<dyn layerfs_content::filesystem::references::backing::OrderingRun>,
+        Box<dyn layerfs_content::filesystem::construction::reference::backing::OrderingRun>,
     > {
         let inner = self.inner.create_run()?;
         let counters = self.shared.borrow_mut();
@@ -575,7 +579,7 @@ impl layerfs_content::filesystem::references::backing::OrderingBacking for Recor
 
 /// One recorded run.
 struct RecordingRun {
-    inner: Box<dyn layerfs_content::filesystem::references::backing::OrderingRun>,
+    inner: Box<dyn layerfs_content::filesystem::construction::reference::backing::OrderingRun>,
     shared: std::rc::Rc<std::cell::RefCell<BackingCounters>>,
     fail_append_at: Option<u64>,
     fail_read_at: Option<u64>,
@@ -585,7 +589,7 @@ struct RecordingRun {
     sealed_before: std::rc::Rc<std::cell::Cell<u64>>,
 }
 
-impl layerfs_content::filesystem::references::backing::OrderingRun for RecordingRun {
+impl layerfs_content::filesystem::construction::reference::backing::OrderingRun for RecordingRun {
     fn append(&mut self, bytes: &[u8]) -> ContentResult<()> {
         if self.run_id < self.sealed_before.get() {
             // This run was an input: the operation wrote into storage it was

@@ -22,12 +22,12 @@
 //! [`Plan::make`] answers `None` and the caller uses [`ChangeWalk::full`].
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 
-use super::sorted::DifferenceWork;
+use super::pages::DifferenceWork;
 use super::tree::{binding_changes, inode_differences, join, EntryFacts, TreeTable};
 use crate::error::{ContentError, ContentResult};
-use crate::filesystem::directory::read::{list_after, lookup, DirectoryReadWork};
-use crate::filesystem::path::PathName;
-use crate::filesystem::sorted::DirectoryRoot;
+use crate::filesystem::name::path::PathName;
+use crate::filesystem::tree::directory::read::{list_after, lookup, DirectoryReadWork};
+use crate::filesystem::tree::pages::DirectoryRoot;
 use crate::object::inode_leaf::{InodeKind, InodeValue};
 use crate::object::{AuthenticatedObjects, ObjectId};
 

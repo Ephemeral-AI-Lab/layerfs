@@ -6,15 +6,13 @@ pub mod codec;
 pub mod inode_leaf;
 
 mod access;
-mod admission;
-mod context;
 mod id;
 mod output;
 mod predecessor;
 
+pub use super::verify::decode::decode_references;
 pub use crate::policy::{MAX_CANONICAL_OBJECT_BYTES, MAX_OBJECT_FIELD_BYTES};
 pub use access::AuthenticatedObjects;
-pub use admission::decode_references;
 pub use codec::{
     canonical_len, decode_bytes_object, encode_bytes_object, encode_bytes_object_to, BYTES_KIND,
     HEADER_LEN, MAX_PAYLOAD_BYTES, OBJECT_MAGIC, VALUE_LEN_BYTES,
