@@ -8,13 +8,14 @@
 //! LayerFS never deletes a bucket object.
 //! This file connects and disconnects buckets and keeps the links; `list`,
 //! `create` and `restore` are in their own files.
-pub use super::super::jobs::create::{create, BackupCreate};
-pub use super::super::jobs::restore::{restore, BackupRestore};
-use super::record::{BucketConnect, BucketRecord, StoreLink};
+use super::record::{BucketConnect, BucketRecord};
 use super::secret;
 use crate::admin::record::store::StoreRecord;
 use crate::backup::bucket::RemoteError;
 use crate::backup::copy as remote;
+use crate::backup::copy::link::StoreLink;
+pub use crate::backup::jobs::create::{create, BackupCreate};
+pub use crate::backup::jobs::restore::{restore, BackupRestore};
 use layerfs_home::home::{self, paths};
 use layerfs_home::names::BucketName;
 use layerfs_home::outcome::{failed, refused, shell_word, with_fix, Outcome};
@@ -25,7 +26,7 @@ type Result<T> = std::result::Result<T, SdkRefusal>;
 
 /// `backup.list`: the Store files in a bucket, or in every bucket.
 pub fn list(home: &Path, bucket: Option<&str>) -> Outcome {
-    super::super::jobs::list::list(home, bucket)
+    crate::backup::jobs::list::list(home, bucket)
 }
 
 /// The bucket connected under `record`'s name: `None` when there is none,

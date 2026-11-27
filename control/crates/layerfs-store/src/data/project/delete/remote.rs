@@ -1,7 +1,26 @@
 //! The worker-side opens of `project.delete`: the remote effects and the
 //! `OpenArgs`/Stack lookups a local Store call needs.
 
-use super::run::*;
+use crate::admin::open::args::OpenArgs;
+use crate::admin::open::service;
+use crate::admin::record::store::StoreRecord;
+use crate::admin::route::executor::Worker;
+use crate::data::project::frame::{
+    DeleteAdmitFrame, DeleteEntryFrame, DeleteEntryReply, DeleteFrame, DeleteReleaseFrame,
+    DeleteReply,
+};
+use layerfs_history::LayerStackId;
+use layerfs_home::names::StoreName;
+use layerfs_home::outcome::refused;
+use layerfs_protocol::sdk::unhex;
+use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
+use layerfs_store_service::history::deletion::Deletion;
+use layerfs_store_service::history::lookup;
+use std::path::Path;
+
+use super::run::{remove_tree, Admission, Effects};
+
+type Result<T> = std::result::Result<T, SdkRefusal>;
 
 pub(super) struct Remote {
     pub(super) worker: Worker,

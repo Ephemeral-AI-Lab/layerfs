@@ -10,8 +10,9 @@ use layerfs_home::outcome::{failed, refused};
 use layerfs_protocol::sdk::hex;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_store::data::project::delete::run::{
-    delete_with, remove_project_entry, remove_worker_entry, Admission, Effects, Intent, IntentState,
+    delete_with, Admission, Effects, Intent, IntentState,
 };
+use layerfs_store::data::project::delete::worker::{remove_project_entry, remove_worker_entry};
 use layerfs_store::data::project::frame::DeleteEntryFrame;
 use layerfs_store_service::history::deletion::Deletion;
 use std::collections::VecDeque;

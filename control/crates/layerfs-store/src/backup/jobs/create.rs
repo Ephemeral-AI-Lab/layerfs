@@ -1,5 +1,4 @@
 //! `backup.create`: a snapshot on the Store's machine, uploaded by this process.
-use super::super::bucket::record::{remote_error, BucketRecord, StoreLink};
 use super::progress::Shown;
 use crate::admin::open::lease;
 use crate::admin::record::intent;
@@ -8,8 +7,10 @@ use crate::admin::route::executor::{self, Executor};
 use crate::admin::status::get::hex_text;
 use crate::backend::sqlite::step_request::{StepFrame, StoreStep};
 use crate::backend::sqlite::step_run::CHUNK;
+use crate::backup::bucket::record::{remote_error, BucketRecord};
 use crate::backup::bucket::{pieces, Driver, Metadata};
 use crate::backup::copy as remote;
+use crate::backup::copy::link::StoreLink;
 use layerfs_home::events::Events;
 use layerfs_home::home::flock::{try_lock, unlock};
 use layerfs_home::home::{self, paths};

@@ -170,7 +170,7 @@ fn settle(home: &Path, store: &str, record: StoreRecord) -> Result<StoreRecord> 
             ),
         ]);
         let fields = with_field(link.to_record().clone(), ATTEMPT, tried);
-        let link = crate::backup::bucket::record::StoreLink::from_record(fields);
+        let link = crate::backup::copy::link::StoreLink::from_record(fields);
         settled = settled.with_link(&bucket, &link);
     }
     settled.write(home)?;

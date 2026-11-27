@@ -4,7 +4,8 @@
 //! (`check`), the family's exclusive operation (`family`, #804), opening a
 //! database session
 //! (`open`, the PostgreSQL URL and Store open), the held host sessions
-//! Store calls read through (`reader`), and a host worker's held read
+//! Store calls read through (`reader`), the engine diagnostic entry points
+//! (`diagnostic`), and a host worker's held read
 //! sessions for the CLI's file reads (`pool`, #819 P-B). Never imports
 //! `sqlite/`.
 #[doc(hidden)]
@@ -13,6 +14,7 @@ pub mod address;
 pub mod check;
 #[doc(hidden)]
 pub mod connect;
+pub mod diagnostic;
 #[doc(hidden)]
 pub mod family;
 #[doc(hidden)]

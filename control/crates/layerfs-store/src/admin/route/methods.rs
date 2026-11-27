@@ -41,7 +41,7 @@ pub enum StoreOp<'a> {
     /// stats` (engine method `store.stats`).
     Statistics,
     /// Entry counts at one project pin.
-    ProjectStats(&'a crate::data::project::hide_path::ProjectStats),
+    ProjectStats(&'a crate::data::project::status::stats::ProjectStats),
     /// `project.hide_path` (engine method `project.remove_file`): hide one
     /// path from every node at or below its marker frontier.
     RemoveFile(&'a crate::data::project::hide_path::ProjectHidePath),
@@ -81,19 +81,19 @@ pub enum StoreOp<'a> {
 
 /// The engine's arguments, built in order; an absent value is not sent.
 #[derive(Default)]
-pub(super) struct Args(pub(super) Vec<(String, SdkValue)>);
+pub(crate) struct Args(pub(crate) Vec<(String, SdkValue)>);
 
 impl Args {
-    pub(super) fn put(&mut self, name: &str, value: SdkValue) -> &mut Self {
+    pub(crate) fn put(&mut self, name: &str, value: SdkValue) -> &mut Self {
         self.0.push((name.to_owned(), value));
         self
     }
 
-    pub(super) fn text(&mut self, name: &str, value: &str) -> &mut Self {
+    pub(crate) fn text(&mut self, name: &str, value: &str) -> &mut Self {
         self.put(name, SdkValue::text(value))
     }
 
-    pub(super) fn opt(&mut self, name: &str, value: Option<&str>) -> &mut Self {
+    pub(crate) fn opt(&mut self, name: &str, value: Option<&str>) -> &mut Self {
         match value {
             Some(value) => self.text(name, value),
             None => self,
@@ -108,21 +108,21 @@ impl Args {
         }
     }
 
-    pub(super) fn int(&mut self, name: &str, value: Option<i64>) -> &mut Self {
+    pub(crate) fn int(&mut self, name: &str, value: Option<i64>) -> &mut Self {
         match value {
             Some(value) => self.put(name, SdkValue::Int(value)),
             None => self,
         }
     }
 
-    pub(super) fn boolean(&mut self, name: &str, value: Option<bool>) -> &mut Self {
+    pub(crate) fn boolean(&mut self, name: &str, value: Option<bool>) -> &mut Self {
         match value {
             Some(value) => self.put(name, SdkValue::Bool(value)),
             None => self,
         }
     }
     /// The snapshot a read names: its Branch, or the Commit when given.
-    pub(super) fn at(&mut self, branch: &str, commit: Option<&str>) -> &mut Self {
+    pub(crate) fn at(&mut self, branch: &str, commit: Option<&str>) -> &mut Self {
         self.text("branch", branch).opt("commit", commit)
     }
 }
@@ -211,7 +211,7 @@ impl StoreOp<'_> {
 }
 
 /// Runs `op` on the Store of `project`.
-pub(super) fn on_project(
+pub(crate) fn on_project(
     home: &Path,
     events: &mut Events<'_>,
     project: &str,
@@ -225,7 +225,7 @@ pub(super) fn on_project(
 /// (call surface 2.0): the head a write expected, as `commit`, on a moved
 /// head; how many Commits a prefix matches, as `matches`; and a merge's
 /// [`conflicts`].
-pub(super) fn next_fields(refusal: SdkRefusal) -> SdkRefusal {
+pub(crate) fn next_fields(refusal: SdkRefusal) -> SdkRefusal {
     let mut refusal = refusal;
     let detail = refusal.detail.clone();
     let carried = [

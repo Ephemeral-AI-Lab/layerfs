@@ -1,12 +1,16 @@
 //! `backup.list`: every Store file in the connected buckets, with the Store
 //! of this home linked to it.
-use super::super::bucket::record::{BucketRecord, StoreLink};
 use crate::admin::record::store::StoreRecord;
+use crate::admin::route::executor::{self, Executor};
+use crate::backend::sqlite::step_request::{StepFrame, StoreStep};
+use crate::backup::bucket::record::BucketRecord;
 use crate::backup::bucket::RemoteError;
 use crate::backup::copy as remote;
+use crate::backup::copy::link::StoreLink;
 use layerfs_home::home::paths;
 use layerfs_home::outcome::{failed, Outcome};
 use layerfs_protocol::sdk::SdkValue;
+use layerfs_protocol::StoreKind;
 use std::collections::BTreeMap;
 use std::path::Path;
 
@@ -257,17 +261,10 @@ pub fn list(home: &Path, only: Option<&str>) -> Outcome {
     ]))
 }
 
-// A sqlite Store's history heads digest where it lives: one read, in this
-// process for a Store on this computer, through its machine's worker
-// (`store.file` step `heads`, within the worker read budget) for any
-// other. Starts nothing; a machine that does not answer is a message.
-use crate::admin::route::executor::{self, Executor};
-use crate::backend::sqlite::step_request::{StepFrame, StoreStep};
-use layerfs_protocol::sdk::hex;
-use layerfs_protocol::StoreKind;
-use std::path::Path;
-
-/// Store `record`'s heads digest as hex, or why it could not be read.
+/// Store `record`'s heads digest as hex, or why it could not be read: one
+/// read, in this process for a Store on this computer, through its machine's
+/// worker (`store.file` step `heads`, within the worker read budget) for any
+/// other. Starts nothing; a machine that does not answer is a message.
 pub fn store_heads(home: &Path, record: &StoreRecord) -> Result<String, String> {
     let store = record.name();
     if let Ok(StoreKind::Postgresql) = record.kind() {
@@ -276,7 +273,8 @@ pub fn store_heads(home: &Path, record: &StoreRecord) -> Result<String, String> 
     let store_ref = record.store_ref().map_err(|refusal| refusal.message)?;
     let executor = executor::plan(home, store_ref).map_err(|refusal| refusal.message)?;
     match executor {
-        Executor::Local => remote::heads(&paths::store_file(home, store)).map(|heads| hex(&heads)),
+        Executor::Local => remote::heads(&paths::store_file(home, store))
+            .map(|heads| layerfs_protocol::sdk::hex(&heads)),
         Executor::Worker(mut worker) => {
             let frame = StepFrame::on(store, StoreStep::Heads);
             let answer = worker

@@ -27,12 +27,12 @@ use std::sync::{Arc, Condvar, Mutex};
 /// The entry points allowed to borrow the service. A host call's outer
 /// cache slot accounts for every host borrower until its reply is ready.
 #[derive(Clone, Copy, Eq, PartialEq)]
-pub(crate) enum Owner {
+pub(crate) enum Route {
     Direct,
     Host,
 }
 
-impl Owner {
+impl Route {
     fn check(self, opened: &Opened) -> Result<(), SdkRefusal> {
         if self == opened.owner {
             Ok(())
@@ -47,7 +47,7 @@ impl Owner {
 
 /// One opened Store and the clients that hold it.
 struct Opened {
-    owner: Owner,
+    owner: Route,
     service: Arc<StoreService>,
     clients: usize,
     /// This service's private overlay directory.
@@ -116,7 +116,7 @@ pub(crate) fn transition<T, R>(
 }
 
 /// Opens the Store at `store` for this process, or refuses.
-fn open(store: &Path, args: &OpenArgs, owner: Owner) -> Result<Opened, SdkRefusal> {
+fn open(store: &Path, args: &OpenArgs, owner: Route) -> Result<Opened, SdkRefusal> {
     let identity = crate::admin::record::identity::identity(args)?;
     let directory = overlay_directory()?;
     let template = directory.join("overlay.sqlite");
@@ -239,7 +239,7 @@ pub(crate) fn open_postgres_write(args: &OpenArgs) -> Result<(StoreService, Path
 }
 
 /// One more client of the Store a call names, opening it first.
-pub(crate) fn acquire(args: &OpenArgs, owner: Owner) -> Result<(), SdkRefusal> {
+pub(crate) fn acquire(args: &OpenArgs, owner: Route) -> Result<(), SdkRefusal> {
     let store = args.store_path()?;
     let pending = loop {
         let mut stores = lock(&STORES)?;
@@ -285,7 +285,7 @@ pub(crate) fn acquire(args: &OpenArgs, owner: Owner) -> Result<(), SdkRefusal> {
 /// returns, and the service closes when it is dropped then: its idle
 /// producer handle's kept ordinals are returned here, and only a handle
 /// that running call gives back later is dropped without that release.
-pub(crate) fn release(args: &OpenArgs, owner: Owner) -> Result<(), SdkRefusal> {
+pub(crate) fn release(args: &OpenArgs, owner: Route) -> Result<(), SdkRefusal> {
     let store = args.store_path()?;
     let pending = Arc::new(Completion::new());
     let opened = {
@@ -320,7 +320,7 @@ fn close_service(opened: Opened) -> Result<(), SdkRefusal> {
         // A call still running holds the service; its idle producer handle
         // returns its kept ordinals now (#768). A handle that call hands
         // back after this is dropped with the service, unreleased.
-        Err(service) if opened.owner == Owner::Direct => {
+        Err(service) if opened.owner == Route::Direct => {
             service.store.release_producer();
             Ok(())
         }
@@ -334,7 +334,7 @@ fn close_service(opened: Opened) -> Result<(), SdkRefusal> {
 }
 
 /// The open service of the Store a call names.
-fn service(args: &OpenArgs, owner: Owner) -> Result<Arc<StoreService>, SdkRefusal> {
+pub(crate) fn service(args: &OpenArgs, owner: Route) -> Result<Arc<StoreService>, SdkRefusal> {
     let store = args.store_path()?;
     let stores = lock(&STORES)?;
     let Some(Slot::Ready(opened)) = stores.get(&store) else {
@@ -354,11 +354,11 @@ pub fn with_service<T>(
     args: &OpenArgs,
     work: impl FnOnce(&Arc<StoreService>) -> Result<T, SdkRefusal>,
 ) -> Result<T, SdkRefusal> {
-    acquire(args, Owner::Direct)?;
+    acquire(args, Route::Direct)?;
     transition(
-        || service(args, Owner::Direct).and_then(|service| work(&service)),
+        || service(args, Route::Direct).and_then(|service| work(&service)),
         |result| {
-            let released = release(args, Owner::Direct);
+            let released = release(args, Route::Direct);
             let value = result?;
             released?;
             Ok(value)
@@ -369,10 +369,10 @@ pub fn with_service<T>(
 /// Runs one Store call in this process on the Store `open` names, with
 /// the call's own arguments `args` (any routing key in them is dropped).
 pub fn call(method: &str, open: &OpenArgs, args: SdkValue) -> Outcome {
-    call_owned(method, open, args, Owner::Direct)
+    call_owned(method, open, args, Route::Direct)
 }
 
-pub(crate) fn call_owned(method: &str, open: &OpenArgs, args: SdkValue, owner: Owner) -> Outcome {
+pub(crate) fn call_owned(method: &str, open: &OpenArgs, args: SdkValue, owner: Route) -> Outcome {
     let service = service(open, owner)?;
     dispatch(&service, method, args)
 }
@@ -382,7 +382,7 @@ pub(crate) fn call_streamed(
     method: &str,
     open: &OpenArgs,
     args: SdkValue,
-    owner: Owner,
+    owner: Route,
     source: &mut dyn layerfs_store_service::methods::Source,
 ) -> Outcome {
     let service = service(open, owner)?;
@@ -422,129 +422,4 @@ pub(crate) fn dispatch(service: &StoreService, method: &str, args: SdkValue) -> 
         args: routed_out(args),
     };
     layerfs_store_service::methods::call(service, &call)
-}
-
-/// The newest Commit of `branch`, read in this process; `None` when it has none.
-pub fn head(
-    args: &OpenArgs,
-    branch: layerfs_history::BranchId,
-) -> Result<Option<layerfs_history::CommitId>, SdkRefusal> {
-    if args.postgresql.is_some() {
-        return crate::backend::postgresql::reader::head(args, branch);
-    }
-    let service = service(args, Owner::Direct)?;
-    let page = service
-        .store
-        .published(|history| {
-            history.commit_history(&layerfs_history::CommitHistoryRequest {
-                branch,
-                start: None,
-                cursor: None,
-                limit: 1,
-            })
-        })
-        .map_err(failed)?;
-    Ok(page.records.first().map(|record| record.id))
-}
-
-/// The id of Branch `name` of project `project` in the Store `args` names,
-/// read with `project.list_branches`' exact name lookup.
-pub fn branch_named(
-    args: &OpenArgs,
-    project: &str,
-    name: &str,
-) -> Result<layerfs_history::BranchId, SdkRefusal> {
-    let asked = SdkValue::map([
-        ("project", SdkValue::text(project)),
-        ("name", SdkValue::text(name)),
-    ]);
-    let listed = with_service(args, |_| call("project.list_branches", args, asked))?;
-    let id = match listed.get("items") {
-        Some(SdkValue::List(items)) => items.first().and_then(|item| item.get_text("id")),
-        _ => None,
-    };
-    id.and_then(layerfs_protocol::sdk::unhex)
-        .and_then(|bytes| layerfs_history::BranchId::from_slice(&bytes).ok())
-        .ok_or_else(|| refused("NoSuchBranch", format!("no Branch {name} in {project}")))
-}
-
-/// Ends the mount intent Workspace `workspace` of Branch `branch` left in
-/// the Store `args` names, if one remains: a forced `sandbox.remove` calls
-/// it once the Sandbox whose daemon owned the intent is stopped, so the
-/// intent does not refuse every later compaction (RC-B F1). Each one left
-/// is released once, or marked uncertain when the Store refuses the delete
-/// (`release_or_mark`, the daemon's own unmount release); answers how many
-/// there were. Nothing is retried.
-pub fn end_mount(
-    args: &OpenArgs,
-    branch: layerfs_history::BranchId,
-    workspace: [u8; 32],
-) -> Result<usize, SdkRefusal> {
-    with_service(args, |service| {
-        let catalog = service.store.history();
-        let scope = layerfs_history::GcScopeKind::Branch;
-        let intents = catalog
-            .gc_intents(scope, branch.as_slice())
-            .map_err(failed)?;
-        let left = intents.iter().filter(|intent| {
-            intent.kind == layerfs_history::GcIntentKind::Mount
-                && intent.workspace == Some(workspace)
-        });
-        let mut ended = 0;
-        for intent in left {
-            layerfs_store_service::history::admission::release_or_mark(catalog, &intent.op_id)
-                .map_err(failed)?;
-            ended += 1;
-        }
-        Ok(ended)
-    })
-}
-
-/// Settles the intents at `machine` the ordered `incarnation` proves dead,
-/// where that Store's calls run: this process when the Store lives here, else
-/// the machine's worker. The home recorded the incarnation in the
-/// `MachineRecord` before this call. One bounded call per Store; a failure is
-/// reported, never retried.
-pub fn reconcile_machine(
-    home: &Path,
-    store: &str,
-    machine: &str,
-    incarnation: &str,
-) -> Result<SdkValue, SdkRefusal> {
-    // The host holds the Store's lease while it sends the call, as
-    // `store_call` does; a Store an operation is moving is left, never retried.
-    let (_lease, record) = crate::admin::open::lease::claim(home, store)?;
-    let store_ref = record.store_ref()?;
-    match crate::admin::route::executor::plan(home, store_ref)? {
-        crate::admin::route::executor::Executor::Local => {
-            let args = OpenArgs::of_record(home, store, &record)?;
-            // the reconcile compares placed mount intents: it reads the view
-            crate::admin::route::place_view::scoped(&args, || {
-                with_service(&args, |service| {
-                    layerfs_store_service::history::admission::reconcile_machine(
-                        service.store.history(),
-                        machine,
-                        incarnation,
-                    )
-                    .map(|reconcile| {
-                        layerfs_store_service::history::admission::reconcile_value(&reconcile)
-                    })
-                    .map_err(layerfs_store_service::history::lookup::history)
-                })
-            })
-        }
-        crate::admin::route::executor::Executor::Worker(mut worker) => {
-            let mut fields = vec![
-                ("store".to_owned(), SdkValue::text(store)),
-                ("store_record".to_owned(), record.to_record().clone()),
-                ("machine".to_owned(), SdkValue::text(machine)),
-                ("incarnation".to_owned(), SdkValue::text(incarnation)),
-            ];
-            if let Some(place) = crate::admin::route::place_view::encoded_from_home(home) {
-                fields.push(("place_view".to_owned(), place));
-            }
-            let request = SdkValue::Map(fields);
-            worker.call("store.reconcile", request, &mut |_: SdkValue| {})
-        }
-    }
 }

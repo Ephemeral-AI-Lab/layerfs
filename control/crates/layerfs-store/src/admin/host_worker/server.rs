@@ -402,7 +402,7 @@ impl HostServer {
             return self.drain_answer();
         }
         let stores = (control && op == "ping")
-            .then(|| crate::admin::open::cache::host_store_count(&self.home));
+            .then(|| crate::admin::open::host::host_store_count(&self.home));
         enum Operation {
             Ping,
             CloseStore,
@@ -540,7 +540,7 @@ impl HostServer {
         &self,
         store: &str,
         reason: &str,
-        report: &Result<crate::admin::open::cache::CloseReport, SdkRefusal>,
+        report: &Result<crate::admin::open::close::CloseReport, SdkRefusal>,
     ) {
         // Do not put an arbitrary request value into the worker log or ping.
         if layerfs_home::names::StoreName::parse(store).is_err() {
@@ -580,7 +580,7 @@ impl HostServer {
     }
 
     fn close_drained_stores(&self) {
-        for (path, report) in crate::admin::open::cache::close_idle_report(Duration::ZERO) {
+        for (path, report) in crate::admin::open::close::close_idle_report(Duration::ZERO) {
             if let Some(store) = path
                 .parent()
                 .and_then(Path::file_name)

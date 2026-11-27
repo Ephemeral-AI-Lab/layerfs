@@ -229,7 +229,7 @@ pub fn serve(home: &Path, request: &SdkValue) -> Outcome {
         ));
     }
     let resolved = resolve::target(home, &format!("{store}/{project}"))?;
-    crate::admin::open::cache::run_host(
+    crate::admin::open::host::run_host(
         home,
         &resolved.store,
         &resolved.project,

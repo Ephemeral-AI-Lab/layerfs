@@ -1,3 +1,5 @@
+//! What a Store reports: `store.get`, `store.list`, its state, formats,
+//! stats, live reads and observed reach.
 pub mod formats;
 pub mod get;
 pub mod list;

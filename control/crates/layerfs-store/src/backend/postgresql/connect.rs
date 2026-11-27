@@ -13,6 +13,7 @@ use super::check;
 use super::login;
 use crate::admin::open::args::{OpenArgs, PgSelection};
 use crate::admin::record::store::url;
+use crate::admin::record::store::{StoreKind, StoreRecord};
 use crate::data::project::record::project::ProjectRecord;
 use crate::data::project::status::listing;
 use crate::Related;
@@ -23,7 +24,6 @@ use layerfs_persistence::diagnostic::ConnectionStep;
 use layerfs_protocol::sdk::hex;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
-use {crate::admin::record::store::StoreRecord, layerfs_protocol::StoreKind};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
@@ -480,7 +480,7 @@ impl Update {
             ));
         };
         current.unblocked()?;
-        crate::admin::open::cache::close(&current.postgresql_key(home_dir, name))?;
+        crate::admin::open::close::close(&current.postgresql_key(home_dir, name))?;
         let current = changed(
             current,
             request,
@@ -552,7 +552,7 @@ pub fn disconnect(home_dir: &Path, name: &StoreName, related: Related) -> Outcom
     // leases, and Sandboxes: a Sandbox's daemon dials the server from its
     // machine, which holds no lease in this home (#535 §7.4)
     (related.store_idle)(home_dir, name)?;
-    crate::admin::open::cache::close(&record.postgresql_key(home_dir, name))?;
+    crate::admin::open::close::close(&record.postgresql_key(home_dir, name))?;
     std::fs::remove_dir_all(paths::store_dir(home_dir, name)).map_err(failed)?;
     login::forget(home_dir, name)?;
     layerfs_home::home::generation::moved(home_dir);

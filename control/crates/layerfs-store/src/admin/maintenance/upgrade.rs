@@ -441,7 +441,7 @@ pub fn in_worker(
             format!("no file of Store {store} is on this machine"),
         ));
     }
-    crate::admin::open::cache::close(&file)?;
+    crate::admin::open::close::close(&file)?;
     let holders = lease::holders(root, store)?;
     if !holders.is_empty() || lease::held_here(root, store) {
         let mut pids: Vec<String> = holders.iter().map(u32::to_string).collect();

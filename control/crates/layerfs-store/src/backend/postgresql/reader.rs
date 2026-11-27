@@ -76,7 +76,7 @@ mod held {
     }
 
     fn insert(id: Key, handles: Arc<PostgresHandles>) {
-        crate::admin::open::cache::reaper();
+        crate::admin::open::close::reaper();
         let mut held = HELD.lock().unwrap_or_else(|e| e.into_inner());
         held.insert(
             id,

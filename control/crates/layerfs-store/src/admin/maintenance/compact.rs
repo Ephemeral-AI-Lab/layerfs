@@ -25,7 +25,7 @@
 //! the earlier local-only refusal.
 use crate::admin::host_worker::handoff::{self, Worker};
 use crate::admin::open::args::OpenArgs;
-use crate::admin::open::cache::close;
+use crate::admin::open::close::close;
 use crate::admin::open::lease;
 use crate::admin::record::identity;
 use crate::admin::record::identity::Kind;

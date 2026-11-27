@@ -204,7 +204,7 @@ pub fn close_at(
     home: &Path,
     generation: &str,
     args: &SdkValue,
-) -> Result<crate::admin::open::cache::CloseReport> {
+) -> Result<crate::admin::open::close::CloseReport> {
     let name = args.get_text("store").unwrap_or_default();
     layerfs_home::names::StoreName::parse(name)?;
     let id = args
@@ -216,7 +216,7 @@ pub fn close_at(
                 "store.close requires its maintenance intent",
             )
         })?;
-    crate::admin::open::cache::close_host(home, name, |record| {
+    crate::admin::open::host::close_host(home, name, |record| {
         let held = ensures_fence(record, id)?;
         let worker = held.args().get(WORKER).unwrap_or(&SdkValue::Null);
         if !local(home, record)?

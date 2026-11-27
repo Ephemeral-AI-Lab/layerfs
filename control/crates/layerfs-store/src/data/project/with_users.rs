@@ -6,7 +6,8 @@
 //! `project` calls are `layerfs-store`'s own.
 use crate::data::project::record::intent::{self, DELETE, INIT};
 use crate::data::project::record::project::ProjectRecord;
-use crate::data::project::status::get::{self, ProjectList};
+use crate::data::project::status::get;
+use crate::data::project::status::list::{self, ProjectList};
 use crate::StoreUsers;
 use layerfs_home::events::Events;
 use layerfs_home::names::ProjectRef;
@@ -18,12 +19,12 @@ use std::path::Path;
 /// `project.get(project)`: one project, its state and main's head; its
 /// Store's machine state is the inventory's.
 pub fn get(home: &Path, project: &ProjectRef, users: &StoreUsers) -> Outcome {
-    read::get(home, project, &users.machine_state)
+    get::get(home, project, &users.machine_state)
 }
 
 /// `project.list({ store, limit, cursor, with: stats })`.
 pub fn list(home: &Path, request: &ProjectList, users: &StoreUsers) -> Outcome {
-    read::list(home, request, &users.machine_state)
+    list::list(home, request, &users.machine_state)
 }
 
 /// `project.delete(project)`: retires the project in its Store and removes

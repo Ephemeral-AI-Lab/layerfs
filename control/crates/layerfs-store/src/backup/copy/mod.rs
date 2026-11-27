@@ -9,6 +9,7 @@
 //! network. Each request is sent once; nothing is resent after an uncertain
 //! outcome.
 pub mod heads;
+pub mod link;
 pub mod list;
 pub mod load;
 pub mod object;

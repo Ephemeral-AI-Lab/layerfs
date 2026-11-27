@@ -6,6 +6,7 @@
 //! check run on the side that dials, and the attachment writes. Which side
 //! dials is the caller's (`layerfs-control`, through the Sandbox route).
 use crate::admin::open::args::PgSelection;
+use crate::admin::record::store::{StoreKind, StoreRecord};
 use crate::backend::postgresql::connect::SCHEMA;
 use layerfs_home::home;
 use layerfs_home::names::StoreName;
@@ -14,7 +15,6 @@ use layerfs_persistence::diagnostic::ConnectionStep;
 use layerfs_persistence::PostgresAccess;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
-use {crate::admin::record::store::StoreRecord, layerfs_protocol::StoreKind};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 

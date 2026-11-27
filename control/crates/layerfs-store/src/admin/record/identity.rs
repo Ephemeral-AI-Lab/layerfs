@@ -10,6 +10,7 @@
 //! `<home>/<project>/` carries the Store's binding. Every Store-level call
 //! is one attempt; nothing is retried.
 use crate::admin::open::args::OpenArgs;
+use crate::admin::record::store::{required, StoreKind, StoreRecord, StoreRef};
 use crate::data::project::record::discovery;
 use layerfs_history::{HistoryCatalogConfig, HistoryName};
 use layerfs_home::outcome::{failed, refused};
@@ -17,10 +18,6 @@ use layerfs_persistence::{PersistenceConfig, SealedStore, SqlitePersistenceProfi
 use layerfs_project::store::{CreateRequest, ProjectApi};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::{Path, PathBuf};
-use {
-    crate::admin::record::store::{required, StoreRecord, StoreRef},
-    layerfs_protocol::StoreKind,
-};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 

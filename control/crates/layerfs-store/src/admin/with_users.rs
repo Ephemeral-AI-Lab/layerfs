@@ -5,6 +5,7 @@
 //! `layerfs-store`'s own. `store.attach` and `store.detach` also read the
 //! machine, and the first reaches the Store from it as a Sandbox would.
 use crate::admin::open::args::OpenArgs;
+use crate::admin::record::store::{StoreKind, StoreRecord};
 use crate::admin::route::executor::{self, Executor};
 use crate::backend::postgresql::check;
 use crate::backend::postgresql::connect::{self, StoreConnect};
@@ -17,7 +18,6 @@ use layerfs_machine::worker::Unreached;
 use layerfs_persistence::diagnostic::ConnectionStep;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
-use {crate::admin::record::store::StoreRecord, layerfs_protocol::StoreKind};
 
 pub use crate::close_idle;
 

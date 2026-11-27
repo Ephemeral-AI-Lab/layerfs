@@ -8,16 +8,13 @@
 //! process's lease is taken. The locks are held only for those checks and
 //! record writes, never across a round trip.
 use crate::admin::open::lease;
+use crate::admin::record::store::{self, StoreKind, StoreRecord};
 use crate::Related;
 use layerfs_home::home;
 use layerfs_home::op::{self, Op};
 use layerfs_home::outcome::refused;
 use layerfs_protocol::sdk::SdkRefusal;
 use std::path::Path;
-use {
-    crate::admin::record::store::{self, StoreRecord},
-    layerfs_protocol::StoreKind,
-};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
@@ -64,7 +61,7 @@ pub fn begin<T>(
 /// lease, taken there.
 pub fn settle(home_dir: &Path, record: &StoreRecord, related: Related) -> Result<lease::Lease> {
     let name = record.name();
-    crate::admin::open::cache::close(&record.postgresql_key(home_dir, name))?;
+    crate::admin::open::close::close(&record.postgresql_key(home_dir, name))?;
     let _lock = home::lock::take(home_dir)?;
     let _store = store::lock(home_dir, name)?;
     if lease::held_here(home_dir, name) {

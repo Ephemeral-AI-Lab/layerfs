@@ -1,10 +1,13 @@
 //! The `branch` family: a project's Branches, each call translated to the
 //! Store method that does it, its answer the call's full map (the keys of
 //! its long form; the dispatcher shapes it).
-use super::super::admin::route::methods::{next_fields, on_project, Names, StoreOp};
+use crate::admin::open::args::OpenArgs;
+use crate::admin::open::service::{call, service, with_service, Route};
+use crate::admin::route::methods::{next_fields, on_project, Names, StoreOp};
 use layerfs_home::cursor;
 use layerfs_home::events::Events;
 use layerfs_home::helpers::shown;
+use layerfs_home::outcome::failed;
 use layerfs_home::outcome::{refused, with_fix, Outcome};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
@@ -366,4 +369,48 @@ pub fn remove(home: &Path, events: &mut Events<'_>, request: &BranchRemove) -> O
         ("branch", value.get("branch").cloned().unwrap_or_default()),
         ("removed_at", removed_at),
     ]))
+}
+
+/// The newest Commit of `branch`, read in this process; `None` when it has none.
+pub fn head(
+    args: &OpenArgs,
+    branch: layerfs_history::BranchId,
+) -> Result<Option<layerfs_history::CommitId>, SdkRefusal> {
+    if args.postgresql.is_some() {
+        return crate::backend::postgresql::reader::head(args, branch);
+    }
+    let service = service(args, Route::Direct)?;
+    let page = service
+        .store
+        .published(|history| {
+            history.commit_history(&layerfs_history::CommitHistoryRequest {
+                branch,
+                start: None,
+                cursor: None,
+                limit: 1,
+            })
+        })
+        .map_err(failed)?;
+    Ok(page.records.first().map(|record| record.id))
+}
+
+/// The id of Branch `name` of project `project` in the Store `args` names,
+/// read with `project.list_branches`' exact name lookup.
+pub fn branch_named(
+    args: &OpenArgs,
+    project: &str,
+    name: &str,
+) -> Result<layerfs_history::BranchId, SdkRefusal> {
+    let asked = SdkValue::map([
+        ("project", SdkValue::text(project)),
+        ("name", SdkValue::text(name)),
+    ]);
+    let listed = with_service(args, |_| call("project.list_branches", args, asked))?;
+    let id = match listed.get("items") {
+        Some(SdkValue::List(items)) => items.first().and_then(|item| item.get_text("id")),
+        _ => None,
+    };
+    id.and_then(layerfs_protocol::sdk::unhex)
+        .and_then(|bytes| layerfs_history::BranchId::from_slice(&bytes).ok())
+        .ok_or_else(|| refused("NoSuchBranch", format!("no Branch {name} in {project}")))
 }

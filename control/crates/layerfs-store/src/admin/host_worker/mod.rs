@@ -9,6 +9,7 @@ pub mod postgresql;
 #[cfg(all(feature = "machine", any(target_os = "macos", target_os = "linux")))]
 pub(crate) mod postgresql_queue;
 pub mod read;
+pub mod retained;
 #[cfg(all(feature = "machine", any(target_os = "macos", target_os = "linux")))]
 pub mod server;
 pub mod stream;

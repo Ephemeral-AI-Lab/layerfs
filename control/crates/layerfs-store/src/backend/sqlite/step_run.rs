@@ -123,7 +123,7 @@ pub fn run_observed(root: &Path, frame: &StepFrame, progress: &mut dyn FnMut(u64
             | StoreStep::Remove
             | StoreStep::Read { staged: false, .. }
     ) {
-        crate::admin::open::cache::close(&file)?;
+        crate::admin::open::close::close(&file)?;
     }
     match &frame.step {
         // whether the file is here, its size with its write-ahead log and

@@ -14,7 +14,7 @@
 use crate::admin::record::intent;
 use crate::admin::record::store::{StoreRecord, StoreRef};
 use crate::admin::status::state;
-use crate::backup::bucket::record::StoreLink;
+use crate::backup::copy::link::StoreLink;
 use layerfs_home::events::Events;
 use layerfs_home::home::{observed, paths};
 use layerfs_home::outcome::{failed, Outcome};

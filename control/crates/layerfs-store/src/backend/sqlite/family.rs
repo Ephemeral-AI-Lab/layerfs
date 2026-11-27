@@ -139,7 +139,7 @@ pub(crate) fn begin_maintenance<T>(
 /// holder, no lease of this process, no Sandbox. Answers this process's
 /// lease, taken there.
 pub fn settle(home: &Path, name: &str, related: Related, op: &Op) -> Result<lease::Lease> {
-    crate::admin::open::cache::close(&paths::store_file(home, name))?;
+    crate::admin::open::close::close(&paths::store_file(home, name))?;
     let _lock = home::lock::take(home)?;
     let _store = store::lock(home, name)?;
     let current = StoreRecord::of(home, name)?;

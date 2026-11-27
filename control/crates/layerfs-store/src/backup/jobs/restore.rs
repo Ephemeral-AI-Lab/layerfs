@@ -1,13 +1,15 @@
 //! `backup.restore`: a backup as a sqlite Store on the machine whose calls
 //! run in this process (`native` on macOS and Linux).
-use super::super::bucket::connect::write_link;
-use super::super::bucket::record::{BucketRecord, StoreLink};
 use super::progress::Shown;
 use crate::admin::open::lease;
 use crate::admin::record::identity::{Identity, Kind};
 use crate::admin::record::intent;
+use crate::admin::record::store::{StoreKind, StoreRecord};
 use crate::admin::status::get::hex_text;
+use crate::backup::bucket::connect::write_link;
+use crate::backup::bucket::record::BucketRecord;
 use crate::backup::copy as remote;
+use crate::backup::copy::link::StoreLink;
 use crate::data::project::record::restored::{records, Found, Restored};
 use crate::Related;
 use layerfs_home::events::Events;
@@ -20,7 +22,6 @@ use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::fs::{File, OpenOptions};
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
-use {crate::admin::record::store::StoreRecord, layerfs_protocol::StoreKind};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
@@ -44,8 +45,9 @@ pub fn restore(
     home: &Path,
     events: &mut Events<'_>,
     request: &BackupRestore,
-    related: Related,
+    users: &crate::StoreUsers,
 ) -> Outcome {
+    let related = users.related;
     let home = home.to_path_buf();
     let store = request.store.as_str();
     layerfs_home::names::StoreName::parse(store)?;
@@ -416,7 +418,7 @@ fn replaceable(
     }
     let destination = paths::store_file(home, store);
     // this process's own open copy closes first
-    crate::admin::open::cache::close(&destination)?;
+    crate::admin::open::close::close(&destination)?;
     (related.store_idle)(home, store)?;
     let linked = record.link(bucket).and_then(|link| link.heads());
     let now = remote::heads(&destination).ok().map(|h| hex(&h));
@@ -469,22 +471,4 @@ fn projects_in(home: &Path, store: &str, record: &StoreRecord, file: &Path) -> R
             sqlite: service.opened.sqlite_version.clone(),
         })
     })
-}
-
-// The `backup` call that checks who uses a Store, `backup.restore`
-// (layerfs-project#105); the other `backup` calls are `layerfs-store`'s
-// own.
-use crate::backup::bucket::connect::BackupRestore;
-use layerfs_home::events::Events;
-use layerfs_home::outcome::Outcome;
-use std::path::Path;
-
-/// `backup.restore`: a Store from a backup, with the Store checks it makes.
-pub fn restore(
-    home: &Path,
-    events: &mut Events<'_>,
-    request: &BackupRestore,
-    users: &crate::StoreUsers,
-) -> Outcome {
-    crate::backup::bucket::connect::restore(home, events, request, users.related)
 }

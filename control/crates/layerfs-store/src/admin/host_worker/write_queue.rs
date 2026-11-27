@@ -323,7 +323,7 @@ impl HostServer {
     /// goes to the worker log, without content, and false is returned.
     fn keep(&self, request_id: &str, kind: &str, args: &SdkValue, outcome: &Outcome) -> bool {
         let Err(error) =
-            crate::admin::host_worker::write::keep(&self.home, request_id, kind, args, outcome)
+            crate::admin::host_worker::retained::keep(&self.home, request_id, kind, args, outcome)
         else {
             return true;
         };

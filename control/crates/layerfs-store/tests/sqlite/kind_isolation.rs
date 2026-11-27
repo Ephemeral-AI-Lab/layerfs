@@ -1,6 +1,6 @@
 //! Rule 3 of the control split (layerfs-project#101, #105): in
-//! `layerfs-store`, `sqlite/` and `postgresql/` never import each other; the
-//! kind-neutral root chooses by `StoreKind`.
+//! `layerfs-store`, `backend/sqlite/` and `backend/postgresql/` never import
+//! each other; the kind-neutral `admin/` chooses by `StoreKind`.
 use std::path::{Path, PathBuf};
 
 /// Every `.rs` file under `dir`.
@@ -29,13 +29,20 @@ fn code(path: &Path) -> String {
 /// The paths by which a file under one kind folder could reach `other`.
 fn reaches(code: &str, other: &str) -> bool {
     let crate_path = format!("crate::{other}");
+    let backend = format!("crate::backend::{other}");
     let named = format!("layerfs_store::{other}");
+    let named_backend = format!("layerfs_store::backend::{other}");
     let up = format!("super::{other}");
-    code.contains(&crate_path) || code.contains(&named) || code.contains(&up)
+    [crate_path, backend, named, named_backend, up]
+        .iter()
+        .any(|path| code.contains(path.as_str()))
 }
 
 fn check(kind: &str, other: &str) {
-    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src").join(kind);
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("src")
+        .join("backend")
+        .join(kind);
     let files = sources(&dir);
     assert!(!files.is_empty(), "{} holds no source", dir.display());
     for file in files {
@@ -61,5 +68,13 @@ fn postgresql_never_imports_sqlite() {
 fn the_check_sees_an_import() {
     assert!(reaches("use crate::postgresql::open;", "postgresql"));
     assert!(reaches("super::super::sqlite::family::run()", "sqlite"));
+    assert!(reaches(
+        "use crate::backend::postgresql::open;",
+        "postgresql"
+    ));
+    assert!(reaches(
+        "layerfs_store::backend::sqlite::family::run()",
+        "sqlite"
+    ));
     assert!(!reaches("use crate::record::StoreKind;", "sqlite"));
 }

@@ -430,7 +430,7 @@ fn run_kind(
         )
     })?;
     let mut lent = checkout(home, store, reservation, revision, dial, open)?;
-    crate::admin::open::cache::reaper();
+    crate::admin::open::close::reaper();
     layerfs_home::trace::step("store_open");
     let outcome = match lent.service.as_ref().and_then(|held| held.service.as_ref()) {
         Some(service) => call(service),

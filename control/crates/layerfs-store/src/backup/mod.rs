@@ -14,10 +14,6 @@ pub mod s3_api;
 #[doc(hidden)]
 pub use crate::backup::bucket::connect as family; // #828 compat
 #[doc(hidden)]
-pub use crate::backup::bucket::record; // #828 compat
-#[doc(hidden)]
-pub use crate::backup::bucket::secret;
-#[doc(hidden)]
 pub use crate::backup::jobs::create; // #828 compat
 #[doc(hidden)]
 pub use crate::backup::jobs::ended; // #828 compat
@@ -27,6 +23,14 @@ pub use crate::backup::jobs::list as heads; // #828 compat
 pub use crate::backup::jobs::list; // #828 compat
 #[doc(hidden)]
 pub use crate::backup::jobs::progress; // #828 compat
+#[doc(hidden)]
+pub mod record {
+    // #828 compat
+    pub use crate::backup::bucket::record::*;
+    pub use crate::backup::copy::link::StoreLink;
+}
+#[doc(hidden)]
+pub use crate::backup::bucket::secret;
 #[doc(hidden)]
 pub use crate::backup::jobs::restore; // #828 compat
 #[doc(hidden)]

@@ -158,7 +158,7 @@ pub fn held_branch(
         return Ok(None);
     };
     let key = target.record.postgresql_key(home, &target.store);
-    if cache::holds(&key) {
+    if crate::admin::open::checkpoint::holds(&key) {
         return Ok(None);
     }
     target.record.unblocked()?;

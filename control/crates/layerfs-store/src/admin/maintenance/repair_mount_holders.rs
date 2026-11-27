@@ -17,7 +17,8 @@
 //! only mount rows without owner or place evidence; `audit` reads one page of
 //! the Branch's retained rows. Nothing is automatic.
 use crate::admin::open::args::OpenArgs;
-use crate::admin::open::service::{branch_named, with_service};
+use crate::admin::open::service::with_service;
+use crate::data::branch::branch_named;
 use layerfs_history::{
     GcAuditAfter, GcIntent, GcIntentKind, GcScopeKind, Liveness, MountHolderView,
 };

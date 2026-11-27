@@ -277,7 +277,7 @@ fn repair_project_completes_an_incomplete_record_from_sqlite_store() {
         },
     )
     .unwrap();
-    layerfs_store::admin::open::cache::close_idle(std::time::Duration::ZERO);
+    layerfs_store::admin::open::close::close_idle(std::time::Duration::ZERO);
 
     let stack = added.get_text("stack").unwrap().to_owned();
     ProjectRecord::from_record(

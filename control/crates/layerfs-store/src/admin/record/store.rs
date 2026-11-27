@@ -5,7 +5,7 @@
 //! [`StoreKind`]; no caller compares a record's `kind` text, and no caller
 //! reads or writes a Store record's fields but through [`StoreRecord`].
 use crate::admin::record::intent;
-use crate::backup::bucket::record::StoreLink;
+use crate::backup::copy::link::StoreLink;
 use layerfs_home::home::entity_lock::{self, EntityLock};
 use layerfs_home::home::{self, paths, read_record, with_field, write_entity};
 use layerfs_home::op::{self, Op};

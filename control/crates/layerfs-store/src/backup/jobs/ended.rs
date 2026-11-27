@@ -5,9 +5,9 @@
 //! ([`crate::get::ATTEMPT`]), which `store.get`'s `backups` section reads;
 //! an `Unknown` one leaves `op` unresolved for `store get --with live` to
 //! settle.
-use super::super::bucket::record::StoreLink;
 use crate::admin::record::intent;
 use crate::admin::record::store::{self, StoreRecord};
+use crate::backup::copy::link::StoreLink;
 use layerfs_home::op::{self, Op};
 use layerfs_protocol::sdk::SdkRefusal;
 use std::path::Path;

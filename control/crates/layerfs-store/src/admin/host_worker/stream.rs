@@ -615,7 +615,7 @@ pub fn serve(home: &Path, request: &SdkValue, reader: &mut StreamReader<'_>) -> 
     let resolved = crate::admin::route::resolve::target(home, &format!("{store}/{project}"))?;
     let fields = fields.clone();
     if body == "none" {
-        return crate::admin::open::cache::run_host(
+        return crate::admin::open::host::run_host(
             home,
             &resolved.store,
             &resolved.project,
@@ -623,7 +623,7 @@ pub fn serve(home: &Path, request: &SdkValue, reader: &mut StreamReader<'_>) -> 
             fields,
         );
     }
-    crate::admin::open::cache::run_host_streamed(
+    crate::admin::open::host::run_host_streamed(
         home,
         &resolved.store,
         &resolved.project,
