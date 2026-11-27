@@ -438,6 +438,106 @@ impl PoolReader {
         Ok(())
     }
 
+    /// [`Self::prepare_leaves`] for a per-object demand (#818 H5), with the
+    /// same window, bounds and calls. A leaf whose rebuild fails, or one of
+    /// whose ordinals the window's lookup finds no stored value for, leaves
+    /// the window and is returned with the failure its own read meets there
+    /// (its read rebuilds it, then looks its values up, the same way); the
+    /// other leaves stay prepared. A failure `ends_demand` names (session,
+    /// transport) and a failed lookup call fail the call.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn prepare_leaves_each(
+        &mut self,
+        source: &crate::read::Fetch,
+        capacities: &StorageCapacities,
+        ceiling: i64,
+        workspace: &mut DecompressionWorkspace,
+        roots: &[ObjectLocation],
+        mut caches: Option<PooledCaches<'_>>,
+        ends_demand: fn(&StorageError) -> bool,
+    ) -> StorageResult<Vec<(ObjectId, StorageError)>> {
+        self.prepared.clear();
+        let mut failed: Vec<(ObjectId, StorageError)> = Vec::new();
+        let mut window = Vec::new();
+        let mut wanted = BTreeSet::new();
+        let mut bytes = 0usize;
+        for root in roots {
+            if self.prepared.len() == PREPARED_LEAVES {
+                break;
+            }
+            if root.role != layerfs_content::ObjectRole::InodeLeaf
+                || self.prepared.contains_key(&root.object_id)
+                || failed.iter().any(|(id, _)| *id == root.object_id)
+            {
+                continue;
+            }
+            let caches = caches.as_mut().map(|caches| PooledCaches {
+                encoded: &mut *caches.encoded,
+                decoded: &mut *caches.decoded,
+            });
+            let rebuilt = self
+                .rebuild(source, capacities, ceiling, workspace, *root, caches)
+                .and_then(|rebuilt| Ok((body_ordinals(rebuilt.read_bodies())?, rebuilt)));
+            let (ordinals, rebuilt) = match rebuilt {
+                Ok(rebuilt) => rebuilt,
+                Err(error) if ends_demand(&error) => return Err(error),
+                Err(error) => {
+                    failed.push((root.object_id, error));
+                    continue;
+                }
+            };
+            let more: Vec<u32> = ordinals.difference(&wanted).copied().collect();
+            let size: usize = rebuilt.bodies.iter().map(Vec::len).sum();
+            if !self.prepared.is_empty()
+                && (wanted.len() + more.len() > VALUE_ROOM || bytes + size > PREPARED_BYTES)
+            {
+                break;
+            }
+            wanted.extend(more);
+            bytes += size;
+            self.prepared.insert(root.object_id, rebuilt);
+            window.push((root.object_id, ordinals));
+        }
+        if self.prepared.len() < 2 {
+            // One leaf looks up its own values, as before.
+            return Ok(failed);
+        }
+        let missing: Vec<u32> = wanted
+            .iter()
+            .copied()
+            .filter(|ordinal| !self.values.contains_key(ordinal))
+            .collect();
+        if missing.is_empty() {
+            return Ok(failed);
+        }
+        if self.values.len() + missing.len() > VALUE_ROOM {
+            self.counters.value_cache_evictions = self
+                .counters
+                .value_cache_evictions
+                .saturating_add(self.values.len() as u64);
+            self.values.clear();
+        }
+        let missing: Vec<u32> = wanted
+            .iter()
+            .copied()
+            .filter(|ordinal| !self.values.contains_key(ordinal))
+            .collect();
+        let found = source.inode_values_found(&missing)?;
+        self.counters.value_lookups = self.counters.value_lookups.saturating_add(1);
+        self.counters.value_rows = self.counters.value_rows.saturating_add(found.len() as u64);
+        self.values.extend(found);
+        for (id, ordinals) in window {
+            if ordinals
+                .iter()
+                .any(|ordinal| !self.values.contains_key(ordinal))
+            {
+                self.prepared.remove(&id);
+                failed.push((id, StorageError::Integrity("metadata ordinal missing")));
+            }
+        }
+        Ok(failed)
+    }
+
     /// The physical body and the authenticated canonical bytes of one pooled
     /// locator, for a Save that reuses the ordinals of the leaf's values.
     pub(crate) fn leaf_parts_with_caches(

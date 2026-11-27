@@ -178,6 +178,8 @@ impl StoreService {
             ReservationBlocks::default(),
         )
         .map_err(open_refusal)?;
+        // #818 W4: one flight, so a first create prepares nothing.
+        opened.prepare_sdk_writes().map_err(open_refusal)?;
         Self::owning(opened, template)
     }
 

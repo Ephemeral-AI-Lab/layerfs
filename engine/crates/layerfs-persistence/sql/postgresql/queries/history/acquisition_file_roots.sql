@@ -1,0 +1,1 @@
+SELECT w.* FROM {s}.init_operation o LEFT JOIN LATERAL (SELECT 1 AS present,canonical_position,aliases,file_root FROM {s}.init_host_file WHERE operation_id=$1::bigint AND canonical_position>$3::bigint ORDER BY canonical_position LIMIT $4::bigint) w ON true WHERE o.operation_id=$1::bigint AND o.owner_epoch=$2::bigint

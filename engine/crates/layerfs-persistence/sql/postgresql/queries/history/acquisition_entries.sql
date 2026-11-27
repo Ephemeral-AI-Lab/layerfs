@@ -1,0 +1,1 @@
+SELECT w.* FROM {s}.init_operation o LEFT JOIN LATERAL (SELECT 1 AS present,parent_position,name,position,kind,canonical_position,metadata_root,content_root FROM {s}.init_entry WHERE operation_id=$1::bigint AND (parent_position,name)>($3::bigint,$4::bytea) ORDER BY parent_position,name LIMIT $5::bigint) w ON true WHERE o.operation_id=$1::bigint AND o.owner_epoch=$2::bigint

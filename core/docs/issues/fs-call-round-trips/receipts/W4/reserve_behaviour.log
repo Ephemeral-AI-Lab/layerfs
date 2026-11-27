@@ -1,0 +1,18 @@
+
+running 1 test
+
+thread 'reservation_answers_as_the_transaction_in_one_message' panicked at engine/crates/layerfs-persistence/tests/postgresql_reserve_message.rs:111:5:
+assertion `left == right` failed
+  left: Ok((1, 9223372036854775806))
+ right: Ok((1, 9223372036854775805))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test reservation_answers_as_the_transaction_in_one_message ... FAILED
+
+failures:
+
+failures:
+    reservation_answers_as_the_transaction_in_one_message
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.75s
+
+run_bounded: exit 101 after 1.7 s

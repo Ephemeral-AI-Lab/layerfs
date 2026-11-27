@@ -10,6 +10,13 @@ pub(crate) fn advance(tx: &Transaction<'_>, pack: i64, ordinal: i64) -> Result<(
     Ok(())
 }
 
+/// The block allocation's statement ([`allocate`]), which the SDK open
+/// prepares (`mount::create_texts`).
+pub(crate) const ALLOCATE: &str =
+    "UPDATE store_policy SET next_pack_id=next_pack_id+$1,next_ordinal=next_ordinal+$2 \
+     WHERE id=1 AND next_pack_id<=9223372036854775807-$1::bigint AND next_ordinal<=$3::bigint-$2::bigint \
+     RETURNING next_pack_id-$1,next_ordinal-$2";
+
 /// Takes both blocks in one `UPDATE … RETURNING`; the bounds are checked in
 /// the statement, so a refused block leaves the cursor unchanged. No row
 /// means a bound was reached, or the policy row is gone (read to tell them
@@ -20,9 +27,7 @@ pub(crate) fn allocate(
     ordinals: i64,
 ) -> Result<(i64, i64), BackendError> {
     let rows = tx.query(
-        "UPDATE store_policy SET next_pack_id=next_pack_id+$1,next_ordinal=next_ordinal+$2 \
-         WHERE id=1 AND next_pack_id<=9223372036854775807-$1::bigint AND next_ordinal<=$3::bigint-$2::bigint \
-         RETURNING next_pack_id-$1,next_ordinal-$2",
+        ALLOCATE,
         vec![
             Param::I64(packs),
             Param::I64(ordinals),

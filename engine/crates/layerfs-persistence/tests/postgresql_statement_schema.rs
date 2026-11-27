@@ -127,6 +127,53 @@ const READS: &[Read] = &[
         keys: &["lineage_chain_window"],
         pg_only: false,
     },
+    // Init's acquisition reads (#818 I3a); `postgresql_acquisition_reads`
+    // runs each one on a real server against SQLite's answers.
+    Read {
+        called: "unplaced_children",
+        keys: &["acquisition_unplaced"],
+        pg_only: false,
+    },
+    Read {
+        called: "directories",
+        keys: &["acquisition_directories"],
+        pg_only: false,
+    },
+    Read {
+        called: "directory_path",
+        keys: &["acquisition_directory_path"],
+        pg_only: false,
+    },
+    Read {
+        called: "jobs",
+        keys: &["acquisition_jobs"],
+        pg_only: false,
+    },
+    Read {
+        called: "job",
+        keys: &["acquisition_job"],
+        pg_only: false,
+    },
+    Read {
+        called: "file_roots",
+        keys: &["acquisition_file_roots"],
+        pg_only: false,
+    },
+    Read {
+        called: "entries",
+        keys: &["acquisition_entries"],
+        pg_only: false,
+    },
+    Read {
+        called: "bindings",
+        keys: &["acquisition_bindings"],
+        pg_only: false,
+    },
+    Read {
+        called: "work",
+        keys: &["acquisition_owner"],
+        pg_only: false,
+    },
     // The shared facade forwards its caller's closure; the call sites above
     // are the bodies it runs.
     Read {

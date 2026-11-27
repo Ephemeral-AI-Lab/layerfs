@@ -8,9 +8,11 @@
 //! joined in, so a released or foreign operation reads no row and is
 //! `Stale` too (`reads`). A write unit with no wait (root windows,
 //! `advance`, `discard`, `dispose`) is one pipelined message from `BEGIN`
-//! to `COMMIT` when the session is eligible (`flights`, #818 I3b). Nothing
-//! is created, and contention is the one-attempt refusal.
-use super::{cleanup, flights, placement, reads, writes};
+//! to `COMMIT` when the session is eligible (`flights`, #818 I3b); a unit
+//! that waits (`put_entries`, `place_children`) is one transaction over
+//! one flight per wait (`unit`, I3b part A). Nothing is created, and
+//! contention is the one-attempt refusal.
+use super::{cleanup, flights, placement, reads, unit, writes};
 use crate::backend::{
     postgresql::session::{connection::Session, transaction::Transaction},
     sqlite::acquisition::statements::{signed, Failure},
@@ -90,16 +92,14 @@ impl PostgresAcquisition {
 
     /// One read unit: one fenced autocommit statement whose read joins the
     /// owner's row (`reads`), so it needs no transaction of its own.
-    fn read<T>(
-        &self,
-        owner: Owner,
-        body: impl FnOnce(&Transaction<'_>) -> Result<T, Failure>,
-    ) -> AcquisitionResult<T> {
+    /// Each call site sends its own body, so the schema guard
+    /// (`postgresql_statement_schema`) sees which statement it runs.
+    fn live(&self, owner: Owner) -> AcquisitionResult<()> {
         self.available()?;
         if owner.epoch == 0 || owner.epoch != self.epoch.get() {
             return Err(Failure::Stale.into());
         }
-        Ok(self.session.read_statement(body)?)
+        Ok(())
     }
 
     /// Refuses every unit on a schema made without the acquisition tables.
@@ -145,7 +145,15 @@ impl Acquisition for PostgresAcquisition {
             entry.key.name.len() + entry.host_path.as_ref().map_or(0, Vec::len) + WRITE_ROW_BYTES
         });
         bounded(entries.len(), bytes.sum())?;
-        self.unit(owner, true, |tx| writes::put_entries(tx, owner, entries))
+        self.flight(
+            owner,
+            |session, id| {
+                Some(unit::run(session, id, |unit| {
+                    writes::append_entries(unit, id.0, entries)
+                }))
+            },
+            |tx| writes::put_entries(tx, owner, entries),
+        )
     }
 
     fn unplaced_children(
@@ -155,9 +163,10 @@ impl Acquisition for PostgresAcquisition {
         after: Option<&[u8]>,
         limits: Limits,
     ) -> AcquisitionResult<Vec<Unplaced>> {
-        self.read(owner, |tx| {
-            reads::unplaced_children(tx, owner, parent, after, limits)
-        })
+        self.live(owner)?;
+        Ok(self
+            .session
+            .read_statement(|tx| reads::unplaced_children(tx, owner, parent, after, limits))?)
     }
 
     fn place_children(
@@ -172,9 +181,20 @@ impl Acquisition for PostgresAcquisition {
                 + WRITE_ROW_BYTES
         });
         bounded(placed.len(), bytes.sum())?;
-        self.unit(owner, true, |tx| {
-            placement::place_children(tx, owner, parent, placed)
-        })
+        self.flight(
+            owner,
+            |session, id| {
+                let signed_parent = signed(parent).ok()?;
+                let state = std::cell::RefCell::new(Default::default());
+                Some(unit::run(session, id, |unit| {
+                    placement::place(unit, id.0, signed_parent, placed, &state)?;
+                    let state: &crate::backend::sqlite::acquisition::placement::Placement =
+                        &state.borrow();
+                    Ok((state.canonical.clone(), state.rows, state.bytes))
+                }))
+            },
+            |tx| placement::place_children(tx, owner, parent, placed),
+        )
     }
 
     fn directories(
@@ -183,11 +203,17 @@ impl Acquisition for PostgresAcquisition {
         after: Option<u64>,
         limits: Limits,
     ) -> AcquisitionResult<Vec<Directory>> {
-        self.read(owner, |tx| reads::directories(tx, owner, after, limits))
+        self.live(owner)?;
+        Ok(self
+            .session
+            .read_statement(|tx| reads::directories(tx, owner, after, limits))?)
     }
 
     fn directory_path(&self, owner: Owner, position: u64) -> AcquisitionResult<Option<Vec<u8>>> {
-        self.read(owner, |tx| reads::directory_path(tx, owner, position))
+        self.live(owner)?;
+        Ok(self
+            .session
+            .read_statement(|tx| reads::directory_path(tx, owner, position))?)
     }
 
     fn jobs(
@@ -196,11 +222,17 @@ impl Acquisition for PostgresAcquisition {
         after: Option<u64>,
         limits: Limits,
     ) -> AcquisitionResult<Vec<Job>> {
-        self.read(owner, |tx| reads::jobs(tx, owner, after, limits))
+        self.live(owner)?;
+        Ok(self
+            .session
+            .read_statement(|tx| reads::jobs(tx, owner, after, limits))?)
     }
 
     fn job(&self, owner: Owner, position: u64) -> AcquisitionResult<Option<Job>> {
-        self.read(owner, |tx| reads::job(tx, owner, position))
+        self.live(owner)?;
+        Ok(self
+            .session
+            .read_statement(|tx| reads::job(tx, owner, position))?)
     }
 
     fn complete_files(&self, owner: Owner, roots: &[(u64, ObjectId)]) -> AcquisitionResult<()> {
@@ -219,7 +251,10 @@ impl Acquisition for PostgresAcquisition {
         after: Option<u64>,
         limits: Limits,
     ) -> AcquisitionResult<Vec<FileRoot>> {
-        self.read(owner, |tx| reads::file_roots(tx, owner, after, limits))
+        self.live(owner)?;
+        Ok(self
+            .session
+            .read_statement(|tx| reads::file_roots(tx, owner, after, limits))?)
     }
 
     fn entries(
@@ -228,7 +263,10 @@ impl Acquisition for PostgresAcquisition {
         after: Option<&EntryKey>,
         limits: Limits,
     ) -> AcquisitionResult<Vec<Entry>> {
-        self.read(owner, |tx| reads::entries(tx, owner, after, limits))
+        self.live(owner)?;
+        Ok(self
+            .session
+            .read_statement(|tx| reads::entries(tx, owner, after, limits))?)
     }
 
     fn bindings(
@@ -237,7 +275,10 @@ impl Acquisition for PostgresAcquisition {
         after: Option<&EntryKey>,
         limits: Limits,
     ) -> AcquisitionResult<Vec<Binding>> {
-        self.read(owner, |tx| reads::bindings(tx, owner, after, limits))
+        self.live(owner)?;
+        Ok(self
+            .session
+            .read_statement(|tx| reads::bindings(tx, owner, after, limits))?)
     }
 
     fn set_directory_roots(
@@ -285,7 +326,8 @@ impl Acquisition for PostgresAcquisition {
     }
 
     fn work(&self, owner: Owner) -> AcquisitionResult<AcquisitionWork> {
-        self.read(owner, |tx| Ok(writes::owner(tx, owner)?.1))
+        self.live(owner)?;
+        Ok(self.session.read_statement(|tx| reads::work(tx, owner))?)
     }
 
     fn abandoned(&self, after: Option<u64>, limit: usize) -> AcquisitionResult<Vec<Abandoned>> {

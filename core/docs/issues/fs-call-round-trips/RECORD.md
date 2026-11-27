@@ -545,3 +545,146 @@ cache, launcher records) were left alone.
   `docs/architecture/engine/store/postgresql.md` resolved keeping both lanes'
   Statement-mode uses. Init pins, write pins and equivalence green on the tip
   (`receipts/M3/merge-WI-*.log`).
+- Lane RH `bd564456cf` H4 + `55f5d4fedc` M2 review fixes → merge `f10b477d40`,
+  Production LOC 230,428 -> 230,600 (+172). History/read pins, equivalence and
+  `method_refusal_order` green on the tip (`receipts/M3/merge-RH-*.log`).
+  - H4 (PG warm, cold): blame.h100 254 → 59 (491 → 296), blame.h10 33 → 16,
+    revision.h100 253 → 72 (11% over the ~55–65 range: `fs.revision` reads a
+    serial only where the path exists, so the window saves less; diagnosed,
+    recorded), revision.h10 cold 82 → 66. SQLite unchanged. Sweep
+    `lineage_chain_window` 492 messages drop + kill.
+  - Review fixes: Branch-name memo ≤ 1,024; one `Cached` for diff_files with
+    attribution; `DirectoryMemo` bounded when full; corrupt-Store refusal order
+    restored (a corrupt recorded Branch costs one extra read, corrupt Store only).
+  - **Residual fault-only order difference (R5), for the owner:** a failure of
+    the context statement itself refuses before an invalid `path` argument
+    refusal. (Before R5 this already held when the fault hit the project read;
+    only a fault exactly on the old marker read refused after `path`.) Removing
+    it needs a second statement per read or checking `path` first, which would
+    reorder healthy `NoSuchProject`/`NoSuchBranch` vs `InvalidInput`; neither done.
+  - Ownership of persistence `history/catalog.rs` and
+    `sql/postgresql/queries/history/` passed to lane W at this merge.
+- **H5/H6 refusal-order blocker and decision (orchestrator).**
+  `AuthenticatedObjects::read_canonical_batch` returns one result per demand, so
+  a damaged object in any version of a batched window fails the whole window,
+  including versions past where today's blame/revision walk stops (and blame's
+  batched text fetch / diff_files' two-sided planning likewise): a corrupt-Store
+  order change. Options: (1) per-object read results, an additive read-port
+  method with a default; (2) accept the corruption-only order change (owner);
+  (3) bounded windows for revision only (partial). **Taken: (1)** — no answer,
+  order, format or custody change; additive core method per SPEC §5.
+  - RH `2a9a328930`: `AuthenticatedObjects::read_canonical_each` +
+    `reads_each_at_once()` (default false; one-by-one default, no re-read).
+    LOC +6 (layerfs-content). The batched read lives in core storage's shared
+    read path (`layerfs-storage` `read/objects.rs`, `fetch.rs`, `prefetch.rs`,
+    `length.rs`, `encoding/pack_cache.rs`, `encoding/pool/read.rs`; both
+    engines), not in lane W's PG provider. Exact per-object errors there are a
+    sizeable refactor: new **lane S** (orchestrator decision) implements it in
+    parallel; RH builds the H5/H6 wiring on the port, gated on
+    `reads_each_at_once()`, with a test-only reader to force batching for the
+    corruption-order tests.
+  - Lane S constraints (parent session): SPEC §5 core rules — additive only
+    (existing read paths and signatures unchanged), no format change, SQLite
+    statement pins unchanged unless a listed pure dedupe, memory bounded by the
+    existing `ReadCache`/`KeptReads` limits, one attempt. Lane S's added core
+    files and LOC go into RECORD and the layout listing; its diff is part of the
+    M3 independent review.
+- Lane I `fc914d59e0` I3b part A on lane W's session capability: `put_entries`
+  and `place_children` as one transaction over several flights of one writer
+  turn (new `acquisition/unit.rs`); waits = the D17 dependency check (kept, same
+  order) and a dependent row's `BIND_HOST_FILE`. **Init 10k: nested 215, flat
+  247 PG trips (≤ 250 target met;** baseline 10,955 / 31,039). 1k nested 99, flat
+  106; hardlink_window 298; wide_hardlinks 709. SQLite unchanged. First
+  measurement 218 / 251 vs predicted ~213 / ~243 (16–20% smaller reductions):
+  diagnosed once (the old generation fence rides in the BEGIN batch, not its own
+  trip); then a revised prediction for a shared prepare (the first unit prepares
+  every acquisition write text) ~215 / ~247, measured exactly. **Note:** that
+  shared prepare is close to I3d (not taken, D13) but runs only when Init runs,
+  not at every Store open, so D13's per-open trip does not apply; recorded.
+  Sweeps: `postgresql_acquisition_units` 156 + 156; placement 72 + 72; flights
+  251 + 251. Production LOC +375 (layerfs-persistence).
+- Lane S `dec2216e23` (on RH's `2a9a328930`): exact per-object results for one
+  batched demand in `layerfs-storage` (additive: `Reader::read_canonical_each`,
+  `reads_each_at_once() = true`, `Storage::read_each_with`, `lengths_each_with`,
+  `read_each_kept`; `read`, `chains`, `prepare_leaves`, `length::read`
+  unchanged). Healthy demands make the same provider calls; transport/session
+  and multi-unit failures fail the call; anything else is the error of exactly
+  the dependent ids, equal to each id's point read; a failed pack is not
+  requested again. 9 new tests; storage suite 191 passed; read/history pins
+  unchanged on both backends; equivalence green. Production LOC 230,606 ->
+  231,175 (+569, core layerfs-storage). No new core files; per file:
+  `read/objects.rs` 199→428, `read/prefetch.rs` 85→215, `encoding/pool/read.rs`
+  586→677, `read/provider.rs` 101→160, `read/length.rs` 66→119, `read/fetch.rs`
+  873→880. Limit being closed: a pack refused inside a multi-pack group read
+  (batched PG) still failed the whole call → `read/hints.rs` follow-up (lane S).
+- Lane W `b7dd8bfd48` W4 (D8): one SDK-open prepare flight of the writer
+  statements a first create sends (no fenced read statements: owner deferral;
+  `commit_snapshot_epoch` and `lineage_parent` included as SELECTs inside the
+  Commit write transaction), re-prepared after reopen (`sdk_writes` flag);
+  `reserve_inodes` on PostgreSQL one pipelined message (`allocation_reserve.sql`,
+  `history/reserve.rs`, dispatched from `catalog.rs`; authority then Capacity
+  checked on the server). new_file cold 96 → 80, mkdir cold 90 → 74 (predicted =
+  measured); warm unchanged; SDK open +1 trip. Sweeps: reservation 27 + 27,
+  open prepare flight 53 + 53. Init −6 trips / +1 statement (W4 edited lane I's
+  Init pins). Production LOC +215.
+  - **Met under the cold rule** (parent session correction): `write.new_file`
+    cold target = SPEC ~40 + (cold 112 − probe 66 = 46) ≈ 86, measured 80;
+    `mkdir` cold target = SPEC ~26 + (113 − 45 = 68) ≈ 94, measured 74. Note
+    (not a miss): the cold construct alone is 18 trips, and the read-statement
+    prepares that would lower it further are an owner deferral.
+  - Asked lane W to **revert** its loosening of `postgresql_round_trips`'
+    `round_trips >= statements` check (AGENTS: never weaken an assertion); that
+    test's failure is pre-existing (recorded at M1).
+  - Guard failure found by W: `postgresql_statement_schema::every_one_statement_read_names_the_schema`
+    trips on I3a's `read_statement(body)` → lane I to fix.
+- Lane W `d78f3f85a0` W7: **not built.** Per-statement trace of a cold
+  `apply.10_writes`: the membership locate is not followed by a read of what it
+  returned; the construct's base-path locates pair with dependent reads but each
+  locates a single object (core `read/fetch.rs` turns the join off for
+  single-object demands); upper bound 1 trip of 80. Follow-up recorded (not
+  built): hand the bind's Workspace-reader base-path locates to the Save (up to
+  6 cold construct locates).
+- Lane RH `ea3516d884` H5 wiring (`read/versions.rs`, windows 16/32/64/128 via
+  `PathAcross`; `Cached` records each object's own failure and never re-reads
+  it; a window with a data failure walks its versions alone; transport failure
+  refuses at once; `Batching::Provider` only on PostgreSQL with
+  `reads_each_at_once`; `Batching::Forced` test-only), LOC +244; `3d377ea174` H6
+  (`lengths_each_with`; read-ahead lengths and blame text roots ≤ 64 / 4 MiB, or
+  revision attribute roots; `diff_files` both sides together; `equal_edges` per
+  pair; `CONTENT_QUERY_BYTES` charged in today's order), LOC +217. Not
+  measurable until lane S merges and `store/ports.rs` forwards to
+  `Storage::read_each_with` / `lengths_each_with`. Predicted PG warm after S:
+  blame.h100 ~18–28 (SPEC ~29), blame.h10 ~8–12, revision.h100 ~22–32 (SPEC ~30),
+  diff_files ~20–21 (SPEC ~12: per-side resolve, `for_snap` and attribution trips
+  not touched by H6 — open, to diagnose from the merge-time trace). Corruption
+  tests (forced batching): a damaged tree root / text refuses only where the
+  walk reaches it.
+  - **Residual fault-only order difference (H6, batched mode), for the owner:**
+    `diff_files` locates the right side before reading the left text, so a
+    right-side locate failure comes before the left text's demands.
+- Lane W `bd1ee54013`: `postgresql_round_trips` check reverted to the original `round_trips >= statements` (no replacement); the test fails as recorded at Phase 0, and W4's pipelined reservation now also trips it. Lane W complete for M3.
+- Merge `1e77af6757` (lane W M3): Init pin conflict (I3b A vs W4) resolved to
+  part A's counts with W4's −6 trips / +1 statement, predicted and measured
+  exactly: **Init 10k PG nested 209, flat 241** (`receipts/M3/merge-W4-*.log`).
+  Production LOC 230,975 -> 231,190 (+215).
+- Lane I `428fc626f3` → merge `71bf02bffc`: I3a acquisition reads now call
+  `read_statement` per site with qualified keys from 9 new
+  `sql/postgresql/queries/history/acquisition_*.sql` files (SQL unchanged but
+  whitespace); `postgresql_statement_schema` green, guard unchanged. Production
+  LOC 231,190 -> 231,247 (+57, SQL text moved into shipped .sql files).
+- `visibility_guard` fails on R5's `read_context_node.sql` (reads `branch` /
+  `layer_stack` without the §4.2 filter) → lane RH to fix (match the one-by-one
+  statements it replaced; never weaken the guard).
+- Lane S `0ad54a7401` (hints follow-up): per-object demands read pages through
+  one `read_groups_classified` call and whole packs through
+  `Fetch::whole_packs_each`, so on the batched PostgreSQL route a refused pack
+  inside a multi-pack group read is the error of exactly the dependent ids, each
+  equal to its point read, requested once; existing callers keep `read_groups`
+  and their counts (no `Fetch::per_object()` guard). Production LOC 231,175 ->
+  231,300 (+125, core layerfs-storage; `read/hints.rs` 684→802,
+  `read/objects.rs` 428→434, `read/fetch.rs` 880→882, `read/prefetch.rs`
+  215→214; no new files). `read/fetch.rs` is at 998 physical lines (ceiling 999).
+  **Recorded edge:** a pack first refused by a reconstruction's own acquisition
+  after the walk (only when the pack cache evicted a group the walk read within
+  one cohort) is acquired again by that reconstruction; the root still gets its
+  point-read error. Corrupt Store + eviction only.

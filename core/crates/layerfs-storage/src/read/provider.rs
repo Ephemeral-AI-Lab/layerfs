@@ -50,6 +50,32 @@ impl<'a> Reader<'a> {
         super::length::read(self.storage, ids, |states| self.read_objects(states))
     }
 }
+impl Reader<'_> {
+    /// [`Self::read_objects`] in one demand with one result per requested
+    /// object (#818 H5): a missing, mismatched or undecodable object, or one
+    /// whose pack, chain or stored values fail, is its own result, the one
+    /// its point read returns; a session, transport or bound failure fails
+    /// the call.
+    pub fn read_objects_each(
+        &self,
+        ids: &[ObjectId],
+    ) -> StorageResult<Vec<StorageResult<Vec<u8>>>> {
+        let _serve = self
+            .after_save
+            .then(|| self.storage.source.serving_published());
+        let (workspace, state) = &mut *self.state.borrow_mut();
+        state.read_each(
+            workspace,
+            &self.storage.source,
+            &self.storage.capacities(),
+            ids,
+        )
+    }
+    /// [`Self::file_lengths`] with one result per requested object (#818 H6).
+    pub fn file_lengths_each(&self, ids: &[ObjectId]) -> StorageResult<Vec<StorageResult<u64>>> {
+        super::length::read_each(self.storage, ids, |states| self.read_objects_each(states))
+    }
+}
 /// One caller's decode arena and bounded pack, group and pooled-value caches,
 /// kept across that caller's demands instead of a fresh [`Reader`]'s per
 /// demand. Pack ids come from a counter that never goes back and published
@@ -128,8 +154,50 @@ impl Storage {
         super::length::read(self, ids, |states| self.read_kept(kept, states))
     }
 }
+impl Storage {
+    /// [`Reader::read_objects_each`] through caller-kept caches.
+    pub fn read_each_with(
+        &self,
+        cache: &mut ReadCache,
+        ids: &[ObjectId],
+    ) -> StorageResult<Vec<StorageResult<Vec<u8>>>> {
+        let ReadCache(workspace, kept) = cache;
+        kept.0
+            .read_each(workspace, &self.source, &self.capacities(), ids)
+    }
+    /// [`Reader::file_lengths_each`] through caller-kept caches.
+    pub fn lengths_each_with(
+        &self,
+        cache: &mut ReadCache,
+        ids: &[ObjectId],
+    ) -> StorageResult<Vec<StorageResult<u64>>> {
+        super::length::read_each(self, ids, |states| self.read_each_with(cache, states))
+    }
+    /// [`Reader::read_objects_each`] through kept caches and a fresh arena.
+    pub fn read_each_kept(
+        &self,
+        kept: &mut KeptReads,
+        ids: &[ObjectId],
+    ) -> StorageResult<Vec<StorageResult<Vec<u8>>>> {
+        let mut workspace = Decoder::new()?;
+        kept.0
+            .read_each(&mut workspace, &self.source, &self.capacities(), ids)
+    }
+}
 impl AuthenticatedObjects for Reader<'_> {
     fn read_canonical_batch(&self, ids: &[ObjectId]) -> ContentResult<Vec<Vec<u8>>> {
         self.read_objects(ids).map_err(crate::error::provider_error)
+    }
+    fn read_canonical_each(&self, ids: &[ObjectId]) -> ContentResult<Vec<ContentResult<Vec<u8>>>> {
+        let each = self
+            .read_objects_each(ids)
+            .map_err(crate::error::provider_error)?;
+        Ok(each
+            .into_iter()
+            .map(|read| read.map_err(crate::error::provider_error))
+            .collect())
+    }
+    fn reads_each_at_once(&self) -> bool {
+        true
     }
 }

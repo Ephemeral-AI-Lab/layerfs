@@ -286,7 +286,7 @@ order, before the new connection serves anything:
 | 2. Read the new backend | The Store's generation, `pg_backend_pid()` and the backend start in one statement | a moved generation `Stale` |
 | 3. Take held keys again | The advisory keys of every intent the session still holds (`held_ops`: its live mounts) went with the old connection. They are taken again, all or none, in the statement a registration uses (`gc_lock_session`, generation and backend checked) | a refused key `Busy`, a moved generation `Stale`, a key on another backend (a transaction-pooling proxy) `Integrity`: the new connection is closed, the writer stays quarantined and the call fails. The intent rows were never touched, so they kept refusing removals and compaction |
 | 4. Release orphaned rows | Two kinds of intent row no caller will release: a mount whose admission reply was lost (it may have committed its row and never reached its caller), and an op whose release found the writer quarantined and could not be sent (its owner has closed; the closed connection gave its keys back, so it left `held_ops` and step 3 does not take them again). Each was recorded inside the turn that found it; its row is deleted by the owner release's generation-checked statement, by op id (token `reopen`). This step runs only when step 1 proved every closed connection's backend gone, so no admission `COMMIT` can land after the delete; otherwise every orphan waits for a later reopen | An orphan whose delete was answered is forgotten (a definite refusal leaves the row). One whose delete may not have run (a lost reply, its prepare's included) stays, with those not yet attempted, and the reopen fails. The delete names one op and is a no-op once the row is gone, so sending it at a later reopen never touches another op's row |
-| 5. Prepare again | The daemon's mount statements prepared at open (`prepare_mounts`) are prepared on the new connection | as any prepare |
+| 5. Prepare again | The statements prepared at open, the daemon's mount statements (`prepare_mounts`) and the SDK's create statements (`prepare_sdk_writes`, #818 W4), are prepared on the new connection in one flight | as any prepare |
 
 **Custody never straddles a reopen.** Every change to `held_ops` and the
 orphans happens inside a writer turn, together with the statement that
@@ -954,6 +954,21 @@ prepared before the mount, in one flight each
   deleted the four in-place migration probes, 2 round trips each). A mount on a service that did not prepare
   them prepares the message's statements at first use, in the message's
   own turn ([Mount admission in one message](#mount-admission-in-one-message)).
+- **The writer, when the SDK opens a Store** (#818 W4,
+  `StoreService::open_postgres` → `OpenedStore::prepare_sdk_writes`): the
+  statements a first create sends after its bind (`mount::create_texts`).
+  A create is an SDK write that does not take the fused Commit. The texts
+  are:
+  - the serial reservation's one message (`allocation_reserve`);
+  - the Save's block allocation, pack `COPY` and object rows;
+  - the bindings' insert;
+  - the statements of the Commit's write transaction (`commit_branch`).
+
+  They go in one flight, one read transaction like the daemon's. Reads sent
+  as autocommit statements are not in it. One round trip per SDK open; a
+  first create then saves 16 round trips (`write.new_file` cold 96 → 80).
+  A reopened writer prepares them again with the mount statements, in one
+  flight (step 5 below).
 - **A Workspace reader**, when it opens (at the mount that opens it, or
   after readiness for the idle reader, `Store::prefill_reader`): the
   snapshot by Branch id and by name, the markers, and the root's first
@@ -1746,7 +1761,7 @@ operation reads no row and is `Stale`, and an empty window answers one row
 with a NULL marker; a path window (jobs, directories) sums its rows' sizes
 over the rows it read and keeps the leading rows that fit in the same
 statement, where a sizing read and a second read did before. One round trip
-per read instead of four or five. A schema without the acquisition tables
+per read instead of four or five. Each read's text (and the owner row's) is a `qualified` statement key naming the schema (`sql/postgresql/queries/history/acquisition_*.sql`), pinned by the one-statement schema guard (`postgresql_statement_schema`). A schema without the acquisition tables
 refuses every unit ([`acquisition/`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/acquisition)). The session's epoch is the
 same lock-free value as on SQLite ([Acquisition](sqlite.md#acquisition)): a
 `begin` waiting for the lane blocks no live owner's unit.
@@ -1771,9 +1786,32 @@ quarantines the session; nothing is resent. A session without a generation,
 a write nested in the held lane, or a position that does not convert to
 signed runs the ordinary transaction instead
 ([`flights.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/acquisition/flights.rs)).
-A warm unit is one round trip instead of five to thirteen. `put_entries` and
-`place_children` keep the ordinary transaction: their dependency check is a
-wait inside the transaction.
+A warm unit is one round trip instead of five to thirteen.
+
+**Write units that wait (#818 I3b, part A).** `put_entries` and
+`place_children` read a reply before they know what to send next: the D17
+dependency check of each window, and a dependent row's `BIND_HOST_FILE`
+(its canonical position is the entry's parameter). Each is one transaction
+over several flights of one writer turn (`DecidedTurn::prepare_unit`,
+`send_in_unit`): the unit's statements are prepared before `BEGIN` in one
+flight (the first unit prepares every acquisition write text, so later unit
+kinds find theirs cached); each wait ends a flight; every other statement is
+queued and sent, in order, at the head of the next flight. A queued
+placement (`PLACE_CHILDREN`, `PLACE_ENTRY`) is decoded when its flight
+returns, in request order before any later reply, so its `Changed` comes
+where the per-statement loop found it. The first flight opens as a flight
+above does (lane row, barrier, fence, attempt token, owner assertion); the
+last sends what is queued, `CHARGED`, the token check and `COMMIT`
+(`place_children` first reads its placements back, since its charge depends
+on them). A refusal from the client (`Bounds`, a malformed reply) first sends
+what is queued, so an earlier server refusal still wins; a refusal or lost
+reply in a flight rolls back (or quarantines) as the session's unit rules
+say, and a unit left open is rolled back by the turn's end. Same refusal
+order, rows and charges as the ordinary transaction, which still runs when
+the session is not eligible
+([`unit.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/acquisition/unit.rs)).
+An independent window is two round trips (dependency check; inserts, charge
+and `COMMIT`) instead of six; a placement unit of one set window is three.
 
 **Wide-directory placement (#818 I2a).** A `place_children` unit (one write
 window: at most 4,096 children or 1 MiB) binds and places its children in
@@ -1790,8 +1828,8 @@ children before it; the rest go in one statement (`PLACE_CHILDREN`: the
 upsert and the update as data-modifying CTEs over `unnest` arrays, answering
 each slot's binding and kind). The first slot with no binding, no placed row
 or a kind that disagrees is the loop's `Changed`, and the unit rolls back as
-before. A flat directory of 10,000 files places in 3 units of 2 round trips
-instead of 20,000 ([`placement.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/acquisition/placement.rs)).
+before. A flat directory of 10,000 files places in 3 units of 3 round trips
+(part A) instead of 20,000 ([`placement.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/acquisition/placement.rs)).
 
 ```text
  release of the last operation                    one Write transaction
@@ -1817,9 +1855,10 @@ reuses an operation id
 | [`postgresql_open_check.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_open_check.rs) | `LAYERFS_TEST_POSTGRES_URL=… cargo +1.85.1 test --locked -p layerfs-persistence --test postgresql_open_check` | `Full` and `Light` refusals |
 | [`postgresql_acquisition_compaction.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_acquisition_compaction.rs) | `LAYERFS_TEST_POSTGRES_URL=… cargo +1.85.1 test --locked -p layerfs-persistence --test postgresql_acquisition_compaction` | Compaction after the last release, never touching a live operation |
 | [`acquisition_placement.rs`](../../../../engine/crates/layerfs-persistence/tests/acquisition_placement.rs) | `LAYERFS_TEST_POSTGRES_URL=… cargo +1.85.1 test --locked -p layerfs-persistence --test acquisition_placement` | Set-window placement gives the per-row loop's first refusal, rows and charges (repeated names and positions, unsigned positions, stored-row dependencies, all-hardlink and large mixed directories), both backends |
-| [`postgresql_placement_fault.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_placement_fault.rs) | same, `--test postgresql_placement_fault` | Drop and kill at every server message of a placement unit (84 + 84): the unit is atomic, never replayed |
+| [`postgresql_placement_fault.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_placement_fault.rs) | same, `--test postgresql_placement_fault` | Drop and kill at every server message of a placement unit (72 + 72): the unit is atomic, never replayed |
 | [`postgresql_save_flight_fault.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_save_flight_fault.rs) | same, `--test postgresql_save_flight_fault` | A Save publishing in flights stores the ordinary Save's rows in fewer round trips; drop and kill at every server message of its finish (68 + 68): atomic, a dropped reply never a success, never replayed |
-| [`postgresql_acquisition_flights.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_acquisition_flights.rs) | same, `--test postgresql_acquisition_flights` | The no-wait write units give SQLite's answers and charges (recorded, repeated, missing, filled and unconvertible root positions, every phase, removal budgets, disposal with another operation live and of the last one, stale owners); a warm unit is one round trip and one transaction; drop and kill at every server message of each unit kind (327 + 327): atomic, a dropped reply never a success, never replayed |
+| [`postgresql_acquisition_flights.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_acquisition_flights.rs) | same, `--test postgresql_acquisition_flights` | The no-wait write units give SQLite's answers and charges (recorded, repeated, missing, filled and unconvertible root positions, every phase, removal budgets, disposal with another operation live and of the last one, stale owners); a warm unit is one round trip and one transaction; drop and kill at every server message of each unit kind (251 + 251): atomic, a dropped reply never a success, never replayed |
+| [`postgresql_acquisition_units.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_acquisition_units.rs) | same, `--test postgresql_acquisition_units` | `put_entries` over flights gives SQLite's answers, charges and rows (independent windows, aliases in and across units, the first refusal of every tail order: `Changed`, `Bounds`, a stored key, a repeated position; stale owners); a warm independent window is two round trips and one transaction; drop and kill at every server message of three unit kinds (156 + 156): atomic, never replayed |
 | [`postgresql_acquisition_reads.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_acquisition_reads.rs) | same, `--test postgresql_acquisition_reads` | Every read window, paged under row and byte limits, equals SQLite's; empty, released, missing and foreign owners stay distinct; drop and kill at every server message of each read kind (78 + 78): never a wrong answer, no row changed, never replayed |
 
 Without `LAYERFS_TEST_POSTGRES_URL` these tests print `NOT_RUN` and check
