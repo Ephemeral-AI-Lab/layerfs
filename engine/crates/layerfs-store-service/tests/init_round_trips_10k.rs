@@ -69,10 +69,12 @@ const SQLITE_FLAT: InitPin = pin(
 // fenced flight; 6 carry packs) [0, 303, 250, 33]; after I3b part C (3
 // root units and 5 removal jobs, each one fenced flight) [0, 245, 271, 33];
 // after I3b part A (5 `put_entries` units, each one flight per wait plus
-// the closing flight) [0, 215, 286, 33]
+// the closing flight) [0, 215, 286, 33]; after #818 W4 merged on top (the
+// serial reservation one pipelined message: -6 trips, +1 statement)
+// [0, 209, 287, 33]
 const POSTGRESQL_NESTED: InitPin = pin(
     "nested_10k",
-    [0, 215, 286, 33],
+    [0, 209, 287, 33],
     108000,
     1379418,
     "a68d83d36cfcc6aa",
@@ -84,10 +86,11 @@ const POSTGRESQL_NESTED: InitPin = pin(
 // after I3c (8 Save publications in fenced flights) [0, 342, 281, 36];
 // after I3b part C (root units and removal jobs in fenced flights)
 // [0, 284, 302, 36]; after I3b part A (5 `put_entries` and 3
-// `place_children` units over one flight per wait) [0, 247, 326, 36]
+// `place_children` units over one flight per wait) [0, 247, 326, 36]; after
+// #818 W4 merged on top (reservation one pipelined message) [0, 241, 327, 36]
 const POSTGRESQL_FLAT: InitPin = pin(
     "flat_10k",
-    [0, 247, 326, 36],
+    [0, 241, 327, 36],
     118890,
     1380691,
     "a0b8d9600c933c0a",

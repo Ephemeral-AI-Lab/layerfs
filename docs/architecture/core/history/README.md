@@ -179,6 +179,17 @@ overwrite.
    --> Reservation { scope, start: old + 1, count }   [start, start+count)
 ```
 
+On PostgreSQL, outside a held lane and with a count of at least 1, the
+reservation is one pipelined message (#818 W4,
+[`reserve.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/history/reserve.rs)).
+The message sends `BEGIN` with the lane row, the generation fence,
+`allocation_reserve` and a token-checked `COMMIT`. `allocation_reserve` is
+one upsert: a new scope's row starts at the count, and an existing row
+advances only when this catalog owns it and the range ends below `i64::MAX`.
+Otherwise the statement writes nothing and returns the row as it stands, so
+the client refuses in the same order (`Integrity` for the authority, then
+`Capacity`). A lost reply answers `UnknownOutcome` and is never resent.
+
 | Caller | Reservation | Source |
 | --- | --- | --- |
 | Project Init | one range of the scanned entry count; its start seeds the tree | [`import/init.rs`](../../../../engine/crates/layerfs-project/src/import/init.rs) |

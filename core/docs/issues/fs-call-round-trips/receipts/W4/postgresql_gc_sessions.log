@@ -1,0 +1,19 @@
+
+running 9 tests
+test a_compaction_on_one_session_refuses_a_mount_on_another ... ok
+test a_failed_unlock_quarantines_the_session_and_rows_still_exclude ... ok
+test a_lost_unlock_reply_quarantines_the_session_and_rows_still_exclude ... ok
+test a_mount_on_one_session_refuses_compaction_and_removal_on_another ... ok
+test a_mount_register_and_release_are_pinned_on_both_engines ... COUNT sqlite mount register: Delta { statements: 5, transactions: 1, commits: 1, round_trips: 0, prepares: 0 }
+COUNT sqlite owner release: Delta { statements: 3, transactions: 1, commits: 1, round_trips: 0, prepares: 0 }
+COUNT postgresql mount register: Delta { statements: 4, transactions: 1, commits: 1, round_trips: 1, prepares: 0 }
+COUNT postgresql owner release: Delta { statements: 2, transactions: 0, commits: 0, round_trips: 1, prepares: 0 }
+ok
+test a_registered_mount_still_meets_the_generation_fence ... ok
+test a_release_after_the_row_was_removed_elsewhere_unlocks_its_keys ... ok
+test a_stale_register_leaves_no_key_held ... ok
+test mount_register_and_release_do_not_wait_for_a_held_lane ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.64s
+
+run_bounded: exit 0 after 2.3 s

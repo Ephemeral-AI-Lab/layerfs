@@ -430,6 +430,8 @@ impl Store {
             ReservationBlocks::default(),
         )
         .unwrap();
+        // As `StoreService::open_postgres` (#818 W4); nothing on SQLite.
+        opened.prepare_sdk_writes().unwrap();
         let overlay = self.dir.join(format!("overlay-{tag}"));
         let _ = std::fs::remove_dir_all(&overlay);
         std::fs::create_dir_all(&overlay).unwrap();

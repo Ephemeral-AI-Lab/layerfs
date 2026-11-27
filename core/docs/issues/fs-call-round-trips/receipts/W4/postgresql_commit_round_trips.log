@@ -1,0 +1,33 @@
+
+running 1 test
+test commit_store_calls_are_counted_on_both_engines ... COUNT sqlite branch_snapshot: statements=3 transactions=1 commits=1 rollbacks=0 round_trips=0 prepares=0
+COUNT sqlite reserve: statements=4 transactions=1 commits=1 rollbacks=0 round_trips=0 prepares=0
+COUNT sqlite save 100 files: statements=10 transactions=1 commits=1 rollbacks=0 round_trips=0 prepares=0
+COUNT sqlite save 8 MiB: statements=61 transactions=3 commits=3 rollbacks=0 round_trips=0 prepares=0
+COUNT sqlite save 1000 similar files: statements=14 transactions=1 commits=1 rollbacks=0 round_trips=0 prepares=0
+STORAGE sqlite similar 23 B: Outcome { packs: 1, stored_bytes: 28032, full_records: 1000, prefix_records: 0 }
+COUNT sqlite save 200 similar 200 B files: statements=9 transactions=1 commits=1 rollbacks=0 round_trips=0 prepares=0
+STORAGE sqlite similar 200 B: Outcome { packs: 1, stored_bytes: 8632, full_records: 200, prefix_records: 0 }
+COUNT sqlite lane + head + commit_branch: statements=12 transactions=2 commits=2 rollbacks=0 round_trips=0 prepares=0
+COUNT sqlite lane with head check + commit_branch: statements=12 transactions=2 commits=2 rollbacks=0 round_trips=0 prepares=0
+COUNT sqlite snapshot + 1 file save: statements=10 transactions=2 commits=2 rollbacks=0 round_trips=0 prepares=0
+COUNT sqlite read_packs 2: statements=3 transactions=0 commits=0 rollbacks=0 round_trips=0 prepares=0
+COUNT sqlite read_packs missing: statements=1 transactions=0 commits=0 rollbacks=0 round_trips=0 prepares=0
+COUNT postgresql branch_snapshot: statements=1 transactions=0 commits=0 rollbacks=0 round_trips=1 prepares=0
+COUNT postgresql reserve: statements=1 transactions=1 commits=1 rollbacks=0 round_trips=3 prepares=0
+COUNT postgresql save 100 files: statements=4 transactions=1 commits=1 rollbacks=0 round_trips=7 prepares=0
+COUNT postgresql save 8 MiB: statements=4 transactions=1 commits=1 rollbacks=0 round_trips=7 prepares=0
+COUNT postgresql save 1000 similar files: statements=5 transactions=1 commits=1 rollbacks=0 round_trips=8 prepares=0
+STORAGE postgresql similar 23 B: Outcome { packs: 1, stored_bytes: 28032, full_records: 1000, prefix_records: 0 }
+COUNT postgresql save 200 similar 200 B files: statements=4 transactions=1 commits=1 rollbacks=0 round_trips=7 prepares=0
+STORAGE postgresql similar 200 B: Outcome { packs: 1, stored_bytes: 8632, full_records: 200, prefix_records: 0 }
+COUNT postgresql lane + head + commit_branch: statements=8 transactions=1 commits=1 rollbacks=0 round_trips=12 prepares=0
+COUNT postgresql lane with head check + commit_branch: statements=7 transactions=1 commits=1 rollbacks=0 round_trips=11 prepares=0
+COUNT postgresql snapshot + 1 file save: statements=5 transactions=1 commits=1 rollbacks=0 round_trips=8 prepares=0
+COUNT postgresql read_packs 2: statements=1 transactions=0 commits=0 rollbacks=0 round_trips=1 prepares=0
+COUNT postgresql read_packs missing: statements=1 transactions=0 commits=0 rollbacks=0 round_trips=1 prepares=0
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.78s
+
+run_bounded: exit 0 after 1.7 s

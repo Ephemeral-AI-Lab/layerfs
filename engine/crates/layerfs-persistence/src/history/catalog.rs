@@ -333,6 +333,15 @@ impl HistoryCatalog for HistoryProvider {
     }
 
     fn reserve_inodes(&self, request: &ReserveRequest) -> HistoryResult<Reservation> {
+        // #818 W4: on PostgreSQL, outside a held lane, one message whose
+        // checks run on the server; a count of zero keeps the transaction
+        // and its refusal order.
+        if let crate::backend::Engine::Postgres(session) = &self.engine {
+            use crate::backend::postgresql::history::{binding_append, reserve};
+            if request.count > 0 && binding_append::eligible(session)? {
+                return reserve::run(session, self.catalog_id, request);
+            }
+        }
         self.write(|tx| allocation::reserve_inodes(tx, self.catalog_id, request))
     }
 

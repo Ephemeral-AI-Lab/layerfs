@@ -1,0 +1,14 @@
+
+running 6 tests
+test a_signature_that_names_no_location_refuses_its_publication ... ok
+test captured_publication_keeps_the_winner_and_rolls_back_invalid_rows ... HELD_TAIL_COLD trips=2 prepares=2
+HELD_TAIL_WARM trips=1 prepares=0
+ok
+test captured_publication_preserves_generation_refusals ... ok
+test captured_publication_splits_wide_packs_inside_one_flight ... ok
+test ids_that_share_a_prefix_are_distinct_and_a_repeat_is_lost_to_the_first ... ok
+test only_tables_with_unbounded_values_have_a_toast_relation ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.23s
+
+run_bounded: exit 0 after 1.8 s

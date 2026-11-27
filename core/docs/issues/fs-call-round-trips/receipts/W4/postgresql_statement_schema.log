@@ -1,0 +1,19 @@
+
+running 2 tests
+test every_one_statement_read_names_the_schema ... 
+thread 'every_one_statement_read_names_the_schema' panicked at engine/crates/layerfs-persistence/tests/postgresql_statement_schema.rs:366:5:
+assertion `left == right` failed: a `read_statement` body was added or removed: pin it in READS and give its key a `{s}` body in src/backend/postgresql/history/statements.rs
+  left: {"body", "branch_any", "branch_named", "branch_snapshot", "branch_snapshot_named", "branch_snapshot_with_stack_name", "chain_window", "commit", "f", "layer", "layer_stack_named", "markers", "node_markers", "node_serial", "published_source", "read_context", "stored"}
+ right: {"branch_any", "branch_named", "branch_snapshot", "branch_snapshot_named", "branch_snapshot_with_stack_name", "chain_window", "commit", "f", "layer", "layer_stack_named", "markers", "node_markers", "node_serial", "published_source", "read_context", "stored"}
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test postgresql_one_statement_reads_answer ... ok
+
+failures:
+
+failures:
+    every_one_statement_read_names_the_schema
+
+test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.28s
+
+run_bounded: exit 101 after 0.9 s

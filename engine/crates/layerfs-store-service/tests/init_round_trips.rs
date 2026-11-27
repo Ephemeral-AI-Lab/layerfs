@@ -114,14 +114,15 @@ const SQLITE: &[InitPin] = &[
 /// release and compaction in it), and I3b part A (each `put_entries` and
 /// `place_children` unit one transaction over one flight per wait: the
 /// dependency check and a dependent row's binding; the first unit prepares
-/// every acquisition write text).
+/// every acquisition write text), and #818 W4 (the serial reservation one
+/// pipelined message: 6 round trips fewer, 1 statement more per Init).
 const POSTGRESQL: &[InitPin] = &[
     // probe init.nested_1k at baseline: [0, 229, 118, 33]
     // at I2a [0, 209, 98, 33]; at I3a [0, 158, 79, 18]; at I3c [0, 145, 88, 18]
     // at I3b C [0, 119, 93, 18]
     pin(
         "nested_1k",
-        [0, 99, 102, 18],
+        [0, 93, 103, 18],
         9900,
         137268,
         "6ac312b34cca5d86",
@@ -131,7 +132,7 @@ const POSTGRESQL: &[InitPin] = &[
     // at I3b C [0, 129, 99, 19]
     pin(
         "flat_1k",
-        [0, 106, 111, 19],
+        [0, 100, 112, 19],
         10890,
         137359,
         "8a79e63caabd7530",
@@ -141,7 +142,7 @@ const POSTGRESQL: &[InitPin] = &[
     // at I3b C [0, 468, 438, 18]
     pin(
         "hardlink_window",
-        [0, 298, 447, 18],
+        [0, 292, 448, 18],
         780,
         7524,
         "d767c58fa69403d6",
@@ -151,7 +152,7 @@ const POSTGRESQL: &[InitPin] = &[
     // at I3c [0, 1,060, 995, 19]; at I3b C [0, 1,034, 1,000, 19]
     pin(
         "wide_hardlinks",
-        [0, 709, 1012, 19],
+        [0, 703, 1013, 19],
         5180,
         43894,
         "e6cba9e302a3c58f",
@@ -161,7 +162,7 @@ const POSTGRESQL: &[InitPin] = &[
     // at I3b C [0, 129, 99, 19]
     pin(
         "dir_600",
-        [0, 106, 111, 19],
+        [0, 100, 112, 19],
         6490,
         82511,
         "f2238ebb0be91b92",
@@ -171,7 +172,7 @@ const POSTGRESQL: &[InitPin] = &[
     // at I3b C [0, 147, 121, 18]
     pin(
         "mixed",
-        [0, 116, 130, 18],
+        [0, 110, 131, 18],
         1100005,
         402976,
         "186f611869dd16c6",
