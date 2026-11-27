@@ -63,7 +63,7 @@ export function globalOptions(spec) {
   const out = {
     detail: { type: "boolean", description: "the long form: every key, nulls included" },
   };
-  const sections = Object.keys(spec.form.with ?? {});
+  const sections = Object.keys(spec.form?.with ?? {});
   if (sections.length > 0) {
     out.with = {
       type: "array",

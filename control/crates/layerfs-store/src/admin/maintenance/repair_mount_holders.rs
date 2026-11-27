@@ -10,7 +10,7 @@
 //! otherwise hold its scopes until the owner's boot ends (#776 G1).
 //!
 //! `list` and `preview` write nothing: one page of holders by op, each with
-//! its row `state` (`live`, `uncertain`) and the `liveness` admission would
+//! its row `status` (`live`, `uncertain`) and the `liveness` admission would
 //! give it now (`live`, `uncertain`, `dead`). `settle` marks one op uncertain
 //! and refuses a holder that still looks `live` unless forced; `release`
 //! retains a settled row as the durable `done` audit; `settle_legacy` marks
@@ -123,7 +123,7 @@ pub fn op_of(text: Option<&str>) -> Result<Option<[u8; 16]>> {
 /// Runs `request` on the Store `open` names, with the place view of its
 /// caller's home (or the one a worker frame installed): `{ action, items,
 /// next }` for a page (`next`, the place the next page starts from, or null),
-/// `{ action, op, state }` for an op, `{ action, settled }` for
+/// `{ action, operation, status }` for an op, `{ action, settled }` for
 /// `settle_legacy`.
 pub fn repair_at(open: &OpenArgs, request: &Repair) -> Result<SdkValue> {
     if !ACTIONS.contains(&request.action.as_str()) {
@@ -265,8 +265,8 @@ fn holders(
     };
     Ok(SdkValue::map([
         ("action", SdkValue::text(action)),
-        ("op", SdkValue::text(shown)),
-        ("state", SdkValue::text(state)),
+        ("operation", SdkValue::text(shown)),
+        ("status", SdkValue::text(state)),
     ]))
 }
 
@@ -359,7 +359,7 @@ fn legacy(intent: &GcIntent) -> bool {
     intent.kind == GcIntentKind::Mount && MountHolderView::of(intent).legacy()
 }
 
-/// One holder row: its `kind`, the typed view, its row `state`, the
+/// One holder row: its `kind`, the typed view, its row `status`, the
 /// `liveness` judged now and `safe` (true unless it still looks live: settle
 /// needs no force).
 fn holder_row(intent: &GcIntent, liveness: Liveness) -> SdkValue {
@@ -367,7 +367,7 @@ fn holder_row(intent: &GcIntent, liveness: Liveness) -> SdkValue {
     let text = |value: Option<&str>| SdkValue::opt_text(value);
     let workspace = holder.workspace.map(|ws| hex(&ws));
     SdkValue::map([
-        ("op", SdkValue::text(hex(&holder.op))),
+        ("operation", SdkValue::text(hex(&holder.op))),
         ("kind", SdkValue::text(intent.kind.as_str())),
         ("branch", text(holder.branch.as_deref())),
         ("project", text(holder.project.as_deref())),
@@ -384,7 +384,7 @@ fn holder_row(intent: &GcIntent, liveness: Liveness) -> SdkValue {
             "sandbox_generation",
             text(holder.sandbox_generation.as_deref()),
         ),
-        ("state", SdkValue::text(holder.state())),
+        ("status", SdkValue::text(holder.state())),
         ("liveness", SdkValue::text(liveness_word(liveness))),
         ("safe", SdkValue::Bool(liveness != Liveness::Live)),
         ("legacy", SdkValue::Bool(legacy(intent))),

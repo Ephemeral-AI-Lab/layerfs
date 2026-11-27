@@ -2,7 +2,7 @@
 //! mount admissions and the Init, merge and removal admissions at the Branch
 //! or its project, on the machine whose worker holds a SQLite Store and in
 //! this process for a PostgreSQL Store. `list` and `preview` write nothing:
-//! one page of holders, each with its row `state` and the `liveness`
+//! one page of holders, each with its row `status` and the `liveness`
 //! admission would give it now; `settle` refuses a holder still `live`
 //! unless forced; `release` retains a settled row as the durable done audit
 //! and records the operator label; `settle_legacy` settles only mount rows
@@ -13,11 +13,74 @@ use crate::dispatch::table::{
     a, call, opt, Call,
     Kind::{Bool, Int, Name, Project, Text},
 };
-use crate::dispatch::Context;
+use crate::dispatch::{Context, Form, Paging, Part};
 use layerfs_home::reply::outcome::Outcome;
 use layerfs_protocol::sdk::SdkValue;
 use layerfs_store::admin::with_users::RepairRequest;
 
+/// One row of a page: a holder (`list`, `preview`), with its typed view,
+/// its row `status` (`live`, `uncertain`), the `liveness` admission would
+/// give it now and whether it is `safe` to settle; or a retained `done` row
+/// (`audit`), with its scope, phase, `evidence` and `updated_ms`. The row's
+/// id is `operation`: `op` is only ever the state companion.
+const ROW: Form = Form::of(
+    &["operation", "kind"],
+    &[
+        "status",
+        "liveness",
+        "safe",
+        "legacy",
+        "project",
+        "branch",
+        "workspace",
+        "sandbox",
+        "machine",
+        "phase",
+        "evidence",
+        "updated_ms",
+    ],
+    &[
+        "operation",
+        "kind",
+        "status",
+        "liveness",
+        "safe",
+        "legacy",
+        "project",
+        "branch",
+        "workspace",
+        "sandbox",
+        "machine",
+        "owner_runtime",
+        "owner_boot",
+        "machine_incarnation",
+        "sandbox_generation",
+        "scope_kind",
+        "scope_id",
+        "phase",
+        "evidence",
+        "updated_ms",
+    ],
+);
+
+/// Its answer, by action: a page `{ action, items, next_cursor }`, one
+/// operation `{ action, operation, status }` (`settle`, `release`) or
+/// `{ action, settled }` (`settle_legacy`).
+const FORM: Form = Form::of(
+    &["action"],
+    &["items", "next_cursor", "operation", "status", "settled"],
+    &[
+        "items",
+        "next_cursor",
+        "action",
+        "operation",
+        "status",
+        "settled",
+    ],
+)
+.parts(&[("items", Part::Rows(&ROW))]);
+
+/// Its table entry.
 pub(crate) const CALL: Call = call(
     "store",
     "repair_mount_holders",
@@ -32,10 +95,9 @@ pub(crate) const CALL: Call = call(
     ],
     "list, preview, settle, release, settle_legacy or audit a Branch's holders (operator)",
     run,
-);
-// It pages by `limit`/`cursor`, but its answers are not on the 2.0 answer
-// form yet, so it declares no `Paging` (an entry without a form declares
-// none; calls_table checks this).
+)
+.form(&FORM)
+.paged(Paging::Cursor);
 
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let text = |name: &str| args.get_text(name).map(str::to_owned);

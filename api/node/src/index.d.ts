@@ -143,16 +143,16 @@ export interface ProjectStatsOptions extends CallOptions {
   at?: string;
 }
 
+/** Options of `project.doctor`; an unknown option is refused. */
+export interface ProjectDoctorOptions extends CallOptions {
+  full?: boolean;
+  on_progress?: ProgressHandler;
+}
+
 /** Options of `project.export`; an unknown option is refused. */
 export interface ProjectExportOptions extends CallOptions {
   branch?: string;
   at?: string;
-  on_progress?: ProgressHandler;
-}
-
-/** Options of `project.doctor`; an unknown option is refused. */
-export interface ProjectDoctorOptions extends CallOptions {
-  full?: boolean;
   on_progress?: ProgressHandler;
 }
 
@@ -534,6 +534,16 @@ export interface StoreUpgradeOptions extends CallOptions {
   on_progress?: ProgressHandler;
 }
 
+/** Options of `store.repair_mount_holders`; an unknown option is refused. */
+export interface StoreRepairMountHoldersOptions extends CallOptions {
+  op?: string;
+  legacy?: boolean;
+  force?: boolean;
+  operator?: string;
+  limit?: WholeNumber;
+  cursor?: string;
+}
+
 /** Options of `store.doctor`; an unknown option is refused. */
 export interface StoreDoctorOptions extends CallOptions {
   machine?: string;
@@ -589,14 +599,14 @@ export interface ProjectFamily {
   get(project: string, options?: CallOptions): Promise<Result>;
   /** entry counts and size of the tree at a Branch's head or a Commit */
   stats(project: string, options?: ProjectStatsOptions): Promise<Result>;
+  /** check one project's record; with --full, also read and check its data */
+  doctor(project: string, options?: ProjectDoctorOptions): Promise<Result>;
   /** export a Branch's committed tree to a folder on this computer */
   export(project: string, destination: string, options?: ProjectExportOptions): Promise<Result>;
   /** retire one project in its Store and remove its home entry */
   delete(project: string, options?: CallOptions): Promise<Result>;
   /** hide one absolute path from the project's whole history; frees no bytes */
   hide_path(project: string, path: string, options?: CallOptions): Promise<Result>;
-  /** check one project's record; with --full, also read and check its data */
-  doctor(project: string, options?: ProjectDoctorOptions): Promise<Result>;
 }
 
 export interface BranchFamily {
@@ -748,6 +758,8 @@ export interface StoreFamily {
   compact(store: string, options?: StoreCompactOptions): Promise<Result>;
   /** bring an older Store to the latest format, in place */
   upgrade(store: string, options?: StoreUpgradeOptions): Promise<Result>;
+  /** list, preview, settle, release, settle_legacy or audit a Branch's holders (operator) */
+  repair_mount_holders(project: string, branch: string, action: string, options?: StoreRepairMountHoldersOptions): Promise<Result>;
   /** check a Store, then each of its projects */
   doctor(store: string, options?: StoreDoctorOptions): Promise<Result>;
 }

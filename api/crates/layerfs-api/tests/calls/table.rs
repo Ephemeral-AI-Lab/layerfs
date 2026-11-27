@@ -828,6 +828,7 @@ fn a_migrated_entry_declares_its_forms_and_the_others_declare_none() {
         "store.remove",
         "store.compact",
         "store.upgrade",
+        "store.repair_mount_holders",
         "store.doctor",
     ];
     let after = [

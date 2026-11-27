@@ -384,7 +384,7 @@ class Calls(unittest.TestCase):
             list(long),
             ["home", "state", "version", "generation", "reason", "fix", "message", "layout", "mode", "bundle", "daemon", "cache"],
         )
-        self.assertEqual((long["reason"], long["fix"], long["layout"], long["mode"]), (None, None, 3, "0700"))
+        self.assertEqual((long["reason"], long["fix"], long["layout"], long["mode"]), (None, None, 4, "0700"))
         # `with_` (a keyword in Python, so the trailing underscore) adds the
         # sections asked for, in either form
         tree = lfs.home.get(with_=["tree"])
@@ -409,7 +409,7 @@ class Calls(unittest.TestCase):
             layerfs.FAMILIES,
             ["home", "project", "branch", "commit", "file", "sandbox", "workspace", "machine", "store", "backup"],
         )
-        self.assertEqual(len(layerfs.TABLE), 81)
+        self.assertEqual(len(layerfs.TABLE), 83)
         for spec in layerfs.TABLE:
             self.assertTrue(callable(getattr(getattr(layerfs, spec["family"]), spec["call"])))
         # the options of `branch publish` (2.0 row: at, expected, force) are in

@@ -40,11 +40,11 @@ function folderOf(files) {
 
 const calling = (name) => table.filter((c) => c.options.some((o) => o.name === name && o.kind === "function")).map((c) => `${c.family}.${c.call}`);
 
-test("the table: nineteen calls take on_progress (five doctors) and one takes the exec sinks", () => {
-  assert.deepEqual(calling("on_progress"), ["home.doctor", "project.init", "project.export", "project.doctor", "sandbox.create", "sandbox.remove", "sandbox.doctor", "workspace.exec", "machine.load_image", "machine.start", "machine.stop", "machine.create", "machine.remove", "machine.doctor", "store.move", "store.compact", "store.upgrade", "store.doctor", "backup.create", "backup.restore"]);
+test("the table: twenty calls take on_progress (five doctors) and one takes the exec sinks", () => {
+  assert.deepEqual(calling("on_progress"), ["home.doctor", "project.init", "project.doctor", "project.export", "sandbox.create", "sandbox.remove", "sandbox.doctor", "workspace.exec", "machine.load_image", "machine.start", "machine.stop", "machine.create", "machine.remove", "machine.doctor", "store.move", "store.compact", "store.upgrade", "store.doctor", "backup.create", "backup.restore"]);
   assert.deepEqual(calling("stdout"), ["workspace.exec"]);
   assert.deepEqual(calling("stderr"), ["workspace.exec"]);
-  assert.equal(table.flatMap((c) => c.options).filter((o) => o.kind === "function").length, 19 + 2);
+  assert.equal(table.flatMap((c) => c.options).filter((o) => o.kind === "function").length, 20 + 2);
 });
 
 test("project.init in this process: check, install, record with null counts, while it runs, before it settles", { timeout: 90_000 }, async () => {

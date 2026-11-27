@@ -42,7 +42,7 @@ check and proves a missing, renamed or extra call is reported.
 
 <!-- BEGIN GENERATED: api/scripts/coverage-doc.mjs -->
 
-81 calls in 10 families, counted from the Node table. Calls present: Node 81, Python 81, Python `aio` 81, CLI 81, MCP 81 (17 in `work`, 64 admin only).
+83 calls in 10 families, counted from the Node table. Calls present: Node 83, Python 83, Python `aio` 83, CLI 83, MCP 83 (17 in `work`, 66 admin only).
 
 Argument names that are Python keywords: from.
 
@@ -59,10 +59,10 @@ Front-end problems: none.
 | `project.list` | - | store, limit, cursor | yes | yes | yes | yes | admin |
 | `project.get` | project | - | yes | yes | yes | yes | admin |
 | `project.stats` | project | branch, at | yes | yes | yes | yes | admin |
+| `project.doctor` | project | full, on_progress() | yes | yes | yes | yes (--progress) | admin |
 | `project.export` | project, destination | branch, at, on_progress() | yes | yes | yes | yes (--progress) | admin |
 | `project.delete` | project | - | yes | yes | yes | yes | admin |
 | `project.hide_path` | project, path | - | yes | yes | yes | yes | admin |
-| `project.doctor` | project | full, on_progress() | yes | yes | yes | yes (--progress) | admin |
 | `branch.list` | project | prefix, exclude_prefix, limit, cursor | yes | yes | yes | yes | admin |
 | `branch.get` | project, branch | - | yes | yes | yes | yes | admin |
 | `branch.fork` | project, name, ?from | at | yes | yes | yes | yes | yes |
@@ -117,13 +117,15 @@ Front-end problems: none.
 | `store.list` | - | machine | yes | yes | yes | yes | admin |
 | `store.get` | store | - | yes | yes | yes | yes | admin |
 | `store.create` | name | machine | yes | yes | yes | yes | admin |
-| `store.connect` | store, url | user, password, synchronous_commit | yes | yes | yes | yes | admin |
+| `store.connect` | store, url | user, password, synchronous_commit, dry_run | yes | yes | yes | yes | admin |
 | `store.disconnect` | store | - | yes | yes | yes | yes | admin |
-| `store.attach` | store | machine | yes | yes | yes | yes | admin |
+| `store.attach` | store | machine, dry_run | yes | yes | yes | yes | admin |
 | `store.detach` | store | machine | yes | yes | yes | yes | admin |
 | `store.move` | store, machine | on_progress() | yes | yes | yes | yes (--progress) | admin |
 | `store.remove` | store | - | yes | yes | yes | yes | admin |
 | `store.compact` | store | on_progress() | yes | yes | yes | yes (--progress) | admin |
+| `store.upgrade` | store | on_progress() | yes | yes | yes | yes (--progress) | admin |
+| `store.repair_mount_holders` | project, branch, action | op, legacy, force, operator, limit, cursor | yes | yes | yes | yes | admin |
 | `store.doctor` | store | machine, on_progress() | yes | yes | yes | yes (--progress) | admin |
 | `backup.connect` | name, url | access_key, secret_key | yes | yes | yes | yes | admin |
 | `backup.disconnect` | bucket | - | yes | yes | yes | yes | admin |

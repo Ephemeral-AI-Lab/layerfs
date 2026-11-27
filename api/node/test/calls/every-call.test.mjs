@@ -15,9 +15,9 @@ const temp = (tag) => {
   return dir;
 };
 
-test("the table: ten families, 81 calls, each a function", () => {
+test("the table: ten families, 83 calls, each a function", () => {
   assert.deepEqual(families, ["home", "project", "branch", "commit", "file", "sandbox", "workspace", "machine", "store", "backup"]);
-  assert.equal(table.length, 81);
+  assert.equal(table.length, 83);
   for (const spec of table) assert.equal(typeof layerfs[spec.family][spec.call], "function", `${spec.family}.${spec.call}`);
 });
 
@@ -40,7 +40,7 @@ test("client.home is the home family; the client's home is where it calls", asyn
     // `detail` is the long form: every key, null when it has no value
     const long = await lfs.home.get({ detail: true });
     assert.deepEqual(Object.keys(long), ["home", "state", "version", "generation", "reason", "fix", "message", "layout", "mode", "bundle", "daemon", "cache"]);
-    assert.deepEqual([long.reason, long.fix, long.layout, long.mode], [null, null, 3n, "0700"].map((v) => (typeof v === "bigint" ? Number(v) : v)));
+    assert.deepEqual([long.reason, long.fix, long.layout, long.mode], [null, null, 4n, "0700"].map((v) => (typeof v === "bigint" ? Number(v) : v)));
     // `with` adds the sections asked for, in either form
     const tree = await lfs.home.get({ with: ["tree"] });
     assert.deepEqual(Object.keys(tree.tree), ["machines", "stores", "buckets"]);

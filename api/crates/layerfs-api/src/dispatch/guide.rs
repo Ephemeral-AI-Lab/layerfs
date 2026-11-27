@@ -517,6 +517,31 @@ const ARGS: &[(&str, &str, &str)] = &[
         "machine",
         "check a PostgreSQL Store from this attached machine only",
     ),
+    (
+        "store.repair_mount_holders",
+        "action",
+        "list, preview, settle, release, settle_legacy or audit",
+    ),
+    (
+        "store.repair_mount_holders",
+        "op",
+        "the holder settle and release act on: 16 bytes of hex",
+    ),
+    (
+        "store.repair_mount_holders",
+        "legacy",
+        "settle only a mount row without owner or place evidence",
+    ),
+    (
+        "store.repair_mount_holders",
+        "force",
+        "settle a holder that still looks live",
+    ),
+    (
+        "store.repair_mount_holders",
+        "operator",
+        "the label a release records; empty is local",
+    ),
     ("backup.connect", "name", "the bucket's name in this home"),
     (
         "backup.connect",
@@ -694,6 +719,10 @@ const EXAMPLES: &[(&str, &str)] = &[
     ("store.remove", "layerfs store remove shop"),
     ("store.compact", "layerfs store compact shop --progress"),
     ("store.upgrade", "layerfs store upgrade shop --progress"),
+    (
+        "store.repair_mount_holders",
+        "layerfs store repair-mount-holders shop/api main preview",
+    ),
     ("store.doctor", "layerfs store doctor shop"),
     (
         "backup.connect",

@@ -712,3 +712,19 @@ holds the LayerFS data, and manage logins. Spec `tmp/pg-store-v23/SPEC.md` (owne
   Store, so it answers on a Store this build refuses to open. `layerfs --version --json` adds
   `formats: {"sqlite": 3, "postgresql": 4}`. The rows now number 82 (store 12; the totals above
   are the freeze's).
+
+## Store repair of mount holders on the 2.0 surface (owner, 2026-11-28)
+
+`store.repair_mount_holders` (#776 G1) entered the table on 2026-11-24 without a row here or an
+answer form, so the contract test, the MCP profiles and the coverage generators refused it. The
+owner ruled to give it a full 2.0 entry rather than an exception.
+
+- **RM-1** The row: badge `new`, profile `full` (an operator call; MCP `admin`), paging `cursor`
+  (`limit`, `cursor`). Short form `action` always; `items`, `next_cursor`, `operation`, `status`,
+  `settled` when news. One `items` form covers both page kinds: a holder (`list`, `preview`) and a
+  retained `done` row (`audit`).
+- **RM-2** Its answers rename two keys to the table's words: a row's own state is `status`
+  (`live`, `uncertain`, `done`), since `state` is only the thing state table's; its id is
+  `operation`, since `op` is only ever the state companion (Fix 16). The `--op` option keeps its
+  name. No alias for the old keys (no backward compatibility in 2.0).
+- **RM-3** Totals: 83 calls, store 13, as the totals above already say.

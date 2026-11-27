@@ -37,6 +37,7 @@ const DEFAULTS: &[(&str, &str, &str)] = &[
     ("machine.create", "memory", "4G"),
     ("machine.create", "disk", "20G"),
     ("store.connect", "synchronous_commit", "local"),
+    ("store.repair_mount_holders", "limit", "100"),
 ];
 
 /// The value word of each option no row shows a default for.
@@ -68,6 +69,8 @@ const WORDS: &[(&str, &str)] = &[
     ("name", "N"),
     ("new_string", "S"),
     ("old_string", "S"),
+    ("op", "HEX"),
+    ("operator", "NAME"),
     ("os_image", "I"),
     ("outcome", "O"),
     ("path", "P"),
