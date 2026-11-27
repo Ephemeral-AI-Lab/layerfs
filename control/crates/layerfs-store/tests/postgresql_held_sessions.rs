@@ -539,7 +539,10 @@ fn write_sessions_stay_apart_and_keep_half_of_each_bound_for_reads() {
     let reads: Vec<_> = (0..pool::PER_STORE - pool::WRITES_PER_STORE)
         .map(|_| pool::reserve(&first, "pgs").expect("a read slot"))
         .collect();
-    assert!(pool::reserve(&first, "pgs").is_none(), "the per-Store bound");
+    assert!(
+        pool::reserve(&first, "pgs").is_none(),
+        "the per-Store bound"
+    );
     drop(reads);
 
     // the process lends half its slots to writes
@@ -574,7 +577,11 @@ fn write_sessions_stay_apart_and_keep_half_of_each_bound_for_reads() {
     for call in calls {
         call.join().unwrap().unwrap();
     }
-    assert_eq!(pool::counts().idle, pool::PER_STORE, "three reads, one write");
+    assert_eq!(
+        pool::counts().idle,
+        pool::PER_STORE,
+        "three reads, one write"
+    );
     let write = pool::reserve_write(&home, "pgs").expect("the idle write session");
     let other = pool::reserve_write(&home, "pgs").expect("room made by a read");
     assert_eq!(pool::counts().idle + pool::counts().lent, pool::PER_STORE);

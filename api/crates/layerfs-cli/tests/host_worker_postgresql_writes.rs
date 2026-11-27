@@ -103,7 +103,11 @@ fn postgresql_writes_commit_once_each_on_held_sessions() {
     let before = commits(path);
 
     // a streamed write starts the worker and opens one write session
-    let written = answered(path, &["file", "write", "pg/p", "work", "/w.txt"], Some("one\n"));
+    let written = answered(
+        path,
+        &["file", "write", "pg/p", "work", "/w.txt"],
+        Some("one\n"),
+    );
     committed(&written);
     assert!(home.paths.socket.exists(), "the write started the worker");
     let held = sessions(&home);
@@ -163,7 +167,11 @@ fn a_worker_killed_after_the_end_leaves_its_write_unknown_and_never_resent() {
 
     // the write's input is all sent; its publication waits on the lane
     let lane = Lane::hold(&db);
-    let child = spawn(path, &["file", "write", "pg/p", "work", "/k.txt"], Some("k\n"));
+    let child = spawn(
+        path,
+        &["file", "write", "pg/p", "work", "/k.txt"],
+        Some("k\n"),
+    );
     assert_eq!(waiting_on_lock(&db, 1), 1, "the write waits on the lane");
     let worker = home.ping().get_int("pid").unwrap();
     let killed = std::process::Command::new("kill")
@@ -177,12 +185,19 @@ fn a_worker_killed_after_the_end_leaves_its_write_unknown_and_never_resent() {
     // nothing sent it again: at most its own one Commit, now and later
     std::thread::sleep(Duration::from_millis(500));
     let after = commits(path);
-    assert!(after == before || after == before + 1, "{before} -> {after}");
+    assert!(
+        after == before || after == before + 1,
+        "{before} -> {after}"
+    );
     std::thread::sleep(Duration::from_millis(500));
     assert_eq!(commits(path), after, "no later Commit of the lost write");
 
     // a later write starts a new worker and commits once
-    let answer = call(path, &["file", "write", "pg/p", "work", "/n.txt"], Some("n\n"));
+    let answer = call(
+        path,
+        &["file", "write", "pg/p", "work", "/n.txt"],
+        Some("n\n"),
+    );
     committed(&answer.unwrap());
     assert_eq!(commits(path), after + 1);
     drain(&home);
@@ -227,7 +242,11 @@ fn a_server_drop_is_unknown_only_for_writes_in_flight() {
     eprintln!("outcomes: {outcomes:?}");
     let lost: Vec<_> = outcomes.iter().filter_map(|o| o.as_ref().err()).collect();
     let served = outcomes.iter().filter(|o| o.is_ok()).count();
-    assert_eq!(lost.len(), terminated, "only the writes in flight were lost");
+    assert_eq!(
+        lost.len(),
+        terminated,
+        "only the writes in flight were lost"
+    );
     assert!(lost.iter().all(|code| *code == "Unknown"), "{lost:?}");
     // each uncertain outcome was recorded before its answer
     let kept = retained(&path);
@@ -257,7 +276,11 @@ fn reads_stay_prompt_while_writes_wait_on_the_store_writer() {
         .map(|n| {
             let target = format!("/f{n}");
             match n % 2 {
-                0 => spawn(&path, &["file", "write", "pg/p", "work", &target], Some("f\n")),
+                0 => spawn(
+                    &path,
+                    &["file", "write", "pg/p", "work", &target],
+                    Some("f\n"),
+                ),
                 _ => spawn(&path, &["file", "mkdir", "pg/p", "work", &target], None),
             }
         })

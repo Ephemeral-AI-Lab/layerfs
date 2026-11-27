@@ -357,9 +357,9 @@ impl HostPaths {
         let sent = sender.raw(&frame);
         host_frame::release(frame, greeted.secret);
         sent.map_err(|_| match sender.lost.as_deref() {
-                Some(why) => early(&stream, op, &id).unwrap_or_else(|| not_committed(op, &id, why)),
-                None => not_committed(op, &id, "the request was not sent"),
-            })?;
+            Some(why) => early(&stream, op, &id).unwrap_or_else(|| not_committed(op, &id, why)),
+            None => not_committed(op, &id, "the request was not sent"),
+        })?;
         go(&stream, op, &id)?;
         let sent = body(&mut sender).and_then(|()| sender.end());
         if let Err(refusal) = sent {

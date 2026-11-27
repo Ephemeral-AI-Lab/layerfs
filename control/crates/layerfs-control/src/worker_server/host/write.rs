@@ -106,7 +106,8 @@ impl Writes {
         for (at, held) in self.waiting.iter().enumerate() {
             match held.postgresql.as_deref() {
                 Some(store) if !draining => {
-                    if let Some(slot) = layerfs_store::postgresql::pool::reserve_write(home, store) {
+                    if let Some(slot) = layerfs_store::postgresql::pool::reserve_write(home, store)
+                    {
                         chosen = Some((at, Some(slot)));
                         break;
                     }
@@ -221,10 +222,6 @@ impl HostServer {
             log("a host write panicked; its answer was lost");
         }
         drop(held);
-        if postgresql {
-            // its session slot is free for the PostgreSQL lane and writes
-            self.slot_freed();
-        }
         let mut activity = self.lock();
         activity.writes.held -= 1;
         if admitted {
@@ -235,6 +232,13 @@ impl HostServer {
             activity.answered += 1;
         }
         drop(activity);
+        if postgresql {
+            // its session slot is free for the PostgreSQL lane and writes;
+            // only after the activity lock, as in `finish`: a waiter holds
+            // it from a failed reserve until it waits, so the wakeup
+            // cannot fall between the two
+            self.slot_freed();
+        }
         self.notify();
     }
 

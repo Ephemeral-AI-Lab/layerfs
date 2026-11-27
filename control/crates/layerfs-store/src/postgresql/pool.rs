@@ -314,7 +314,9 @@ pub fn reserve_kind(home: &Path, store: &str, kind: Kind) -> Option<Reservation>
     // the Store at its bound frees one of its own idle sessions (of the
     // other kind); one under it, any Store's least recently used
     let own = stored >= PER_STORE;
-    let evicted = (pool.lent < PER_STORE).then(|| all.evict(&key, own)).flatten();
+    let evicted = (pool.lent < PER_STORE)
+        .then(|| all.evict(&key, own))
+        .flatten();
     match (evicted, all.stores.get_mut(&key)) {
         (Some(evicted), Some(pool)) => slot(pool, None, Some(evicted)),
         (evicted, _) => {

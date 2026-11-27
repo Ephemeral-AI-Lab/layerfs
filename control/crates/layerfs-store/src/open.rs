@@ -667,7 +667,7 @@ pub fn close_idle(idle: Duration) -> usize {
 
 /// As in [`close_idle`], with one outcome per settled Store. A final drain
 /// also awaits entries whose physical close is already underway, and
-/// closes every idle held PostgreSQL read session.
+/// closes every idle held PostgreSQL session, read or write.
 pub fn close_idle_report(idle: Duration) -> Vec<(PathBuf, Result<CloseReport, SdkRefusal>)> {
     if idle.is_zero() {
         crate::postgresql::pool::close_idle(Duration::ZERO);

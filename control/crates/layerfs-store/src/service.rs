@@ -152,14 +152,17 @@ fn open(store: &Path, args: &OpenArgs, owner: Owner) -> Result<Opened, SdkRefusa
 }
 
 /// A new private overlay directory in this process's temporary directory,
-/// under a random name (#436).
+/// under a random name (#436), readable only by its owner.
 fn overlay_directory() -> Result<PathBuf, SdkRefusal> {
     let directory = std::env::temp_dir().join(format!(
         "layerfs-store-{}-{}",
         std::process::id(),
         layerfs_bridge::sdk_values::hex(&layerfs_home::helpers::random()?[..12])
     ));
-    std::fs::create_dir(&directory).map_err(failed)?;
+    let mut builder = std::fs::DirBuilder::new();
+    #[cfg(unix)]
+    std::os::unix::fs::DirBuilderExt::mode(&mut builder, 0o700);
+    builder.create(&directory).map_err(failed)?;
     Ok(directory)
 }
 
@@ -206,9 +209,7 @@ pub(crate) fn open_postgres_read(args: &OpenArgs) -> Result<StoreService, SdkRef
 /// A writable PostgreSQL service over new sessions, held by a host worker
 /// between CLI writes (#819 P-B, [`crate::postgresql::pool`]), with its own
 /// private overlay directory, which the caller removes after closing it.
-pub(crate) fn open_postgres_write(
-    args: &OpenArgs,
-) -> Result<(StoreService, PathBuf), SdkRefusal> {
+pub(crate) fn open_postgres_write(args: &OpenArgs) -> Result<(StoreService, PathBuf), SdkRefusal> {
     let identity = crate::identity::identity(args)?;
     let directory = overlay_directory()?;
     let template = directory.join("overlay.sqlite");
