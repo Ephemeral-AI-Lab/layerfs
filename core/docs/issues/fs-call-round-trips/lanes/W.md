@@ -710,8 +710,12 @@ Other pins this moved:
   nested_10k 245 → 239, flat_10k 284 → 278.
 - **`postgresql_round_trips`:** its sanity check `round_trips >= statements`
   is false for any pipelined message, and the mount's reservation is now
-  one. It became `round_trips >= max(transactions, 1)`. The file is a
-  measurement tool that asserts only that work happened.
+  one. W4 loosened it to `round_trips >= max(transactions, 1)`.
+  **Reverted in the W4 follow-up** at the coordinator's review (AGENTS.md:
+  never weaken a surviving assertion). The original check stands, and the
+  test stays a recorded failure. It already failed at the Phase 0 base
+  (`workspace_reader_open` 11 < 12), and now also fails on the pipelined
+  reservation.
 
 Sweeps (`postgresql_reserve_message`, new):
 - **Reservation, 27 server messages:** a drop at each answers
@@ -735,7 +739,8 @@ Checks, each run once:
   `method_refusal_order`, `init_round_trips` and `_10k` (repinned),
   `commit_batched_*`, `commit_similar_tiny_files`, `mount_round_trips`,
   `postgresql_phase_attribution`, `sdk_round_trip_equivalence_seeded`,
-  `postgresql_round_trips`, `admission`, `writer_reopen`,
+  `postgresql_round_trips` (green only under W4's loosened check, since
+  reverted: see above), `admission`, `writer_reopen`,
   `writer_reopen_release`, `testerwr_reopen_sweep`, `tester768_open_cost`,
   `postgresql_open_cost`, `commit_fault_drop`/`kill`,
   `mount_fault_drop`/`kill`.
