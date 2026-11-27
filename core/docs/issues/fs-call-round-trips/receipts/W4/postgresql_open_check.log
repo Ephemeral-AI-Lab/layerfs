@@ -1,0 +1,9 @@
+
+running 3 tests
+test both_checks_open_a_store_and_refuse_another_binding ... ok
+test both_checks_refuse_a_changed_incarnation_or_schema_version ... ok
+test only_the_full_check_reads_the_live_definition ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.36s
+
+run_bounded: exit 0 after 1.0 s

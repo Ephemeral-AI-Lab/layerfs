@@ -369,8 +369,11 @@ impl Run {
         if name != "commit.up_to_date" {
             assert!(total.statements > 0, "{name}: no counted statements");
         }
+        // A pipelined message (#768; the serial reservation since #818 W4)
+        // carries several statements in one round trip, but every
+        // transaction still waits for at least one.
         if self.backend == "postgresql" && total.statements > 0 {
-            assert!(total.round_trips >= total.statements, "{name}");
+            assert!(total.round_trips >= total.transactions.max(1), "{name}");
         }
     }
 

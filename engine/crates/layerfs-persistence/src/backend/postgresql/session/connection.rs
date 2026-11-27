@@ -409,6 +409,9 @@ pub(crate) struct Session {
     /// Whether the writer's mount statements were prepared
     /// (`prepare_mount_writes`), so a reopen prepares them again.
     pub(crate) mount_writes: AtomicBool,
+    /// Whether the writer's create statements were prepared
+    /// (`prepare_sdk_writes`, #818 W4), so a reopen prepares them again.
+    pub(crate) sdk_writes: AtomicBool,
     /// Mount intents whose admission ended with an unknown outcome: the
     /// next reopen deletes each one's row once, by its op id.
     pub(crate) orphans: Mutex<Vec<[u8; 16]>>,
@@ -477,6 +480,7 @@ impl Session {
             held_ops: Mutex::default(),
             reopens: AtomicBool::new(false),
             mount_writes: AtomicBool::new(false),
+            sdk_writes: AtomicBool::new(false),
             orphans: Mutex::default(),
             identity: super::reopen::identity(),
         })
@@ -517,6 +521,7 @@ impl Session {
             held_ops: Mutex::default(),
             reopens: AtomicBool::new(false),
             mount_writes: AtomicBool::new(false),
+            sdk_writes: AtomicBool::new(false),
             orphans: Mutex::default(),
             identity: super::reopen::identity(),
         })

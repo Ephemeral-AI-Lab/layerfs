@@ -67,10 +67,11 @@ const SQLITE_FLAT: InitPin = pin(
 // statement instead of a transaction with an owner select and one or two
 // reads) [0, 339, 226, 33]; after I3c (8 Save publications, each one
 // fenced flight; 6 carry packs) [0, 303, 250, 33]; after I3b part C (3
-// root units and 5 removal jobs, each one fenced flight) [0, 245, 271, 33]
+// root units and 5 removal jobs, each one fenced flight) [0, 245, 271, 33];
+// after #818 W4 (the serial reservation one message) [0, 239, 272, 33]
 const POSTGRESQL_NESTED: InitPin = pin(
     "nested_10k",
-    [0, 245, 271, 33],
+    [0, 239, 272, 33],
     108000,
     1379418,
     "a68d83d36cfcc6aa",
@@ -81,10 +82,11 @@ const POSTGRESQL_NESTED: InitPin = pin(
 // after I3a (108 read units, each one fenced statement) [0, 378, 257, 36];
 // after I3c (8 Save publications in fenced flights) [0, 342, 281, 36];
 // after I3b part C (root units and removal jobs in fenced flights)
-// [0, 284, 302, 36]
+// [0, 284, 302, 36]; after #818 W4 (the serial reservation one message)
+// [0, 278, 303, 36]
 const POSTGRESQL_FLAT: InitPin = pin(
     "flat_10k",
-    [0, 284, 302, 36],
+    [0, 278, 303, 36],
     118890,
     1380691,
     "a0b8d9600c933c0a",

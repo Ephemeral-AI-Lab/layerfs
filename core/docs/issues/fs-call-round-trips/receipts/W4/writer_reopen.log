@@ -1,0 +1,15 @@
+
+running 9 tests
+test a_commit_cut_before_the_server_commits_folds_back_across_the_reopen ... ok
+test a_commit_lost_after_its_commit_is_installed_once_across_the_reopen ... ok
+test a_dropped_writer_connection_reopens_at_the_next_commit ... ok
+test a_key_that_cannot_be_taken_again_refuses_the_reopen ... ok
+test a_killed_writer_backend_reopens_at_the_next_commit ... ok
+test a_mount_kept_across_the_reopen_keeps_its_row_and_keys ... ok
+test a_mount_lost_after_its_commit_leaves_no_row_after_the_reopen ... ok
+test a_reopen_against_a_server_that_is_down_fails_and_the_next_one_works ... ok
+test two_commits_queued_when_the_writer_dies_reopen_once ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.20s
+
+run_bounded: exit 0 after 4.5 s

@@ -286,7 +286,7 @@ order, before the new connection serves anything:
 | 2. Read the new backend | The Store's generation, `pg_backend_pid()` and the backend start in one statement | a moved generation `Stale` |
 | 3. Take held keys again | The advisory keys of every intent the session still holds (`held_ops`: its live mounts) went with the old connection. They are taken again, all or none, in the statement a registration uses (`gc_lock_session`, generation and backend checked) | a refused key `Busy`, a moved generation `Stale`, a key on another backend (a transaction-pooling proxy) `Integrity`: the new connection is closed, the writer stays quarantined and the call fails. The intent rows were never touched, so they kept refusing removals and compaction |
 | 4. Release orphaned rows | Two kinds of intent row no caller will release: a mount whose admission reply was lost (it may have committed its row and never reached its caller), and an op whose release found the writer quarantined and could not be sent (its owner has closed; the closed connection gave its keys back, so it left `held_ops` and step 3 does not take them again). Each was recorded inside the turn that found it; its row is deleted by the owner release's generation-checked statement, by op id (token `reopen`). This step runs only when step 1 proved every closed connection's backend gone, so no admission `COMMIT` can land after the delete; otherwise every orphan waits for a later reopen | An orphan whose delete was answered is forgotten (a definite refusal leaves the row). One whose delete may not have run (a lost reply, its prepare's included) stays, with those not yet attempted, and the reopen fails. The delete names one op and is a no-op once the row is gone, so sending it at a later reopen never touches another op's row |
-| 5. Prepare again | The daemon's mount statements prepared at open (`prepare_mounts`) are prepared on the new connection | as any prepare |
+| 5. Prepare again | The statements prepared at open, the daemon's mount statements (`prepare_mounts`) and the SDK's create statements (`prepare_sdk_writes`, #818 W4), are prepared on the new connection in one flight | as any prepare |
 
 **Custody never straddles a reopen.** Every change to `held_ops` and the
 orphans happens inside a writer turn, together with the statement that
@@ -954,6 +954,21 @@ prepared before the mount, in one flight each
   deleted the four in-place migration probes, 2 round trips each). A mount on a service that did not prepare
   them prepares the message's statements at first use, in the message's
   own turn ([Mount admission in one message](#mount-admission-in-one-message)).
+- **The writer, when the SDK opens a Store** (#818 W4,
+  `StoreService::open_postgres` → `OpenedStore::prepare_sdk_writes`): the
+  statements a first create sends after its bind (`mount::create_texts`).
+  A create is an SDK write that does not take the fused Commit. The texts
+  are:
+  - the serial reservation's one message (`allocation_reserve`);
+  - the Save's block allocation, pack `COPY` and object rows;
+  - the bindings' insert;
+  - the statements of the Commit's write transaction (`commit_branch`).
+
+  They go in one flight, one read transaction like the daemon's. Reads sent
+  as autocommit statements are not in it. One round trip per SDK open; a
+  first create then saves 16 round trips (`write.new_file` cold 96 → 80).
+  A reopened writer prepares them again with the mount statements, in one
+  flight (step 5 below).
 - **A Workspace reader**, when it opens (at the mount that opens it, or
   after readiness for the idle reader, `Store::prefill_reader`): the
   snapshot by Branch id and by name, the markers, and the root's first

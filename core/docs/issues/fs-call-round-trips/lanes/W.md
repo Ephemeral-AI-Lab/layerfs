@@ -601,3 +601,163 @@ Checks, each run once:
 - Deleted tests: none.
 - Production LOC: 230,048 -> 230,065 (delta +17), engine
   layerfs-store-service +17.
+
+## W4 — prepare the create path at the SDK Store open (M3)
+
+Base `f10b477d40` (H4 merged). W0 at this tip (`receipts/W4/w0-before.log`):
+- `write.new_file`: 96 trips cold, 33 warm.
+- `mkdir`: 90 cold, 32 warm.
+
+The writer prepares that a cold create sends, from a server statement trace
+(`receipts/W4/trace-newfile.txt`, PG `log_min_duration_statement=0` on
+`rt818_w` for this run only), with the keys behind them:
+
+| Phase | Prepared on first use (one round trip each) | Kind |
+|---|---|---|
+| `files.change` | `allocation_scope_by_id`, `allocation_advance_scope` | the serial reservation (6 trips: begin, 2 prepares, 2 statements, commit) |
+| `begin` | `store_policy` block `UPDATE … RETURNING` (`metadata::writes::allocate`) | write |
+| `finish` | `COPY pack`, `publish_rows` | write (the Save's publication) |
+| `finish` | `content_signature` read | read: not prepared |
+| `bindings` | `fused::HINTS` (binding append) | write |
+| `publish` | `commit_snapshot_epoch`, `position_next_serial`, `commit_insert_commit`, `lineage_parent`, `lineage_insert_commit`, `commit_advance_branch`, `gc_epoch_share` | the Commit's write transaction |
+| `construct`, `head`, `logical.*`, `validate` | fenced autocommit reads | read: not prepared (owner deferred) |
+| `store.bind`, `files.close` | mount and release statements | mount: `prepare_mounts`'s list, not a create's |
+
+Two of the Commit transaction's statements are SELECTs:
+`commit_snapshot_epoch` and `lineage_parent`. Both run inside the write
+transaction, not as read calls.
+
+**Prediction (PG writer, first create per open):**
+
+| Phase | Saving | Why |
+|---|---|---|
+| `files.change` | 6 → 1 (−5) | the reservation becomes one message: `BEGIN` + lane, fence, `allocation_reserve`, `COMMIT` |
+| `begin` | −1 | |
+| `finish` | −2 | |
+| `bindings` | −1 | |
+| `publish` | −7 | |
+| **call total** | **−16** | |
+
+- `write.new_file` cold: 96 → 80; `mkdir` cold: 90 → 74.
+- Warm: unchanged (33 and 32). The reservation and pack blocks are taken
+  once per open.
+- SDK open: +1 round trip (one prepare flight).
+- Overwrite (fused path): unchanged. SQLite: unchanged.
+
+### W4 measured
+
+**Change.**
+- `StoreService::open_postgres` calls `OpenedStore::prepare_sdk_writes`.
+  That prepares `mount::create_texts` in one flight, and sets
+  `Session::sdk_writes` so a reopen prepares them again with the mount list,
+  in one flight.
+- On PostgreSQL, outside a held lane and with a count of at least 1,
+  `reserve_inodes` is one pipelined message (`backend/postgresql/history/reserve.rs`,
+  `sql/postgresql/queries/history/allocation_reserve.sql`, dispatched from
+  `history/catalog.rs`). The message sends `BEGIN` with the lane row, the
+  fence and token, the upsert, and the token-checked `COMMIT`.
+- The scope's authority and `Capacity` are checked on the server. The
+  answers and their order are the transaction's (authority, then capacity).
+  A refusal writes nothing.
+- A count of zero, SQLite, and a held lane keep the transaction.
+- The harness's open (`support/round_trips.rs`) calls the prepare, as the
+  SDK open does.
+
+PG trips, W0 on this tip (`receipts/W4/w0-before.log`, `w0-after.log`, same
+cases and order):
+
+| Case | before | predicted | measured |
+|---|---|---|---|
+| `write.new_file` cold | 96 | 80 | 80 |
+| `write.new_file` warm | 33 | 33 | 33 |
+| `mkdir` cold | 90 | 74 | 74 |
+| `mkdir` warm | 32 | 32 | 32 |
+
+The `new_file` cold saving by phase was exactly as predicted:
+
+| Phase | Saving |
+|---|---|
+| `files.change` writer | 6 → 1 |
+| `begin` | −1 |
+| `finish` | −2 |
+| `bindings` | −1 |
+| `publish` | −7 |
+
+The SDK open costs +1 trip. A first cut prepared the overflow bindings'
+fused text instead of the array insert a create sends (`hint_insert_blocks`),
+which left the `bindings` prepare (−15). This was diagnosed from the phase
+listing and fixed.
+
+PG write pins (`sdk_write_round_trips`, writer `.cold`; every `.warm` and
+every SQLite pin unchanged):
+
+| Case | writer before | after |
+|---|---|---|
+| `write.new_file`, `mkdir`, `cp.file`, `apply.10_writes`, `apply.10_dirs` | 76/78/75/81/80 trips | −16 each, +2 statements (the message counts its simple texts) |
+| `mv.file` | 69 | 58 (−11; it reserves no serials) |
+| `rm.file` | 66 | 56 |
+| `rm.dir_100_recursive` | 68 | 58 |
+| `write.overwrite` | 37 | 36 (−1: the fused path's Save block allocation) |
+| `edit.2000_lines` | 34 | 33 |
+
+Other pins this moved:
+- **Init (lane I's pin files, edited here because W4 moved them):**
+  `init_round_trips` and `init_round_trips_10k` PG are −6 trips and +1
+  statement per Init. The reservation is now one message, unprepared there
+  (+1 prepare trip), instead of a transaction of three statements. Every
+  shape changed: nested_1k 119 → 113, flat_1k 129 → 123, dir_600 129 → 123,
+  hardlink_window 468 → 462, wide_hardlinks 1,034 → 1,028, mixed 147 → 141,
+  nested_10k 245 → 239, flat_10k 284 → 278.
+- **`postgresql_round_trips`:** its sanity check `round_trips >= statements`
+  is false for any pipelined message, and the mount's reservation is now
+  one. It became `round_trips >= max(transactions, 1)`. The file is a
+  measurement tool that asserts only that work happened.
+
+Sweeps (`postgresql_reserve_message`, new):
+- **Reservation, 27 server messages:** a drop at each answers
+  `UnknownOutcome` 27/27, the scope advanced whole. HoldKill: 27/27 `Ok`
+  with exactly the range taken; the server finished the one message before
+  the kill. No reconnect, no barrier key left, and the next range follows
+  every range given out.
+- **The open's prepare flight, 53 messages, on a reopening writer:** a drop
+  answers `Uncertain` 53/53, then the next reservation is answered after one
+  reopen. HoldKill: 53/53 `Ok`, then the next reservation.
+- **Behaviour test:** ranges follow each other; zero is `InvalidInput`
+  (transaction path); another catalog is `Integrity` before `Capacity`,
+  even for an oversized count; `Capacity` at the end and for an oversized
+  new scope, with no row written; one round trip, no prepare, one write
+  commit.
+
+Checks, each run once:
+- **Green:** `sdk_write_round_trips` (repinned), `sdk_read_round_trips`,
+  `sdk_history_round_trips`, `sdk_read_context_rh`, `sdk_write_*` (named
+  refusals, kept markers, recursive kinds, planned paths),
+  `method_refusal_order`, `init_round_trips` and `_10k` (repinned),
+  `commit_batched_*`, `commit_similar_tiny_files`, `mount_round_trips`,
+  `postgresql_phase_attribution`, `sdk_round_trip_equivalence_seeded`,
+  `postgresql_round_trips`, `admission`, `writer_reopen`,
+  `writer_reopen_release`, `testerwr_reopen_sweep`, `tester768_open_cost`,
+  `postgresql_open_cost`, `commit_fault_drop`/`kill`,
+  `mount_fault_drop`/`kill`.
+- **Green (persistence):** `history_allocation`, `postgresql_mount_pipeline`,
+  `fused_commit` (single-threaded), `postgresql_ancestor_lists`,
+  `postgresql_acquisition_flights`, `postgresql_captured_save_fault`,
+  `postgresql_compact_units`, `postgresql_commit_round_trips`,
+  `postgresql_gc_sessions`, `postgresql_narrow_locations`,
+  `postgresql_open_check`, `postgresql_overflow_bindings`,
+  `postgresql_save_flight_fault`, `store_upgrade_postgresql`,
+  `store_upgrade_postgresql_wire`.
+- **Pre-existing failure, not this diff:**
+  `postgresql_statement_schema::every_one_statement_read_names_the_schema`
+  finds a `read_statement(body)` in `acquisition/provider.rs` (I3a,
+  `24c69d577b`) that its pin list lacks. Neither file is touched here.
+- Clippy `-D warnings` (persistence and store-service, all targets) and
+  rustfmt: clean.
+- Deleted tests: none.
+
+Outside the plan's W4 file list: `metadata/writes.rs` (`ALLOCATE`) and
+`objects/publish.rs` (`COPY`, `ROWS`) export their statement texts as
+constants for the prepare list. The text is unchanged.
+
+Production LOC: 230,600 -> 230,815 (delta +215), engine
+layerfs-persistence +208, layerfs-store-service +7.

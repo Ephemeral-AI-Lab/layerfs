@@ -1,0 +1,8 @@
+
+running 1 test
+test a_release_whose_prepare_reply_is_lost_leaves_an_orphan_the_reopen_deletes ... WR_V1 release Err(UnknownOutcome); fired at 3 (1); window [(0, 'C'), (0, 'C'), (0, 'Z'), (0, '1')]; rows ["live"]
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.31s
+
+run_bounded: exit 0 after 1.0 s

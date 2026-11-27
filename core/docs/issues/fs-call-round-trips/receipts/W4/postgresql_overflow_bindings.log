@@ -1,0 +1,8 @@
+
+running 1 test
+test overflow_binding_appends_keep_three_ordered_acknowledgements_in_four_trips ... BINDING_OVERFLOW_PARITY trips=4 prepares=1 committed=3 rows=10000
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+
+run_bounded: exit 0 after 0.8 s
