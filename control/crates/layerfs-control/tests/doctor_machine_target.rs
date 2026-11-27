@@ -186,6 +186,7 @@ fn machine_checks_report_in_order_and_preserve_the_home() {
         "machine.operation",
         "machine.state",
         "machine.worker.endpoint",
+        "machine.worker.retained",
     ];
     let host_network = cfg!(target_os = "linux") && nix::unistd::Uid::effective().is_root();
     if host_network {

@@ -217,14 +217,16 @@ fn home_and_machine_doctors_answer_from_their_frozen_checks() {
             "machine.state"
         ]
     );
-    // the host machine adds its worker's endpoint: none is published here
+    // the host machine adds its worker's endpoint (none is published here)
+    // and the write outcomes its worker retained
     assert_eq!(
         checks(&machines[1]),
         [
             "machine.record",
             "machine.operation",
             "machine.state",
-            "machine.worker.endpoint"
+            "machine.worker.endpoint",
+            "machine.worker.retained"
         ]
     );
     assert_eq!(events, 3, "the home, then each machine");
