@@ -909,7 +909,7 @@ fn arm_measurement() {
     } else {
         let committed = std::fs::read_to_string(&path).unwrap_or_else(|_| {
             panic!(
-                "missing {}; run UPDATE_MEASURE=1 cargo test -p layerfs-persistence --test sqlite_compact_matrix",
+                "missing {}; run UPDATE_MEASURE=1 cargo test -p layerfs-persistence --test sqlite_compact matrix",
                 path.display()
             )
         });
@@ -990,45 +990,45 @@ struct Row {
 
 const MATRIX: [Row; 60] = [
     Row { id: "AC-01", backend: Backend::Both, tier: "E2", status: Status::Covered,
-        evidence: &["engine/crates/layerfs-persistence/tests/sqlite_compact_crash.rs#crash_before_seal",
-                    "engine/crates/layerfs-persistence/tests/sqlite_compact_crash.rs#crash_during_copy",
-                    "engine/crates/layerfs-persistence/tests/sqlite_compact_crash.rs#crash_after_verify",
-                    "engine/crates/layerfs-persistence/tests/sqlite_compact_crash.rs#crash_after_install",
-                    "engine/crates/layerfs-persistence/tests/sqlite_compact_crash.rs#crash_during_settle",
-                    "engine/crates/layerfs-persistence/tests/sqlite_compact_crash.rs#sigkill_before_seal",
-                    "engine/crates/layerfs-persistence/tests/sqlite_compact_crash.rs#sigkill_after_seal",
-                    "engine/crates/layerfs-persistence/tests/sqlite_compact_crash.rs#sigkill_during_copy",
-                    "engine/crates/layerfs-persistence/tests/sqlite_compact_crash.rs#sigkill_during_verify",
-                    "engine/crates/layerfs-persistence/tests/sqlite_compact_crash.rs#sigkill_during_rename",
-                    "engine/crates/layerfs-persistence/tests/sqlite_compact_crash.rs#sigkill_after_build",
-                    "engine/crates/layerfs-persistence/tests/sqlite_compact_crash.rs#sigkill_before_install",
-                    "engine/crates/layerfs-persistence/tests/sqlite_compact_crash.rs#sigkill_after_install",
-                    "engine/crates/layerfs-persistence/tests/sqlite_compact_crash.rs#sigkill_during_settle",
-                    "api/crates/layerfs-cli/tests/sqlite_compact_process_kill.rs#sigkill_before_seal",
-                    "api/crates/layerfs-cli/tests/sqlite_compact_process_kill.rs#sigkill_after_seal",
-                    "api/crates/layerfs-cli/tests/sqlite_compact_process_kill.rs#sigkill_before_load",
-                    "api/crates/layerfs-cli/tests/sqlite_compact_process_kill.rs#sigkill_after_build",
-                    "api/crates/layerfs-cli/tests/sqlite_compact_process_kill.rs#sigkill_during_verify",
-                    "api/crates/layerfs-cli/tests/sqlite_compact_process_kill.rs#sigkill_before_install",
-                    "api/crates/layerfs-cli/tests/sqlite_compact_process_kill.rs#sigkill_after_install",
-                    "api/crates/layerfs-cli/tests/sqlite_compact_process_kill.rs#sigkill_during_settle"],
+        evidence: &["engine/crates/layerfs-persistence/tests/sqlite_compact/crash.rs#crash_before_seal",
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact/crash.rs#crash_during_copy",
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact/crash.rs#crash_after_verify",
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact/crash.rs#crash_after_install",
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact/crash.rs#crash_during_settle",
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact/crash.rs#sigkill_before_seal",
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact/crash.rs#sigkill_after_seal",
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact/crash.rs#sigkill_during_copy",
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact/crash.rs#sigkill_during_verify",
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact/crash.rs#sigkill_during_rename",
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact/crash.rs#sigkill_after_build",
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact/crash.rs#sigkill_before_install",
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact/crash.rs#sigkill_after_install",
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact/crash.rs#sigkill_during_settle",
+                    "api/crates/layerfs-cli/tests/store_process/compact_kill.rs#sigkill_before_seal",
+                    "api/crates/layerfs-cli/tests/store_process/compact_kill.rs#sigkill_after_seal",
+                    "api/crates/layerfs-cli/tests/store_process/compact_kill.rs#sigkill_before_load",
+                    "api/crates/layerfs-cli/tests/store_process/compact_kill.rs#sigkill_after_build",
+                    "api/crates/layerfs-cli/tests/store_process/compact_kill.rs#sigkill_during_verify",
+                    "api/crates/layerfs-cli/tests/store_process/compact_kill.rs#sigkill_before_install",
+                    "api/crates/layerfs-cli/tests/store_process/compact_kill.rs#sigkill_after_install",
+                    "api/crates/layerfs-cli/tests/store_process/compact_kill.rs#sigkill_during_settle"],
         note: "The SQLite section 9 crash matrix through named failpoints; the 9 sigkill_at! arms in sqlite_compact_crash.rs and the CLI test's 8 SIGKILL arms on the built layerfs store compact process at mark, build, verify and install; no daemon serves Store calls." },
     Row { id: "AC-02", backend: Backend::Both, tier: "E2", status: Status::Partial,
-        evidence: &["engine/crates/layerfs-persistence/tests/sqlite_compact.rs#a_wholly_dead_pack_is_rebuilt_away",
-                    "engine/crates/layerfs-persistence/tests/sqlite_compact_fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript"],
+        evidence: &["engine/crates/layerfs-persistence/tests/sqlite_compact/compact.rs#a_wholly_dead_pack_is_rebuilt_away",
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact/fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript"],
         note: "The SQLite arm runs through the suite; the converted 1.0 Store arm and the PostgreSQL backend matrix are deferred to T12.3b." },
     Row { id: "AC-03", backend: Backend::Both, tier: "E2", status: Status::Covered,
-        evidence: &["engine/crates/layerfs-persistence/tests/sqlite_compact_crash.rs#crash_before_seal",
-                    "engine/crates/layerfs-persistence/tests/sqlite_compact_crash.rs#crash_after_wal_switch",
-                    "engine/crates/layerfs-persistence/tests/sqlite_compact_crash.rs#crash_before_install",
-                    "engine/crates/layerfs-persistence/tests/sqlite_compact_crash.rs#crash_after_install"],
+        evidence: &["engine/crates/layerfs-persistence/tests/sqlite_compact/crash.rs#crash_before_seal",
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact/crash.rs#crash_after_wal_switch",
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact/crash.rs#crash_before_install",
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact/crash.rs#crash_after_install"],
         note: "SQLite mark/build/verify/install and WAL-switch stop points; lost COMMIT and power-loss arms belong to the PostgreSQL/fsync halves." },
     Row { id: "AC-04", backend: Backend::Both, tier: "E3", status: Status::Partial,
-        evidence: &["engine/crates/layerfs-persistence/tests/sqlite_compact_fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript",
+        evidence: &["engine/crates/layerfs-persistence/tests/sqlite_compact/fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript",
                     "runner#arm_random_store_shapes"],
         note: "Deterministic closure fixture plus a seeded six-history reachability property arm; the full random fork/commit/merge/publish/removal generator is not built here." },
     Row { id: "AC-05", backend: Backend::Both, tier: "E2", status: Status::Covered,
-        evidence: &["engine/crates/layerfs-persistence/tests/sqlite_compact_fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript",
+        evidence: &["engine/crates/layerfs-persistence/tests/sqlite_compact/fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript",
                     "runner#arm_random_store_shapes"],
         note: "Full doctor (including the diagnostic scan) on the compacted Store, also in the property arm." },
     Row { id: "AC-06", backend: Backend::Both, tier: "E2", status: Status::Executed,
@@ -1036,132 +1036,132 @@ const MATRIX: [Row; 60] = [
         note: "A Save's `file_digest` row named a root the rebuild collected; the row goes with its root and recording the same content again succeeds. The PostgreSQL half is T12.3b." },
     Row { id: "AC-07", backend: Backend::Both, tier: "E2", status: Status::Executed,
         evidence: &["runner#arm_mount_and_compaction_exclude_each_other",
-                    "engine/crates/layerfs-persistence/tests/sqlite_compact.rs#a_store_replaced_under_an_open_handle_is_stale_at_the_next_transaction"],
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact/compact.rs#a_store_replaced_under_an_open_handle_is_stale_at_the_next_transaction"],
         note: "SQLite half executed: bypass gives `StaleStore`, a mount blocks compaction (`MountsActive`, naming the holder) and a live compaction refuses a mount and a second compaction (`BusyOp`). The open one-shot SDK transaction arm is PostgreSQL, T12.3b." },
     Row { id: "AC-08", backend: Backend::Both, tier: "E2", status: Status::Covered,
-        evidence: &["engine/crates/layerfs-persistence/tests/admission.rs#a_concurrent_mount_and_branch_remove_have_one_winner"],
+        evidence: &["engine/crates/layerfs-persistence/tests/gc/admission.rs#a_concurrent_mount_and_branch_remove_have_one_winner"],
         note: "One winner; the loser sees MountsActive, and a removed Branch is Missing." },
     Row { id: "AC-09", backend: Backend::Both, tier: "E2", status: Status::Covered,
-        evidence: &["engine/crates/layerfs-persistence/tests/branch_removal.rs#a_removed_branch_is_hidden_and_the_epoch_bumps_once",
-                    "engine/crates/layerfs-persistence/tests/branch_removal.rs#a_live_holder_is_reported_for_branch_and_project_names",
-                    "api/crates/layerfs-api/tests/gc_calls.rs#branch_remove_refuses_reserved_and_absent_branches"],
+        evidence: &["engine/crates/layerfs-persistence/tests/history/branch_removal.rs#a_removed_branch_is_hidden_and_the_epoch_bumps_once",
+                    "engine/crates/layerfs-persistence/tests/history/branch_removal.rs#a_live_holder_is_reported_for_branch_and_project_names",
+                    "api/crates/layerfs-api/tests/calls/gc.rs#branch_remove_refuses_reserved_and_absent_branches"],
         note: "Reserved main, absent Branch and holder details are asserted; project-side name collisions are in AC-30." },
     Row { id: "AC-10", backend: Backend::Both, tier: "E2", status: Status::Covered,
-        evidence: &["engine/crates/layerfs-persistence/tests/path_removal.rs#marker_frontier_and_up_to_date_follow_the_store_position"],
+        evidence: &["engine/crates/layerfs-persistence/tests/history/path_removal.rs#marker_frontier_and_up_to_date_follow_the_store_position"],
         note: "Removed/UpToDate codes and the frontier; 2.0 frees no bytes for the removed path." },
     Row { id: "AC-11", backend: Backend::Both, tier: "E2", status: Status::Partial,
-        evidence: &["engine/crates/layerfs-store-service/tests/sdk_path_whiteouts.rs#a_merge_of_two_hidden_sides_keeps_the_path_absent",
-                    "engine/crates/layerfs-store-service/tests/sdk_path_whiteouts.rs#a_merge_keeps_a_post_frontier_re_creation",
-                    "engine/crates/layerfs-store-service/tests/sdk_path_merge_removal.rs#a_fast_forward_merge_creates_no_tree_and_the_path_stays_hidden",
-                    "engine/crates/layerfs-store-service/tests/sdk_path_merge_removal.rs#publishing_an_at_or_below_commit_yields_a_hidden_layer_and_a_layer_headed_mount"],
+        evidence: &["engine/crates/layerfs-store-service/tests/removal/path_whiteouts.rs#a_merge_of_two_hidden_sides_keeps_the_path_absent",
+                    "engine/crates/layerfs-store-service/tests/removal/path_whiteouts.rs#a_merge_keeps_a_post_frontier_re_creation",
+                    "engine/crates/layerfs-store-service/tests/removal/path_merge_removal.rs#a_fast_forward_merge_creates_no_tree_and_the_path_stays_hidden",
+                    "engine/crates/layerfs-store-service/tests/removal/path_merge_removal.rs#publishing_an_at_or_below_commit_yields_a_hidden_layer_and_a_layer_headed_mount"],
         note: "Non-FF whiteouts, the fast-forward control, a post-frontier re-creation and publish-at-or-below with a layer-headed mount whiteout execute. A merge that cannot materialize the whiteout has no implementation branch to refuse (`removal::derive_root` always derives), so that clause is deferred by name, not claimed." },
     Row { id: "AC-12", backend: Backend::Both, tier: "E2", status: Status::Covered,
-        evidence: &["engine/crates/layerfs-store-service/tests/sdk_path_whiteouts.rs#a_merge_of_two_hidden_sides_keeps_the_path_absent",
-                    "engine/crates/layerfs-store-service/tests/sdk_path_whiteouts.rs#a_merge_keeps_a_post_frontier_re_creation",
-                    "engine/crates/layerfs-store-service/tests/sdk_path_merge_removal.rs#a_recreated_removed_path_still_conflicts_as_an_ordinary_edit"],
+        evidence: &["engine/crates/layerfs-store-service/tests/removal/path_whiteouts.rs#a_merge_of_two_hidden_sides_keeps_the_path_absent",
+                    "engine/crates/layerfs-store-service/tests/removal/path_whiteouts.rs#a_merge_keeps_a_post_frontier_re_creation",
+                    "engine/crates/layerfs-store-service/tests/removal/path_merge_removal.rs#a_recreated_removed_path_still_conflicts_as_an_ordinary_edit"],
         note: "A removed path in a merge is omitted with no conflict; a post-frontier re-creation is kept, and only an ordinary edit conflict on it is reported." },
     Row { id: "AC-13", backend: Backend::Both, tier: "E2", status: Status::Covered,
-        evidence: &["engine/crates/layerfs-store-service/tests/sdk_path_merge_removal.rs#an_unmerged_branch_created_before_the_frontier_hides_but_does_not_inherit"],
+        evidence: &["engine/crates/layerfs-store-service/tests/removal/path_merge_removal.rs#an_unmerged_branch_created_before_the_frontier_hides_but_does_not_inherit"],
         note: "The earlier Commit on an unmerged Branch is hidden by the marker; a Commit after the frontier does not inherit the path." },
     Row { id: "AC-14", backend: Backend::Both, tier: "E2", status: Status::Covered,
-        evidence: &["engine/crates/layerfs-store-service/tests/sdk_path_merge_removal.rs#publishing_an_at_or_below_commit_yields_a_hidden_layer_and_a_layer_headed_mount",
-                    "engine/crates/layerfs-store-service/tests/sdk_path_whiteouts.rs#a_marker_under_a_live_mount_is_refused_and_materializes_after_it_closes"],
+        evidence: &["engine/crates/layerfs-store-service/tests/removal/path_merge_removal.rs#publishing_an_at_or_below_commit_yields_a_hidden_layer_and_a_layer_headed_mount",
+                    "engine/crates/layerfs-store-service/tests/removal/path_whiteouts.rs#a_marker_under_a_live_mount_is_refused_and_materializes_after_it_closes"],
         note: "A Branch whose head is empty and whose base Layer is at or below the frontier whiteouts the path at mount; its next Commit records the deletion." },
     Row { id: "AC-15", backend: Backend::Both, tier: "E2", status: Status::Partial,
-        evidence: &["engine/crates/layerfs-persistence/tests/kept_objects.rs#a_retained_tree_and_inode_are_kept_with_their_packs",
-                    "engine/crates/layerfs-persistence/tests/sqlite_compact_fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript"],
+        evidence: &["engine/crates/layerfs-persistence/tests/gc_mark/kept_objects.rs#a_retained_tree_and_inode_are_kept_with_their_packs",
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact/fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript"],
         note: "Retention of the only-reaching-path object is proven; marker hiding in reads/listings and derived whiteouts are not in one named test." },
     Row { id: "AC-16", backend: Backend::Both, tier: "E2", status: Status::Covered,
-        evidence: &["engine/crates/layerfs-persistence/tests/branch_removal.rs#a_live_holder_is_reported_for_branch_and_project_names",
-                    "engine/crates/layerfs-persistence/tests/sqlite_compact_fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript"],
+        evidence: &["engine/crates/layerfs-persistence/tests/history/branch_removal.rs#a_live_holder_is_reported_for_branch_and_project_names",
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact/fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript"],
         note: "T12.1 pins a retained retired Branch name and a collected unreferenced one; the branch.remove-then-rebuild arm is exercised through those markers." },
     Row { id: "AC-17", backend: Backend::Both, tier: "E2", status: Status::Covered,
-        evidence: &["engine/crates/layerfs-persistence/tests/sqlite_compact_fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript",
-                    "engine/crates/layerfs-persistence/tests/kept_objects.rs#a_delta_base_is_enqueued_and_reported"],
+        evidence: &["engine/crates/layerfs-persistence/tests/sqlite_compact/fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript",
+                    "engine/crates/layerfs-persistence/tests/gc_mark/kept_objects.rs#a_delta_base_is_enqueued_and_reported"],
         note: "Depth-2 chain copied, pack ids preserved." },
     Row { id: "AC-18", backend: Backend::Both, tier: "E2", status: Status::Covered,
-        evidence: &["engine/crates/layerfs-persistence/tests/sqlite_compact_fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript"],
+        evidence: &["engine/crates/layerfs-persistence/tests/sqlite_compact/fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript"],
         note: "Collected digest row gone, retained one kept." },
     Row { id: "AC-19", backend: Backend::Both, tier: "E2", status: Status::Partial,
-        evidence: &["api/crates/layerfs-api/tests/gc_calls.rs#project_hide_path_checks_its_path_grammar_then_reports_markers",
-                    "engine/crates/layerfs-persistence/tests/path_removal.rs#marker_frontier_and_up_to_date_follow_the_store_position"],
+        evidence: &["api/crates/layerfs-api/tests/calls/gc.rs#project_hide_path_checks_its_path_grammar_then_reports_markers",
+                    "engine/crates/layerfs-persistence/tests/history/path_removal.rs#marker_frontier_and_up_to_date_follow_the_store_position"],
         note: "Path-grammar refusals and the marker frontier are named; the full form table (symlink/hardlink, >4096 bytes, >256 components) is not one test." },
     Row { id: "AC-20", backend: Backend::Both, tier: "E2", status: Status::Partial,
-        evidence: &["engine/crates/layerfs-persistence/tests/path_removal.rs#a_raw_marker_frontier_also_yields_up_to_date",
-                    "engine/crates/layerfs-persistence/tests/path_removal.rs#an_unknown_project_is_missing"],
+        evidence: &["engine/crates/layerfs-persistence/tests/history/path_removal.rs#a_raw_marker_frontier_also_yields_up_to_date",
+                    "engine/crates/layerfs-persistence/tests/history/path_removal.rs#an_unknown_project_is_missing"],
         note: "UpToDate and never-existing paths are named; the re-creation and other-project arms are partial." },
     Row { id: "AC-21", backend: Backend::Both, tier: "E2", status: Status::Partial,
-        evidence: &["engine/crates/layerfs-persistence/tests/epoch_fence.rs#an_epoch_change_during_a_commit_is_detected_and_rolled_back",
-                    "engine/crates/layerfs-persistence/tests/epoch_fence.rs#a_concurrent_commit_and_removal_have_one_winner"],
+        evidence: &["engine/crates/layerfs-persistence/tests/gc/fence.rs#an_epoch_change_during_a_commit_is_detected_and_rolled_back",
+                    "engine/crates/layerfs-persistence/tests/gc/fence.rs#a_concurrent_commit_and_removal_have_one_winner"],
         note: "One-shot writes racing removals roll back as Conflict; the merge-racing-remove_file arm is not named." },
     Row { id: "AC-22", backend: Backend::Both, tier: "E3", status: Status::Covered,
-        evidence: &["engine/crates/layerfs-store-service/tests/sdk_path_merge_removal.rs#a_merge_and_a_removal_started_together_never_leave_the_path_visible",
-                    "engine/crates/layerfs-persistence/tests/epoch_fence.rs#an_epoch_change_during_a_merge_is_detected_and_rolled_back"],
+        evidence: &["engine/crates/layerfs-store-service/tests/removal/path_merge_removal.rs#a_merge_and_a_removal_started_together_never_leave_the_path_visible",
+                    "engine/crates/layerfs-persistence/tests/gc/fence.rs#an_epoch_change_during_a_merge_is_detected_and_rolled_back"],
         note: "A deterministic barrier starts a merge and a `remove_file` together for three rounds: the loser sees the marker or gets `Conflict` and retries with the whiteout, and a tree derived afterwards never shows the path. The PostgreSQL half is T12.3b." },
     Row { id: "AC-23", backend: Backend::Both, tier: "E2", status: Status::Partial,
-        evidence: &["engine/crates/layerfs-persistence/tests/sqlite_compact_fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript",
-                    "engine/crates/layerfs-persistence/tests/project_delete.rs#deleting_a_project_hides_it_and_marks_once"],
+        evidence: &["engine/crates/layerfs-persistence/tests/sqlite_compact/fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript",
+                    "engine/crates/layerfs-persistence/tests/history/project_delete.rs#deleting_a_project_hides_it_and_marks_once"],
         note: "Deleted-project rows and markers are collected by the rebuild; a dedicated path_removed cleanup arm is not named." },
     Row { id: "AC-24", backend: Backend::Both, tier: "E2", status: Status::Covered,
-        evidence: &["engine/crates/layerfs-persistence/tests/gc_backfill.rs#commits_layers_and_epochs_are_backfilled_in_deterministic_order",
-                    "engine/crates/layerfs-persistence/tests/gc_backfill.rs#existing_serials_are_kept_and_new_ones_start_above_the_maximum"],
+        evidence: &["engine/crates/layerfs-persistence/tests/gc/backfill.rs#commits_layers_and_epochs_are_backfilled_in_deterministic_order",
+                    "engine/crates/layerfs-persistence/tests/gc/backfill.rs#existing_serials_are_kept_and_new_ones_start_above_the_maximum"],
         note: "Serials backfilled, next_history_serial never falls." },
     Row { id: "AC-25", backend: Backend::Both, tier: "E2", status: Status::Covered,
-        evidence: &["engine/crates/layerfs-persistence/tests/sqlite_compact_fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript"],
+        evidence: &["engine/crates/layerfs-persistence/tests/sqlite_compact/fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript"],
         note: "Retained branch_retired/layer_stack_retired markers survive; collected rows take their markers." },
     Row { id: "AC-26", backend: Backend::Both, tier: "E2", status: Status::Covered,
-        evidence: &["engine/crates/layerfs-persistence/tests/project_delete.rs#retry_classifies_retired_live_and_absent",
-                    "engine/crates/layerfs-persistence/tests/project_delete.rs#deleting_a_project_hides_it_and_marks_once"],
+        evidence: &["engine/crates/layerfs-persistence/tests/history/project_delete.rs#retry_classifies_retired_live_and_absent",
+                    "engine/crates/layerfs-persistence/tests/history/project_delete.rs#deleting_a_project_hides_it_and_marks_once"],
         note: "Hidden, entry present, retry returns the stored deleted_ms." },
     Row { id: "AC-27", backend: Backend::Both, tier: "E2", status: Status::Covered,
-        evidence: &["engine/crates/layerfs-persistence/tests/project_delete.rs#paging_skips_a_hidden_project",
-                    "engine/crates/layerfs-persistence/tests/visibility_guard.rs#every_statement_reading_branch_or_layer_stack_is_filtered_or_allow_listed"],
+        evidence: &["engine/crates/layerfs-persistence/tests/history/project_delete.rs#paging_skips_a_hidden_project",
+                    "engine/crates/layerfs-persistence/tests/gc/visibility_guard.rs#every_statement_reading_branch_or_layer_stack_is_filtered_or_allow_listed"],
         note: "Stale home entries stay out of list/lookup." },
     Row { id: "AC-28", backend: Backend::Pg, tier: "E2", status: Status::Deferred,
         evidence: &[], note: "PostgreSQL Phase C cleanup and its failpoints: T12.3b." },
     Row { id: "AC-29", backend: Backend::Both, tier: "E2", status: Status::Covered,
-        evidence: &["engine/crates/layerfs-persistence/tests/admission.rs#a_live_operation_is_busy_and_an_uncertain_owner_is_unresolved",
-                    "engine/crates/layerfs-persistence/tests/admission.rs#a_mount_blocks_all_three_removals_until_released"],
+        evidence: &["engine/crates/layerfs-persistence/tests/gc/admission.rs#a_live_operation_is_busy_and_an_uncertain_owner_is_unresolved",
+                    "engine/crates/layerfs-persistence/tests/gc/admission.rs#a_mount_blocks_all_three_removals_until_released"],
         note: "Owner liveness and Unresolved settlement; machine_stopped and the other-home intent are partial." },
     Row { id: "AC-30", backend: Backend::Both, tier: "E2", status: Status::Partial,
-        evidence: &["engine/crates/layerfs-persistence/tests/branch_removal.rs#a_live_holder_is_reported_for_branch_and_project_names",
-                    "api/crates/layerfs-api/tests/gc_calls.rs#wrong_kinds_and_unknown_options_are_refused_before_any_effect"],
+        evidence: &["engine/crates/layerfs-persistence/tests/history/branch_removal.rs#a_live_holder_is_reported_for_branch_and_project_names",
+                    "api/crates/layerfs-api/tests/calls/gc.rs#wrong_kinds_and_unknown_options_are_refused_before_any_effect"],
         note: "Holder detail and refusal codes are named; the full exact-message matrix (AC-55) is partial." },
     Row { id: "AC-31", backend: Backend::Both, tier: "E2", status: Status::Covered,
-        evidence: &["api/crates/layerfs-api/tests/gc_trace.rs#path_arguments_are_byte_counts_in_the_call_log",
-                    "api/crates/layerfs-api/tests/gc_trace.rs#the_trace_key_is_salted_by_the_store_policy_salt"],
+        evidence: &["api/crates/layerfs-api/tests/calls/log_redaction.rs#path_arguments_are_byte_counts_in_the_call_log",
+                    "api/crates/layerfs-api/tests/calls/log_redaction.rs#the_trace_key_is_salted_by_the_store_policy_salt"],
         note: "Byte-count path arguments and the keyed trace hash are asserted." },
     Row { id: "AC-32", backend: Backend::Both, tier: "E2", status: Status::Partial,
-        evidence: &["engine/crates/layerfs-persistence/tests/admission.rs#a_live_operation_is_busy_and_an_uncertain_owner_is_unresolved"],
+        evidence: &["engine/crates/layerfs-persistence/tests/gc/admission.rs#a_live_operation_is_busy_and_an_uncertain_owner_is_unresolved"],
         note: "Live/uncertain ownership is named; live-but-unreachable, machine_stopped and another home's intent are partial." },
     Row { id: "AC-33", backend: Backend::Sqlite, tier: "E2", status: Status::Executed,
         evidence: &["runner#arm_checkpoint_busy", "runner#arm_sidecar_at_install"],
         note: "A live reader makes wal_checkpoint(TRUNCATE) Busy with no artifact and no op; a -mj* super-journal at install is Conflict with no writes." },
     Row { id: "AC-34", backend: Backend::Both, tier: "E2", status: Status::Partial,
-        evidence: &["engine/crates/layerfs-store-service/tests/sdk_mount_bind_failure.rs#a_bind_failure_cleans_its_intent_and_leaves_no_mounts_active"],
+        evidence: &["engine/crates/layerfs-store-service/tests/mount/bind_failure.rs#a_bind_failure_cleans_its_intent_and_leaves_no_mounts_active"],
         note: "A committed mount intent whose bind fails at the root check is deleted in the error path and no `MountsActive` remains. The failed-delete sub-arm is not inducible on SQLite: the storage schema guard rejects a trigger on `gc_intent`, and a lock held across the bind refuses the register too; the explicit `Cleanup` report is covered by the seam's code path, not executed here. The PostgreSQL half is T12.3b." },
     Row { id: "AC-35", backend: Backend::Pg, tier: "E2", status: Status::Deferred,
         evidence: &[], note: "PostgreSQL advisory-key refcount: T12.3b." },
     Row { id: "AC-36", backend: Backend::Both, tier: "E2", status: Status::Covered,
-        evidence: &["control/crates/layerfs-control/tests/project_delete_worker.rs#a_lost_worker_reply_is_unknown_and_keeps_the_sidecar_for_the_retry",
-                    "control/crates/layerfs-store/tests/project_delete.rs#a_retired_retry_reuses_the_intent_deleted_ms_and_finishes_the_entry",
-                    "control/crates/layerfs-store/tests/project_delete.rs#an_absent_stack_finishes_a_stale_entry"],
+        evidence: &["api/crates/layerfs-api/tests/worker_ops/project_delete.rs#a_lost_worker_reply_is_unknown_and_keeps_the_sidecar_for_the_retry",
+                    "control/crates/layerfs-store/tests/project/delete.rs#a_retired_retry_reuses_the_intent_deleted_ms_and_finishes_the_entry",
+                    "control/crates/layerfs-store/tests/project/delete.rs#an_absent_stack_finishes_a_stale_entry"],
         note: "A lost marker reply is `Unknown` with the sidecar kept; the retry resolves retired, live or absent. The PostgreSQL half is T12.3b." },
     Row { id: "AC-37", backend: Backend::Both, tier: "E2", status: Status::Partial,
-        evidence: &["api/crates/layerfs-api/tests/gc_trace.rs#the_redacted_set_covers_every_path_bearing_call",
-                    "api/crates/layerfs-api/tests/gc_trace.rs#the_trace_key_is_salted_by_the_store_policy_salt"],
+        evidence: &["api/crates/layerfs-api/tests/calls/log_redaction.rs#the_redacted_set_covers_every_path_bearing_call",
+                    "api/crates/layerfs-api/tests/calls/log_redaction.rs#the_trace_key_is_salted_by_the_store_policy_salt"],
         note: "Redaction and the keyed hash are named; salt backfill on an upgraded Store is partial." },
     Row { id: "AC-38", backend: Backend::Both, tier: "E2", status: Status::Covered,
-        evidence: &["engine/crates/layerfs-persistence/tests/sqlite_compact_fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript",
-                    "engine/crates/layerfs-persistence/tests/sqlite_compact_crash.rs#crash_during_settle",
-                    "engine/crates/layerfs-persistence/tests/sqlite_compact.rs#the_whole_artifact_set_is_removed_by_the_next_run"],
+        evidence: &["engine/crates/layerfs-persistence/tests/sqlite_compact/fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript",
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact/crash.rs#crash_during_settle",
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact/compact.rs#the_whole_artifact_set_is_removed_by_the_next_run"],
         note: "The full SQLite artifact set is removed exactly: the staged file and its -wal/-shm/-journal, the visited scratch and its journal, the incomplete op record and the -mj* super-journals; the PostgreSQL schema/name arms are T12.3b." },
     Row { id: "AC-39", backend: Backend::Both, tier: "E2", status: Status::Covered,
-        evidence: &["engine/crates/layerfs-persistence/tests/gc_backfill.rs#commits_layers_and_epochs_are_backfilled_in_deterministic_order"],
+        evidence: &["engine/crates/layerfs-persistence/tests/gc/backfill.rs#commits_layers_and_epochs_are_backfilled_in_deterministic_order"],
         note: "One project_epoch row per stack, gc_op not copied, next_history_serial never lowered." },
     Row { id: "AC-40", backend: Backend::Both, tier: "E2", status: Status::Covered,
-        evidence: &["engine/crates/layerfs-persistence/tests/sqlite_compact_fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript",
-                    "engine/crates/layerfs-persistence/tests/kept_objects.rs#the_digest_is_stable_and_moves_with_a_head"],
+        evidence: &["engine/crates/layerfs-persistence/tests/sqlite_compact/fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript",
+                    "engine/crates/layerfs-persistence/tests/gc_mark/kept_objects.rs#the_digest_is_stable_and_moves_with_a_head"],
         note: "SQLite live_heads_digest is identical before/after and moves with a head; PostgreSQL agreement is deferred." },
     Row { id: "AC-41", backend: Backend::Pg, tier: "E2", status: Status::Deferred,
         evidence: &[], note: "PostgreSQL Phase M mark transfer: T12.3b. The §11 `markBytes` transfer is measured in the walking mark and recorded as the `compact.mark_bytes` metric (asserted by `postgresql_compact_fixtures.rs`; see AC-52)." },
@@ -1170,95 +1170,95 @@ const MATRIX: [Row; 60] = [
     Row { id: "AC-43", backend: Backend::Pg, tier: "E2", status: Status::Deferred,
         evidence: &[], note: "PostgreSQL Phase C cleanup resume: T12.3b." },
     Row { id: "AC-44", backend: Backend::Pg, tier: "E2", status: Status::Covered,
-        evidence: &["engine/crates/layerfs-persistence/tests/postgresql_compact.rs#a_fully_privileged_role_compacts",
-                    "engine/crates/layerfs-persistence/tests/postgresql_compact.rs#a_role_without_create_on_the_database_is_refused_as_unsupported",
-                    "engine/crates/layerfs-persistence/tests/postgresql_compact.rs#a_role_without_create_on_the_store_schema_is_refused_as_unsupported",
-                    "engine/crates/layerfs-persistence/tests/postgresql_compact.rs#a_role_without_temp_is_refused_as_unsupported",
-                    "engine/crates/layerfs-persistence/tests/postgresql_compact.rs#a_role_without_pg_read_all_stats_is_refused_as_unsupported",
-                    "engine/crates/layerfs-persistence/tests/postgresql_compact.rs#a_lost_swap_reply_from_an_ended_owner_resumes_at_g_plus_1",
-                    "engine/crates/layerfs-persistence/tests/postgresql_compact.rs#a_recorded_live_owner_without_the_store_key_is_terminated",
-                    "engine/crates/layerfs-persistence/tests/postgresql_compact.rs#a_live_key_holding_owner_is_busy_and_not_terminated",
-                    "engine/crates/layerfs-persistence/tests/postgresql_compact.rs#a_role_without_pg_signal_backend_is_refused_as_unsupported"],
+        evidence: &["engine/crates/layerfs-persistence/tests/postgresql_gc/compact.rs#a_fully_privileged_role_compacts",
+                    "engine/crates/layerfs-persistence/tests/postgresql_gc/compact.rs#a_role_without_create_on_the_database_is_refused_as_unsupported",
+                    "engine/crates/layerfs-persistence/tests/postgresql_gc/compact.rs#a_role_without_create_on_the_store_schema_is_refused_as_unsupported",
+                    "engine/crates/layerfs-persistence/tests/postgresql_gc/compact.rs#a_role_without_temp_is_refused_as_unsupported",
+                    "engine/crates/layerfs-persistence/tests/postgresql_gc/compact.rs#a_role_without_pg_read_all_stats_is_refused_as_unsupported",
+                    "engine/crates/layerfs-persistence/tests/postgresql_gc/compact.rs#a_lost_swap_reply_from_an_ended_owner_resumes_at_g_plus_1",
+                    "engine/crates/layerfs-persistence/tests/postgresql_gc/compact.rs#a_recorded_live_owner_without_the_store_key_is_terminated",
+                    "engine/crates/layerfs-persistence/tests/postgresql_gc/compact.rs#a_live_key_holding_owner_is_busy_and_not_terminated",
+                    "engine/crates/layerfs-persistence/tests/postgresql_gc/compact.rs#a_role_without_pg_signal_backend_is_refused_as_unsupported"],
         note: "PostgreSQL privilege preflight (database/schema CREATE, TEMP, pg_read_all_stats, the fully privileged control, the signal backend), the lost-COMMIT reply resumed by the next compact, an ended owner without the Store key terminated, a live key holder `Busy` and kept, and a role without the signal backend `Unsupported`; T-G38/T-G54." },
     Row { id: "AC-45", backend: Backend::Sqlite, tier: "E1", status: Status::Covered,
-        evidence: &["engine/crates/layerfs-persistence/tests/sqlite_compact.rs#group_rows_layout_opens_compacts_and_takes_none",
-                    "engine/crates/layerfs-persistence/tests/sqlite_compact.rs#group_rows_indexed_layout_opens_compacts_and_takes_none",
-                    "engine/crates/layerfs-persistence/tests/sqlite_compact.rs#acquisition_layout_opens_compacts_and_clears_working_rows",
-                    "engine/crates/layerfs-persistence/tests/sqlite_group_rows.rs#explicit_creation_reopens_declared_units_and_keeps_sparse_canonical_order"],
+        evidence: &["engine/crates/layerfs-persistence/tests/sqlite_compact/compact.rs#group_rows_layout_opens_compacts_and_takes_none",
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact/compact.rs#group_rows_indexed_layout_opens_compacts_and_takes_none",
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact/compact.rs#acquisition_layout_opens_compacts_and_clears_working_rows",
+                    "engine/crates/layerfs-persistence/tests/sqlite/group_rows.rs#explicit_creation_reopens_declared_units_and_keeps_sparse_canonical_order"],
         note: "Monolithic/GroupRows/GroupRowsIndexed and the acquisition variants compact; working rows are cleared." },
     Row { id: "AC-46", backend: Backend::Sqlite, tier: "E2", status: Status::Executed,
         evidence: &["runner#arm_sidecar_at_install",
-                    "engine/crates/layerfs-persistence/tests/sqlite_compact.rs#a_store_replaced_between_seal_and_install_is_conflict",
-                    "engine/crates/layerfs-persistence/tests/sqlite_compact.rs#a_store_replaced_under_an_open_handle_is_stale_at_the_next_transaction"],
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact/compact.rs#a_store_replaced_between_seal_and_install_is_conflict",
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact/compact.rs#a_store_replaced_under_an_open_handle_is_stale_at_the_next_transaction"],
         note: "Sealed-state/sidecar change at install gives Conflict with no writes; a Store replaced between seal and install is also Conflict, because step 7 re-applies the sealed (dev, ino) identity. Only a session that opens after the install, or transacts on the old file, gets StaleStore. The in-flight-transaction exclusion is a documented lane limit, not probed." },
     Row { id: "AC-47", backend: Backend::Sqlite, tier: "E2", status: Status::Covered,
-        evidence: &["engine/crates/layerfs-persistence/tests/sqlite_compact_crash.rs#crash_during_copy",
-                    "engine/crates/layerfs-persistence/tests/sqlite_compact_crash.rs#crash_during_settle",
-                    "engine/crates/layerfs-persistence/tests/sqlite_compact.rs#a_stray_staged_name_is_refused_and_not_deleted",
-                    "engine/crates/layerfs-persistence/tests/sqlite_compact.rs#the_whole_artifact_set_is_removed_by_the_next_run",
-                    "engine/crates/layerfs-persistence/tests/sqlite_compact.rs#an_installed_leftover_reports_the_same_rebuild_as_a_completed_run",
-                    "engine/crates/layerfs-persistence/tests/sqlite_compact_fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript"],
+        evidence: &["engine/crates/layerfs-persistence/tests/sqlite_compact/crash.rs#crash_during_copy",
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact/crash.rs#crash_during_settle",
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact/compact.rs#a_stray_staged_name_is_refused_and_not_deleted",
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact/compact.rs#the_whole_artifact_set_is_removed_by_the_next_run",
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact/compact.rs#an_installed_leftover_reports_the_same_rebuild_as_a_completed_run",
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact/fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript"],
         note: "A crash leaves the full set (the fixture now creates .compact-wal, .compact-shm, .compact-visited-journal and a .compact-mj* super-journal too), the next compact removes every one and recovers, none leaves no artifact, a stray name is Exists; an installed leftover answers its recorded Rebuild G->G+1 report with the collected totals instead of re-deciding to none (F41-1)." },
     Row { id: "AC-48", backend: Backend::Both, tier: "E2", status: Status::Covered,
-        evidence: &["engine/crates/layerfs-persistence/tests/sqlite_compact.rs#nine_percent_wholly_dead_bytes_take_the_none_path",
-                    "engine/crates/layerfs-persistence/tests/sqlite_compact.rs#ten_percent_wholly_dead_bytes_rebuild_at_the_threshold",
-                    "engine/crates/layerfs-persistence/tests/sqlite_compact.rs#thirty_percent_wholly_dead_bytes_rebuild_above_the_threshold",
-                    "engine/crates/layerfs-persistence/tests/sqlite_compact.rs#an_empty_store_takes_the_none_path",
-                    "engine/crates/layerfs-persistence/tests/sqlite_compact.rs#a_capacity_failure_leaves_the_store_unchanged"],
+        evidence: &["engine/crates/layerfs-persistence/tests/sqlite_compact/compact.rs#nine_percent_wholly_dead_bytes_take_the_none_path",
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact/compact.rs#ten_percent_wholly_dead_bytes_rebuild_at_the_threshold",
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact/compact.rs#thirty_percent_wholly_dead_bytes_rebuild_above_the_threshold",
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact/compact.rs#an_empty_store_takes_the_none_path",
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact/compact.rs#a_capacity_failure_leaves_the_store_unchanged"],
         note: "9/10/30 percent, empty-store zeroReason, capacity abort; verify-failure and re-refine arms are partial." },
     Row { id: "AC-49", backend: Backend::Both, tier: "E2", status: Status::Executed,
         evidence: &["runner#arm_mount_during_compaction_is_busy",
                     "runner#arm_commit_during_rebuild",
-                    "engine/crates/layerfs-persistence/tests/admission.rs#a_concurrent_mount_and_branch_remove_have_one_winner"],
+                    "engine/crates/layerfs-persistence/tests/gc/admission.rs#a_concurrent_mount_and_branch_remove_have_one_winner"],
         note: "SQLite half executed: a mount during compact is `BusyOp` with the compaction; compaction returns `MountsActive` when the mount wins; a Commit racing the rebuild gets `StaleStore` or lands, and its retry is never lost. The PG Phase A/Phase C arms are T12.3b." },
     Row { id: "AC-50", backend: Backend::Both, tier: "E2", status: Status::Covered,
-        evidence: &["api/crates/layerfs-api/tests/calls_scope.rs#a_scope_refuses_every_call_it_does_not_cover",
-                    "api/crates/layerfs-api/tests/gc_calls.rs#the_four_gc_calls_take_ids_only"],
+        evidence: &["api/crates/layerfs-api/tests/scope/allowed.rs#a_scope_refuses_every_call_it_does_not_cover",
+                    "api/crates/layerfs-api/tests/calls/gc.rs#the_four_gc_calls_take_ids_only"],
         note: "Folder scope refuses the four calls; the admin profile is the only allowance." },
     Row { id: "AC-51", backend: Backend::Both, tier: "E2", status: Status::Executed,
         evidence: &["runner#arm_status_phases",
-                    "control/crates/layerfs-store/tests/compact_report_status.rs#a_live_read_shows_the_sidecar_phase_and_state_and_remembers_a_leftover",
-                    "engine/crates/layerfs-persistence/tests/sqlite_compact_crash.rs#crash_before_seal"],
+                    "control/crates/layerfs-store/tests/maintenance/compact_report_status.rs#a_live_read_shows_the_sidecar_phase_and_state_and_remembers_a_leftover",
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact/crash.rs#crash_before_seal"],
         note: "The op sidecar records mark/build/verify/install (runner); T10 projects it through store.status, and the named control test asserts the phase, state and phases list." },
     Row { id: "AC-52", backend: Backend::Both, tier: "E2", status: Status::Covered,
-        evidence: &["engine/crates/layerfs-persistence/tests/sqlite_compact_fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript",
+        evidence: &["engine/crates/layerfs-persistence/tests/sqlite_compact/fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript",
                     "engine/crates/layerfs-persistence/tests/fixtures/sqlite_compact_golden.json",
-                    "control/crates/layerfs-store/tests/compact_report_status.rs#the_report_is_flat_with_byte_totals_named_bytes"],
+                    "control/crates/layerfs-store/tests/maintenance/compact_report_status.rs#the_report_is_flat_with_byte_totals_named_bytes"],
         note: "Every section 11 field pinned with units and sampling point (golden) and rendered by the T10 wire-shape test; markBytes is a metric, not a result field, and PostgreSQL records it as `compact.mark_bytes`; `deadBytesRefined` is the bound on every path, because the mark leaves no payload sweep to refine it (#42 A10)." },
     Row { id: "AC-53", backend: Backend::Both, tier: "E2", status: Status::Partial,
-        evidence: &["api/crates/layerfs-api/tests/project_export.rs#export_omits_a_path_hidden_by_hide_path",
-                    "api/crates/layerfs-api/tests/gc_calls.rs#project_hide_path_checks_its_path_grammar_then_reports_markers"],
+        evidence: &["api/crates/layerfs-api/tests/project/export.rs#export_omits_a_path_hidden_by_hide_path",
+                    "api/crates/layerfs-api/tests/calls/gc.rs#project_hide_path_checks_its_path_grammar_then_reports_markers"],
         note: "One hidden-path export case is named; the full read-surface table (read/stat/list/glob/diff/revision/edit/grep/blame/cp/apply) is not executed." },
     Row { id: "AC-54", backend: Backend::Both, tier: "E2", status: Status::Partial,
-        evidence: &["control/crates/layerfs-store/tests/restore_install.rs#a_folder_made_unprivate_during_the_download_is_refused_before_the_install",
-                    "control/crates/layerfs-store/tests/restored_records.rs#a_restored_project_reads_as_a_sandbox_reads_it"],
+        evidence: &["control/crates/layerfs-store/tests/backup/restore_install.rs#a_folder_made_unprivate_during_the_download_is_refused_before_the_install",
+                    "control/crates/layerfs-store/tests/backup/restored_records.rs#a_restored_project_reads_as_a_sandbox_reads_it"],
         note: "Restore install guards and restored records are named; restore before/after a removal and the stale-entry listing arm are partial. The restore-window arm needs a lock-capable filesystem (ext4/xfs/btrfs), so on this Sandbox it reports Unsupported while the other two cases pass." },
     Row { id: "AC-55", backend: Backend::Both, tier: "E2", status: Status::Executed,
         evidence: &["runner#arm_error_codes", "runner#arm_checkpoint_busy",
-                    "engine/crates/layerfs-persistence/tests/sqlite_compact.rs#a_stray_staged_name_is_refused_and_not_deleted"],
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact/compact.rs#a_stray_staged_name_is_refused_and_not_deleted"],
         note: "Exact SQLite texts asserted: Busy, Conflict(\"Store sidecar at install\"), Exists(\"unrecorded compaction artifact\"), Capacity(\"disk space\"); the full engine/API message matrix stays partial." },
     Row { id: "AC-56", backend: Backend::Both, tier: "E3", status: Status::Partial,
 
-        evidence: &["engine/crates/layerfs-persistence/tests/sqlite_compact_fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript",
+        evidence: &["engine/crates/layerfs-persistence/tests/sqlite_compact/fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript",
                     "engine/crates/layerfs-persistence/tests/fixtures/sqlite_compact_golden.json"],
         note: "The literal SQLite vector is pinned (absent head 33 zero bytes); the shared PostgreSQL literal and the three-run E3 shape are deferred." },
     Row { id: "AC-57", backend: Backend::Both, tier: "E3", status: Status::Partial,
         evidence: &["runner#arm_measurement",
                     "engine/crates/layerfs-persistence/tests/fixtures/sqlite_compact_measure.json",
-                    "engine/crates/layerfs-persistence/tests/sqlite_compact_capacity.rs#capacity_measure",
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact/capacity.rs#capacity_measure",
                     "engine/crates/layerfs-persistence/tests/fixtures/sqlite_compact_capacity_measure.json",
                     "engine/crates/layerfs-persistence/tests/fixtures/sqlite_compact_capacity_measure_whole_store.json",
                     "engine/crates/layerfs-persistence/tests/fixtures/sqlite_compact_capacity_measure_50gb.json",
                     "engine/crates/layerfs-persistence/tests/fixtures/sqlite_compact_capacity_measure_gc_bench.json"],
         note: "The tiny three-run arm is median 32.1 ms. T-G61 measured a real 9.987 GB Store on the whole-Store `VACUUM INTO` build (3 runs per arm; medians kept in `tests/fixtures/sqlite_compact_capacity_measure_whole_store.json`): `none` at 8.88% dead median 149.318 s and `rebuild` at 10.00% dead median 246.371 s (mark 149.089 s / build 94.317 s / verify 0.312 s / install 1.916 s; the build phase's per-run samples were not retained, so it records a 94.317 s median only and no range -- a recorded missing-range deviation, see `tools/ci/gc-bench.md` section 13), plus a WAL/FULL control at 284.078 s. Measured on the pre-#49-round-4 fresh-copy build on the same 9.987 GB fixture: the committed receipt predates both the 256 MiB `src.mmap_size` source window and the `quick_check` removal, so it is the pre-head8 build/verify path, not a head8 re-measurement. `rebuild` median 118.439584 s (mark 74.462-75.704 s / build 18.190-19.209 s / verify 4.330-4.377 s (including the `quick_check` page scan #49 round 4 removed) / install 19.197-23.673 s), peak 9.144 GB; `none` median 88.439 s (82.0-149.9 s; this Sandbox shares the host); profile, host and toolchain are declared in the fixture, and the warm page cache is declared below. The §11 `markBytes` transfer is recorded per PostgreSQL run as `compact.mark_bytes`. The separate gc_bench medium fixture (9.789 GB live / 10.731 GB pack) measured `rebuild` median 133.076 s in three runs (receipt: `tests/fixtures/sqlite_compact_capacity_measure_gc_bench.json`), a different generated Store from the 9.987 GB capacity_measure fixture; the same-fixture comparison is 246.371 s -> 118.439584 s = 2.08x, and the earlier 1.85x (133.076 s against 246.371 s) mixed the two fixtures and is withdrawn. The gc-bench/1 receipt declares the Disposable profile (WAL/OFF, page_size 4096) and the cache, records bytes written as `processIo.writeBytes`, and does not record the SQLite version or WAL bytes (recorded deviation). T-G66 later measured the 50 GB arm once per path (#42 item 44; receipt `tests/fixtures/sqlite_compact_capacity_measure_50gb.json`, `none` 1,633.585 s and `rebuild` 5,131.835 s); the 30% arm, each removal type, the plain `VACUUM INTO` comparison and PostgreSQL timings remain deferred/[E]." },
     Row { id: "AC-58", backend: Backend::Sqlite, tier: "E2", status: Status::Covered,
-        evidence: &["engine/crates/layerfs-persistence/tests/sqlite_compact_fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript",
-                    "engine/crates/layerfs-persistence/tests/sqlite_compact_crash.rs#crash_before_copy",
-                    "engine/crates/layerfs-persistence/tests/sqlite_compact_crash.rs#crash_during_copy"],
+        evidence: &["engine/crates/layerfs-persistence/tests/sqlite_compact/fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript",
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact/crash.rs#crash_before_copy",
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact/crash.rs#crash_during_copy"],
         note: "none rolls its mark transaction back (no kept_node row, no gc_intent row, no committed WAL frame), deletes the scratch and leaves no .compact; rebuild commits the mark and keeps the visited scratch through the build; step 2 writes only on rebuild." },
     Row { id: "AC-59", backend: Backend::Sqlite, tier: "E2", status: Status::Executed,
         evidence: &["runner#arm_checkpoint_busy", "runner#arm_seal",
-                    "engine/crates/layerfs-persistence/tests/sqlite_compact.rs#a_store_replaced_between_seal_and_install_is_conflict"],
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact/compact.rs#a_store_replaced_between_seal_and_install_is_conflict"],
         note: "busy != 0 refuses Busy and the WAL is never unlinked; a successful seal records (size, mtime, counter) as fenced by the Conflict arm." },
     Row { id: "AC-60", backend: Backend::Pg, tier: "E2", status: Status::Deferred,
         evidence: &[], note: "PostgreSQL synchronous standby handling: T12.3b." },
@@ -1307,7 +1307,7 @@ fn status_label(status: Status) -> &'static str {
 /// added: the in-process `crash_at!` arms, the `sigkill_at!` arms and the
 /// crash child itself are every test the suite declares on Linux.
 fn crash_suite_counts() -> (usize, usize) {
-    let path = repo_root().join("engine/crates/layerfs-persistence/tests/sqlite_compact_crash.rs");
+    let path = repo_root().join("engine/crates/layerfs-persistence/tests/sqlite_compact/crash.rs");
     let text = std::fs::read_to_string(&path).unwrap_or_else(|_| {
         panic!(
             "missing {}; the crash suite the report counts",
@@ -1355,7 +1355,7 @@ fn generate_report() -> String {
     writeln!(out).unwrap();
     writeln!(
         out,
-        "> Generated by `cargo test -p layerfs-persistence --test sqlite_compact_matrix`."
+        "> Generated by `cargo test -p layerfs-persistence --test sqlite_compact matrix`."
     )
     .unwrap();
     writeln!(
@@ -1371,7 +1371,7 @@ fn generate_report() -> String {
     writeln!(out, "> evidence and adds no contract. Regenerate with").unwrap();
     writeln!(
         out,
-        "> `UPDATE_REPORT=1 cargo test -p layerfs-persistence --test sqlite_compact_matrix`."
+        "> `UPDATE_REPORT=1 cargo test -p layerfs-persistence --test sqlite_compact matrix`."
     )
     .unwrap();
     writeln!(out).unwrap();
@@ -1423,7 +1423,7 @@ fn generate_report() -> String {
     writeln!(out, "  re-executed test child, so T-G65 added").unwrap();
     writeln!(
         out,
-        "  `api/crates/layerfs-cli/tests/sqlite_compact_process_kill.rs`: 8 SIGKILL"
+        "  `api/crates/layerfs-cli/tests/store_process/compact_kill.rs`: 8 SIGKILL"
     )
     .unwrap();
     writeln!(
@@ -2126,7 +2126,7 @@ fn generate_report() -> String {
     writeln!(out, "  (WAL/OFF), `CARGO_TARGET_DIR=/tmp/target-t123c`.").unwrap();
     writeln!(
         out,
-        "- Verified here: `sqlite_compact_matrix` (1 test); the persistence suites"
+        "- Verified here: `sqlite_compact` `matrix` (1 test); the persistence suites"
     )
     .unwrap();
     // The counts come from the test sources, so a suite that gains or loses a
@@ -2136,69 +2136,69 @@ fn generate_report() -> String {
     writeln!(
         out,
         "  `sqlite_compact` ({}), `sqlite_compact_crash` (24),",
-        suite_tests("engine/crates/layerfs-persistence/tests/sqlite_compact.rs")
+        suite_tests("engine/crates/layerfs-persistence/tests/sqlite_compact/compact.rs")
     )
     .unwrap();
     writeln!(
         out,
         "  `sqlite_compact_fixtures` ({}), `admission` ({}), `path_removal` ({}),",
-        suite_tests("engine/crates/layerfs-persistence/tests/sqlite_compact_fixtures.rs"),
-        suite_tests("engine/crates/layerfs-persistence/tests/admission.rs"),
-        suite_tests("engine/crates/layerfs-persistence/tests/path_removal.rs")
+        suite_tests("engine/crates/layerfs-persistence/tests/sqlite_compact/fixtures.rs"),
+        suite_tests("engine/crates/layerfs-persistence/tests/gc/admission.rs"),
+        suite_tests("engine/crates/layerfs-persistence/tests/history/path_removal.rs")
     )
     .unwrap();
     writeln!(
         out,
         "  `branch_removal` ({}), `project_delete` ({}), `epoch_fence` ({}),",
-        suite_tests("engine/crates/layerfs-persistence/tests/branch_removal.rs"),
-        suite_tests("engine/crates/layerfs-persistence/tests/project_delete.rs"),
-        suite_tests("engine/crates/layerfs-persistence/tests/epoch_fence.rs")
+        suite_tests("engine/crates/layerfs-persistence/tests/history/branch_removal.rs"),
+        suite_tests("engine/crates/layerfs-persistence/tests/history/project_delete.rs"),
+        suite_tests("engine/crates/layerfs-persistence/tests/gc/fence.rs")
     )
     .unwrap();
     writeln!(
         out,
         "  `gc_backfill` ({}), `kept_objects` ({}); the Store-service path suites",
-        suite_tests("engine/crates/layerfs-persistence/tests/gc_backfill.rs"),
-        suite_tests("engine/crates/layerfs-persistence/tests/kept_objects.rs")
+        suite_tests("engine/crates/layerfs-persistence/tests/gc/backfill.rs"),
+        suite_tests("engine/crates/layerfs-persistence/tests/gc_mark/kept_objects.rs")
     )
     .unwrap();
     writeln!(
         out,
         "  `sdk_path_merge_removal` ({}), `sdk_mount_bind_failure` ({}),",
-        suite_tests("engine/crates/layerfs-store-service/tests/sdk_path_merge_removal.rs"),
-        suite_tests("engine/crates/layerfs-store-service/tests/sdk_mount_bind_failure.rs")
+        suite_tests("engine/crates/layerfs-store-service/tests/removal/path_merge_removal.rs"),
+        suite_tests("engine/crates/layerfs-store-service/tests/mount/bind_failure.rs")
     )
     .unwrap();
     writeln!(
         out,
         "  `sdk_path_whiteouts` ({}), `sdk_path_hidden_semantics` ({}),",
-        suite_tests("engine/crates/layerfs-store-service/tests/sdk_path_whiteouts.rs"),
-        suite_tests("engine/crates/layerfs-store-service/tests/sdk_path_hidden_semantics.rs")
+        suite_tests("engine/crates/layerfs-store-service/tests/removal/path_whiteouts.rs"),
+        suite_tests("engine/crates/layerfs-store-service/tests/removal/path_hidden_semantics.rs")
     )
     .unwrap();
     writeln!(
         out,
         "  `sdk_path_removal` ({}); and the `layerfs-control",
-        suite_tests("engine/crates/layerfs-store-service/tests/sdk_path_removal.rs")
+        suite_tests("engine/crates/layerfs-store-service/tests/removal/path_removal.rs")
     )
     .unwrap();
     writeln!(
         out,
         "  project_delete_worker` ({}), the `layerfs-store",
-        suite_tests("control/crates/layerfs-control/tests/project_delete_worker.rs")
+        suite_tests("api/crates/layerfs-api/tests/worker_ops/project_delete.rs")
     )
     .unwrap();
     writeln!(
         out,
         "  project_delete` ({}), `compact_report_status` ({}) and the",
-        suite_tests("control/crates/layerfs-store/tests/project_delete.rs"),
-        suite_tests("control/crates/layerfs-store/tests/compact_report_status.rs")
+        suite_tests("control/crates/layerfs-store/tests/project/delete.rs"),
+        suite_tests("control/crates/layerfs-store/tests/maintenance/compact_report_status.rs")
     )
     .unwrap();
     writeln!(
         out,
         "  PostgreSQL AC-44 suite `postgresql_compact` ({} tests; AC-44's nine are",
-        suite_tests("engine/crates/layerfs-persistence/tests/postgresql_compact.rs")
+        suite_tests("engine/crates/layerfs-persistence/tests/postgresql_gc/compact.rs")
     )
     .unwrap();
     writeln!(out, "  `a_fully_privileged_role_compacts`,").unwrap();
@@ -2344,7 +2344,7 @@ fn the_sqlite_half_of_the_acceptance_matrix_is_executed_and_reported() {
     } else {
         let committed = std::fs::read_to_string(&path).unwrap_or_else(|_| {
             panic!(
-                "missing {}; run UPDATE_REPORT=1 cargo test -p layerfs-persistence --test sqlite_compact_matrix",
+                "missing {}; run UPDATE_REPORT=1 cargo test -p layerfs-persistence --test sqlite_compact matrix",
                 path.display()
             )
         });

@@ -15,6 +15,7 @@
 use super::super::doctor::budget::{Budget, Checks};
 use super::super::doctor::report::Node;
 use super::super::doctor::runner::{CheckId, Probe};
+use super::schema::{format_evidence, postgresql_format, upgrade_error, with_format};
 use layerfs_home::disk::paths;
 use layerfs_home::record::intent::Standing;
 use layerfs_home::reply::events::Events;
@@ -36,7 +37,7 @@ const RECORD: &str = "store.record";
 const OPERATION: &str = "store.operation";
 const CONNECTION: &str = "store.connection";
 const IDENTITY: &str = "store.identity";
-const SCHEMA: &str = "store.schema";
+pub(super) const SCHEMA: &str = "store.schema";
 const BACKUPS: &str = "store.backups";
 const MOUNT_HOLDERS: &str = "store.mount_holders";
 const GC_AUDIT: &str = "store.gc_audit";
@@ -944,62 +945,4 @@ fn connect_fix(record: &StoreRecord, login: bool) -> String {
         "layerfs store connect {} <url>{login}",
         shell_word(record.name())
     )
-}
-
-/// `store.schema`'s evidence (#804 §2): `{ version, latest, status, raw,
-/// variant }`, the format with the raw encoding (`user_version`, or
-/// `history_meta.schema_version`) and the recorded-source variant.
-fn format_evidence(evidence: &layerfs_persistence::upgrade::FormatEvidence) -> SdkValue {
-    let format = &evidence.format;
-    SdkValue::map([
-        (
-            "version",
-            format.version.map_or(SdkValue::Null, SdkValue::Int),
-        ),
-        ("latest", SdkValue::Int(format.latest)),
-        ("status", SdkValue::text(format.status.word())),
-        ("raw", SdkValue::Int(evidence.raw)),
-        ("variant", SdkValue::opt_text(evidence.variant.clone())),
-    ])
-}
-
-/// The engine's words for a format it could not read.
-fn upgrade_error(error: &layerfs_persistence::upgrade::UpgradeError) -> String {
-    use layerfs_persistence::upgrade::UpgradeError;
-    match error {
-        UpgradeError::InUse(why)
-        | UpgradeError::Busy(why)
-        | UpgradeError::Unsupported(why)
-        | UpgradeError::Failed(why)
-        | UpgradeError::Unknown(why) => why.clone(),
-        UpgradeError::Cancelled => layerfs_store::upgrade::CANCELLED.to_owned(),
-    }
-}
-
-/// `fields` with the shallow cut's `format` (`{ version, latest, status,
-/// raw, variant }` or `{ error }`) as `format` beside them.
-fn with_format(mut fields: Vec<(&str, SdkValue)>, format: Option<&SdkValue>) -> SdkValue {
-    if let Some(format) = format {
-        fields.push(("format", format.clone()));
-    }
-    map_of(fields)
-}
-
-/// PostgreSQL Store `record`'s format as `store.schema`'s evidence: one
-/// connect and one `SELECT` (`postgresql_format_evidence`).
-fn postgresql_format(record: &StoreRecord, checks: &mut Checks) {
-    let url = layerfs_store::admin::record::store::url(record);
-    let schema = layerfs_store::upgrade::postgresql_schema(record);
-    let format = match (url, schema) {
-        (Ok(url), Ok(schema)) => {
-            match layerfs_persistence::upgrade::postgresql_format_evidence(&url, &schema) {
-                Ok(evidence) => format_evidence(&evidence),
-                Err(error) => SdkValue::map([("error", SdkValue::text(upgrade_error(&error)))]),
-            }
-        }
-        (Err(error), _) | (_, Err(error)) => {
-            SdkValue::map([("error", SdkValue::text(error.message))])
-        }
-    };
-    checks.evidence(SCHEMA, with_format(Vec::new(), Some(&format)));
 }

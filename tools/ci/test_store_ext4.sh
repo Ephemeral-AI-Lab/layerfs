@@ -293,11 +293,29 @@ run_cargo() {
   if [ "${#passthrough[@]}" -gt 0 ]; then
     cmd+=( -- "${passthrough[@]}" )
   fi
+  run_command "$package" "$*" "${cmd[@]}"
+}
+
+# One module of an area test binary (`tests/<area>/main.rs`, #828): the
+# binary, filtered to the module's tests by libtest (`<module>::`).
+run_module() {
+  local package=$1 binary=$2 module=$3
+  local -a cmd=( "${cargo_cmd[@]}" test --locked -j "$jobs" -p "$package" --test "$binary" -- "$module::" )
+  if [ "${#passthrough[@]}" -gt 0 ]; then
+    cmd+=( "${passthrough[@]}" )
+  fi
+  run_command "$package" "--test $binary $module::" "${cmd[@]}"
+}
+
+run_command() {
+  local package=$1 label=$2
+  shift 2
+  local -a cmd=( "$@" )
   show_command "${cmd[@]}"
   if [ "$list_only" -eq 1 ]; then
     return 0
   fi
-  printf '\n==> %s:%s\n' "$package" "$*"
+  printf '\n==> %s:%s\n' "$package" "$label"
   ran=$((ran + 1))
   if "${cmd[@]}"; then
     printf 'PASS %s\n' "$package"
@@ -376,28 +394,35 @@ if [ -n "${LAYERFS_TEST_POSTGRES_URL:-}" ] && [ "$list_only" -eq 0 ]; then
 fi
 
 if [ "$mode" = quick ]; then
-  run_cargo layerfs-persistence --test heads --test sqlite_publication
-  run_cargo layerfs-store-service --test kernel_guard --test commit_pipeline
-  run_cargo layerfs-store --test create_directory --test compact_report_status
-  run_cargo layerfs-api --test store_family --test calls_table --test gc_calls --test gc_trace
-  run_cargo layerfs-cli --test gc --test sqlite_compact_process_kill
+  run_module layerfs-persistence history heads
+  run_module layerfs-persistence sqlite publication
+  run_module layerfs-store-service store kernel_guard
+  run_module layerfs-store-service commit pipeline
+  run_module layerfs-store sqlite create_directory
+  run_module layerfs-store maintenance compact_report_status
+  run_module layerfs-api store family
+  run_module layerfs-api calls table
+  run_module layerfs-api calls gc
+  run_module layerfs-api calls log_redaction
+  run_module layerfs-cli command_line gc_calls
+  run_module layerfs-cli store_process compact_kill
 else
   run_cargo layerfs-persistence
   run_cargo layerfs-store-service
   run_cargo layerfs-store
-  api_store_targets=()
-  for file in api/crates/layerfs-api/tests/store_*.rs; do
-    [ -f "$file" ] || continue
-    target=${file##*/}
-    api_store_targets+=( --test "${target%.rs}" )
-  done
-  [ "${#api_store_targets[@]}" -gt 0 ] \
-    || refuse "no api/crates/layerfs-api/tests/store_*.rs targets found; is $root the repository root?"
-  run_cargo layerfs-api "${api_store_targets[@]}"
+  [ -f api/crates/layerfs-api/tests/store/main.rs ] \
+    || refuse "no api/crates/layerfs-api/tests/store/ test binary found; is $root the repository root?"
+  # The Store family's binary and the Store tests that stay standalone (#828).
+  run_cargo layerfs-api --test store --test idle_checkpoint --test oneshot_close \
+    --test open_cache --test reaper --test upgrade_cancel
   # The four GC calls, their trace and the scope refusal, and the CLI's GC
   # commands plus the real-process compaction kill arms (T-G65).
-  run_cargo layerfs-api --test calls_table --test gc_calls --test gc_trace --test calls_scope
-  run_cargo layerfs-cli --test gc --test sqlite_compact_process_kill
+  run_module layerfs-api calls table
+  run_module layerfs-api calls gc
+  run_module layerfs-api calls log_redaction
+  run_module layerfs-api scope allowed
+  run_module layerfs-cli command_line gc_calls
+  run_module layerfs-cli store_process compact_kill
 fi
 
 if [ "$list_only" -eq 1 ]; then

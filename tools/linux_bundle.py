@@ -129,7 +129,7 @@ def version(worktree):
 
 
 def protocol(worktree):
-    source = Path(worktree) / "control/crates/layerfs-machine/src/worker/hello.rs"
+    source = Path(worktree) / "control/crates/layerfs-machine/src/route/guest/hello.rs"
     match = re.search(r"pub const PROTOCOL: i64 = (\d+);", source.read_text())
     if not match:
         raise Refused("the worker protocol constant could not be read")

@@ -179,7 +179,7 @@ impl CallSite {
 
 /// `control/SUPPORT.json`: every named host's rows, keys in a fixed order.
 pub fn support_json() -> String {
-    let mut out = String::from("{\n  \"generated_from\": \"control/crates/layerfs-platform/src/support.rs\",\n  \"hosts\": [\n");
+    let mut out = String::from("{\n  \"generated_from\": \"control/crates/layerfs-machine/src/table/support.rs\",\n  \"hosts\": [\n");
     for (h, host) in HostOs::NAMED.into_iter().enumerate() {
         out.push_str("    {\n      \"host\": ");
         text(&mut out, host.as_str());
