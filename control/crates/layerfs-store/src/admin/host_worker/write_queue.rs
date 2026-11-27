@@ -36,7 +36,7 @@
 //! that ends the worker. Nothing waits on a record: drain, idle exit and a
 //! Store's close never do.
 use super::server::{log, HostServer};
-use crate::postgresql::pool::Reservation;
+use crate::backend::postgresql::pool::Reservation;
 use layerfs_home::outcome::{refused, Outcome};
 use layerfs_machine::worker::StreamReader;
 #[cfg(doc)]
@@ -68,7 +68,7 @@ impl Drop for Held {
     /// A PostgreSQL write's arguments carry its password: overwritten.
     fn drop(&mut self) {
         if self.args.get("password").is_some() {
-            crate::host_postgresql::wipe_request(std::mem::take(&mut self.args));
+            crate::admin::host_worker::postgresql::wipe_request(std::mem::take(&mut self.args));
         }
     }
 }
@@ -106,7 +106,8 @@ impl Writes {
         for (at, held) in self.waiting.iter().enumerate() {
             match held.postgresql.as_deref() {
                 Some(store) if !draining => {
-                    if let Some(slot) = crate::postgresql::pool::reserve_write(home, store) {
+                    if let Some(slot) = crate::backend::postgresql::pool::reserve_write(home, store)
+                    {
                         chosen = Some((at, Some(slot)));
                         break;
                     }
@@ -211,12 +212,12 @@ impl HostServer {
         let mut admitted = false;
         let postgresql = slot.is_some();
         if let Some(slot) = slot {
-            crate::postgresql::pool::hold(slot);
+            crate::backend::postgresql::pool::hold(slot);
         }
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             self.answer_write(&held, &mut admitted)
         }));
-        crate::postgresql::pool::release_held();
+        crate::backend::postgresql::pool::release_held();
         if result.is_err() {
             let _ = layerfs_home::trace::steps_take();
             log("a host write panicked; its answer was lost");
@@ -315,13 +316,14 @@ impl HostServer {
             ));
         }
         let mut reader = StreamReader::new(&held.stream);
-        crate::host_stream::serve(&self.home, &held.args, &mut reader)
+        crate::admin::host_worker::stream::serve(&self.home, &held.args, &mut reader)
     }
 
     /// Writes one outcome's record, one attempt; on failure the outcome
     /// goes to the worker log, without content, and false is returned.
     fn keep(&self, request_id: &str, kind: &str, args: &SdkValue, outcome: &Outcome) -> bool {
-        let Err(error) = crate::host_write::keep(&self.home, request_id, kind, args, outcome)
+        let Err(error) =
+            crate::admin::host_worker::retained::keep(&self.home, request_id, kind, args, outcome)
         else {
             return true;
         };

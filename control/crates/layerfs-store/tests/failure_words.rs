@@ -80,7 +80,7 @@ fn a_history_failure_keeps_the_history_crates_words() {
 #[test]
 fn an_old_format_store_is_named_by_its_version_refusal() {
     use layerfs_home::outcome::refused;
-    use layerfs_store::state::{outdated_fix, outdated_status, OLD_STORE};
+    use layerfs_store::admin::status::state::{outdated_fix, outdated_status, OLD_STORE};
     let Some(raised) = schema_2_open_refusal() else {
         return;
     };
@@ -131,7 +131,7 @@ fn schema_2_open_refusal() -> Option<layerfs_protocol::sdk::SdkRefusal> {
     std::fs::set_permissions(&home, std::fs::Permissions::from_mode(0o700)).unwrap();
     layerfs_home::home::open(&home).unwrap();
     let name = layerfs_home::names::StoreName::parse("shop").unwrap();
-    if let Err(refusal) = layerfs_store::sqlite::create::create(&home, &name, None) {
+    if let Err(refusal) = layerfs_store::backend::sqlite::create::create(&home, &name, None) {
         assert!(
             refusal.message.contains("does not carry SQLite locks"),
             "{refusal:?}"
@@ -143,13 +143,13 @@ fn schema_2_open_refusal() -> Option<layerfs_protocol::sdk::SdkRefusal> {
     let mut bytes = std::fs::read(&file).unwrap();
     bytes[60..64].copy_from_slice(&36u32.to_be_bytes());
     std::fs::write(&file, bytes).unwrap();
-    let record = layerfs_store::record::StoreRecord::of(&home, "shop").unwrap();
-    let open = layerfs_store::open_args::OpenArgs::in_root(
+    let record = layerfs_store::admin::record::store::StoreRecord::of(&home, "shop").unwrap();
+    let open = layerfs_store::admin::open::args::OpenArgs::in_root(
         &home,
         "shop",
         Some(record.to_record().clone()),
     );
-    let refusal = layerfs_store::service::with_service(&open, |_| Ok(())).unwrap_err();
+    let refusal = layerfs_store::admin::open::service::with_service(&open, |_| Ok(())).unwrap_err();
     let _ = std::fs::remove_dir_all(&home);
     Some(refusal)
 }

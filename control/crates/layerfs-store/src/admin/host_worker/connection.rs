@@ -33,7 +33,7 @@ pub(crate) fn serve_host_connection(
         Some(request) => request,
         None => match read_host_request(server, socket, management) {
             Some(request) if endpoint == Endpoint::Ordinary && is_postgres(&request) => {
-                crate::host_postgresql::harden();
+                crate::admin::host_worker::postgresql::harden();
                 // checked here, so the lane holds only small requests; one
                 // the request alone refuses is answered on this thread
                 match server.lane_request(request) {
@@ -48,7 +48,7 @@ pub(crate) fn serve_host_connection(
     // a PostgreSQL call's password goes with its answer (#819 P-B)
     let secret = carries_login(&request);
     if secret {
-        crate::host_postgresql::harden();
+        crate::admin::host_worker::postgresql::harden();
     }
     let request = layerfs_home::wipe::Guard::new(request, secret);
     let request = request.get();
@@ -74,7 +74,7 @@ pub(crate) fn refuse_host_request(
     refusal: SdkRefusal,
 ) -> bool {
     let answered = answer_host_request(server, socket, false, &request, &mut false, Some(refusal));
-    crate::host_postgresql::wipe_request(request);
+    crate::admin::host_worker::postgresql::wipe_request(request);
     answered
 }
 
@@ -83,8 +83,8 @@ pub(crate) fn refuse_host_request(
 /// streamed one comes in on the write endpoint).
 pub(crate) fn is_postgres(request: &SdkValue) -> bool {
     match request.get_text("op") {
-        Some(crate::host_postgresql::OP) => true,
-        Some(crate::host_write::OP) => {
+        Some(crate::admin::host_worker::postgresql::OP) => true,
+        Some(crate::admin::host_worker::write::OP) => {
             carries_login(request)
                 && request.get("args").and_then(|args| args.get_text("body")) == Some("none")
         }
@@ -189,7 +189,7 @@ fn held_write(
 ) -> Option<Result<super::server::Held, SdkRefusal>> {
     let unsupported = |why: &str| Some(Err(refused("Unsupported", why)));
     const ONLY_STREAMED: &str = "the host worker's write endpoint serves only streamed file writes";
-    if request.get_text("op") != Some(crate::host_write::OP) {
+    if request.get_text("op") != Some(crate::admin::host_worker::write::OP) {
         return if writes {
             unsupported(ONLY_STREAMED)
         } else {
@@ -207,7 +207,7 @@ fn held_write(
     };
     // checked before the write is held: a held write keeps only a header
     // within its bound (scalar fields of a 64 KiB request)
-    let (store, body) = match crate::host_write::header(args) {
+    let (store, body) = match crate::admin::host_worker::write::header(args) {
         Ok((_, store, _, body, _)) => (store, body),
         Err(refusal) => return Some(Err(refusal)),
     };

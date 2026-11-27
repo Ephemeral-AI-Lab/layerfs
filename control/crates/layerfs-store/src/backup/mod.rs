@@ -5,24 +5,33 @@
 //! one.
 pub mod bucket;
 pub mod copy;
-#[doc(hidden)]
-pub mod create;
-pub mod ended;
-#[doc(hidden)]
-pub mod family;
-pub mod heads;
 pub mod jobs;
-#[doc(hidden)]
-pub mod list;
-#[doc(hidden)]
-pub mod progress;
 pub mod providers;
-#[doc(hidden)]
-pub mod record;
-#[doc(hidden)]
-pub mod restore;
-#[doc(hidden)]
-pub mod restored;
 #[cfg(feature = "s3_api")]
 pub mod s3_api;
-pub mod secret;
+
+// #828 compat: old public module paths, removed in wave 3.
+#[doc(hidden)]
+pub use crate::backup::bucket::connect as family; // #828 compat
+#[doc(hidden)]
+pub use crate::backup::jobs::create; // #828 compat
+#[doc(hidden)]
+pub use crate::backup::jobs::ended; // #828 compat
+#[doc(hidden)]
+pub use crate::backup::jobs::list as heads; // #828 compat
+#[doc(hidden)]
+pub use crate::backup::jobs::list; // #828 compat
+#[doc(hidden)]
+pub use crate::backup::jobs::progress; // #828 compat
+#[doc(hidden)]
+pub mod record {
+    // #828 compat
+    pub use crate::backup::bucket::record::*;
+    pub use crate::backup::copy::link::StoreLink;
+}
+#[doc(hidden)]
+pub use crate::backup::bucket::secret;
+#[doc(hidden)]
+pub use crate::backup::jobs::restore; // #828 compat
+#[doc(hidden)]
+pub use crate::data::project::record::restored; // #828 compat // #828 compat

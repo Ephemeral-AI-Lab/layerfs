@@ -10,12 +10,17 @@
 #![forbid(unsafe_code)]
 
 pub mod auth;
+#[doc(hidden)]
+pub mod connect;
 pub mod driver;
 pub mod error;
 pub mod limits;
 pub mod pieces;
 pub mod progress;
+#[doc(hidden)]
+pub mod record;
 pub mod registry;
+pub mod secret;
 
 pub use auth::Credentials;
 pub use driver::{Driver, Listed, Metadata, Span, Stat};

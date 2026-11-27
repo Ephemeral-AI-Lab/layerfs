@@ -4,11 +4,11 @@
 //! and the rest (`store.list`, `store.get`, `store.create`) are
 //! `layerfs-store`'s own. `store.attach` and `store.detach` also read the
 //! machine, and the first reaches the Store from it as a Sandbox would.
-use crate::open_args::OpenArgs;
-use crate::place::{self, Executor};
-use crate::postgresql::check;
-use crate::postgresql::connect::{self, StoreConnect};
-use crate::record::{StoreKind, StoreRecord};
+use crate::admin::open::args::OpenArgs;
+use crate::admin::record::store::{StoreKind, StoreRecord};
+use crate::admin::route::executor::{self, Executor};
+use crate::backend::postgresql::check;
+use crate::backend::postgresql::connect::{self, StoreConnect};
 use crate::StoreUsers;
 use layerfs_home::events::Events;
 use layerfs_home::names::{MachineName, StoreName};
@@ -34,7 +34,7 @@ pub fn compact(
     users: &StoreUsers,
 ) -> Outcome {
     let store = name.as_str();
-    crate::compact::compact(home, events, store)
+    crate::admin::maintenance::compact::compact(home, events, store)
         .map_err(|refusal| with_store_fix(home, store, refusal, "compact", users))
 }
 
@@ -57,7 +57,13 @@ pub fn upgrade(
     let cancel = layerfs_home::cancel::flag();
     // a cancel asked for before the run still stops it; once the answer is
     // decided the request is dropped, so it does not cancel a later call
-    let outcome = crate::upgrade::upgrade_with(home, events, store, cancel, users.related);
+    let outcome = crate::admin::maintenance::upgrade::upgrade_with(
+        home,
+        events,
+        store,
+        cancel,
+        users.related,
+    );
     layerfs_home::cancel::clear();
     outcome.map_err(|refusal| {
         if refusal.code != "Unsupported"
@@ -176,12 +182,12 @@ pub fn repair(home: &Path, request: &RepairRequest) -> Outcome {
     let carried = (request.cursor.as_deref())
         .map(|made| layerfs_home::cursor::resume(REPAIR, made, &filters))
         .transpose()?;
-    let target = crate::resolve::target(home, &request.project)?;
-    let sent = crate::repair::Repair {
+    let target = crate::admin::route::resolve::target(home, &request.project)?;
+    let sent = crate::admin::maintenance::repair_mount_holders::Repair {
         project: target.project.clone(),
         branch: request.branch.clone(),
         action: request.action.clone(),
-        op: crate::repair::op_of(request.op.as_deref())?,
+        op: crate::admin::maintenance::repair_mount_holders::op_of(request.op.as_deref())?,
         legacy: request.legacy,
         force: request.force,
         operator: request.operator.clone().unwrap_or_default(),
@@ -190,11 +196,11 @@ pub fn repair(home: &Path, request: &RepairRequest) -> Outcome {
     };
     // The host holds the Store's lease while it repairs or sends the call,
     // as `store_call` does: a Store an operation is moving is left.
-    let (_lease, record) = crate::lease::claim(home, &target.store)?;
-    let answer = match place::plan(home, record.store_ref()?)? {
+    let (_lease, record) = crate::admin::open::lease::claim(home, &target.store)?;
+    let answer = match executor::plan(home, record.store_ref()?)? {
         Executor::Local => {
             let open = OpenArgs::of_record(home, &target.store, &record)?;
-            crate::repair::repair_at(&open, &sent)
+            crate::admin::maintenance::repair_mount_holders::repair_at(&open, &sent)
         }
         Executor::Worker(mut worker) => {
             let mut fields = vec![
@@ -203,7 +209,7 @@ pub fn repair(home: &Path, request: &RepairRequest) -> Outcome {
             ];
             fields.extend(sent.to_fields());
             // list, preview and settle judge holders with this home's places
-            if let Some(view) = crate::place_view::encoded_from_home(home) {
+            if let Some(view) = crate::admin::route::place_view::encoded_from_home(home) {
                 fields.push(("place_view".to_owned(), view));
             }
             worker.call("store.repair", SdkValue::Map(fields), &mut |_: SdkValue| {})
@@ -245,7 +251,7 @@ fn paged(answer: SdkValue, filters: &[(&str, SdkValue)]) -> SdkValue {
 
 /// `store.remove`: a sqlite Store no Sandbox uses, with its file.
 pub fn remove(home: &Path, name: &StoreName, users: &StoreUsers) -> Outcome {
-    crate::sqlite::remove::remove(home, name, users.related)
+    crate::backend::sqlite::remove::remove(home, name, users.related)
 }
 
 /// `store.move`: a sqlite Store from the machine that holds it to
@@ -257,7 +263,7 @@ pub fn move_to(
     machine: &str,
     users: &StoreUsers,
 ) -> Outcome {
-    crate::sqlite::transfer::phases::move_to(home, events, store, machine, users.related)
+    crate::backend::sqlite::move_phases::move_to(home, events, store, machine, users.related)
 }
 
 /// `store.disconnect(store)`: forget a PostgreSQL Store, its saved login
@@ -423,8 +429,8 @@ pub fn attach(
         return Ok(attach_answer("tested", name, machine, &checked?));
     }
     if attached || checked.is_ok() {
-        let seen = crate::observed::Reach::of(&checked);
-        crate::observed::record(home, name, Some(machine), &seen);
+        let seen = crate::admin::status::observed::Reach::of(&checked);
+        crate::admin::status::observed::record(home, name, Some(machine), &seen);
     }
     let checked = checked?;
     let new = check::attach(home, name, machine, record.binding())?;
@@ -530,7 +536,7 @@ fn from_machine(
         }
         "Unavailable" if !message.starts_with(check::ANOTHER_STORE) => {
             let hint = hint
-                .filter(|_| crate::postgresql::open::not_connected(&message))
+                .filter(|_| crate::backend::postgresql::open::not_connected(&message))
                 .map(|hint| format!("; {hint}"))
                 .unwrap_or_default();
             refused(
@@ -566,7 +572,7 @@ pub fn check_from(
     machine: &str,
     users: &StoreUsers,
 ) -> (Option<String>, Result<SdkValue, SdkRefusal>) {
-    match crate::record::url(record) {
+    match crate::admin::record::store::url(record) {
         Ok(url) => check_dialling(home, events, record, machine, url, users),
         Err(refusal) => {
             let refusal = check::at_step(refusal, ConnectionStep::Configuration);
@@ -628,7 +634,7 @@ fn dial_from(
         Ok((host, _, _)) => host,
         Err(refusal) => return (None, Err(configuration(refusal))),
     };
-    let executor = match place::on_machine(home, machine) {
+    let executor = match executor::on_machine(home, machine) {
         Ok(executor) => executor,
         Err(refusal) => return (Some(host), Err(refusal)),
     };
@@ -670,7 +676,7 @@ pub fn reach_in_worker(args: &SdkValue) -> Outcome {
     }
     let postgresql = args
         .get("postgresql")
-        .map(crate::open_args::PgSelection::read)
+        .map(crate::admin::open::args::PgSelection::read)
         .ok_or_else(|| {
             refused(
                 "InvalidInput",

@@ -6,7 +6,7 @@
 use layerfs_home::events::Events;
 use layerfs_protocol::sdk::SdkValue;
 use layerfs_store::backup::bucket::progress as bucket;
-use layerfs_store::backup::progress::Shown;
+use layerfs_store::backup::jobs::progress::Shown;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
