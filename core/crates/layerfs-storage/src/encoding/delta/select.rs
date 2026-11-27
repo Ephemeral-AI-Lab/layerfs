@@ -38,8 +38,8 @@ use layerfs_content::{ObjectId, ObjectRole};
 
 use crate::encoding::codec::{CompressionWorkspace, DecompressionWorkspace};
 use crate::encoding::delta::candidates::{signature, Candidates};
+use crate::encoding::delta::full::{encode_full, encode_prefix, raw_payload, EncodedRecord};
 use crate::encoding::delta::read::{ChainBases, ChainCounters, ChainEdge, Resolver};
-use crate::encoding::full::{encode_full, encode_prefix, raw_payload, EncodedRecord};
 use crate::error::{StorageError, StorageResult};
 use crate::location::ObjectLocation;
 use crate::pack::layout::PackLane;
@@ -92,11 +92,11 @@ pub struct DeltaCounters {
     /// Chunk objects stored, by chain depth (FULL is 0).
     pub chunk_depths: DepthHistogram,
     /// Inode-table branch selection, apart from the payload counts above.
-    pub branch: super::branch::BranchCounters,
+    pub branch: super::program_page::BranchCounters,
     /// Directory leaf and branch selection (#92), apart from the payload counts.
-    pub directory: super::branch::BranchCounters,
+    pub directory: super::program_page::BranchCounters,
     /// Extent leaf and branch selection (#92), apart from the payload counts.
-    pub extent: super::branch::BranchCounters,
+    pub extent: super::program_page::BranchCounters,
 }
 
 /// Stored objects by dependency-chain depth: slot `d` counts depth `d`, and the
@@ -545,8 +545,8 @@ pub(crate) fn select_after_trial(
         SaveProfile::charge(&mut input.profile.full_ns, started);
         let record = record?;
         note_stored(input.profile, &record);
-        if crate::encoding::pool::branch::is_program_role(role) {
-            return super::branch::select(input, role, canonical, advisory, record);
+        if crate::encoding::pool::program_page::is_program_role(role) {
+            return super::program_page::select(input, role, canonical, advisory, record);
         }
         return Ok(record);
     }

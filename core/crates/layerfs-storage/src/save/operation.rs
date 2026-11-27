@@ -125,7 +125,7 @@ impl<'a> Save<'a> {
     }
     /// Seals the remaining output and registers it; with `hold`, the last
     /// batch is returned instead of published.
-    fn seal(&self, hold: bool) -> StorageResult<Option<super::publication::Held>> {
+    fn seal(&self, hold: bool) -> StorageResult<Option<super::publish::register::Held>> {
         if let Some(error) = self.failure.borrow_mut().take() {
             return Err(error);
         }
@@ -245,7 +245,7 @@ impl Drop for Save<'_> {
 /// are lost.
 pub struct PreparedTail<'a> {
     save: Option<Save<'a>>,
-    held: Option<super::publication::Held>,
+    held: Option<super::publish::register::Held>,
     /// [`Self::publication`] was handed to a caller that may have sent it.
     handed_out: std::cell::Cell<bool>,
 }
@@ -265,7 +265,7 @@ impl PreparedTail<'_> {
         let state = save.state.borrow();
         let mut outcome = state.outcome;
         if let Some(held) = &self.held {
-            super::publication::counted(
+            super::publish::register::counted(
                 &mut outcome,
                 &held.batch,
                 &held.members,

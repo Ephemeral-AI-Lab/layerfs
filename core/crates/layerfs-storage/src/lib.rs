@@ -12,20 +12,22 @@
 #![deny(unsafe_code)]
 
 pub mod encoding;
-mod store;
-pub use store::error;
-pub use store::location;
+pub mod error;
+pub(crate) mod handle;
+pub mod location;
 pub mod pack;
-pub use store::policy;
+pub mod policy;
 pub mod port;
 pub mod read;
 pub mod save;
-pub(crate) use store::handle as storage;
-pub use store::source;
+pub(crate) use handle as storage;
+// #828 compat: old public module path, removed in wave 3.
+#[doc(hidden)]
+pub use location as source; // #828 compat
 
 pub use error::{StorageError, StorageResult};
 pub use policy::{StorageCapacities, StoragePolicy};
-pub use store::reservations::ReservationBlocks;
+pub use save::publish::reservation::ReservationBlocks;
 
 pub use read::{Diagnostics, KeptReads, ReadCache, Reader};
 pub use save::{PreparedTail, Save, SaveSink, WriteOutcome};

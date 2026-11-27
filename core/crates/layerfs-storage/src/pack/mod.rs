@@ -4,8 +4,10 @@
 
 pub mod assemble;
 pub mod audit;
+pub(crate) mod cache;
 pub mod layout;
 pub mod repack;
+pub(crate) mod units;
 
 pub use assemble::{
     assemble, assemble_consuming, body_bytes, build_group, control_area, directory_entries,

@@ -14,7 +14,7 @@ use layerfs_content::ObjectId;
 
 use crate::encoding::codec::DecompressionWorkspace;
 use crate::encoding::decode::{decode_selected_group, GroupCache};
-use crate::encoding::full::raw_payload;
+use crate::encoding::delta::full::raw_payload;
 use crate::encoding::pool::PoolReader;
 use crate::error::{StorageError, StorageResult};
 use crate::location::ObjectLocation;
@@ -238,7 +238,7 @@ impl<'a> Resolver<'a> {
             self.counters.pooled = self.caches.pool.counters().since(before);
             return Ok((canonical, id));
         }
-        if crate::encoding::pool::branch::is_program_role(root.role) {
+        if crate::encoding::pool::program_page::is_program_role(root.role) {
             // An inode-table branch (#360 item 3) or a directory or extent page
             // (#92) may be a COPY/INSERT chain against its predecessors. The
             // pooled reader walks it under the metadata depth cap and chain

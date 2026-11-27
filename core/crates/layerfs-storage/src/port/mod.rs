@@ -1,21 +1,19 @@
 //! Bounded physical persistence contract.
 pub mod acquisition;
-mod pack;
+pub(crate) mod object_key;
+pub(crate) mod pack_read;
 mod persistence;
-mod read_pack;
-mod read_scoped;
-mod read_selection;
-pub use pack::ObjectKey;
+pub use object_key::ObjectKey;
+pub use pack_read::persisted::PersistedPack;
 pub use persistence::{
     GroupRead, GroupReadAnswer, PackPersistence, PersistenceError, Publication, Published,
     PublishedPack, Reserve, Reserved,
 };
-pub use read_pack::PersistedPack;
 
-pub use read_selection::{
+pub use pack_read::selection::{
     PackRange, PackRangeBodies, PackReadChoice, PackReadPlan, PersistedPackRanges,
     PersistedPackRead, PACK_READ_PREFIX_BYTES, PACK_SCAN_BYTES,
 };
 
-pub use read_scoped::{AcquiredPackRead, AcquiredPackUnits};
-pub(crate) use read_selection::check_ranges;
+pub use pack_read::scoped::{AcquiredPackRead, AcquiredPackUnits};
+pub(crate) use pack_read::selection::check_ranges;
