@@ -67,7 +67,11 @@ fn held_session_serves_later_reads_without_a_login() {
     no_secret(path, &db.password);
     #[cfg(target_os = "linux")]
     {
-        // a worker that served a PostgreSQL call is not dumpable
+        // a worker that served a PostgreSQL call is not dumpable; after the
+        // drain the first read runs direct and starts it (#833), the next
+        // one is its PostgreSQL call
+        ok(path, READ);
+        home.ping();
         ok(path, READ);
         let worker = home.ping().get_int("pid").unwrap();
         let environ = std::fs::read(format!("/proc/{worker}/environ"));
@@ -414,6 +418,7 @@ fn sessions_stay_bounded_across_homes() {
             _ => {
                 let home = Fixture::new();
                 connect(&home.paths.home, &db, db.at());
+                warm(&home);
                 home
             }
         })

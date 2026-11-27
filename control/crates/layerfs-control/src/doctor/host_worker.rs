@@ -2,7 +2,7 @@
 use super::target::{Budget, Checks};
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::home::{paths, with_field};
-use layerfs_machine::worker::{HostObservation, HostPaths, HostProbe};
+use layerfs_machine::worker::{start_failure, HostObservation, HostPaths, HostProbe};
 use std::path::Path;
 use std::time::{Duration, Instant};
 
@@ -104,7 +104,31 @@ pub(super) fn diagnose(home: &Path, budget: &Budget, checks: &mut Checks) {
     };
     let compatible =
         |checks: &mut Checks| checks.pass(COMPAT, "the worker build and protocol match");
+    // a background start that failed (#833) left its reason: the calls
+    // went direct meanwhile, so this is where it shows, while no worker
+    // listens (a worker that publishes its endpoints removes it)
+    let failed = matches!(&probe, Absent | Stale)
+        .then(|| start_failure(home))
+        .flatten();
     match &probe {
+        Absent | Stale if failed.is_some() => {
+            let record = failed.unwrap_or_default();
+            let message = record.get_text("message").unwrap_or("unknown");
+            checks.warning(
+                ENDPOINT,
+                format!(
+                    "the last background start of the host worker failed: {message}; calls run directly until a worker starts (see log/worker.log)"
+                ),
+            );
+            checks.fix(
+                ENDPOINT,
+                format!(
+                    "layerfs machine start {}",
+                    layerfs_home::names::HOST_MACHINE
+                ),
+            );
+            checks.evidence(ENDPOINT, with_field(evidence(), "start_failure", record));
+        }
         Absent => checks.pass_evidence(ENDPOINT, "no worker endpoint is published", evidence()),
         Stale => {
             checks.notice(

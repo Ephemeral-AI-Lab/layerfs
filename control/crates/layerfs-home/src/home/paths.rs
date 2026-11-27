@@ -82,6 +82,14 @@ pub fn host_worker_startup_lock(home: &Path) -> PathBuf {
     machine_dir(home, crate::names::HOST_MACHINE).join("worker-start.lock")
 }
 
+/// The native worker's last failed background start (#833): what failed,
+/// written by the caller that started it or by the worker before its
+/// endpoints were published, and removed by the next worker that publishes
+/// them.
+pub fn host_worker_start_failure(home: &Path) -> PathBuf {
+    machine_dir(home, crate::names::HOST_MACHINE).join("worker-start-failed.json")
+}
+
 /// `machine/<machine>/sandbox-retired/`: one tombstone per closed Sandbox,
 /// outside `sandbox/` so a Sandbox listing never mistakes it for one.
 pub fn sandbox_retired_dir(home: &Path, machine: &str) -> PathBuf {

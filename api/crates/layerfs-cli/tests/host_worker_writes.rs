@@ -19,6 +19,7 @@ use writes::*;
 #[test]
 fn every_write_streams_through_the_worker_as_one_commit() {
     let home = prepare(&["work"]);
+    warm(&home);
     let path = &home.paths.home;
     let before = commits(path, "shop/api", "work");
     let binary = patterned(3 << 20);
@@ -124,6 +125,7 @@ fn every_write_streams_through_the_worker_as_one_commit() {
 #[test]
 fn apply_rows_past_the_fused_limit_still_publish_one_commit() {
     let home = prepare(&["rows"]);
+    warm(&home);
     let path = &home.paths.home;
     for (count, folder) in [(8_191, "a"), (8_192, "b")] {
         let before = commits(path, "shop/api", "rows");
@@ -160,6 +162,7 @@ fn apply_rows_past_the_fused_limit_still_publish_one_commit() {
 #[test]
 fn stopped_or_refused_inputs_commit_nothing() {
     let home = prepare(&["work"]);
+    warm(&home);
     let path = &home.paths.home;
     let before = commits(path, "shop/api", "work");
     // invalid JSON after a valid change: the CLI stops before the end
@@ -312,6 +315,7 @@ fn lost_inputs_and_unread_answers_leave_inspectable_evidence() {
 #[test]
 fn ten_concurrent_writes_each_commit_once() {
     let home = prepare(&["work"]);
+    warm(&home);
     let path = &home.paths.home;
     let before = commits(path, "shop/api", "work");
     let spawn = |words: Vec<String>, content: Vec<u8>| {
@@ -496,6 +500,7 @@ fn writes_on_a_postgresql_store_go_to_the_worker() {
         b"",
     );
     ok(path, &["branch", "fork", project, "work"], b"");
+    warm(&home);
     let before = commits(path, project, "work");
     ok(
         path,

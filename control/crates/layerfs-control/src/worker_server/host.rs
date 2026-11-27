@@ -728,6 +728,18 @@ fn run(
     Ok(super::Served { requests })
 }
 
+/// Points stdin at `/dev/null` once every endpoint is published: a caller
+/// that started this worker in the background handed it the startup lock
+/// as its stdin (#833), and other callers may now start a worker again
+/// (which finds this one ready). Any other stdin is dropped the same way.
+fn release_startup_lock() {
+    let released = std::fs::File::open("/dev/null")
+        .and_then(|null| nix::unistd::dup2_stdin(&null).map_err(io::Error::from));
+    if let Err(error) = released {
+        log(&format!("startup lock kept until exit: {error}"));
+    }
+}
+
 /// Runs the host worker with the real home and its lifetime lock.
 /// This entry runs in its own process, above the Store and machine crates.
 pub fn serve_host(home: &Path) -> Result<super::Served, SdkRefusal> {
@@ -741,19 +753,28 @@ pub fn serve_host(home: &Path) -> Result<super::Served, SdkRefusal> {
         )
     })?;
     let run = (|| {
-        let hello = HostHello::own(&paths)?;
-        let listeners = {
+        let published = (|| {
+            let hello = HostHello::own(&paths)?;
             let _home = layerfs_home::home::lock::take(home)?;
             layerfs_machine::record::MachineRecord::admit_host(
                 home,
                 layerfs_home::names::HOST_MACHINE,
             )?;
-            [
-                paths.bind(false, &guard)?,
-                paths.bind_writes(&guard)?,
-                paths.bind(true, &guard)?,
-            ]
-        };
+            Ok::<_, SdkRefusal>((
+                hello,
+                [
+                    paths.bind(false, &guard)?,
+                    paths.bind_writes(&guard)?,
+                    paths.bind(true, &guard)?,
+                ],
+            ))
+        })();
+        let (hello, listeners) = published.inspect_err(|error| {
+            // a background start's caller has gone: doctor reads it here
+            paths.record_start_failure(&error.message);
+        })?;
+        paths.clear_start_failure();
+        release_startup_lock();
         run(
             listeners,
             hello,

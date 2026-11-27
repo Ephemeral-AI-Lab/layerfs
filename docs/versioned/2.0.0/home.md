@@ -36,7 +36,10 @@ eligible to exit after one minute with no calls and no waiting connections.
 Status checks (`machine doctor`, `machine get --with live`) do not keep it
 running. A call made while the worker is busy waits up to 30 seconds for a
 free call thread; past that it is refused `Unavailable` before anything is
-sent, naming the load, and can be made again. The worker starts with only `LAYERFS_HOME`, `PATH`,
+sent, naming the load, and can be made again. The first CLI call that
+finds no ready worker runs directly and starts one in the background for
+the next call; while another call is starting it, or the last one is still
+exiting, calls run directly too. The worker starts with only `LAYERFS_HOME`, `PATH`,
 `HOME`, `TMPDIR`, the locale and the OpenSSL certificate settings from the
 command that started it, in `/`. The home itself keeps its permissions.
 The CLI checks the worker's build before it sends a request. If they differ,
@@ -68,6 +71,9 @@ steps.
                                equal to the input, on the home's filesystem
   machine/<host>/retained/     host worker write outcomes a caller may not know,
                                <request id>.json each; at most 256; removed with `rm`
+  machine/<host>/worker-start-failed.json
+                               the host worker's last failed background start; removed
+                               by the next worker that starts
   sandbox/<name>/
     record.json                v, name, project, machine, backend, route, ..., op?
     control.json               the Sandbox daemon's keys (0600; the host machine, and machines reached directly)

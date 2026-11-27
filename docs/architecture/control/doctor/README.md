@@ -129,7 +129,11 @@ compatibility notice before the ping. Ready and draining observations carry
 evidence on `machine.worker.ping`. Before a starting worker publishes its
 socket, the probe can observe only an absent endpoint. The probe waits for
 no lock: it tries the two locks once, only for such a socket, never creates
-their files, and never launches or replaces a worker.
+their files, and never launches or replaces a worker. With no worker
+listening (absent or stale), a recorded failed background start
+(`machine/<host>/worker-start-failed.json`, #833) makes
+`machine.worker.endpoint` a warning naming it, evidence `start_failure`,
+fix `layerfs machine start <host>`.
 
 `home doctor` verifies the existing host-worker directory's ownership and
 privacy under `home.records`. `store doctor` reports live lease holders and
