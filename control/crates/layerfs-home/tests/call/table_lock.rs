@@ -2,7 +2,7 @@
 //! one step, so it is taken back from a holder that panicked
 //! (layerfs-project#177): a panic in one call of a worker never refuses the
 //! calls after it.
-use layerfs_home::reply::values::lock;
+use layerfs_home::lock::mutex::lock;
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 

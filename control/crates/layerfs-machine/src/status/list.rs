@@ -1,11 +1,10 @@
-//! `machine.list` and `machine.get`: every machine, or one, from the
-//! home's records alone (call surface 2.0). Nothing is probed unless the
-//! caller asks for `live` (`live.rs`).
-use super::super::record::machine::{Holders, MachineRecord};
+//! `machine.list`: every machine from the home's records alone (call
+//! surface 2.0), and the summary `machine.get` shows of one (`get.rs`).
+//! Nothing is probed unless the caller asks for `live` (`live.rs`).
 use super::live::{self, Seen};
+use crate::record::machine::{Holders, MachineRecord};
 use crate::Related;
-use layerfs_home::names::MachineName;
-use layerfs_home::reply::outcome::{failed, with_fix, Outcome};
+use layerfs_home::reply::outcome::{failed, Outcome};
 use layerfs_home::reply::state::{Reason, State};
 use layerfs_home::reply::time::iso;
 use layerfs_home::{disk::paths, record::observed};
@@ -28,7 +27,7 @@ fn loopback(home: &Path, record: &MachineRecord) -> SdkValue {
     if record.removed().is_some() {
         return SdkValue::Null;
     }
-    match super::super::record::adapter_spec::provider_spec(home, record) {
+    match crate::record::adapter_spec::provider_spec(home, record) {
         Ok(spec) if crate::platform::shares_loopback(&spec) => SdkValue::text("shared"),
         Ok(_) => SdkValue::text("apart"),
         Err(_) => SdkValue::Null,
@@ -46,7 +45,7 @@ fn loopback(home: &Path, record: &MachineRecord) -> SdkValue {
 /// With `seen` (a live read), the state, its companion, `message` and
 /// `observed_at` are the probe's. A machine of a removed platform has no
 /// backend, supports nothing and is `broken` `unsupported`.
-pub(super) fn summary(
+pub(crate) fn summary(
     home: &Path,
     record: &MachineRecord,
     seen: Option<&Seen>,
@@ -64,8 +63,8 @@ pub(super) fn summary(
             let kind = record.platform()?;
             (
                 kind.name().to_owned(),
-                SdkValue::text(super::super::record::adapter_spec::backend_name(kind)),
-                super::super::platform::available::supports(kind),
+                SdkValue::text(crate::record::adapter_spec::backend_name(kind)),
+                crate::platform::available::supports(kind),
             )
         }
     };
@@ -84,7 +83,7 @@ pub(super) fn summary(
                     stores: &stores,
                     hosted: &[],
                 };
-                let fix = super::super::record::machine::no_vm_name_fix(record.name(), held);
+                let fix = crate::record::machine::no_vm_name_fix(record.name(), held);
                 let state = State::broken(Reason::Missing, Some(&fix));
                 (state, seen.message.clone(), seen.at)
             }
@@ -186,30 +185,6 @@ fn unreadable(name: &str, refusal: &SdkRefusal) -> SdkValue {
     SdkValue::Map(fields.into_iter().map(|(n, v)| (n.to_owned(), v)).collect())
 }
 
-/// `machine.get(machine)`: its record and state, with no probe. With
-/// `live`, one probe of its provider and one hello to its worker, and the
-/// `live` section: `{ disk_free_bytes, tool_version, worker }`. A read:
-/// answered while an `op` holds the machine too.
-pub fn get(home: &Path, name: &MachineName, live: bool, related: Related) -> Outcome {
-    // a record that cannot be read: refused, with its doctor as the fix
-    let rows = [
-        MachineRecord::of(home, name).map_err(|refusal| match refusal.code.as_str() {
-            "Failed" => with_fix(refusal, crate::status::state::unreadable_fix(name.as_str())),
-            _ => refusal,
-        })?,
-    ];
-    if !live {
-        return summary(home, &rows[0], None, related);
-    }
-    let seen = live::observe(home, &rows, related)?.pop().flatten();
-    let shown = summary(home, &rows[0], seen.as_ref(), related)?;
-    let section = match &seen {
-        Some(seen) => seen.section(),
-        None => live::unprobed(home, &rows[0]),
-    };
-    Ok(layerfs_home::disk::with_field(shown, "live", section))
-}
-
 /// The keys of a machine's size and settings, in the order answers list them.
 const SETTINGS: [&str; 8] = [
     "cpus",
@@ -249,10 +224,10 @@ fn settings(record: &MachineRecord) -> Vec<(&'static str, SdkValue)> {
 /// The answer of a lifecycle call that changed machine `record`: `ok`,
 /// `outcome` (the word for what it did), then each of `keys` its record
 /// holds ([`settings`]; `backend` is its platform's).
-pub(super) fn changed(record: &MachineRecord, outcome: &str, keys: &[&str]) -> Result<SdkValue> {
+pub(crate) fn changed(record: &MachineRecord, outcome: &str, keys: &[&str]) -> Result<SdkValue> {
     let mut set = settings(record);
     if keys.contains(&"backend") {
-        let backend = super::super::record::adapter_spec::backend_name(record.platform()?);
+        let backend = crate::record::adapter_spec::backend_name(record.platform()?);
         set.push(("backend", SdkValue::text(backend)));
     }
     let mut fields = vec![

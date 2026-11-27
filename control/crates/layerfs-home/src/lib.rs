@@ -24,7 +24,12 @@ pub use crate::reply::cursor; // #828 compat
 #[doc(hidden)]
 pub use crate::reply::events; // #828 compat
 #[doc(hidden)]
-pub use crate::reply::values as helpers; // #828 compat
+pub mod helpers {
+    // #828 compat
+    pub use crate::lock::mutex::lock; // #828 compat
+    pub use crate::record::token::{ordered_token, random}; // #828 compat
+    pub use crate::reply::values::*; // #828 compat
+}
 #[doc(hidden)]
 pub mod home {
     // #828 compat
@@ -39,15 +44,20 @@ pub mod home {
     #[doc(hidden)]
     pub use crate::record::fields; // #828 compat
     #[doc(hidden)]
-    pub use crate::record::file as records; // #828 compat
+    pub mod records {
+        // #828 compat
+        pub use crate::log::lines::{log_line, log_swept, SWEPT, UNCERTAIN}; // #828 compat
+        pub use crate::record::file::*; // #828 compat
+    }
     #[doc(hidden)]
     pub use crate::record::generation; // #828 compat
     #[doc(hidden)]
     pub use crate::record::observed; // #828 compat
     #[doc(hidden)]
-    pub use crate::secret::saved as secrets;
+    pub use crate::secret::saved as secrets; // #828 compat
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
     #[doc(hidden)]
-    pub use crate::socket as host_socket; // #828 compat // #828 compat
+    pub use crate::socket as host_socket; // #828 compat
 }
 #[doc(hidden)]
 pub use crate::log::calls as logs; // #828 compat

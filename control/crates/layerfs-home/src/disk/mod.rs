@@ -8,8 +8,9 @@ pub mod layout;
 pub(crate) mod native_names;
 pub mod paths;
 
-pub use super::record::file::{
-    log_line, log_swept, now_ms, private_dir, read_record, traversable, versioned, with_field,
-    write_entity, write_record, RECORD_VERSION,
+pub use crate::log::lines::{log_line, log_swept};
+pub use crate::record::file::{
+    now_ms, private_dir, read_record, traversable, versioned, with_field, write_entity,
+    write_record, RECORD_VERSION,
 };
 pub use layout::{detect, ensure, open, opened, HomeFile, Layout, LAYOUT_VERSION};

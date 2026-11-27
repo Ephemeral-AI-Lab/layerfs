@@ -18,9 +18,10 @@
 //! backpressure with one frame held on each side. The worker commits only
 //! after it has read `end`, so a failure before the caller has written all
 //! of `end` leaves nothing committed; after that, a lost answer is `Unknown`.
-use super::super::guest::frame::ATTACHED;
-use super::client::{decode_answer, unavailable, unknown, HostPaths};
+use super::client::{decode_answer, unknown};
+use super::endpoint::{unavailable, HostPaths};
 use super::frame::{self, HOST_MAX_REPLY, HOST_MAX_REQUEST};
+use crate::route::guest::frame::ATTACHED;
 use layerfs_home::{
     json,
     log::trace,
@@ -341,7 +342,7 @@ impl HostPaths {
     ) -> Outcome {
         // the write endpoint: a held write never takes an ordinary place
         let path = &self.writes;
-        let Some(greeted) = self.greet(super::client::Endpoint::Writes, true, op, args, None)?
+        let Some(greeted) = self.greet(super::endpoint::Endpoint::Writes, true, op, args, None)?
         else {
             return Err(unavailable("start", "no accepting host endpoint"));
         };

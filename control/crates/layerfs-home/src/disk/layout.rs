@@ -6,7 +6,7 @@
 //! record it as where they were exported from. A folder that is not such a
 //! home, and is not empty, is refused with a fix that moves it aside: this
 //! build writes nothing in it. Reading never changes anything.
-use super::super::record::file::{private_dir, read_record, unreadable, write_record};
+use crate::record::file::{private_dir, read_record, unreadable, write_record};
 use crate::reply::outcome::{refused, shell_word, with_fix};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
@@ -177,7 +177,7 @@ pub fn open(home: &Path) -> Result<HomeFile, SdkRefusal> {
 /// Writes a new `layerfs.json` with a new id.
 pub fn create(home: &Path) -> Result<HomeFile, SdkRefusal> {
     private_dir(home)?;
-    let random = crate::reply::values::random()?;
+    let random = crate::record::token::random()?;
     let file = HomeFile {
         layout: LAYOUT_VERSION,
         id: layerfs_protocol::sdk::hex(&random[..16]),

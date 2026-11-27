@@ -1,10 +1,10 @@
 //! `machine.remove`. Its phases are `check` and `delete` (call surface
 //! 2.0), each a `{ phase, done, total }` event on the caller's stream; it
 //! answers `{ ok, outcome, machine, message }`.
-use super::super::record::adapter_spec::{self as record, refusal};
-use super::super::record::machine::{MachineRecord, REMOVE};
 use super::progress::Phases;
 use crate::platform::{self as adapters, Code};
+use crate::record::adapter_spec::{self as record, refusal};
+use crate::record::machine::{MachineRecord, REMOVE};
 use crate::Related;
 use layerfs_home::names::MachineName;
 use layerfs_home::record::intent::Op;
@@ -63,7 +63,7 @@ fn take_down(
             false => "its record has no vm_name",
         };
         let answer = drop_record(&home, name, reason, related)?;
-        super::super::record::adapter_spec::forget_built_ins(&home);
+        crate::record::built_ins::forget_built_ins(&home);
         phases.end();
         return Ok(answer);
     }

@@ -116,7 +116,7 @@ fn each_profile_names_its_platform_and_how() {
 
 #[test]
 fn kernel_routes_follow_the_backend() {
-    use layerfs_protocol::KernelRoute;
+    use layerfs_machine::platform::KernelRoute;
     assert_eq!(Platform::Host.kernel(HostOs::Macos), Some(KernelRoute::Nfs));
     assert_eq!(
         Platform::Host.kernel(HostOs::Linux),

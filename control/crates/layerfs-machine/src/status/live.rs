@@ -22,9 +22,9 @@
 //! whose record alone makes it broken (a removed platform's, `unsupported`;
 //! an earlier build's with no `vm_name`, `outdated`): its record's state,
 //! reason and fix win over the live read (UI pass 2, F1).
-use super::super::record::adapter_spec::{self as record, refusal};
-use super::super::record::machine::{MachineRecord, CREATE, REMOVE};
 use crate::platform::{self as adapters, Code, Spec};
+use crate::record::adapter_spec::{self as record, refusal};
+use crate::record::machine::{MachineRecord, CREATE, REMOVE};
 use crate::route::{self, Endpoint, Hello};
 use crate::Related;
 use layerfs_home::record::intent::Standing;
@@ -50,7 +50,7 @@ const HELLO: Duration = Duration::from_secs(2);
 
 /// What a live read saw of one machine.
 #[derive(Clone, Debug)]
-pub(super) struct Seen {
+pub(crate) struct Seen {
     /// Its state: the probe's, or `unknown`.
     pub state: State,
     /// The sentence behind a broken or unknown state.

@@ -5,11 +5,11 @@
 //! the sockets the host names. It starts no machine (P4) and needs no home:
 //! with one it reads the docker machine's recorded socket. Also the
 //! per-machine `supports` of `machine.list` and `machine.get` (P3).
-use super::super::record::adapter_spec as record;
 use crate::platform::{
     self as adapters, CallSite, DockerCandidate, DockerEnv, HostOs, Platform, Probe, SupportRow,
     Supports,
 };
+use crate::record::adapter_spec as record;
 use layerfs_home::reply::outcome::Outcome;
 use layerfs_protocol::sdk::SdkValue;
 use std::path::{Path, PathBuf};
@@ -31,9 +31,9 @@ pub fn platforms(home: &Path) -> Outcome {
     let mut tools = adapters::Tools::from_env();
     tools.docker_socket = socket.clone();
     // a platform that runs a worker needs this build's bundle
-    let bundle = super::super::setup::bundle::bundle()
+    let bundle = crate::setup::bundle::bundle()
         .err()
-        .and_then(|_| super::super::setup::bundle::bundle_dir("linux").ok())
+        .and_then(|_| crate::setup::bundle::bundle_dir("linux").ok())
         .map(|dir| format!("bundle:{}", dir.display()));
     let rows = adapters::platforms(host)
         .iter()

@@ -1,30 +1,24 @@
-//! The host's endpoint custody and single-attempt client.
-use super::super::guest::frame::MAX_HELLO;
+//! The host worker's single-attempt client; its endpoint custody is
+//! `endpoint.rs`.
+use super::endpoint::{
+    existing_socket, hold, host_check_peer, private_directory, unavailable, Endpoint, HostPaths,
+};
 use super::frame::{self, HOST_MAX_REPLY, HOST_MAX_REQUEST};
 use super::hello::{build_identity, executable, token, HostHello, CORRELATION_LEN};
+use crate::route::guest::frame::MAX_HELLO;
 use layerfs_home::{
     disk::{self, paths},
-    lock::flock,
     log::trace,
     reply::outcome::{refused, Outcome},
     socket,
 };
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
-use std::fs::{self, File};
+use std::fs::File;
 use std::io;
-use std::os::unix::{
-    fs::{FileTypeExt, MetadataExt},
-    net::{UnixListener, UnixStream},
-    process::CommandExt,
-};
-use std::path::{Path, PathBuf};
+use std::os::unix::{fs::MetadataExt, net::UnixStream, process::CommandExt};
+use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
-
-pub use super::stream::{
-    StreamFrame, StreamReader, StreamSender, STREAM_KEEPALIVE, STREAM_PIECE, STREAM_PROGRESS,
-    STREAM_WAIT,
-};
 
 const READY_WAIT: Duration = Duration::from_secs(10);
 const TRANSFER_WAIT: Duration = Duration::from_secs(10);
@@ -68,261 +62,7 @@ pub(super) struct Greeted {
     pub(super) began: Instant,
 }
 
-/// Which of the worker's endpoints a caller dials.
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(super) enum Endpoint {
-    Ordinary,
-    Control,
-    /// Streamed file writes only (S2.2).
-    Writes,
-}
-
-impl Endpoint {
-    fn of(control: bool) -> Self {
-        if control {
-            Self::Control
-        } else {
-            Self::Ordinary
-        }
-    }
-}
-
-/// Canonical home authority and its three endpoints.
-pub struct HostPaths {
-    cli: Option<(PathBuf, String)>,
-    /// Canonical pathname of the existing home.
-    pub home: PathBuf,
-    /// Identity from the authoritative home record.
-    pub home_id: String,
-    /// Ordinary request endpoint.
-    pub socket: PathBuf,
-    /// Management endpoint with independent admission.
-    pub control: PathBuf,
-    /// Streamed write endpoint with independent admission.
-    pub writes: PathBuf,
-}
-
-/// Ownership of the stable lifetime lock. Drop only after removing the sockets.
-pub struct HostGuard {
-    lock: File,
-    directory: File,
-    home: PathBuf,
-}
-
-/// Accepts only this process's user, before greeting or sending.
-pub fn host_check_peer(stream: &UnixStream) -> Result<(), SdkRefusal> {
-    let uid = socket::peer_uid(stream).map_err(|error| unavailable("peer credentials", error))?;
-    if uid != flock::euid() {
-        return Err(refused(
-            "Denied",
-            "host worker peer has a different effective UID",
-        ));
-    }
-    Ok(())
-}
-
-fn unavailable(action: &str, error: impl std::fmt::Display) -> SdkRefusal {
-    refused(
-        "Unavailable",
-        format!("host worker {action}: {error}; no operation was sent"),
-    )
-}
-
-fn private_directory(path: &Path) -> Result<(), SdkRefusal> {
-    let metadata = fs::symlink_metadata(path).map_err(|error| unavailable("directory", error))?;
-    // Passing through without listing is permitted for a namespaces Sandbox.
-    if !metadata.is_dir() || metadata.uid() != flock::euid() || metadata.mode() & 0o066 != 0 {
-        return Err(refused(
-            "Denied",
-            format!(
-                "{} is not a private directory owned by this user",
-                path.display()
-            ),
-        ));
-    }
-    Ok(())
-}
-
-pub(super) fn existing_socket(path: &Path) -> Result<Option<fs::Metadata>, SdkRefusal> {
-    let metadata = match fs::symlink_metadata(path) {
-        Ok(metadata) => metadata,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
-        Err(error) => return Err(unavailable("socket metadata", error)),
-    };
-    if !metadata.file_type().is_socket() || metadata.uid() != flock::euid() {
-        return Err(refused(
-            "Denied",
-            format!("{} is not a socket owned by this user", path.display()),
-        ));
-    }
-    Ok(Some(metadata))
-}
-
-fn hold(path: &Path) -> Result<Option<File>, SdkRefusal> {
-    let file =
-        socket::private_file(path, false).map_err(|error| unavailable("lock file", error))?;
-    flock::try_lock(&file, true)
-        .map(|acquired| acquired.then_some(file))
-        .map_err(|error| unavailable("lock", error))
-}
-
 impl HostPaths {
-    /// Reads an open home's identity without creating or changing any entry.
-    pub fn new(home: &Path) -> Result<Self, SdkRefusal> {
-        let canonical = fs::canonicalize(home).map_err(|error| unavailable("home", error))?;
-        let file = match disk::detect(&canonical)? {
-            disk::Layout::Current(file) => file,
-            _ => {
-                return Err(refused(
-                    "Unavailable",
-                    "host worker needs an open LayerFS home",
-                ))
-            }
-        };
-        Ok(Self {
-            cli: None,
-            socket: paths::host_worker_socket(&canonical),
-            control: paths::host_worker_control(&canonical),
-            writes: paths::host_worker_writes(&canonical),
-            home_id: file.id,
-            home: canonical,
-        })
-    }
-
-    /// Pre-dial routing check. Every endpoint name must fit the kernel limit.
-    pub fn fits(&self) -> bool {
-        self.endpoints().iter().all(|path| socket::path_fits(path))
-    }
-
-    /// The ordinary, write and management endpoints.
-    pub fn endpoints(&self) -> [&Path; 3] {
-        [&self.socket, &self.writes, &self.control]
-    }
-
-    pub(super) fn verify_directories(&self) -> Result<(), SdkRefusal> {
-        private_directory(&self.home)?;
-        private_directory(&self.home.join("machine"))?;
-        private_directory(&paths::machine_dir(
-            &self.home,
-            layerfs_home::names::HOST_MACHINE,
-        ))
-    }
-
-    /// Takes the worker lifetime lock without waiting. The existing Home
-    /// supplies the private native machine directory.
-    pub fn try_hold(&self) -> Result<Option<HostGuard>, SdkRefusal> {
-        self.check_paths()?;
-        let directory = File::open(paths::machine_dir(
-            &self.home,
-            layerfs_home::names::HOST_MACHINE,
-        ))
-        .map_err(|error| unavailable("directory", error))?;
-        let Some(lock) = hold(&paths::host_worker_lock(&self.home))? else {
-            return Ok(None);
-        };
-        let guard = HostGuard {
-            lock,
-            directory,
-            home: self.home.clone(),
-        };
-        self.check_guard(&guard)?;
-        Ok(Some(guard))
-    }
-
-    fn check_paths(&self) -> Result<(), SdkRefusal> {
-        if !self.fits() {
-            return Err(refused(
-                "Unavailable",
-                "host worker socket path is too long",
-            ));
-        }
-        self.verify_directories()
-    }
-
-    fn check_guard(&self, guard: &HostGuard) -> Result<(), SdkRefusal> {
-        if self.home != guard.home {
-            return Err(refused(
-                "Denied",
-                "host worker lock belongs to another home",
-            ));
-        }
-        self.check_paths()?;
-        let current_home = disk::opened(&self.home)?;
-        let same = |file: &File, path: PathBuf| {
-            let held = file
-                .metadata()
-                .map_err(|error| unavailable("held lock", error))?;
-            let current =
-                fs::symlink_metadata(path).map_err(|error| unavailable("lock pathname", error))?;
-            Ok::<_, SdkRefusal>(held.dev() == current.dev() && held.ino() == current.ino())
-        };
-        if self.home_id != current_home.id
-            || !same(
-                &guard.directory,
-                paths::machine_dir(&self.home, layerfs_home::names::HOST_MACHINE),
-            )?
-            || !same(&guard.lock, paths::host_worker_lock(&self.home))?
-        {
-            return Err(refused(
-                "Unavailable",
-                "host worker home or lock identity changed",
-            ));
-        }
-        Ok(())
-    }
-
-    /// Recovers a stale socket and binds a private endpoint while holding
-    /// its home's worker lifetime lock.
-    pub fn bind(&self, control: bool, guard: &HostGuard) -> Result<UnixListener, SdkRefusal> {
-        self.bind_at(Endpoint::of(control), guard)
-    }
-
-    /// [`Self::bind`] for the streamed write endpoint.
-    pub fn bind_writes(&self, guard: &HostGuard) -> Result<UnixListener, SdkRefusal> {
-        self.bind_at(Endpoint::Writes, guard)
-    }
-
-    fn bind_at(&self, endpoint: Endpoint, guard: &HostGuard) -> Result<UnixListener, SdkRefusal> {
-        self.check_guard(guard)?;
-        let path = self.endpoint(endpoint);
-        let name = path
-            .file_name()
-            .ok_or_else(|| unavailable("bind", "missing socket name"))?;
-        socket::remove_socket(&guard.directory, name)
-            .map_err(|error| unavailable("remove stale socket", error))?;
-        let listener = UnixListener::bind(path).map_err(|error| unavailable("bind", error))?;
-        self.check_guard(guard)?;
-        if let Err(error) = socket::set_socket_private(&guard.directory, name) {
-            let _ = socket::remove_socket(&guard.directory, name);
-            return Err(unavailable("socket permissions", error));
-        }
-        Ok(listener)
-    }
-
-    /// Removes every socket file under the lifetime lock after listeners close.
-    pub fn remove_endpoints(&self, guard: &HostGuard) -> Result<(), SdkRefusal> {
-        self.check_guard(guard)?;
-        let remove = |path: &Path| {
-            let name = path
-                .file_name()
-                .ok_or_else(|| unavailable("cleanup", "missing socket name"))?;
-            socket::remove_socket(&guard.directory, name)
-                .map_err(|error| unavailable("remove socket", error))
-        };
-        let ordinary = remove(&self.socket);
-        let writes = remove(&self.writes);
-        let management = remove(&self.control);
-        ordinary.and(writes).and(management)
-    }
-
-    fn endpoint(&self, endpoint: Endpoint) -> &Path {
-        match endpoint {
-            Endpoint::Ordinary => &self.socket,
-            Endpoint::Control => &self.control,
-            Endpoint::Writes => &self.writes,
-        }
-    }
-
     /// Whether an intended request fits before selecting the host route.
     /// A trial frame that carries a login, and its copy of `args`, are
     /// overwritten before they are freed (#819 P-B).
@@ -759,7 +499,7 @@ fn send_request(
     decode_answer(op, id, answer)
 }
 
-fn decode_answer(op: &str, id: &str, mut frame: SdkValue) -> Outcome {
+pub(super) fn decode_answer(op: &str, id: &str, mut frame: SdkValue) -> Outcome {
     if frame.get_text("request_id") != Some(id) {
         return Err(unknown(op, id, "answer did not echo the request ID"));
     }
@@ -786,7 +526,7 @@ fn decode_answer(op: &str, id: &str, mut frame: SdkValue) -> Outcome {
         (Some((_, error)), None)
             if error.get_text("code").is_some() && error.get_text("message").is_some() =>
         {
-            let mut refusal = super::super::guest::client::refusal_of(&error);
+            let mut refusal = crate::route::guest::client::refusal_of(&error);
             // an engine-uncertain outcome is kept under this id (§8.5):
             // the caller matches it to its record
             if refusal.code == "Unknown" {
@@ -802,7 +542,7 @@ fn decode_answer(op: &str, id: &str, mut frame: SdkValue) -> Outcome {
     }
 }
 
-fn unknown(op: &str, id: &str, why: &str) -> SdkRefusal {
+pub(super) fn unknown(op: &str, id: &str, why: &str) -> SdkRefusal {
     let mut refusal = refused(
         "Unknown",
         format!("{op}: host worker may have received request {id}: {why}"),

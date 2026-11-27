@@ -32,7 +32,7 @@ pub fn nameless_chain(home: &Path, refusal: SdkRefusal, users: &MachineUsers) ->
 
 /// `machine.list`: from the records; with `live`, every machine probed.
 pub fn list(home: &Path, live: bool, users: &MachineUsers) -> Outcome {
-    crate::status::list(home, live, users.related)
+    crate::list(home, live, users.related)
 }
 
 /// `machine.get`: from its record; with `live`, one probe and the `live`
@@ -169,7 +169,7 @@ pub fn create(
     request: &MachineCreate,
     users: &MachineUsers,
 ) -> Outcome {
-    crate::lifecycle::create(home, events, request, users.related)
+    crate::create(home, events, request, users.related)
 }
 
 /// `machine.remove`. A removed machine's attachment to each PostgreSQL
@@ -182,7 +182,7 @@ pub fn remove(
     name: &MachineName,
     users: &MachineUsers,
 ) -> Outcome {
-    let removed = crate::lifecycle::remove(home, name, users.related, events)?;
+    let removed = crate::remove(home, name, users.related, events)?;
     (users.forget)(home, name.as_str())?;
     Ok(removed)
 }

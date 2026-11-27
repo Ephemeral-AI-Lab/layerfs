@@ -122,7 +122,7 @@ pub const GUEST_RUN: &str = "linux-guest";
 /// home or a worker's root: one directory per Sandbox beside the image
 /// cache the namespaces backend keeps there (`images/`). It is named for
 /// the side's kernel and role (#819 R): `machine/linux-guest/run/` in a
-/// worker's root ([`crate::home::guest::is_root`], which the worker marks
+/// worker's root ([`crate::disk::guest::is_root`], which the worker marks
 /// before it sweeps or serves anything), else the host machine's own
 /// folder, `machine/macos-host/run/` or `machine/linux-host/run/`. The
 /// earlier `machine/native/run/` is not read.

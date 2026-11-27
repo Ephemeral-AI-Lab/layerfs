@@ -4,12 +4,10 @@
 //! `trace/calls.lock`. `log/uncertain.jsonl` never rotates (#179 D8). The
 //! logs are made large as sparse files, so no test writes 16 MiB.
 #![cfg(unix)]
+use layerfs_home::disk::paths;
+use layerfs_home::lock::flock;
 use layerfs_home::log::calls::{self, ROTATE_AT};
-use layerfs_home::{
-    disk::{log_line, paths},
-    lock::flock,
-    record::file::UNCERTAIN,
-};
+use layerfs_home::log::lines::{log_line, UNCERTAIN};
 use layerfs_protocol::sdk::SdkValue;
 use std::fs::{self, File, OpenOptions};
 use std::os::unix::fs::PermissionsExt;

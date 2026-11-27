@@ -6,7 +6,7 @@
 //! writer moves it whether it holds the home lock, an entity lock or none.
 //! Reading it takes no lock. Moving it is best effort: a count that cannot
 //! be written changes no outcome.
-use super::super::lock::flock;
+use crate::lock::flock;
 use std::fs::OpenOptions;
 use std::os::unix::fs::{FileExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};

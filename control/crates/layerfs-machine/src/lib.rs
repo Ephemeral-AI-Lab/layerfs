@@ -16,10 +16,10 @@ pub(crate) mod lifecycle;
 /// (layerfs-project#106).
 #[cfg(feature = "machine")]
 pub mod platform;
+#[doc(hidden)]
 pub mod record;
 pub mod route;
-#[cfg(all(feature = "machine", unix))]
-pub(crate) mod setup;
+pub mod setup;
 pub mod status;
 #[doc(hidden)]
 pub mod table;
@@ -38,17 +38,18 @@ pub use lifecycle::progress::Phases;
 #[cfg(feature = "machine")]
 pub use lifecycle::remove::remove;
 #[cfg(feature = "machine")]
-pub use lifecycle::start::{done, start, stop, with_stopped, STOP_PHASES};
+pub use lifecycle::start::{done, start};
+#[cfg(feature = "machine")]
+pub use lifecycle::stop::{stop, with_stopped, STOP_PHASES};
 #[cfg(feature = "machine")]
 pub use platform::available::platforms;
 #[cfg(feature = "machine")]
 pub use record::adapter_spec::{
-    docker_socket, ensure_built_ins, machine_of, tools as machine_tools, vm_name,
+    docker_socket, machine_of, provider_spec as machine_provider_spec, refusal as machine_refusal,
+    spec as machine_spec, tools as machine_tools, vm_name,
 };
 #[cfg(feature = "machine")]
-pub use record::adapter_spec::{
-    provider_spec as machine_provider_spec, refusal as machine_refusal, spec as machine_spec,
-};
+pub use record::built_ins::ensure_built_ins;
 pub use route::runs_here::{in_process, none_in_process, provided, runs_here};
 #[cfg(feature = "machine")]
 pub use setup::bundle::bundle;
@@ -56,7 +57,9 @@ pub use setup::bundle::{bundle_dir, bundle_place, IMAGE_ARCHIVE};
 #[cfg(feature = "machine")]
 pub use setup::default_image::docker_default;
 #[cfg(feature = "machine")]
-pub use status::list::{get, list};
+pub use status::get::get;
+#[cfg(feature = "machine")]
+pub use status::list::list;
 #[cfg(feature = "machine")]
 pub use update::{update, MachineUpdate};
 pub use users::{MachineUsers, Related};
@@ -69,10 +72,8 @@ pub use lifecycle::force_stop::force_record;
 
 // #828 compat: old public module paths, removed in wave 3.
 #[doc(hidden)]
-pub use crate::record::machine as record; // #828 compat
-#[doc(hidden)]
-pub use crate::route as worker;
+pub use crate::route as worker; // #828 compat
 #[doc(hidden)]
 pub use crate::setup::bundle; // #828 compat
 #[doc(hidden)]
-pub use crate::status::state; // #828 compat // #828 compat
+pub use crate::status::state; // #828 compat

@@ -16,15 +16,15 @@
 //! use; broken `failed` when its provider refused. A lost reply keeps the
 //! `op`, uncertain, and `machine get <m> --with live` settles it. A worker
 //! of another build is never replaced by a start over it (ruling R2).
-use super::super::record::adapter_spec::{
+use super::progress::Phases;
+use super::stop::CHECK;
+use crate::platform::{self as adapters, Code, HostOs, Platform, Route};
+use crate::record::adapter_spec::{
     self as record, machine_of, refusal, save_running, save_unready,
 };
-use super::super::record::machine::{MachineRecord, START};
-use super::super::status::state::{replace_worker, settle};
-use super::progress::Phases;
-use super::start::CHECK;
-use crate::platform::{self as adapters, Code, HostOs, Platform, Route};
+use crate::record::machine::{MachineRecord, START};
 use crate::route::{self, Endpoint};
+use crate::status::state::{replace_worker, settle};
 use crate::Related;
 use layerfs_home::lock::home;
 use layerfs_home::record::intent::Op;
@@ -168,10 +168,7 @@ fn not_running(
         "machine {name} {said}; a start would replace that worker and end every Sandbox on it"
     );
     if sandboxes > 0 {
-        message.push_str(&format!(
-            "; {}",
-            super::super::status::state::count(sandboxes)
-        ));
+        message.push_str(&format!("; {}", crate::status::state::count(sandboxes)));
     }
     if let Some(why) = noted.err() {
         message.push_str(&format!(
@@ -266,7 +263,7 @@ fn start(
     let mut op = Op::begin(START, "bundle", SdkValue::Null)?;
     op = enter(home, name, op, "bundle", &mut phases)?;
     let mut run = || -> std::result::Result<Option<adapters::Running>, Ended> {
-        let bundle = super::super::setup::bundle::bundle().map_err(Ended::Before)?;
+        let bundle = crate::setup::bundle::bundle().map_err(Ended::Before)?;
         // the first start pins its Engine before anything is made in it (an
         // image loaded, a volume or container made); an Engine that does not
         // answer gets nothing, so a start that cannot reach it pins nothing
@@ -280,8 +277,7 @@ fn start(
         }
         if loads {
             op = enter(home, name, op.clone(), "image", &mut phases).map_err(Ended::Before)?;
-            let image =
-                super::super::setup::default_image::docker_default(home).map_err(Ended::Before)?;
+            let image = crate::setup::default_image::docker_default(home).map_err(Ended::Before)?;
             spec.os_image = Some(image);
         }
         // A new worker must replace a stopped one: its fresh incarnation
@@ -386,7 +382,7 @@ fn stop_old(home: &Path, name: &str, spec: &adapters::Spec) -> Result<()> {
         ));
     }
     if let Some(endpoint) = recorded(home, name)? {
-        if crate::route::guest::hello(&endpoint).is_ok() {
+        if crate::route::hello(&endpoint).is_ok() {
             return Err(refused(
                 "Failed",
                 format!(
@@ -409,7 +405,7 @@ fn mint_incarnation(home: &Path, name: &str) -> Result<String> {
     let _lock = layerfs_home::lock::home::take(home)?;
     let record = MachineRecord::of(home, name)?;
     let previous = record.incarnation().unwrap_or_default();
-    let incarnation = layerfs_home::reply::values::ordered_token(&id, "worker", &[previous]);
+    let incarnation = layerfs_home::record::token::ordered_token(&id, "worker", &[previous]);
     record.with_incarnation(&incarnation).write(home)?;
     let saved = MachineRecord::of(home, name)?;
     if saved.incarnation() != Some(incarnation.as_str()) {

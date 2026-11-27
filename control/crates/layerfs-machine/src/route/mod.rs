@@ -18,6 +18,7 @@
 //! (layerfs-project#104).
 pub mod accept;
 pub(crate) mod guest;
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 pub(crate) mod host;
 pub(crate) mod runs_here;
 
@@ -34,12 +35,11 @@ pub(crate) use guest::hello::sealed_hash;
 pub use guest::hello::{is_mismatch, replace_with, Hello, PROTOCOL};
 
 #[cfg(any(target_os = "macos", target_os = "linux"))]
-pub use host::client::{
-    host_check_peer, HostGuard, HostPaths, StreamFrame, StreamReader, StreamSender,
-    HOST_HELD_WRITES, STREAM_KEEPALIVE, STREAM_PIECE, STREAM_PROGRESS, STREAM_WAIT,
-};
+pub use host::client::HOST_HELD_WRITES;
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 pub use host::diagnostic::{HostObservation, HostProbe};
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+pub use host::endpoint::{host_check_peer, HostGuard, HostPaths};
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 pub use host::frame::{
     read_host_frame, value_within_budget, within_budget, write_host_frame, FRAME_LIMITS,
@@ -47,3 +47,8 @@ pub use host::frame::{
 };
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 pub use host::hello::{set_host_build, HostHello, HOST_PROTOCOL};
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+pub use host::stream::{
+    StreamFrame, StreamReader, StreamSender, STREAM_KEEPALIVE, STREAM_PIECE, STREAM_PROGRESS,
+    STREAM_WAIT,
+};

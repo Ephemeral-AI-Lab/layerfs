@@ -21,7 +21,7 @@
 //! Built without the `machine` feature too: the caller says whether the
 //! record's platform was removed (`layerfs-control`'s
 //! `inventory::machine_state` asks the platform policy).
-use super::super::record::machine::{Holders, MachineRecord, CREATE, REMOVE};
+use crate::record::machine::{Holders, MachineRecord, CREATE, REMOVE};
 use layerfs_home::record::intent::{Op, Standing};
 use layerfs_home::reply::outcome::shell_word;
 use layerfs_home::reply::outcome::{with_fix, with_next};
@@ -148,7 +148,7 @@ impl MachineRecord {
             "machine {}'s VM is gone ({said}); only its records remain",
             self.name()
         );
-        let fix = super::super::record::machine::no_vm_name_fix(self.name(), Holders::default());
+        let fix = crate::record::machine::no_vm_name_fix(self.name(), Holders::default());
         Err(with_fix(
             layerfs_home::reply::outcome::refused("Failed", message),
             fix,
@@ -194,7 +194,7 @@ impl MachineRecord {
         // a record an earlier build made, with no provider name: only its
         // record can go
         if self.nameless() {
-            let fix = super::super::record::machine::no_vm_name_fix(name, Holders::default());
+            let fix = crate::record::machine::no_vm_name_fix(name, Holders::default());
             return State::broken(Reason::Outdated, Some(&fix));
         }
         if let Some(reason) = self.reason() {
@@ -219,7 +219,7 @@ impl MachineRecord {
                 reason: reason @ (Reason::Outdated | Reason::Missing),
                 ..
             } if self.gone() => {
-                let fix = super::super::record::machine::no_vm_name_fix(self.name(), held);
+                let fix = crate::record::machine::no_vm_name_fix(self.name(), held);
                 State::broken(reason, Some(&fix))
             }
             state => state,
@@ -235,7 +235,7 @@ impl MachineRecord {
             return None;
         };
         if self.nameless() {
-            return Some(super::super::record::machine::no_vm_name(self.name()));
+            return Some(crate::record::machine::no_vm_name(self.name()));
         }
         let said = self.text("error").map(str::to_owned);
         match reason {

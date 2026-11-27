@@ -33,9 +33,9 @@ pub fn read_secret(home: &Path, kind: &str, secret: &str) -> Result<Option<SdkVa
     let text = match std::fs::read_to_string(&path) {
         Ok(text) => text,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(error) => return Err(super::super::record::file::unreadable(&path, &error)),
+        Err(error) => return Err(crate::record::file::unreadable(&path, &error)),
     };
-    let read = super::super::record::file::record_of(&path, &text);
+    let read = crate::record::file::record_of(&path, &text);
     crate::secret::wipe::text(text);
     read.map(Some)
 }
@@ -43,7 +43,7 @@ pub fn read_secret(home: &Path, kind: &str, secret: &str) -> Result<Option<SdkVa
 /// Saves `value` as secret `name` of kind `kind`, replacing the one there
 /// whole (0600, in 0700 folders), and moves the home's `generation`.
 pub fn save_secret(home: &Path, kind: &str, secret: &str, value: &SdkValue) -> Result<()> {
-    super::super::record::file::write_record_as(&file(home, kind, secret)?, value, true)?;
+    crate::record::file::write_record_as(&file(home, kind, secret)?, value, true)?;
     generation::moved(home);
     Ok(())
 }

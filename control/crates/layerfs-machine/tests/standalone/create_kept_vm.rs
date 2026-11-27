@@ -10,9 +10,7 @@
 use layerfs_home::disk;
 use layerfs_home::reply::events::Events;
 use layerfs_home::reply::state::Reason;
-use layerfs_machine::{
-    ensure_built_ins, lifecycle::create, record::machine::MachineRecord, running,
-};
+use layerfs_machine::{create, ensure_built_ins, record::machine::MachineRecord, running};
 use layerfs_machine::{MachineCreate, Related};
 use layerfs_protocol::sdk::SdkRefusal;
 use std::fs;

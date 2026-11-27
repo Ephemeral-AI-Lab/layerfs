@@ -10,16 +10,14 @@
 //! keeps its recorded port, so `machine start` can start it. Its phases are `bundle`, `boot` and
 //! `worker` (call surface 2.0): the `op` moves through them and each is a
 //! `{ phase, done, total }` event on the caller's stream.
-use super::super::record::adapter_spec::{
-    self as record, home_id, machine_of, refusal, save_running,
-};
-use super::super::record::adapter_spec::{save_unready, update as update_record};
-use super::super::record::machine::{MachineRecord, CREATE};
-use super::super::setup::bundle::bundle;
-use super::super::status::list::changed;
 use super::boot::{endpoint_of, enter};
 use super::progress::Phases;
 use crate::platform::{self as adapters, Code, Platform};
+use crate::record::adapter_spec::{self as record, home_id, machine_of, refusal, save_running};
+use crate::record::adapter_spec::{save_unready, update as update_record};
+use crate::record::machine::{MachineRecord, CREATE};
+use crate::setup::bundle::bundle;
+use crate::status::list::changed;
 use crate::Related;
 use layerfs_home::record::intent::Op;
 use layerfs_home::reply::events::Events;
@@ -203,7 +201,7 @@ pub fn create(
     let os_image = match request.os_image.as_deref() {
         Some(STOCK) => None,
         Some(image) => Some(image.to_owned()),
-        None => super::super::setup::bundle::prepared_os_image(kind, &bundle)?,
+        None => crate::setup::bundle::prepared_os_image(kind, &bundle)?,
     };
     let id = home_id(&home)?;
     // the worker port the VM forwards is recorded with the claim, before
@@ -249,7 +247,7 @@ pub fn create(
     let spec = {
         let _lock = lock::take(&home)?;
         new_name(&home, &id, kind, name)?;
-        let incarnation = layerfs_home::reply::values::ordered_token(&id, "worker", &[]);
+        let incarnation = layerfs_home::record::token::ordered_token(&id, "worker", &[]);
         let record = record.with_incarnation(&incarnation);
         record.write(&home)?;
         record::spec(&home, &record).map(|mut spec| {
@@ -298,7 +296,7 @@ fn checked(
 ) -> std::result::Result<Op, (Reason, SdkRefusal)> {
     let op = enter(home, name, op, "worker", phases).map_err(|why| (Reason::Failed, why))?;
     let endpoint = endpoint_of(&running.endpoint);
-    let hello = crate::route::guest::hello(&endpoint).map_err(|why| (Reason::NotAnswering, why))?;
+    let hello = crate::route::hello(&endpoint).map_err(|why| (Reason::NotAnswering, why))?;
     match hello.stale_bundle(name, bundle, &endpoint.address.to_string()) {
         Some(stale) => Err((Reason::Outdated, stale)),
         None => Ok(op),

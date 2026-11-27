@@ -1,6 +1,6 @@
 //! Ordered place values: each names the home that minted it, and a value is
 //! minted past the one it replaces even when the wall clock stepped back.
-use layerfs_home::reply::values::ordered_token;
+use layerfs_home::record::token::ordered_token;
 
 fn milliseconds(value: &str) -> u64 {
     value.split(':').nth(2).unwrap().parse().unwrap()

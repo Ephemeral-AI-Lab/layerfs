@@ -241,7 +241,7 @@ impl Op {
     pub fn log_uncertain(&self, home: &Path, entity: &str, name: &str, message: &str) {
         let _ = disk::log_line(
             home,
-            disk::records::UNCERTAIN,
+            crate::log::lines::UNCERTAIN,
             &SdkValue::map([
                 ("at", SdkValue::Int(disk::now_ms())),
                 ("op", SdkValue::text(self.id())),
@@ -266,7 +266,7 @@ fn owner() -> SdkValue {
 
 /// A fresh `op-<16 hex>`.
 fn mint() -> Result<String, SdkRefusal> {
-    let bytes = crate::reply::values::random()?;
+    let bytes = crate::record::token::random()?;
     let id = u64::from_be_bytes(bytes[..8].try_into().expect("eight bytes"));
     Ok(format!("op-{id:016x}"))
 }

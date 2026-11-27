@@ -1,6 +1,7 @@
 //! Host-worker identity, independent of the guest bundle handshake.
-use super::super::HostPaths;
-use layerfs_home::reply::{outcome::refused, values::random};
+use super::endpoint::HostPaths;
+use layerfs_home::record::token::random;
+use layerfs_home::reply::outcome::refused;
 use layerfs_protocol::{
     sdk::hex,
     sdk::{SdkRefusal, SdkValue},

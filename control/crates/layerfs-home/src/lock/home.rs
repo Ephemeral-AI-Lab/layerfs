@@ -76,7 +76,7 @@ pub fn take(home: &Path) -> Result<HomeLock, SdkRefusal> {
         }
         held.push((home.clone(), me, 1));
     }
-    let opened = super::super::record::file::private_dir(&home).and_then(|()| {
+    let opened = crate::record::file::private_dir(&home).and_then(|()| {
         OpenOptions::new()
             .read(true)
             .write(true)

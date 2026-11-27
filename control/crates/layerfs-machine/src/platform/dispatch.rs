@@ -3,11 +3,11 @@
 //! Setup steps 1 to 4 (VM and disk, bundle, worker, forward and readiness)
 //! end in a [`Running`]; writing `worker.json` and `record.json` is the
 //! caller's step 5.
-use super::super::setup::guest::Guest;
-use super::super::setup::worker;
 use crate::platform::adapter::{adapter, refused};
 use crate::platform::error::{Code, MachineError};
+use crate::setup::guest::Guest;
 use crate::setup::spec::{Bundle, Forward, NameLimit, Running, Spec};
+use crate::setup::worker;
 use crate::table::profile::{HostOs, Platform, Route};
 use std::path::Path;
 use std::time::Instant;
@@ -110,7 +110,7 @@ pub fn data_volume(spec: &Spec) -> Option<String> {
 /// failed create keeps (`vm_exists`, or an `Unknown` outcome) is then
 /// started on the port it was made with.
 pub fn worker_port() -> Result<u16, MachineError> {
-    super::super::setup::tool::free_port()
+    crate::setup::tool::free_port()
 }
 
 /// Makes a new VM machine and starts its worker. A create that fails before
@@ -175,7 +175,7 @@ pub fn provider_state(spec: &Spec) -> Result<State, MachineError> {
 /// is that command's `Unknown`. For callers that wait for a probe a bounded
 /// time (`machine.list`), so a probe past it leaves no process behind.
 pub fn status_within(spec: &Spec, deadline: Instant) -> Result<Status, MachineError> {
-    super::super::setup::tool::within(deadline, || status(spec))
+    crate::setup::tool::within(deadline, || status(spec))
 }
 
 /// Observes provider prerequisites, version and runtime state by `deadline`.
@@ -192,7 +192,7 @@ pub fn provider_within(spec: &Spec, deadline: Instant) -> Result<Status, Machine
             "machine platform is unsupported on this host",
         ));
     }
-    super::super::setup::tool::within(deadline, || {
+    crate::setup::tool::within(deadline, || {
         let probe = crate::setup::probe::probe(spec.kind, &spec.tools);
         if Instant::now() >= deadline {
             return Err(MachineError::new(
@@ -296,7 +296,7 @@ pub fn forward(spec: &Spec, guest_port: u16) -> Result<Forward, MachineError> {
 /// nothing to end. Bounded: SIGTERM, then SIGKILL after 3 s.
 pub fn forward_close(spec: &Spec, forward: &Forward) {
     if let Some(pid) = forward.pid {
-        super::super::setup::forward::end(spec, pid, forward.address.port());
+        crate::setup::forward::end(spec, pid, forward.address.port());
     }
 }
 

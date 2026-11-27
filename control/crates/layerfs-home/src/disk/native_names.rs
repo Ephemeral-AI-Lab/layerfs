@@ -1,5 +1,6 @@
 //! Read-only compatibility checks for development homes made before host naming.
-use super::{super::record::file::unreadable, layout::foreign_fix, paths, read_record, with_field};
+use super::{layout::foreign_fix, paths, read_record, with_field};
+use crate::record::file::unreadable;
 use crate::reply::outcome::{refused, with_fix};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;

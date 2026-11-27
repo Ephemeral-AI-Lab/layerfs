@@ -1,5 +1,5 @@
 //! The bounded plain JSON frames of the host-worker read exchange.
-use super::super::guest::frame::ATTACHED;
+use crate::route::guest::frame::ATTACHED;
 use layerfs_home::{json, reply::outcome::refused, socket};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::io::{self, Read, Write};

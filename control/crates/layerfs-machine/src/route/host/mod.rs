@@ -1,9 +1,8 @@
-#[cfg(any(target_os = "macos", target_os = "linux"))]
+//! The host worker's protocol (macOS and Linux): its endpoint custody,
+//! client, frames, hello, diagnostics and streamed writes.
 pub(crate) mod client;
-#[cfg(any(target_os = "macos", target_os = "linux"))]
 pub(crate) mod diagnostic;
-#[cfg(any(target_os = "macos", target_os = "linux"))]
+pub(crate) mod endpoint;
 pub(crate) mod frame;
-#[cfg(any(target_os = "macos", target_os = "linux"))]
 pub(crate) mod hello;
 pub(crate) mod stream;

@@ -1,6 +1,8 @@
-//! The one inspect route (layerfs-project#178, #179 A): [`ask`] runs a kind
-//! where a machine's run folders are, [`in_worker`] is the worker's
-//! `inspect` operation, and [`serve`] is the one place a kind is matched.
+//! The worker side's one match on every inspect kind (layerfs-project#178,
+//! #179 A), which spans machine and Sandbox reads: [`serve`] is the one
+//! place a kind is matched; [`ask`] runs a kind where a machine's run
+//! folders are and [`in_worker`] is the worker's `inspect` operation, both
+//! through Sandbox's inspect route with [`serve`].
 use crate::Side;
 use layerfs_home::outcome::Outcome;
 use layerfs_protocol::sdk::SdkValue;
