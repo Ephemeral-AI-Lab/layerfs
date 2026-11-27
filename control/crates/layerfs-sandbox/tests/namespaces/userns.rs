@@ -88,7 +88,7 @@ mod linux {
         command
             .args([
                 "--exact",
-                "linux::a_filtered_command_cannot_create_a_user_namespace",
+                "userns::linux::a_filtered_command_cannot_create_a_user_namespace",
                 "--nocapture",
                 "--test-threads=1",
             ])

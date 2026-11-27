@@ -55,6 +55,8 @@ fn dead_pid() -> i64 {
 
 #[test]
 fn a_running_sandbox_keeps_its_machine_s_settings() {
+    // tools (and `true`) are found on the binary's own PATH
+    let _env = crate::env_lock();
     let home = tempdir("update");
     home::open(&home).unwrap();
     call(&home, "machine.list", &[]).unwrap();
@@ -103,6 +105,8 @@ fn op(name: &str, pid: i64, uncertain: bool) -> SdkValue {
 
 #[test]
 fn a_machine_being_removed_is_used_by_no_call() {
+    // tools (and `true`) are found on the binary's own PATH
+    let _env = crate::env_lock();
     let home = tempdir("removing");
     home::open(&home).unwrap();
     let me = i64::from(std::process::id());
@@ -148,6 +152,8 @@ fn a_machine_being_removed_is_used_by_no_call() {
 
 #[test]
 fn a_gone_owner_s_unknown_outcome_is_unresolved_until_removed() {
+    // tools (and `true`) are found on the binary's own PATH
+    let _env = crate::env_lock();
     let home = tempdir("unresolved");
     home::open(&home).unwrap();
     let lost = op("machine.create", dead_pid(), true);
@@ -200,6 +206,8 @@ fn a_gone_owner_s_unknown_outcome_is_unresolved_until_removed() {
 
 #[test]
 fn a_remove_waits_for_the_start_lock_and_restores_a_refused_record() {
+    // tools (and `true`) are found on the binary's own PATH
+    let _env = crate::env_lock();
     let home = tempdir("remove");
     home::open(&home).unwrap();
     lima(&home, "dev", &[]);

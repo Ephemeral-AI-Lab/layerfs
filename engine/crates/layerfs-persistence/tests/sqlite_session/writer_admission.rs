@@ -856,7 +856,11 @@ fn three_processes_open_and_reserve_concurrently() {
     let mut children = Children::new();
     for id in 0..3 {
         let child = Command::new(&exe)
-            .args(["--exact", "concurrent_open_child", "--nocapture"])
+            .args([
+                "--exact",
+                "writer_admission::concurrent_open_child",
+                "--nocapture",
+            ])
             .env("LAYERFS_ADMISSION_OPEN_STORE", &path)
             .env("LAYERFS_ADMISSION_OPEN_SOCK", &sock_path)
             .stdin(Stdio::null())

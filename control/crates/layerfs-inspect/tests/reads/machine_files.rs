@@ -20,13 +20,9 @@ use std::cell::Cell;
 use std::os::unix::fs::{symlink, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 static NEXT: AtomicU32 = AtomicU32::new(0);
-/// The inspect permits are the process's: the tests that take one take
-/// this turn.
-static PERMITS: Mutex<()> = Mutex::new(());
 
 fn t(s: &str) -> SdkValue {
     SdkValue::text(s)
@@ -575,7 +571,7 @@ fn the_image_cache_keeps_its_locks_and_a_home_keeps_its_own_lock_files() {
 
 #[test]
 fn a_home_reads_only_its_layerfs_folders() {
-    let _turn = PERMITS.lock().unwrap_or_else(|poison| poison.into_inner());
+    let _turn = crate::permits();
     let fx = machine(layerfs_home::names::HOST_MACHINE);
     let home = fx.scratch.join("home");
     disk::private_dir(&home).unwrap();
@@ -707,7 +703,7 @@ fn a_walk_pages_by_name_and_answers_what_it_has_at_its_soft_budget() {
     // through the request's own budget, as the worker serves the kind: a
     // request that has used its four seconds before the walk starts
     // answers no entry, in time, and says why
-    let _turn = PERMITS.lock().unwrap_or_else(|poison| poison.into_inner());
+    let _turn = crate::permits();
     let asked = disk::with_field(asked, "kind", t("machine_files"));
     let (root, request) = (fx.data.clone(), asked.clone());
     let started = Instant::now();

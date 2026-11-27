@@ -106,7 +106,7 @@ fn kill_at(store: &Path, n: u32) -> (usize, usize) {
     let listener = std::os::unix::net::UnixListener::bind(&gate).unwrap();
     listener.set_nonblocking(true).unwrap();
     let child = Command::new(std::env::current_exe().unwrap())
-        .args(["--exact", "crash_child", "--nocapture"])
+        .args(["--exact", "sqlite_crash::crash_child", "--nocapture"])
         .env(STORE_ENV, store)
         .env(FAILPOINT_ENV, n.to_string())
         .env(GATE_ENV, &gate)

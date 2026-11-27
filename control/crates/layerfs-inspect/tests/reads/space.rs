@@ -17,15 +17,14 @@ use std::collections::{BTreeMap, HashSet};
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::{Mutex, MutexGuard};
+use std::sync::MutexGuard;
 use std::time::{Duration, Instant};
 
-static PROCESS: Mutex<()> = Mutex::new(());
 static NEXT: AtomicU32 = AtomicU32::new(0);
 
 /// The test's turn, once no earlier test's helper is still running.
 fn serial() -> MutexGuard<'static, ()> {
-    let guard = PROCESS.lock().unwrap_or_else(|poison| poison.into_inner());
+    let guard = crate::permits();
     let started = Instant::now();
     while layerfs_inspect::running() != 0 {
         assert!(started.elapsed() < Duration::from_secs(15), "helpers");

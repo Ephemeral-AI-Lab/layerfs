@@ -328,7 +328,11 @@ fn three_processes_open_direct_and_commit_concurrently() {
         std::fs::create_dir(&overlay_dir).unwrap();
         let tpl = overlay_dir.join("overlay.sqlite");
         let child = Command::new(&exe)
-            .args(["--exact", "open_concurrent_child", "--nocapture"])
+            .args([
+                "--exact",
+                "kernel_guard::open_concurrent_child",
+                "--nocapture",
+            ])
             .env("LAYERFS_OPEN_CONCURRENT_STORE", &fixture.config.path)
             .env("LAYERFS_OPEN_CONCURRENT_ID", id.to_string())
             .env("LAYERFS_OPEN_CONCURRENT_TPL", &tpl)

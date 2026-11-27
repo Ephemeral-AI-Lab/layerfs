@@ -22,15 +22,9 @@ use std::net::{SocketAddr, TcpListener};
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
-static PROCESS: Mutex<()> = Mutex::new(());
 static HOMES: AtomicUsize = AtomicUsize::new(0);
-
-fn serial() -> MutexGuard<'static, ()> {
-    PROCESS.lock().unwrap_or_else(|poison| poison.into_inner())
-}
 
 /// A new private folder under the build's own temporary folder.
 fn tempdir(tag: &str) -> PathBuf {
@@ -436,7 +430,7 @@ fn call_err(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> (String, Stri
 
 #[test]
 fn native_stats_are_read_in_this_process_with_no_lock_and_nothing_written() {
-    let _turn = serial();
+    let _turn = crate::serial();
     let home = tempdir(layerfs_home::names::HOST_MACHINE);
     home::open(&home).unwrap();
     machine_record(&home, layerfs_home::names::HOST_MACHINE, "host", None);
@@ -516,7 +510,7 @@ fn native_stats_are_read_in_this_process_with_no_lock_and_nothing_written() {
 
 #[test]
 fn a_worker_answers_its_machine_s_stats_and_who_it_is_and_writes_nothing() {
-    let _turn = serial();
+    let _turn = crate::serial();
     let started = home::now_ms();
     let (scratch, home, root) = boxed("worker");
     let (bytes, allocated) = store_files(&root);
@@ -596,7 +590,7 @@ fn a_worker_answers_its_machine_s_stats_and_who_it_is_and_writes_nothing() {
 
 #[test]
 fn a_stopped_machine_is_unavailable_and_its_sandboxes_are_not_known() {
-    let _turn = serial();
+    let _turn = crate::serial();
     // a machine that records no worker
     let home = tempdir("stopped");
     home::open(&home).unwrap();
@@ -634,7 +628,7 @@ fn a_stopped_machine_is_unavailable_and_its_sandboxes_are_not_known() {
 
 #[test]
 fn a_forwarded_sandbox_s_process_is_checked_in_its_machine() {
-    let _turn = serial();
+    let _turn = crate::serial();
     let (scratch, home, root) = boxed("forwarded");
     // the home reaches the daemon directly: its record holds the forward
     // and no process; the daemon record with the process is the worker's
@@ -659,7 +653,7 @@ fn a_forwarded_sandbox_s_process_is_checked_in_its_machine() {
 /// writes no call-log line.
 #[test]
 fn a_worker_answers_its_machine_s_space_and_writes_nothing() {
-    let _turn = serial();
+    let _turn = crate::serial();
     let (scratch, home, root) = boxed("space");
     store_files(&root);
     worker_sandbox(&home, "s1", "box", false);

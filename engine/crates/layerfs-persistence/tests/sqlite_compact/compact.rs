@@ -421,7 +421,7 @@ fn another_client_holding_the_store_is_busy_at_admission() {
     handles.seal().expect("close the Store");
     let ready = temp.join("foreign.ready");
     let foreign = std::process::Command::new(std::env::current_exe().expect("test binary"))
-        .args(["--exact", "foreign_client_child", "--nocapture"])
+        .args(["--exact", "compact::foreign_client_child", "--nocapture"])
         .env(FOREIGN_STORE, &path)
         .env(FOREIGN_READY, &ready)
         .stdout(std::process::Stdio::null())

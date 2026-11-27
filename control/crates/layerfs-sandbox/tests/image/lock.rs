@@ -453,7 +453,11 @@ fn a_dead_owner_is_taken_over_and_a_reused_pid_holds_nothing() {
     // lock, and the waiting copy takes over without a deadline
     let mut helper = Holder(
         Command::new(std::env::current_exe().unwrap())
-            .args(["--exact", "holds_the_lock_for_another_copy", "--nocapture"])
+            .args([
+                "--exact",
+                "lock::holds_the_lock_for_another_copy",
+                "--nocapture",
+            ])
             .env("LP176_LOCK_HOLD", &home)
             .env("LP176_LOCK_PARENT", std::process::id().to_string())
             .stdout(Stdio::null())

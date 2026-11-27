@@ -99,7 +99,7 @@ impl Held {
         let listener = UnixListener::bind(socket_path).unwrap();
         listener.set_nonblocking(true).unwrap();
         let mut child = Command::new(std::env::current_exe().unwrap())
-            .args(["--exact", "lock_child", "--nocapture"])
+            .args(["--exact", "serverless::lock_child", "--nocapture"])
             .env("LAYERFS_STORE_LOCK_CHILD", path)
             .env("LAYERFS_STORE_LOCK_SOCKET", socket_path)
             .stdin(Stdio::null())

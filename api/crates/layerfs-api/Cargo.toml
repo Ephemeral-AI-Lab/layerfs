@@ -80,6 +80,10 @@ name = "worker_trace"
 path = "tests/standalone/worker_trace.rs"
 
 [[test]]
+name = "store_call_steps"
+path = "tests/standalone/store_call_steps.rs"
+
+[[test]]
 name = "machine_built_ins_once"
 path = "tests/standalone/machine_built_ins_once.rs"
 

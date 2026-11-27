@@ -478,7 +478,7 @@ fn real_docker_volume_image_leaves_no_anonymous_volumes() {
     // created for the container, then let `load()` finish normally and assert
     // both container and anonymous volume are gone.
     let child = Command::new(std::env::current_exe().unwrap())
-        .args(["--exact", "helper_load_with_pause", "--nocapture"])
+        .args(["--exact", "export::helper_load_with_pause", "--nocapture"])
         .env("LP176_PAUSE_HOME", &home)
         .env("LP176_PAUSE_MACHINE", layerfs_home::names::HOST_MACHINE)
         .env("LP176_PAUSE_IMAGE", &img.tag)
@@ -592,7 +592,7 @@ fn real_docker_killed_load_enumerates_and_recovers_under_lock() {
 
     // 1. Spawn child that creates container, stages >= CHUNK bytes, then pauses.
     let mut child1 = Command::new(std::env::current_exe().unwrap())
-        .args(["--exact", "helper_load_with_pause", "--nocapture"])
+        .args(["--exact", "export::helper_load_with_pause", "--nocapture"])
         .env("LP176_PAUSE_HOME", &home)
         .env("LP176_PAUSE_MACHINE", "docker")
         .env("LP176_PAUSE_IMAGE", &img.tag)
@@ -663,7 +663,7 @@ fn real_docker_killed_load_enumerates_and_recovers_under_lock() {
     // exports with a new nonce container, resumes from CHUNK, and cleans up.
     let _ = fs::remove_file(home.join("paused"));
     let mut child2 = Command::new(std::env::current_exe().unwrap())
-        .args(["--exact", "helper_load_with_pause", "--nocapture"])
+        .args(["--exact", "export::helper_load_with_pause", "--nocapture"])
         .env("LP176_PAUSE_HOME", &home)
         .env("LP176_PAUSE_MACHINE", "docker")
         .env("LP176_PAUSE_IMAGE", &img.tag)
@@ -712,7 +712,7 @@ fn real_docker_different_homes_do_not_collide_or_delete_each_other() {
     // Leave a residual container from home1 (via killed helper, plus an old
     // `layerfs.export.started=1` container owned by home1).
     let mut child = Command::new(std::env::current_exe().unwrap())
-        .args(["--exact", "helper_load_with_pause", "--nocapture"])
+        .args(["--exact", "export::helper_load_with_pause", "--nocapture"])
         .env("LP176_PAUSE_HOME", &home1)
         .env("LP176_PAUSE_MACHINE", "docker")
         .env("LP176_PAUSE_IMAGE", &img.tag)
@@ -801,7 +801,7 @@ fn real_docker_next_copy_sweeps_a_killed_copy_without_touching_active() {
 
     // 1. SIGKILL a load on (machine="docker", img_killed), leaving container + anonymous volume.
     let mut killed_child = Command::new(std::env::current_exe().unwrap())
-        .args(["--exact", "helper_load_with_pause", "--nocapture"])
+        .args(["--exact", "export::helper_load_with_pause", "--nocapture"])
         .env("LP176_PAUSE_HOME", &home)
         .env("LP176_PAUSE_MACHINE", "docker")
         .env("LP176_PAUSE_IMAGE", &img_killed.tag)
@@ -823,7 +823,7 @@ fn real_docker_next_copy_sweeps_a_killed_copy_without_touching_active() {
 
     // 2. Keep a second load actively paused on (machine="lima", img_active).
     let active_child = Command::new(std::env::current_exe().unwrap())
-        .args(["--exact", "helper_load_with_pause", "--nocapture"])
+        .args(["--exact", "export::helper_load_with_pause", "--nocapture"])
         .env("LP176_PAUSE_HOME", &home)
         .env("LP176_PAUSE_MACHINE", "lima")
         .env("LP176_PAUSE_IMAGE", &img_active.tag)

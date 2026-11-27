@@ -20,15 +20,9 @@ use std::net::{SocketAddr, TcpListener};
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
-static PROCESS: Mutex<()> = Mutex::new(());
 static HOMES: AtomicUsize = AtomicUsize::new(0);
-
-fn serial() -> MutexGuard<'static, ()> {
-    PROCESS.lock().unwrap_or_else(|poison| poison.into_inner())
-}
 
 fn tempdir(tag: &str) -> PathBuf {
     let sequence = HOMES.fetch_add(1, Ordering::Relaxed);
@@ -373,7 +367,7 @@ fn the_table_lists_the_call_quiet_with_a_path_and_its_options() {
 
 #[test]
 fn a_native_machine_s_layerfs_folders_are_read_here_with_no_lock_line_or_write() {
-    let _turn = serial();
+    let _turn = crate::serial();
     let home = tempdir(layerfs_home::names::HOST_MACHINE);
     home::open(&home).unwrap();
     home_records(&home, layerfs_home::names::HOST_MACHINE, "host", None);
@@ -499,7 +493,7 @@ fn a_native_machine_s_layerfs_folders_are_read_here_with_no_lock_line_or_write()
 
 #[test]
 fn a_worker_reads_its_machine_s_files_and_neither_side_changes() {
-    let _turn = serial();
+    let _turn = crate::serial();
     let (scratch, home, root) = boxed("worker");
     worker_sandbox(&home);
     let folder = local_sandbox(&root);
@@ -568,7 +562,7 @@ fn a_worker_reads_its_machine_s_files_and_neither_side_changes() {
 
 #[test]
 fn a_forwarded_sandbox_s_workspaces_are_named_from_the_home_s_records() {
-    let _turn = serial();
+    let _turn = crate::serial();
     let (scratch, home, root) = boxed("forwarded");
     // the home reaches the daemon directly and keeps the Workspace
     // records; the run folder is in the machine, which keeps none
@@ -612,7 +606,7 @@ fn a_forwarded_sandbox_s_workspaces_are_named_from_the_home_s_records() {
 
 #[test]
 fn a_stopped_machine_is_unavailable_and_nothing_starts_it() {
-    let _turn = serial();
+    let _turn = crate::serial();
     // a machine that records no worker
     let home = tempdir("stopped");
     home::open(&home).unwrap();

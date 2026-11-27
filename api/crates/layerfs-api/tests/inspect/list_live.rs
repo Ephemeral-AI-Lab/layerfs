@@ -175,6 +175,8 @@ fn log(tools: &Path) -> String {
 
 #[test]
 fn list_and_get_answer_the_records_then_the_live_state() {
+    // PATH is the process's, which the other modules' tests also use
+    let _turn = crate::serial();
     let tools = tempdir("tools");
     let limactl = tools.join("limactl");
     std::fs::write(&limactl, STAND_IN).unwrap();

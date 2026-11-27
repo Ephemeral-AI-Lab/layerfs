@@ -830,7 +830,7 @@ mod real_process {
         let child = Command::new(std::env::current_exe().expect("the test binary"))
             .args([
                 "--exact",
-                "real_process::sigkill_at_failpoint",
+                "crash::real_process::sigkill_at_failpoint",
                 "--nocapture",
             ])
             .env(STORE_ENV, &path)

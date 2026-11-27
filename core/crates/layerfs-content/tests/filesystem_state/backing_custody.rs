@@ -91,7 +91,7 @@ fn a_failed_partial_append_keeps_its_physical_bytes_charged() {
         .arg(&binary)
         .args([
             "--exact",
-            "a_failed_partial_append_keeps_its_physical_bytes_charged",
+            "backing_custody::a_failed_partial_append_keeps_its_physical_bytes_charged",
             "--nocapture",
             "--test-threads=1",
         ])

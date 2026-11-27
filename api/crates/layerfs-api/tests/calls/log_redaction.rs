@@ -12,12 +12,11 @@ use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::MutexGuard;
 
 static NEXT: AtomicU64 = AtomicU64::new(0);
 
 /// The tests share the process environment, so each one holds this lock.
-fn serial() -> MutexGuard<'static, ()> {
+fn serial() -> crate::env::EnvTurn {
     let guard = crate::env_lock();
     std::env::remove_var("LAYERFS_LOGS");
     std::env::remove_var("LAYERFS_LOGS_TAG");

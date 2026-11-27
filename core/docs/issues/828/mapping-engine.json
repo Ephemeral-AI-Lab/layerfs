@@ -5859,9 +5859,9 @@
   },
   {
    "old": "engine/crates/layerfs-persistence/tests/postgresql_session_keys.rs",
-   "new": "engine/crates/layerfs-persistence/tests/postgresql_session/keys.rs",
-   "change": "rename",
-   "note": "test area postgresql_session/ (one binary); campaign prefix dropped"
+   "new": "engine/crates/layerfs-persistence/tests/standalone/postgresql_session_keys.rs",
+   "change": "move",
+   "note": "test area postgresql_session/ (one binary); campaign prefix dropped; standalone [[test]]: counts the session's advisory keys (own binary)"
   },
   {
    "old": "engine/crates/layerfs-persistence/tests/postgresql_sqlstate.rs",

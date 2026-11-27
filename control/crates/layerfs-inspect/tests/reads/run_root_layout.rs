@@ -17,13 +17,9 @@ use layerfs_sandbox::record::{DaemonRecord, Local};
 use layerfs_sandbox::{lifecycle::force_remove, record::sweep};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::Mutex;
 use std::time::{Duration, SystemTime};
 
 static NEXT: AtomicU32 = AtomicU32::new(0);
-/// The inspect permits are the process's: the tests that take one take
-/// this turn.
-static PERMITS: Mutex<()> = Mutex::new(());
 
 fn t(text: &str) -> SdkValue {
     SdkValue::text(text)
@@ -177,7 +173,7 @@ fn a_sweep_covers_the_named_run_root_and_not_machine_native() {
 
 #[test]
 fn inspection_reads_run_folders_in_the_named_run_root_only() {
-    let _turn = PERMITS.lock().unwrap_or_else(|poison| poison.into_inner());
+    let _turn = crate::permits();
     let scratch = scratch("inspect");
     let home = new_home(&scratch);
     let run = paths::run_root(&home);

@@ -123,7 +123,11 @@ fn shared_mapping_stores_are_published_and_never_change_size() {
 
     // Map, close, store, exit, in an unregistered nonroot process.
     let exited = Command::new(std::env::current_exe().unwrap())
-        .args(["--exact", "map_close_store_exit_process", "--nocapture"])
+        .args([
+            "--exact",
+            "coherence::map_close_store_exit_process",
+            "--nocapture",
+        ])
         .env(MAP_STORE, &path)
         .uid(COMMAND)
         .gid(COMMAND)

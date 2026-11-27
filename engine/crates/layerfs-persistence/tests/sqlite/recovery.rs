@@ -54,7 +54,7 @@ fn sigkill_preserves_acknowledged_body_locator_and_reservation() {
     let t = support::Temp::new("sigkill");
     let path = t.join("db");
     let mut child = std::process::Command::new(std::env::current_exe().unwrap())
-        .args(["--exact", "crash_child", "--nocapture"])
+        .args(["--exact", "recovery::crash_child", "--nocapture"])
         .env("LAYERFS_RECOVERY_CHILD_PATH", &path)
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())

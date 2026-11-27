@@ -8,12 +8,11 @@ use layerfs_home::disk::paths;
 use layerfs_protocol::sdk::SdkValue;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use std::sync::MutexGuard;
 
 static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 /// The test's lock, with the log settings cleared.
-fn serial() -> MutexGuard<'static, ()> {
+fn serial() -> crate::env::EnvTurn {
     let guard = crate::env_lock();
     std::env::remove_var("LAYERFS_LOGS");
     std::env::remove_var("LAYERFS_LOGS_TAG");

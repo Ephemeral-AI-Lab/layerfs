@@ -20,15 +20,9 @@ use std::net::{SocketAddr, TcpListener};
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
-static PROCESS: Mutex<()> = Mutex::new(());
 static HOMES: AtomicUsize = AtomicUsize::new(0);
-
-fn serial() -> MutexGuard<'static, ()> {
-    PROCESS.lock().unwrap_or_else(|poison| poison.into_inner())
-}
 
 fn tempdir(tag: &str) -> PathBuf {
     let sequence = HOMES.fetch_add(1, Ordering::Relaxed);
@@ -329,7 +323,7 @@ fn the_table_lists_both_calls_with_a_cursor_window() {
 
 #[test]
 fn a_native_sandbox_s_log_is_read_here_with_no_lock_and_nothing_written() {
-    let _turn = serial();
+    let _turn = crate::serial();
     let home = tempdir(layerfs_home::names::HOST_MACHINE);
     home::open(&home).unwrap();
     home_records(&home, layerfs_home::names::HOST_MACHINE, "host", None);
@@ -411,7 +405,7 @@ fn a_native_sandbox_s_log_is_read_here_with_no_lock_and_nothing_written() {
 
 #[test]
 fn a_worker_reads_its_log_and_its_sandboxes_logs_and_writes_nothing() {
-    let _turn = serial();
+    let _turn = crate::serial();
     let (scratch, home, root) = boxed("worker");
     worker_sandbox(&home);
     local_sandbox(&root, "daemon up\nlistening\n");
@@ -497,7 +491,7 @@ fn a_worker_reads_its_log_and_its_sandboxes_logs_and_writes_nothing() {
 
 #[test]
 fn a_machine_started_by_an_earlier_build_answers_an_empty_log() {
-    let _turn = serial();
+    let _turn = crate::serial();
     let (scratch, home, root) = boxed("old");
     // its worker answers, and wrote no `log/worker.log`
     let guest = files(&root);
@@ -516,7 +510,7 @@ fn a_machine_started_by_an_earlier_build_answers_an_empty_log() {
 
 #[test]
 fn a_stopped_machine_is_unavailable_and_nothing_starts_it() {
-    let _turn = serial();
+    let _turn = crate::serial();
     // a machine that records no worker
     let home = tempdir("stopped");
     home::open(&home).unwrap();
@@ -559,7 +553,7 @@ fn a_stopped_machine_is_unavailable_and_nothing_starts_it() {
 
 #[test]
 fn a_forwarded_sandbox_s_run_folder_is_read_in_its_machine() {
-    let _turn = serial();
+    let _turn = crate::serial();
     let (scratch, home, root) = boxed("forwarded");
     // the home reaches the daemon directly and keeps the Workspace records
     let forward = map(&[("address", t("127.0.0.1:1")), ("machine", t("box"))]);

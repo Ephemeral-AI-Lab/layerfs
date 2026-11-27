@@ -2303,9 +2303,9 @@
   },
   {
    "old": "api/crates/layerfs-api/tests/store_call_steps.rs",
-   "new": "api/crates/layerfs-api/tests/store/call_steps.rs",
-   "change": "rename",
-   "note": "test added at #818/#835"
+   "new": "api/crates/layerfs-api/tests/standalone/store_call_steps.rs",
+   "change": "move",
+   "note": "test added at #818/#835; standalone [[test]]: sets the process's LAYERFS_TRACE (own binary)"
   },
   {
    "old": "api/crates/layerfs-cli/tests/common/host_worker.rs",
@@ -2450,6 +2450,12 @@
    "new": "api/crates/layerfs-cli/tests/host_worker/first_call.rs",
    "change": "move",
    "note": "added by #837 (merged into layerfs_v2_0_0 after the plan); ported to its #828 place"
+  },
+  {
+   "old": null,
+   "new": "api/crates/layerfs-api/tests/support/env.rs",
+   "change": "new",
+   "note": "wave 3: the environment turn shared by the joined calls, doctors, machine and machine_power binaries; it restores the environment on release, as each test's own process did"
   }
  ]
 }

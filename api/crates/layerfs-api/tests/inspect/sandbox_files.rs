@@ -21,15 +21,9 @@ use std::net::{SocketAddr, TcpListener};
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
-static PROCESS: Mutex<()> = Mutex::new(());
 static HOMES: AtomicUsize = AtomicUsize::new(0);
-
-fn serial() -> MutexGuard<'static, ()> {
-    PROCESS.lock().unwrap_or_else(|poison| poison.into_inner())
-}
 
 fn tempdir(tag: &str) -> PathBuf {
     let sequence = HOMES.fetch_add(1, Ordering::Relaxed);
@@ -466,7 +460,7 @@ fn the_table_lists_the_call_quiet_with_a_path_and_its_options() {
 
 #[test]
 fn a_native_sandbox_s_files_are_read_here_with_no_lock_line_or_write() {
-    let _turn = serial();
+    let _turn = crate::serial();
     let home = tempdir(layerfs_home::names::HOST_MACHINE);
     home::open(&home).unwrap();
     home_records(&home, layerfs_home::names::HOST_MACHINE, "host", None);
@@ -514,7 +508,7 @@ fn a_native_sandbox_s_files_are_read_here_with_no_lock_line_or_write() {
 
 #[test]
 fn a_worker_reads_its_sandbox_s_files_and_neither_side_changes() {
-    let _turn = serial();
+    let _turn = crate::serial();
     let (scratch, home, root) = boxed("worker");
     worker_sandbox(&home);
     let folder = local_sandbox(&root);
@@ -582,7 +576,7 @@ fn forwarded_sandbox(home: &Path) {
 /// not only with the roots read.
 #[test]
 fn a_forwarded_sandbox_s_root_names_the_workspaces_the_home_records() {
-    let _turn = serial();
+    let _turn = crate::serial();
     let (scratch, home, root) = boxed("forwarded-root");
     forwarded_sandbox(&home);
     // this process stands in for the Sandbox's init: its root is `/`
@@ -615,7 +609,7 @@ fn a_forwarded_sandbox_s_root_names_the_workspaces_the_home_records() {
 
 #[test]
 fn a_forwarded_sandbox_s_roots_list_the_workspaces_the_home_records() {
-    let _turn = serial();
+    let _turn = crate::serial();
     let (scratch, home, root) = boxed("forwarded");
     forwarded_sandbox(&home);
     let folder = local_sandbox(&root);
@@ -643,7 +637,7 @@ fn a_forwarded_sandbox_s_roots_list_the_workspaces_the_home_records() {
 
 #[test]
 fn a_namespaces_sandbox_s_roots_offer_its_root_which_its_machine_reads() {
-    let _turn = serial();
+    let _turn = crate::serial();
     let (scratch, home, root) = boxed("rooted");
     worker_sandbox(&home);
     // this process stands in for the Sandbox's init: its root is `/`
@@ -707,7 +701,7 @@ fn a_namespaces_sandbox_s_roots_offer_its_root_which_its_machine_reads() {
 
 #[test]
 fn a_stopped_machine_is_unavailable_and_nothing_starts_it() {
-    let _turn = serial();
+    let _turn = crate::serial();
     // a machine that records no worker
     let home = tempdir("stopped");
     home::open(&home).unwrap();

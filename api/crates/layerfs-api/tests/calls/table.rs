@@ -578,10 +578,12 @@ fn an_explicit_home_must_be_absolute() {
 
 #[test]
 fn the_source_is_one_file_per_call_under_its_family() {
-    // src/ holds lib.rs, the call machinery (calls/, layerfs-project#107)
-    // and one folder per family; each family folder holds its mod.rs and
-    // one <call>.rs per call, nothing else
-    let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    // src/ holds lib.rs, the call machinery (dispatch/, layerfs-project#107),
+    // the host worker (worker/) and families/ (#828), which holds its mod.rs
+    // and one folder per family; a family folder holds one <call>.rs per
+    // call, in it or in purpose subfolders (#828), and a mod.rs in each
+    // folder, nothing else
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
     let names = |dir: &std::path::Path| -> Vec<String> {
         let mut names: Vec<String> = std::fs::read_dir(dir)
             .unwrap()
@@ -590,20 +592,39 @@ fn the_source_is_one_file_per_call_under_its_family() {
         names.sort();
         names
     };
+    assert_eq!(names(&root), ["dispatch", "families", "lib.rs", "worker"]);
+    let src = root.join("families");
     let mut expected: Vec<String> = families().iter().map(|f| f.name.to_owned()).collect();
-    expected.push("lib.rs".to_owned());
-    expected.push("calls".to_owned());
+    expected.push("mod.rs".to_owned());
     expected.sort();
     assert_eq!(names(&src), expected);
+    // the call files under `dir`, each folder holding its mod.rs
+    fn call_files(dir: &std::path::Path, files: &mut Vec<String>) {
+        let mut has_mod = false;
+        for entry in std::fs::read_dir(dir).unwrap() {
+            let path = entry.unwrap().path();
+            let name = path.file_name().unwrap().to_str().unwrap().to_owned();
+            if path.is_dir() {
+                call_files(&path, files);
+            } else if name == "mod.rs" {
+                has_mod = true;
+            } else {
+                files.push(name);
+            }
+        }
+        assert!(has_mod, "{} has no mod.rs", dir.display());
+    }
     for family in families() {
-        let mut files: Vec<String> = family
+        let mut expected: Vec<String> = family
             .calls()
             .iter()
             .map(|c| format!("{}.rs", c.call))
             .collect();
-        files.push("mod.rs".to_owned());
+        expected.sort();
+        let mut files = Vec::new();
+        call_files(&src.join(family.name), &mut files);
         files.sort();
-        assert_eq!(names(&src.join(family.name)), files, "{}", family.name);
+        assert_eq!(files, expected, "{}", family.name);
     }
 }
 

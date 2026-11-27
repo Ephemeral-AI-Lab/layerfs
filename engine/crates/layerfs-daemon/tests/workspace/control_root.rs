@@ -102,7 +102,7 @@ fn a_refused_control_mount_leaves_no_directory() {
         .arg(std::env::current_exe().unwrap())
         .args([
             "--exact",
-            "refused_inside_a_user_namespace",
+            "control_root::refused_inside_a_user_namespace",
             "--ignored",
             "--nocapture",
         ])

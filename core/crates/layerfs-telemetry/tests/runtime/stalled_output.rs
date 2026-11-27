@@ -9,7 +9,7 @@ fn blocked_platform_stderr_preserves_result_and_process_exit() {
         .args([
             "--ignored",
             "--exact",
-            "stalled_writer_child",
+            "stalled_output::stalled_writer_child",
             "--nocapture",
         ])
         .stdout(Stdio::piped())

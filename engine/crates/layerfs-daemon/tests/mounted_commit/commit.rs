@@ -862,7 +862,11 @@ fn r5_9_stores_through_shared_mappings_are_committed_once_written_back() {
     let mut stored = vec![b'm'; 2 * PAGE + 100];
     same_bytes(&fs::read(&mapped).unwrap(), &stored, "file for the child");
     let exited = Command::new(std::env::current_exe().unwrap())
-        .args(["--exact", "map_close_store_exit_process", "--nocapture"])
+        .args([
+            "--exact",
+            "commit::map_close_store_exit_process",
+            "--nocapture",
+        ])
         .env(MAP_STORE, &mapped)
         .uid(COMMAND)
         .gid(COMMAND)

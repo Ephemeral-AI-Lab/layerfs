@@ -407,7 +407,7 @@ fn real_docker_tag_move_leaves_enumerable_part_and_clears_stale_ref_on_publish()
     guard.retag(&v2_tag, &repo_tag);
     let mut child = ChildGuard::new(
         Command::new(std::env::current_exe().unwrap())
-            .args(["--exact", "helper_pause_load", "--nocapture"])
+            .args(["--exact", "recovery::helper_pause_load", "--nocapture"])
             .env("LP176_REC_PAUSE_HOME", &home)
             .env("LP176_REC_PAUSE_MACHINE", layerfs_home::names::HOST_MACHINE)
             .env("LP176_REC_PAUSE_IMAGE", &repo_tag)
@@ -545,7 +545,7 @@ fn prune_reclaims_parts_temps_and_stranded_while_protecting_live_locks_and_in_us
     fs::create_dir_all(cache_dir.join(format!(".tmp-{hex_locked}.2-cd34/bin"))).unwrap();
     let mut lock_child = ChildGuard::new(
         Command::new(std::env::current_exe().unwrap())
-            .args(["--exact", "helper_hold_image_lock", "--nocapture"])
+            .args(["--exact", "recovery::helper_hold_image_lock", "--nocapture"])
             .env("LP176_REC_LOCK_HOME", &home)
             .env("LP176_REC_LOCK_MACHINE", layerfs_home::names::HOST_MACHINE)
             .env("LP176_REC_LOCK_IMAGE", &id_locked)

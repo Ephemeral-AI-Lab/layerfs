@@ -20,13 +20,9 @@ use std::cell::Cell;
 use std::os::unix::fs::{symlink, FileExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 static NEXT: AtomicU32 = AtomicU32::new(0);
-/// The inspect permits are the process's: the tests that take one take
-/// this turn.
-static PERMITS: Mutex<()> = Mutex::new(());
 
 fn t(s: &str) -> SdkValue {
     SdkValue::text(s)
@@ -507,7 +503,7 @@ fn a_page_past_its_soft_budget_answers_what_it_has_with_reason_deadline() {
     // through the request's own budget: a request that has used its four
     // seconds before the walk starts answers no entry, in time, and says
     // why; its helper ends and frees its permit
-    let _turn = PERMITS.lock().unwrap_or_else(|poison| poison.into_inner());
+    let _turn = crate::permits();
     let asked = disk::with_field(asked, "kind", t("sandbox_files"));
     let (home, request) = (fx.home.clone(), asked.clone());
     let started = Instant::now();
@@ -933,7 +929,7 @@ fn the_roots_are_the_workspaces_from_their_records_then_home_and_log() {
 
 #[test]
 fn the_call_reads_a_stopped_sandbox_s_home_in_this_process() {
-    let _turn = PERMITS.lock().unwrap_or_else(|poison| poison.into_inner());
+    let _turn = crate::permits();
     // the fixture's daemon is no process at all: a stopped Sandbox
     let fx = fixture("local", me());
     std::fs::write(fx.tmp.join("left"), "by a command").unwrap();
