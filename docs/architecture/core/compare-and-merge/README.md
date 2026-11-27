@@ -32,6 +32,8 @@ tree with decided conflicts.
  |  bytes    same file bytes  |   |  build    plan -> backed update   |
  |  text     line diff        |   |                                   |
  |  memo     bounded page memo|   |                                   |
+ |  across   one path, many   |   |                                   |
+ |           versions (H5)    |   |                                   |
  +----------------------------+   +-----------------------------------+
           | reads by ID                      | emits new objects
           v                                  v
@@ -90,6 +92,42 @@ identity); when both fronts open at one level, both sides' pages go in one
 demand (#810). `logical_size_and_directories` counts a root's logical size
 and notes its changed directories in the same walk. `same_inode` compares decoded portable metadata, so a root-form
 and an inline row of equal metadata are equal.
+
+### One path across versions
+
+A history call resolves the same path in each version it walks.
+`PathAcross::resolve` takes a window of version roots and answers each
+version exactly as walking it alone would (the store service's strict or
+lenient path walk), refusals included: an intermediate symlink is
+`Symlink { component }` where a strict walk refuses it, a bound
+intermediate without an inode record is `Unbound`.
+
+```text
+ window of W roots (newest first), chain predicted by the previous window
+   roots                 1 demand (<= 128 objects)
+   inode values          all versions x all chain serials: one demand per
+                         inode level (lookup_tables; pages shared by
+                         versions read once, <= 128 pages a demand)
+   directory bindings    DirectoryMemo (dir root, name) -> serial answers
+                         unchanged directories; every miss of every version
+                         and level: one demand per directory page level
+   divergence            a binding != prediction: that version reads its
+                         actual serial in one more inode wave
+ window cost: 1 + h + m (+ h + m per diverged level); first window, no
+ prediction: level by level, all versions together
+```
+
+| Function | Answers | Source |
+| --- | --- | --- |
+| `PathAcross::resolve` | one `PathAnswer` per root: `Entry`, `Absent`, `Symlink`, `Unbound`; with `batched = false` (no round-trip cost, `batched_chain_reads()` false) each root is opened and walked alone with today's reads | [`across.rs`](../../../../core/crates/layerfs-content/src/compare/across.rs) |
+| `DirectoryMemo` | a call's `(directory root, name) -> serial` bindings, absence included, at most the caller's capacity; directory contents are immutable, so an equal root gives an equal binding | same |
+| `lookup_tables` | inode values from several tables in one descent, one demand per level, each page checked where each table found it, answers as `lookup_many` per table | [`inode/read.rs`](../../../../core/crates/layerfs-content/src/filesystem/inode/read.rs) |
+
+A prediction never answers: a version's answer comes from its own bindings
+and values, and a wrong prediction only costs the extra wave. Values and
+bindings are dropped when `resolve` returns; what is kept across windows is
+the serial chain (path depth + 1) and the caller's memo. An integrity failure
+in any version of a batched window fails the window.
 
 ### Naming changed inodes
 
@@ -162,6 +200,7 @@ lines to the newer version.
 | Line-diff table | `MAXIMUM_DIFF_CELLS` 2^20 cells, then unique-line matching | same |
 | Changed inodes a plan accepts | `MAXIMUM_CHANGED` 65,536; past it `Plan::make` is `None` and the caller walks fully | [`changes.rs`](../../../../core/crates/layerfs-content/src/compare/changes.rs) |
 | Comparison memo | `MEMO_PAGES` 256; a batch size mismatch is `BatchCardinality` | [`memo.rs`](../../../../core/crates/layerfs-content/src/compare/memo.rs) |
+| Objects one cross-version demand carries | 128 (the directory window; 1 MiB of pages, one storage `PREPARED_LEAVES` window); a wider wave takes more demands | [`across.rs`](../../../../core/crates/layerfs-content/src/compare/across.rs) |
 | `/.lww` files per load | `MAXIMUM_RULE_FILES` 16, includes counted | [`merge/lww.rs`](../../../../core/crates/layerfs-content/src/merge/lww.rs) |
 | Changed serials a bounded merge decides | the caller's `bound`, else `BoundedCapacityExceeded { what: "merge.bound" }`; the publication lane passes `LANE_MERGE_PATHS` = 1,024 | [`merge/serial.rs`](../../../../core/crates/layerfs-content/src/merge/serial.rs), [`commit_merge.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit_merge.rs) |
 | Merge state in memory | `HELD_BYTES` 8 MiB, then the caller's records | [`merge/spill.rs`](../../../../core/crates/layerfs-content/src/merge/spill.rs) |
@@ -182,6 +221,7 @@ Each command gets a wall timeout of at most 120 s.
 | --- | --- | --- | --- |
 | [`compare_full_resume.rs`](../../../../core/crates/layerfs-content/tests/compare_full_resume.rs) | `cargo +1.85.1 test --locked -p layerfs-content --test compare_full_resume` | any | A resumed full walk lists the same pairs as an uninterrupted one; reads before the first pair do not grow with the cursor |
 | [`compare_memo.rs`](../../../../core/crates/layerfs-content/tests/compare_memo.rs) | `cargo +1.85.1 test --locked -p layerfs-content --test compare_memo` | any | Past 256 objects, shared upper pages are still read once |
+| [`compare_across.rs`](../../../../core/crates/layerfs-content/tests/compare_across.rs) | `cargo +1.85.1 test --locked -p layerfs-content --test compare_across` | any | Each version's answer equals walking it alone on seeded random histories; per-window demands on depth-12, 10k-entry, symlink, hardlink, created-path and kind-change histories |
 | [`merge_units.rs`](../../../../core/crates/layerfs-content/tests/merge_units.rs) | `cargo +1.85.1 test --locked -p layerfs-content --test merge_units` | any | Unit admission and coverage; a relink is no change; ours wins a tie |
 | [`merge_units.rs`](../../../../engine/crates/layerfs-store-service/tests/merge_units.rs) | `cargo +1.85.1 test --locked -p layerfs-store-service --test merge_units` | any | `branch.merge` with `units`: a unit both sides changed comes whole from the later side |
 | [`merge_by_serial.rs`](../../../../engine/crates/layerfs-store-service/tests/merge_by_serial.rs) | `cargo +1.85.1 test --locked -p layerfs-store-service --test merge_by_serial` | any | Moves follow their serial; crossed directory moves and delete-against-edit conflict |
