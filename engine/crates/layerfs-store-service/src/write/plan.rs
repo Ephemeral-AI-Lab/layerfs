@@ -7,7 +7,8 @@
 //! paths, the overlay first, so the answers stay the walk's own. Planned
 //! only where the provider pays a round trip per demand (PostgreSQL).
 use super::files::Change;
-use super::mutation::{read_failure, Mutation, Result};
+use super::mutation::{permitted, read_failure, Mutation, Result};
+use super::recursive::overlap;
 use crate::history::lookup::Arg;
 use layerfs_content::filesystem::PathName;
 use layerfs_content::object::inode_leaf::{InodeKind, InodeValue};
@@ -26,16 +27,40 @@ const PLAN_BYTES: usize = 1024 * 1024;
 
 impl Mutation<'_> {
     /// Plans the base reads of `changes`' paths (at most [`PLAN_PATHS`]
-    /// changes) before they apply. A refused change names no path to plan.
+    /// changes) before they apply. The plan stops at the first change
+    /// refused before any read ([`refused_unread`]): that change answers its
+    /// own refusal, as without a plan, and none after it applies; when it is
+    /// the first, nothing is planned. A failed plan read thus refuses only
+    /// at a change whose own walk reads.
     pub fn plan(&self, changes: &[Arg<Change<'_>>]) -> Result<()> {
         if !self.workspace.store.batched_reads() {
             return Ok(());
         }
-        let paths = (changes.iter())
+        let planned = (changes.iter().position(refused_unread)).unwrap_or(changes.len());
+        if planned == 0 {
+            return Ok(());
+        }
+        let paths = (changes[..planned].iter())
             .filter_map(|change| change.as_ref().ok())
             .flat_map(|change| paths(change).into_iter().flatten());
         plan(self.view.base(), self.view.root_serial(), paths)
             .map_err(|error| read_failure(error.into()))
+    }
+}
+
+/// Whether `change` is refused before it reads anything: its arguments, or
+/// the first check of its operation (`Mutation::edit`'s empty `oldText`,
+/// `mkdir`'s mode, `remove` of the root, `copy` and `rename` overlap).
+fn refused_unread(change: &Arg<Change<'_>>) -> bool {
+    match change {
+        Err(_) => true,
+        Ok(Change::Edit { old, .. }) => old.is_empty(),
+        Ok(Change::Mkdir { path, mode }) => {
+            permitted(path, InodeKind::Directory, mode.unwrap_or(0o755)).is_err()
+        }
+        Ok(Change::Rm { path, .. }) => *path == "/",
+        Ok(Change::Cp { from, to } | Change::Mv { from, to }) => overlap(from, to).is_err(),
+        Ok(Change::Write { .. } | Change::Chmod { .. }) => false,
     }
 }
 

@@ -548,3 +548,56 @@ Other checks:
 - Production LOC: 229,872 -> 230,048 (delta +176), engine
   layerfs-persistence +176. This includes the test hook in
   `src/internals.rs`, which the counter counts as product source.
+
+## W6 fix — refusal order under a failed plan read (M2 review)
+
+**Finding.** In `write/files.rs`, the plan of a window runs before the
+window's first change. A failed plan read therefore refused at that
+change's index, even when the change's own refusal, which needs no read,
+comes first in the parent (an invalid path, for example).
+
+**Fix.** `Mutation::plan` (`write/plan.rs`) now plans only the changes
+before the window's first change that is refused before any read
+(`refused_unread`). These are the first checks of each operation, done
+with the same functions (`permitted` and `overlap` became `pub(super)`):
+- an argument refusal (`Arg` error);
+- `edit` with an empty `oldText`;
+- a `mkdir` mode;
+- `rm` of the root;
+- an overlapping `cp` or `mv`.
+
+That change answers its own refusal, and no change after it applies. When
+it is the window's first change, nothing is planned. Trips are unchanged
+on every pinned case: a change list with no such refusal plans exactly as
+before, and one with it reads less.
+
+**Test.** `sdk_write_planned_paths::postgresql_unread_refusal_comes_before_the_plan`
+sends an `fs.apply` with a relative path at index 0, then a write under
+`/dir/deeper`. It drops the connection at each of the call's 131 server
+messages in turn. Every answer that names a change is the clean
+`InvalidInput` at index 0. Every other answer is a failure before the
+changes, with no index (117 `Failed`, 8 `Unknown`). No backend is left in
+a transaction.
+- Unfixed plan (temporarily reverted): message n108 answered `Failed` at
+  index 0 (`Store object demand: storage failure`) instead of
+  `InvalidInput` (`receipts/W6-order/before_fix.log`).
+- With the fix it passes (`sdk_write_planned_paths.log`, 3/3).
+
+**Residual (not removed).** A failed plan read refuses at the window's
+first change whose own walk reads. The parent's per-change walks might
+have read only paths that answer, and that change could then have refused
+for a reason that needs a read (`NoSuchPath`, `NotDirectory`) or applied,
+with the failing read reached at a later change. Matching that exactly
+would mean reading again after the failed plan read, which is a retry. So
+under a fault the failure can come at an earlier index, or replace a
+later refusal that needs a read; it is never a different answer to a
+fault-free call. Recorded in `docs/architecture/engine/store-calls/README.md`.
+
+Checks, each run once:
+- `sdk_write_planned_paths` (3 tests), `sdk_write_round_trips` (the write
+  pins, both backends, unchanged) and `method_refusal_order`: all green.
+- Clippy `-D warnings` on `layerfs-store-service` (all targets) and
+  rustfmt: clean.
+- Deleted tests: none.
+- Production LOC: 230,048 -> 230,065 (delta +17), engine
+  layerfs-store-service +17.

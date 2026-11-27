@@ -24,7 +24,7 @@ fn checked(path: &str, name: &str) -> Result<PathName> {
 /// LayerFS stores, as `project.init` accepts them. Set-user-ID, set-group-ID
 /// and the sticky bit on a file are refused as `InvalidInput` with reason
 /// `Mode`; a symbolic link has no mode of its own.
-fn permitted(path: &str, kind: InodeKind, mode: u32) -> Result<u32> {
+pub(super) fn permitted(path: &str, kind: InodeKind, mode: u32) -> Result<u32> {
     let mask = match kind {
         InodeKind::Directory => 0o1777,
         InodeKind::RegularFile => 0o777,

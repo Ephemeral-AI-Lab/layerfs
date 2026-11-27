@@ -1,0 +1,18 @@
+
+running 1 test
+
+thread 'postgresql_unread_refusal_comes_before_the_plan' panicked at engine/crates/layerfs-store-service/tests/sdk_write_planned_paths.rs:243:24:
+assertion `left == right` failed: n108: the first change's own refusal
+  left: ("Failed", "Content(ProviderFailure { what: \"Store object demand: storage failure\" })", Some(0))
+ right: ("InvalidInput", "expected an absolute path without empty, dot or parent components", Some(0))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test postgresql_unread_refusal_comes_before_the_plan ... FAILED
+
+failures:
+
+failures:
+    postgresql_unread_refusal_comes_before_the_plan
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 2 filtered out; finished in 3.43s
+
+run_bounded: exit 101 after 4.4 s

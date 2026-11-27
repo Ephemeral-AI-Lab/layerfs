@@ -1,0 +1,10 @@
+
+running 3 tests
+test sqlite_planned_paths_answer_as_before ... ok
+W6_ORDER_STATES K=131 {"Failed None": 117, "InvalidInput Some(0)": 6, "Unknown None": 8}
+test postgresql_unread_refusal_comes_before_the_plan ... ok
+test postgresql_planned_paths_answer_as_before ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.70s
+
+run_bounded: exit 0 after 4.4 s

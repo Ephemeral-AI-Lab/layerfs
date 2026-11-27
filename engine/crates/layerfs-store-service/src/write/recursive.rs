@@ -293,7 +293,7 @@ fn exists(to: &str) -> layerfs_bridge::control::SdkRefusal {
     let message = format!("{to} already exists");
     args::refuse("Exists", message, layerfs_bridge::control::SdkValue::Null)
 }
-fn overlap(from: &str, to: &str) -> Result<()> {
+pub(super) fn overlap(from: &str, to: &str) -> Result<()> {
     if from == to || from == "/" || to.starts_with(&format!("{from}/")) {
         Err(args::invalid("source and destination overlap"))
     } else {

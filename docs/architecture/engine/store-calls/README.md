@@ -170,9 +170,16 @@ whose count is not remembered (the count is then remembered, as the
 directory's full stat would derive it), as one inode wave of at most
 `BaseView::PLAN_SERIALS` (1,024) serials (`BaseView::plan_level`). The plan
 only fills the Workspace client's caches; every change still resolves on
-its own, so answers are unchanged. A failed plan read refuses the call at
-the first change of its window as a failed read (`Failed`), as that
-change's own walk would. SQLite plans nothing.
+its own, so answers are unchanged. A window's plan stops at its first
+change that is refused before any read: its arguments, an empty `oldText`,
+a `mkdir` mode, `rm` of the root, or an overlapping `cp` or `mv`. That
+change answers its own refusal, and nothing is planned when it is the
+window's first change. A failed plan read refuses the call at the window's
+first change as a failed read (`Failed`). That change's own walk would also
+read first, but it might have read only paths that answer, and then
+refused or applied itself. A fault can therefore move a failure to an
+earlier change, or replace a change's later refusal; the plan is read once
+and never retried. SQLite plans nothing.
 
 **Binding by name.** A call on a named Branch other than `main` without
 `expected` binds through `Store::bind_named_private`: on PostgreSQL the
