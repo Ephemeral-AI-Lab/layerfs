@@ -32,11 +32,20 @@ use std::{
 /// (#818 H5): a later demand that names it gets that error back and the
 /// object is never read again, so a window read ahead of a walk refuses only
 /// where the walk reaches the object, and no failed read is attempted twice.
+///
+/// A call that plans its reads ahead (#818 H6) keeps the lengths it read per
+/// file, each a length or that file's own failure, and answers a lengths
+/// demand from them when it names only kept files; and it holds the roots it
+/// read ahead, at most [`ROOT_BYTES`] until the next plan releases them, and
+/// serves a demand from them when it names only held roots. A kept failure
+/// is met where the call first asks for that file, as before.
 pub struct Cached<'a> {
     ports: &'a StorePorts,
     cache: RefCell<Option<ReadCache>>,
     directories: RefCell<DirectoryMemo>,
     failed: RefCell<HashMap<ObjectId, ContentError>>,
+    lengths: RefCell<HashMap<ObjectId, Result<u64, Arc<PortError>>>>,
+    held: RefCell<(HashMap<ObjectId, Vec<u8>>, usize)>,
 }
 
 /// Names a history call's directory memo keeps at most (#818 H3): lane C's
@@ -52,7 +61,81 @@ impl<'a> Cached<'a> {
             cache: RefCell::new(None),
             directories: RefCell::new(DirectoryMemo::new(MEMO)),
             failed: RefCell::new(HashMap::new()),
+            lengths: RefCell::new(HashMap::new()),
+            held: RefCell::new((HashMap::new(), 0)),
         })
+    }
+
+    /// A file's kept length or kept failure (#818 H6).
+    pub fn length(&self, id: ObjectId) -> Option<Result<u64, Arc<PortError>>> {
+        self.lengths.borrow().get(&id).cloned()
+    }
+
+    /// Reads the lengths of the `ids` not kept yet in one per-object demand
+    /// and keeps each, a length or the file's own failure, while the record
+    /// has room ([`MEMO`]); a failure of the demand itself refuses.
+    pub fn lengths_each(&self, ids: &[ObjectId]) -> Result<(), SdkRefusal> {
+        let wanted = {
+            let kept = self.lengths.borrow();
+            let mut wanted: Vec<ObjectId> = Vec::new();
+            for id in ids {
+                if !kept.contains_key(id) && !wanted.contains(id) {
+                    wanted.push(*id);
+                }
+            }
+            wanted.truncate(MEMO.saturating_sub(kept.len()));
+            wanted
+        };
+        if wanted.is_empty() {
+            return Ok(());
+        }
+        let each = self
+            .with(|cache| self.ports.lengths_each_with(cache, &wanted))
+            .map_err(args::failed)?;
+        if each.len() != wanted.len() {
+            return Err(args::failed("file length cardinality"));
+        }
+        self.lengths
+            .borrow_mut()
+            .extend(wanted.into_iter().zip(each));
+        Ok(())
+    }
+
+    /// Releases the held roots, then reads the `ids` not held, not failed,
+    /// in one per-object demand and holds each one read while the held bytes
+    /// stay within [`ROOT_BYTES`]; an object's own failure is recorded as
+    /// every per-object read records it.
+    pub fn hold_each(&self, ids: &[ObjectId]) -> ContentResult<()> {
+        *self.held.borrow_mut() = (HashMap::new(), 0);
+        let mut wanted: Vec<ObjectId> = Vec::new();
+        for id in ids {
+            if !wanted.contains(id) {
+                wanted.push(*id);
+            }
+        }
+        if wanted.is_empty() {
+            return Ok(());
+        }
+        let each = self.read_canonical_each(&wanted)?;
+        let mut held = self.held.borrow_mut();
+        for (id, read) in wanted.into_iter().zip(each) {
+            if let Ok(bytes) = read {
+                if held.1.saturating_add(bytes.len()) <= ROOT_BYTES {
+                    held.1 += bytes.len();
+                    held.0.insert(id, bytes);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// The held roots `ids` name, when every one is held.
+    fn held(&self, ids: &[ObjectId]) -> Option<Vec<Vec<u8>>> {
+        let held = self.held.borrow();
+        if held.0.is_empty() {
+            return None;
+        }
+        ids.iter().map(|id| held.0.get(id).cloned()).collect()
     }
 
     /// The call's directory memo, for a window of versions (#818 H5).
@@ -141,9 +224,23 @@ impl<'a> Cached<'a> {
     }
 
     /// Regular files' lengths through the call's caches (#818 R4).
+    /// Answered from the kept lengths when every file is kept (#818 H6),
+    /// the first kept failure in request order refusing as the demand's
+    /// failure would.
     pub fn lengths(&self, ids: &[ObjectId]) -> Result<Vec<u64>, SdkRefusal> {
-        self.with(|cache| self.ports.lengths_with(cache, ids))
-            .map_err(args::failed)
+        let kept: Option<Vec<_>> = {
+            let lengths = self.lengths.borrow();
+            ids.iter().map(|id| lengths.get(id).cloned()).collect()
+        };
+        match kept {
+            Some(kept) if !ids.is_empty() => kept
+                .into_iter()
+                .map(|kept| kept.map_err(args::failed))
+                .collect(),
+            _ => self
+                .with(|cache| self.ports.lengths_with(cache, ids))
+                .map_err(args::failed),
+        }
     }
 
     fn open(
@@ -206,6 +303,9 @@ impl AuthenticatedObjects for Cached<'_> {
     fn read_canonical_batch(&self, ids: &[ObjectId]) -> ContentResult<Vec<Vec<u8>>> {
         if let Some(error) = self.recorded(ids) {
             return Err(error);
+        }
+        if let Some(held) = self.held(ids) {
+            return Ok(held);
         }
         self.with(|cache| self.ports.objects_with(cache, ids))
             .map_err(|error| error.object_demand())

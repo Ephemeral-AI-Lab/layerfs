@@ -5,6 +5,11 @@
 //! the walk stops never surfaces, and one in a version the walk reaches
 //! refuses there, as before.
 //!
+//! A window also reads ahead what the walk reads at its versions (#818 H6):
+//! lengths, blame's texts, the revisions' metadata; `fs.diff_files` reads
+//! both sides' files together. A damaged text past the point where the walk
+//! stops never surfaces either, and one the call reaches refuses there.
+//!
 //! The windows are forced ([`Batching::Forced`]): the Store's reader reads
 //! per-object demands one object at a time until the storage reader serves
 //! them at once, which is when the product turns them on. PostgreSQL only
@@ -19,7 +24,8 @@ use layerfs_store_service::history::rows::Rows;
 use layerfs_store_service::read::{
     blame,
     cached::Cached,
-    query, revision, snapshot,
+    compare::Selector,
+    file_compare, query, revision, snapshot,
     versions::{windows_resolved, Batching},
     visibility::Visibility,
 };
@@ -41,6 +47,17 @@ fn blame(
     file: &str,
     batching: Batching,
 ) -> Result<SdkValue, SdkRefusal> {
+    blame_from(service, name, file, 1, batching)
+}
+
+/// [`blame`] from line `from`.
+fn blame_from(
+    service: &StoreService,
+    name: &str,
+    file: &str,
+    from: u64,
+    batching: Batching,
+) -> Result<SdkValue, SdkRefusal> {
     let stack = stack(service);
     let (reader, snap) = snapshot::open(&service.store, &stack, name)?;
     let cached = Cached::new(&reader)?;
@@ -53,7 +70,7 @@ fn blame(
         file,
         &seen,
         blame::Window {
-            from: Ok(1),
+            from: Ok(from),
             count: Ok(2000),
         },
         &mut blame::Limits {
@@ -95,15 +112,56 @@ fn revisions(
     )
 }
 
+/// `fs.diff_files` of `file` between `left` and `right`, with `batching`.
+fn diff(
+    service: &StoreService,
+    file: &str,
+    left: &str,
+    right: &str,
+    batching: Batching,
+) -> Result<SdkValue, SdkRefusal> {
+    let side = |at| {
+        Ok(Selector {
+            path: file.to_owned(),
+            at,
+        })
+    };
+    file_compare::diff(
+        &service.store,
+        &stack(service),
+        side(left),
+        side(right),
+        file_compare::Options {
+            include_attribution: false,
+            allow_missing: false,
+            page: query::result_page(&SdkValue::Map(Vec::new()))?,
+            extended: true,
+            batching,
+        },
+    )
+}
+
 /// The answer or refusal, with both modes required to agree; returns it.
 fn alike(
     label: &str,
     call: impl Fn(Batching) -> Result<SdkValue, SdkRefusal>,
 ) -> Result<SdkValue, SdkRefusal> {
+    alike_in(label, true, call)
+}
+
+/// [`alike`], requiring a window to be read when `windowed`.
+fn alike_in(
+    label: &str,
+    windowed: bool,
+    call: impl Fn(Batching) -> Result<SdkValue, SdkRefusal>,
+) -> Result<SdkValue, SdkRefusal> {
     let alone = call(Batching::Provider);
     let before = windows_resolved();
-    let windowed = call(Batching::Forced);
-    assert!(windows_resolved() > before, "{label}: a window was read");
+    let forced = call(Batching::Forced);
+    if windowed {
+        assert!(windows_resolved() > before, "{label}: a window was read");
+    }
+    let windowed = forced;
     assert_eq!(windowed, alone, "{label}: windows answer as the lone walk");
     alone
 }
@@ -219,5 +277,92 @@ fn a_damaged_version_refuses_only_where_the_walk_reaches_it() {
         blame(service, rt::BRANCH, "/hist/kept.txt", b)
     });
     assert!(reached.is_err(), "the walk reaches the damage: {reached:?}");
+    opened.stop();
+}
+
+/// The object id of `file`'s content in the tree of the Commit a `fs.write`
+/// reply names.
+fn content_of(service: &StoreService, reply: &SdkValue, file: &str) -> Vec<u8> {
+    let root = layerfs_content::ObjectId::from_bytes(&root_of(service, reply)).unwrap();
+    let stack = stack(service);
+    let (reader, _) = snapshot::open(&service.store, &stack, rt::BRANCH).unwrap();
+    let cached = Cached::new(&reader).unwrap();
+    let entry = cached.entry(root, file).unwrap().expect("the file");
+    entry.value.content_root.as_bytes().to_vec()
+}
+
+#[test]
+fn a_damaged_text_refuses_only_where_the_call_reaches_it() {
+    let _turn = rt::postgresql_turn();
+    let Some(mut store) = Store::postgresql("versions_text_rh") else {
+        return;
+    };
+    let source = store.dir.join("source");
+    rt::build_tree(&source);
+    store.init(&source, &mut |_, _| {});
+    let opened = store.open("setup");
+    rt::fork_work(&opened);
+    // 20 Commits of `/hist/b.txt`: its first line never changes, its second
+    // is new each time.
+    let (mut commits, mut texts) = (Vec::new(), Vec::new());
+    for n in 0..20 {
+        let reply = opened
+            .call(
+                "fs.write",
+                vec![
+                    ("branch", t(rt::BRANCH)),
+                    path("/hist/b.txt"),
+                    (
+                        "bytes",
+                        SdkValue::Bytes(format!("keep\nx{n}\n").into_bytes()),
+                    ),
+                ],
+            )
+            .unwrap();
+        texts.push(content_of(&opened.service, &reply, "/hist/b.txt"));
+        commits.push(rt::commit_id(&reply));
+    }
+    opened.stop();
+    // The text of the 10th Commit from the head: blame of line 2, a
+    // one-item revision page and the diff of the head with its parent stop
+    // before it; blame of line 1, the whole revision list and a diff with
+    // that Commit reach it.
+    let at = texts.len() - 10;
+    let mut admin = postgres::Client::connect(&store.url, postgres::NoTls).unwrap();
+    admin
+        .batch_execute(&format!("SET search_path TO {}", store.schema))
+        .unwrap();
+    let removed = admin
+        .execute(
+            "DELETE FROM object_location WHERE object_id = $1",
+            &[&texts[at]],
+        )
+        .unwrap();
+    assert_eq!(removed, 1, "the damaged text's location");
+
+    let opened = store.open("damaged");
+    let service = &opened.service;
+    let b = "/hist/b.txt";
+    let head = commits[commits.len() - 1].as_str();
+    let parent = commits[commits.len() - 2].as_str();
+    let damaged = commits[at].as_str();
+    let stops = alike("blame line 2", |m| blame_from(service, rt::BRANCH, b, 2, m));
+    assert!(stops.is_ok(), "line 2's walk stops before: {stops:?}");
+    let page = alike("revision page", |m| {
+        revisions(service, rt::BRANCH, b, Some(1), m)
+    });
+    assert!(page.is_ok(), "the page ends before the damage: {page:?}");
+    let near = alike_in("diff near", false, |m| diff(service, b, head, parent, m));
+    assert!(near.is_ok(), "the diff reads no damaged side: {near:?}");
+    let reached = alike("blame line 1", |m| blame_from(service, rt::BRANCH, b, 1, m));
+    assert!(reached.is_err(), "line 1's walk reaches it: {reached:?}");
+    let listed = alike("revision list", |m| {
+        revisions(service, rt::BRANCH, b, None, m)
+    });
+    assert!(listed.is_err(), "the list reaches it: {listed:?}");
+    for (label, left, right) in [("diff left", damaged, head), ("diff right", head, damaged)] {
+        let refused = alike_in(label, false, |m| diff(service, b, left, right, m));
+        assert!(refused.is_err(), "{label}: a damaged side: {refused:?}");
+    }
     opened.stop();
 }

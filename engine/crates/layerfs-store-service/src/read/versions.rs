@@ -21,14 +21,24 @@
 //! bound component without its record) is walked alone too, and refuses
 //! there with today's refusal.
 //!
+//! A window also reads ahead what the walk reads at its versions (#818 H6),
+//! through the same per-object reads: its regular files' lengths in one
+//! demand, then for blame the roots of the texts it compares while their
+//! comparisons fit its byte budget, for `fs.revision` its entries' metadata,
+//! at most [`ROOTS`] roots and [`super::cached::ROOT_BYTES`] held in one
+//! demand. Each read
+//! ahead is kept or held by the call's caches and served where the walk asks
+//! for it, a recorded failure there too.
+//!
 //! Elsewhere (SQLite, or a reader without per-object demands) each version
 //! is walked alone, as before.
-use super::cached::Cached;
+use super::cached::{batches, Cached, ROOTS};
 use crate::history::{lookup as args, rows::Rows};
 use crate::store::Store;
 use layerfs_bridge::control::SdkRefusal;
 use layerfs_content::compare::{AcrossWork, EntryFacts, PathAcross, PathAnswer};
 use layerfs_content::filesystem::{path::PathName, FilesystemRootId};
+use layerfs_content::object::inode_leaf::InodeKind;
 use layerfs_content::{AuthenticatedObjects, ContentError, ContentResult, ObjectId};
 use layerfs_history::NodeId;
 use std::cell::{Cell, RefCell};
@@ -51,12 +61,24 @@ pub enum Batching {
 }
 
 impl Batching {
-    fn on(self, store: &Store, reader: &Cached<'_>) -> bool {
+    /// Whether this call plans its reads ahead over `store` and `reader`.
+    pub fn on(self, store: &Store, reader: &Cached<'_>) -> bool {
         match self {
             Self::Provider => store.batched_reads() && reader.reads_each_at_once(),
             Self::Forced => true,
         }
     }
+}
+
+/// What a window reads ahead beside its versions' entries (#818 H6).
+#[derive(Clone, Copy, Debug)]
+pub enum Ahead {
+    /// Blame: the walk compares the newer side's file `newer` with each
+    /// older version whose file differs, while the comparisons' bytes fit
+    /// `budget`; their lengths and texts' roots.
+    Texts { newer: ObjectId, budget: u64 },
+    /// `fs.revision`: the entries' lengths and metadata.
+    Facts,
 }
 
 thread_local! {
@@ -115,6 +137,7 @@ impl<'r, 'c> Versions<'r, 'c> {
         rows: &Rows<'_>,
         node: NodeId,
         root: ObjectId,
+        ahead: Ahead,
     ) -> Result<Option<EntryFacts>, SdkRefusal> {
         if self.across.is_none() || self.alone.contains(&node) {
             return self.reader.entry(root, self.path);
@@ -129,6 +152,7 @@ impl<'r, 'c> Versions<'r, 'c> {
             return self.reader.entry(root, self.path);
         }
         self.window(&versions)?;
+        self.ahead(&versions, ahead)?;
         match self.answers.get(&node) {
             Some(found) if !self.alone.contains(&node) => Ok(*found),
             _ => self.reader.entry(root, self.path),
@@ -182,6 +206,71 @@ impl<'r, 'c> Versions<'r, 'c> {
                     Ok(())
                 }
             },
+        }
+    }
+}
+
+impl Versions<'_, '_> {
+    /// Reads ahead what the walk reads at the window's versions it answered,
+    /// in walk order up to the first it did not.
+    fn ahead(&self, versions: &[(NodeId, ObjectId)], ahead: Ahead) -> Result<(), SdkRefusal> {
+        let entries: Vec<EntryFacts> = versions
+            .iter()
+            .map_while(|(node, _)| self.answers.get(node).copied().flatten())
+            .collect();
+        if entries.is_empty() {
+            return Ok(());
+        }
+        let files = |entries: &[EntryFacts]| -> Vec<ObjectId> {
+            entries
+                .iter()
+                .filter(|e| e.value.kind == InodeKind::RegularFile)
+                .map(|e| e.value.content_root)
+                .collect()
+        };
+        let reader = self.reader;
+        match ahead {
+            Ahead::Facts => {
+                reader.lengths_each(&files(&entries))?;
+                let mut metadata: Vec<ObjectId> = Vec::new();
+                // An inline form needs no read; an attribute tree's root does.
+                for root in entries.iter().filter_map(|e| e.value.metadata_root.root()) {
+                    if metadata.len() < ROOTS && !metadata.contains(&root) {
+                        metadata.push(root);
+                    }
+                }
+                reader.hold_each(&metadata).map_err(args::content)
+            }
+            Ahead::Texts { newer, budget } => {
+                // Blame stops at a version whose path is no regular file.
+                let walk: Vec<EntryFacts> = entries
+                    .into_iter()
+                    .take_while(|e| e.value.kind == InodeKind::RegularFile)
+                    .collect();
+                let mut wanted = vec![newer];
+                wanted.extend(files(&walk));
+                reader.lengths_each(&wanted)?;
+                let (mut previous, mut spent) = (newer, 0u64);
+                let (mut texts, mut lengths) = (Vec::new(), Vec::new());
+                for root in files(&walk) {
+                    if root == previous {
+                        continue;
+                    }
+                    let (Some(Ok(a)), Some(Ok(b))) = (reader.length(previous), reader.length(root))
+                    else {
+                        break;
+                    };
+                    spent = spent.saturating_add(a.saturating_add(b).saturating_mul(3));
+                    if spent > budget {
+                        break;
+                    }
+                    texts.push(root);
+                    lengths.push(b);
+                    previous = root;
+                }
+                let first = batches(&lengths).into_iter().next().unwrap_or_default();
+                reader.hold_each(&texts[first]).map_err(args::content)
+            }
         }
     }
 }

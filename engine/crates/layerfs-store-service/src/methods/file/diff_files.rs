@@ -29,6 +29,7 @@ pub fn diff_files(service: &StoreService, args: &SdkValue) -> Answer {
             extended: ["page", "pageSize", "includeAttribution", "allowMissing"]
                 .iter()
                 .any(|name| args.get(name).is_some()),
+            batching: crate::read::versions::Batching::Provider,
         },
     )
 }

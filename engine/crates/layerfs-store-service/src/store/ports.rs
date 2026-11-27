@@ -89,6 +89,8 @@ impl std::error::Error for PortError {
 }
 /// One object's read in a per-object demand: its bytes or its own failure.
 pub type ObjectRead = Result<Vec<u8>, Arc<PortError>>;
+/// One regular file's length in a per-object demand, or its own failure.
+pub type LengthRead = Result<u64, Arc<PortError>>;
 /// Fresh demand custody for one operation, never stored in the immutable cache.
 pub struct StorePorts {
     store: Arc<Store>,
@@ -278,6 +280,32 @@ impl StorePorts {
         ids: &[ObjectId],
     ) -> Result<Vec<u64>, Arc<PortError>> {
         self.attempt(|| self.reader()?.lengths_with(cache, ids))
+    }
+    /// Each regular file's length or its own failure (#818 H6), as
+    /// [`Self::objects_each_with`] reads objects: one point demand per file
+    /// until the storage reader serves such a demand at once
+    /// (`Storage::lengths_each_with`).
+    pub fn lengths_each_with(
+        &self,
+        cache: &mut layerfs_storage::ReadCache,
+        ids: &[ObjectId],
+    ) -> Result<Vec<LengthRead>, Arc<PortError>> {
+        let mut each = Vec::with_capacity(ids.len());
+        for id in ids {
+            let read = self.attempt_keeping(
+                || self.reader()?.lengths_with(cache, std::slice::from_ref(id)),
+                |error| !error.object_owned(),
+            );
+            each.push(match read {
+                Ok(lengths) if lengths.len() == 1 => Ok(lengths[0]),
+                Ok(_) => Err(Arc::new(PortError::Storage(StorageError::Integrity(
+                    "file length demand cardinality",
+                )))),
+                Err(error) if error.object_owned() => Err(error),
+                Err(error) => return Err(error),
+            });
+        }
+        Ok(each)
     }
 }
 impl AuthenticatedObjects for StorePorts {

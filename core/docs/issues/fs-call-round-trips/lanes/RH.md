@@ -764,3 +764,78 @@ PostgreSQL control, warm (cold +1–2 prepares and the first-use gap):
 - Pins unchanged (both backends). History, read and compare tests,
   `sdk_round_trip_equivalence_seeded`, `method_refusal_order` green.
 - Deleted tests: none.
+
+## H6 — prediction (written before coding, 2026-11-27)
+
+Mechanism: per-window lengths, text and metadata roots, and `diff_files`
+two-sided planning, all through per-object reads (H5 port), gated like H5
+(`Batching::Provider`: PostgreSQL and a reader serving per-object demands at
+once; `Forced` for tests).
+
+- New `StorePorts::lengths_each_with` (one point `lengths_with` per id until
+  lane S's `Storage::lengths_each_with`; an object's own failure per object,
+  not retained). `Cached` records each prefetched length (or its failure)
+  and answers a lengths demand from the record when every id is in it; it
+  holds prefetched canonical roots (at most `ROOT_BYTES`, released when the
+  next window opens) and serves a demand from them when every id is held.
+  Recorded failures are served where the walk first asks, never re-read.
+- A window (H5) also demands, after it resolves: the lengths of its regular
+  files' content roots (one demand); for blame, the older-side roots the walk
+  would read as text, in walk order while `(newer + older) * 3` fits the
+  remaining `limits.bytes`, the first `batches()` run (≤64 roots, ≤4 MiB);
+  for revision, its entries' metadata roots (≤64, ≤4 MiB held). Each pair's
+  `equal_edges` stays per pair; `CONTENT_QUERY_BYTES` is charged in today's
+  order (the charge is arithmetic on recorded lengths).
+- `diff_files`: both sides located first, then one lengths demand and one
+  root demand for both sides' regular files; the left side's text and the
+  right side's locate refusal are served in today's order.
+
+Predicted, PostgreSQL control warm, once lane S merges (SQLite and PG pins
+unchanged now; nothing is batched until `reads_each_at_once`):
+
+| Row | after H5 (pred.) | after H6 (pred.) | SPEC M3 |
+| --- | --- | --- | --- |
+| `blame.h100` | ~25–35 | ~18–28 | ~29 |
+| `blame.h10` | ~10–14 | ~8–12 | ~17 |
+| `revision.h100` | ~30–40 | ~22–32 | ~30 |
+| `diff_files` | 23 | ~20–21 | ~12 |
+
+`diff_files` reaching ~12 needs the per-side resolve, `for_snap` and
+attribution trips, which H6's file-facts planning does not touch: an open
+gap to SPEC, to diagnose from the merge-time trace.
+
+### H6 — built and checked
+
+- `StorePorts::lengths_each_with` (`LengthRead`): one point lengths demand
+  per file until lane S; an object's own failure per file, not retained.
+- `Cached`: kept lengths (≤ `MEMO` files; `length`, `lengths_each`; `lengths`
+  answers from them when every file is kept) and held roots (`hold_each`,
+  ≤ `ROOT_BYTES`, released by the next plan; `read_canonical_batch` serves
+  a demand naming only held roots).
+- `Versions::entry` takes `Ahead::{Texts { newer, budget }, Facts}`; after a
+  window resolves it plans lengths, then blame's text roots (walk order,
+  `(newer + older) * 3` within the remaining `limits.bytes`, stop at the
+  first unknown length, first `batches()` run) or revision's attribute-tree
+  roots (≤64).
+- `file_compare::diff` (`Options.batching`): when on, locates the right side
+  before the left text, plans both sides' lengths and text roots, then reads
+  left text, surfaces the right side's refusal, reads right text; off, the
+  order is the old one exactly.
+- Tests: `sdk_history_versions_rh::a_damaged_text_refuses_only_where_the_call_reaches_it`
+  (PostgreSQL, `Forced`): 20 Commits of a two-line file, the 10th text from
+  the head with its location deleted. Blame of line 2, a one-item revision
+  page and the head/parent diff answer as before; blame of line 1, the full
+  revision list and both diffs naming the damaged Commit refuse identically.
+  Mutation check: refusing on a kept length failure fails `blame line 2`.
+  The damaged text's length fails before its root is planned, so the held
+  roots' failure path is the H5 per-object read path (already covered).
+- No new server message (per-file lengths are the existing lengths demand):
+  no new sweep; `sdk_history_fault_rh_{drop,kill}` rerun green.
+- Pins unchanged on both backends (nothing is planned until
+  `reads_each_at_once`). History, blame, revision, compare, diff tests,
+  `sdk_round_trip_equivalence_seeded`, `method_refusal_order` green; Clippy
+  `-D warnings` clean.
+- Fault-only residual (batched mode only, after lane S): `diff_files`
+  locates the right side before reading the left text, so a demand failure
+  in the right side's locate now precedes the left text's demands.
+- Deleted tests: none.

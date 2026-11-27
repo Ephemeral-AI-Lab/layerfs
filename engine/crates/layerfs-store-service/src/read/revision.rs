@@ -3,7 +3,7 @@ use super::{
     file_facts, query,
     revision_pages::{self, Boundary, Key},
     snapshot,
-    versions::{Batching, Versions},
+    versions::{Ahead, Batching, Versions},
     visibility::Visibility,
 };
 use crate::history::{lookup as args, rows::Rows};
@@ -160,7 +160,7 @@ pub fn list(
             Some((held, found, serial)) if held == node => (found, serial),
             _ => {
                 let root = rows.record(node)?.root();
-                (lookups.entry(&rows, node, root)?, None)
+                (lookups.entry(&rows, node, root, Ahead::Facts)?, None)
             }
         };
         // A node the marker hides is never a returned version: the walk stops
@@ -178,7 +178,7 @@ pub fn list(
         let before = previous
             .map(|p| {
                 let root = rows.walked(p)?.root();
-                let found = lookups.entry(&rows, p, root)?;
+                let found = lookups.entry(&rows, p, root, Ahead::Facts)?;
                 let serial = found.map(|_| rows.serial(p)).transpose()?;
                 carried = Some((p, found, serial));
                 if serial.is_some_and(|serial| visibility.hidden_at(path, serial).is_some()) {

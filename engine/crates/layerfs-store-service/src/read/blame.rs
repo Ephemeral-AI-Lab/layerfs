@@ -6,7 +6,7 @@
 use super::{
     cached::Cached,
     snapshot::{self, Snap},
-    versions::{Batching, Versions},
+    versions::{Ahead, Batching, Versions},
     visibility::Visibility,
     window,
 };
@@ -264,8 +264,12 @@ pub fn blame(
         let older = match parent {
             Some(p) => {
                 let root = rows.walked(p)?.root();
+                let ahead = Ahead::Texts {
+                    newer: current.value.content_root,
+                    budget: limits.bytes,
+                };
                 let found = lookups
-                    .entry(rows, p, root)?
+                    .entry(rows, p, root, ahead)?
                     .filter(|e| e.value.kind == InodeKind::RegularFile);
                 match found {
                     Some(_) if visibility.hidden_at(path, rows.serial(p)?).is_some() => None,
