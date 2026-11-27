@@ -1,6 +1,5 @@
 //! Conditional version-owned probes and one-page authenticated listing.
-#[path = "../support/doctor_s3.rs"]
-mod peer;
+use crate::peer;
 use layerfs_store::backup::bucket::RemoteError;
 use peer::{Mode, Server, TOKEN};
 use std::time::{Duration, Instant};

@@ -3,12 +3,8 @@
 //! records their generation and incarnation on its mount intent, and after
 //! the Sandbox's retirement tombstone admission settles it so the Branch can
 //! be removed without an operator.
-#[allow(dead_code)]
-#[path = "../../../../../engine/crates/layerfs-daemon/tests/support/control_fixture.rs"]
-mod fixture;
-#[allow(dead_code)]
-#[path = "../../../../../engine/crates/layerfs-daemon/tests/support/host_install.rs"]
-mod support;
+use crate::fixture;
+use crate::support;
 
 use layerfs_history::records::GcScopeKind;
 use layerfs_history::{BranchId, ForkRequest, ForkSource, HistoryName, LayerStackId, WorkspaceId};

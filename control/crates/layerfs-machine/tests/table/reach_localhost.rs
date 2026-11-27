@@ -4,8 +4,7 @@
 //! (`verify-full` as a reach input only: the Store's client reads `sslmode`
 //! disable, prefer or require, and `store connect` refuses `verify-full`).
 #![cfg(target_os = "linux")]
-#[path = "../support/standin.rs"]
-mod standin;
+use crate::standin;
 use layerfs_machine::platform::{self as machine, Platform};
 use standin::Scratch;
 

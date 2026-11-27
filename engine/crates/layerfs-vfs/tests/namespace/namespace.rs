@@ -1,9 +1,7 @@
 //! Public S4 proofs: ordinary namespace operations over a real content-built
 //! root, exact refusals, atomic effects and declared enumeration semantics.
-#[path = "../support/fixture.rs"]
-mod common;
-#[path = "../support/harness.rs"]
-mod harness;
+use crate::common;
+use crate::harness;
 use common::name;
 use harness::*;
 use layerfs_content::filesystem::SymlinkTarget;

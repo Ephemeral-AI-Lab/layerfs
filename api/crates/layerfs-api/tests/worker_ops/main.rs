@@ -8,3 +8,5 @@ mod store_repair;
 mod store_repair_live;
 mod store_transfer_recovery;
 mod sweep_run_root;
+#[path = "../support/worker_store.rs"]
+mod worker_store;

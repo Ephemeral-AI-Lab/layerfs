@@ -17,6 +17,9 @@ use layerfs_home::home::{self, paths, write_record};
 use layerfs_home::names::MachineName;
 use layerfs_os::process::LocalProcess;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
+use layerfs_sandbox::deploy::Side;
+use layerfs_sandbox::inspect::owner::{HARD, SOFT};
+use layerfs_sandbox::inspect::process;
 use layerfs_sandbox::inspect::process::KernelStat;
 use layerfs_sandbox::record::{DaemonRecord, Local};
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
@@ -24,16 +27,6 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, Instant};
-use {
-    layerfs_inspect,
-    layerfs_sandbox::{
-        deploy::Side,
-        inspect::{
-            owner::{HARD, SOFT},
-            process,
-        },
-    },
-};
 
 static PROCESS: Mutex<()> = Mutex::new(());
 static NEXT: AtomicU32 = AtomicU32::new(0);

@@ -1,7 +1,6 @@
 //! The write recognizer over a content-built base: gate, follow, search, the
 //! unmatched budget, forward sources and memory-only passes.
-#[path = "../support/fixture.rs"]
-mod common;
+use crate::common;
 
 use common::{fixture_with, Fixture};
 use layerfs_overlay::{WriteClaims, RUN_BYTES, WRITE_CLAIMS};

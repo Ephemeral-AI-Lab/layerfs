@@ -1,9 +1,7 @@
 //! Public S4 proofs: enumeration under mutation, generations and known
 //! install, and operations whose owner rounds interleave with other work.
-#[path = "../support/fixture.rs"]
-mod common;
-#[path = "../support/harness.rs"]
-mod harness;
+use crate::common;
+use crate::harness;
 use common::{file, metadata, name};
 use harness::*;
 use layerfs_content::filesystem::{

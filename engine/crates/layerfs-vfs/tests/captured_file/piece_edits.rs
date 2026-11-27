@@ -2,10 +2,8 @@
 //! through the live and the captured view, and committed by the edit script.
 //! Each case names the exact edits the script must seal; the committed file
 //! is compared with the final bytes and with the byte-source canonical route.
-#[path = "../support/captured.rs"]
-mod captured_support;
-#[path = "../support/fixture.rs"]
-mod common;
+use crate::captured_support;
+use crate::common;
 use captured_support::*;
 use layerfs_content::{Edit, ObjectId};
 

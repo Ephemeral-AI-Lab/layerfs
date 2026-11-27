@@ -15,12 +15,12 @@
 use layerfs_home::home::{paths, write_record};
 use layerfs_os::process::LocalProcess;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
+use layerfs_sandbox::deploy::Side;
 use layerfs_sandbox::record::{DaemonRecord, Local, WorkspaceRecord};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicU32, Ordering};
-use {layerfs_inspect, layerfs_sandbox::deploy::Side};
 
 static NEXT: AtomicU32 = AtomicU32::new(0);
 /// The uid the fixture's Sandbox runs its commands as; not this test's.

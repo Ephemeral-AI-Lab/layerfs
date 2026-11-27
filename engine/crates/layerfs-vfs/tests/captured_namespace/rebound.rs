@@ -3,14 +3,9 @@
 //! inode, and every inode of a replaced directory's subtree, is absent from
 //! the decoded inode table, not merely unreachable; the complete walk against
 //! the model asserts the same for every inode the model does not name.
-#[path = "../support/fixture.rs"]
-mod common;
-#[path = "../support/harness.rs"]
-mod harness;
-#[path = "../support/oracle.rs"]
-mod oracle;
-#[path = "../support/producer.rs"]
-mod producer;
+use crate::harness;
+use crate::oracle;
+use crate::producer;
 use harness::Bench;
 use oracle::{absent, value};
 use producer::{build_over, drain, evidence, record, Built, Drive, Recording, VALUE};

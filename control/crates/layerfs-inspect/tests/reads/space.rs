@@ -10,7 +10,6 @@
 #![cfg(any(target_os = "linux", target_os = "macos"))]
 use layerfs_home::home::{self, paths, write_record};
 use layerfs_home::names::MachineName;
-use layerfs_inspect;
 use layerfs_os::process::LocalProcess;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_sandbox::record::{DaemonRecord, Local};

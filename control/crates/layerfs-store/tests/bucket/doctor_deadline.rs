@@ -1,6 +1,5 @@
 //! Absolute diagnostic deadlines cover trickling HTTP headers/body and TLS handshake I/O.
-#[path = "../support/doctor_s3.rs"]
-mod peer;
+use crate::peer;
 use layerfs_store::backup::s3_api::S3Client;
 use peer::{Mode, Server};
 use std::io::{Read, Write};

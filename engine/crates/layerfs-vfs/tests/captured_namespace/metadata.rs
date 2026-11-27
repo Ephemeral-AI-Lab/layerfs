@@ -5,14 +5,10 @@
 //! own whose inodes carry attributes outside the portable domain; the shared
 //! fixture and every other test's roots are untouched. The model walker
 //! compares each inode's complete attribute key set with its values.
-#[path = "../support/fixture.rs"]
-mod common;
-#[path = "../support/harness.rs"]
-mod harness;
-#[path = "../support/oracle.rs"]
-mod oracle;
-#[path = "../support/producer.rs"]
-mod producer;
+use crate::common;
+use crate::harness;
+use crate::oracle;
+use crate::producer;
 use common::{file, metadata, name, Fixture, Store};
 use harness::Bench;
 use layerfs_content::filesystem::{

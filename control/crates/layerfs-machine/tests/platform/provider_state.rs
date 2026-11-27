@@ -1,7 +1,6 @@
 //! Provider state is independent of worker health; observation executes no guest commands.
 #![cfg(unix)]
-#[path = "../support/standin.rs"]
-mod standin;
+use crate::standin;
 use layerfs_machine::platform::{provider_within, Code, Platform, State};
 use standin::Scratch;
 use std::time::{Duration, Instant};

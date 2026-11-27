@@ -1,8 +1,7 @@
 //! Each platform's adapter refuses what its platform does not do, before
 //! any effect and with the same text the calls gave before the adapters.
 #![cfg(unix)]
-#[path = "../support/standin.rs"]
-mod standin;
+use crate::standin;
 use layerfs_machine::platform::{self as machine, Code, MachineError, Platform};
 use standin::Scratch;
 

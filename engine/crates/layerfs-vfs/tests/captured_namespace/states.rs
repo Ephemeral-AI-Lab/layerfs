@@ -6,14 +6,9 @@
 //! captured_namespace_fragments.rs. The recording provider shows which rows
 //! the capture really held; the result is always the complete walk against
 //! the independent model.
-#[path = "../support/fixture.rs"]
-mod common;
-#[path = "../support/harness.rs"]
-mod harness;
-#[path = "../support/oracle.rs"]
-mod oracle;
-#[path = "../support/producer.rs"]
-mod producer;
+use crate::harness;
+use crate::oracle;
+use crate::producer;
 use harness::Bench;
 use layerfs_content::filesystem::attributes::{read_portable, AttributeReadWork};
 use layerfs_content::{object::inode_leaf::decode_inode_value, ConstructionPolicy, ContentError};

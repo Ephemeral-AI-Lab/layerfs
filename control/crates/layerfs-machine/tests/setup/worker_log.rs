@@ -5,8 +5,7 @@
 //! tools, and the part every launcher shares is run under this host's `sh`
 //! on a scratch log. No VM or container is made.
 #![cfg(unix)]
-#[path = "../support/standin.rs"]
-mod standin;
+use crate::standin;
 use layerfs_machine::platform::{self as machine, Code, HostOs, Platform, WORKER_LOG};
 use standin::Scratch;
 use std::fs;

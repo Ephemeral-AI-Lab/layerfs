@@ -1,7 +1,6 @@
 //! Decoded inode and directory pages kept by the shared cache (#364 item 3):
 //! a kept page skips the copy and decode, never an answer or a check.
-#[path = "../support/fixture.rs"]
-mod common;
+use crate::common;
 
 use common::name;
 use layerfs_content::filesystem::inode::{lookup, InodeReadWork, InodeTable};

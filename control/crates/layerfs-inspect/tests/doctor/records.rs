@@ -4,8 +4,7 @@
 //! message then saying what to do by hand); a clean home has no findings; a foreign
 //! home (a `layerfs.json` of another layout) fails its layout check with the
 //! move fix; and the doctor writes nothing in the home. The check reads records only: it dials no worker or daemon.
-#[path = "../support/doctor_own.rs"]
-mod doctor_own;
+use crate::doctor_own;
 use layerfs_home::home::{paths, private_dir, write_entity, write_record};
 use layerfs_inspect::{Kind, Options};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};

@@ -1,8 +1,6 @@
 //! Shared immutable allowance and actual scoped Workspace/owner transitions.
-#[path = "../support/fixture.rs"]
-mod common;
-#[path = "../support/harness.rs"]
-mod harness;
+use crate::common;
+use crate::harness;
 
 use common::{file, fixture, Store};
 use layerfs_content::filesystem::{

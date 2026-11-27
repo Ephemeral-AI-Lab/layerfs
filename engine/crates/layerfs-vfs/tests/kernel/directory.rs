@@ -1,8 +1,6 @@
 //! Canonical directory merge, original cookie boundaries and removed-dir custody.
-#[path = "../support/fixture.rs"]
-mod common;
-#[path = "../support/harness.rs"]
-mod harness;
+use crate::common;
+use crate::harness;
 use harness::{create, mkdir, path, rename, rmdir, unlink, Bench, T1, T2};
 use layerfs_content::{
     filesystem::{

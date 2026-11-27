@@ -4,10 +4,8 @@
 //! the producer remembers the row's count under that root (#367).
 //! This drives the real captured-namespace producer and the known local
 //! install, and compares every directory before and after.
-#[path = "../support/fixture.rs"]
-mod common;
-#[path = "../support/harness.rs"]
-mod harness;
+use crate::common;
+use crate::harness;
 #[path = "../support/oracle.rs"]
 mod oracle;
 #[path = "../support/producer.rs"]

@@ -1,10 +1,6 @@
 //! A checked Unmount refuses only changes a Commit would keep, and names them.
-#[allow(dead_code)]
-#[path = "../../../../../engine/crates/layerfs-daemon/tests/support/control_fixture.rs"]
-mod fixture;
-#[allow(dead_code)]
-#[path = "../../../../../engine/crates/layerfs-daemon/tests/support/host_install.rs"]
-mod support;
+use crate::fixture;
+use crate::support;
 use layerfs_content::filesystem::PathName;
 use layerfs_daemon::control::Service;
 use layerfs_history::WorkspaceId;

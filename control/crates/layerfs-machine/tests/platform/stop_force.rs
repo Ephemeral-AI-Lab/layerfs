@@ -1,7 +1,6 @@
 //! Force stop uses only provider power operations, retaining machines and disks.
 #![cfg(unix)]
-#[path = "../support/standin.rs"]
-mod standin;
+use crate::standin;
 use layerfs_machine::platform::{self as machine, Code, Platform};
 use standin::Scratch;
 

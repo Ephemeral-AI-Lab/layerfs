@@ -30,8 +30,7 @@
 #![cfg(unix)]
 #[path = "../../../layerfs-machine/tests/support/standin.rs"]
 mod standin;
-#[path = "../support/json.rs"]
-mod support_json;
+use crate::support_json;
 use layerfs_machine::platform::{
     self as machine, platforms, sandbox_allowed, support, Backend, CallSite, Code, ExecutorKind,
     Forward, HostOs, How, KernelRoute, MachineError, OptKind, Platform, Route, Spec, StoreKind,

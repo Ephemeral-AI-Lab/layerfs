@@ -9,10 +9,8 @@
 //! - A directory of maximum-length base names with local names after them
 //!   lists every name exactly once, through the SDK and through READDIR
 //!   (finding #12).
-#[path = "../support/fixture.rs"]
-mod common;
-#[path = "../support/harness.rs"]
-mod harness;
+use crate::common;
+use crate::harness;
 use common::name;
 use harness::{rename, unlink, Bench, T1};
 use layerfs_content::{

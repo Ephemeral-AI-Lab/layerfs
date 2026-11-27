@@ -1,7 +1,6 @@
 //! Sizes and spec validation, refused before any effect.
 #![cfg(unix)]
-#[path = "../support/standin.rs"]
-mod standin;
+use crate::standin;
 use layerfs_machine::platform::{parse_size, Code, Platform, Spec};
 use standin::Scratch;
 

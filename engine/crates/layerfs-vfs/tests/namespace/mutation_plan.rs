@@ -1,8 +1,5 @@
 //! Public resumable mutation rounds over the same real Content/Overlay fixture.
-#[path = "../support/fixture.rs"]
-mod common;
-#[path = "../support/harness.rs"]
-mod harness;
+use crate::harness;
 use harness::{create, Bench, T1, T2};
 use layerfs_vfs::{JobOutcome, MutationStage, Operation, Outcome, Refusal, WorkspaceError};
 use std::{fmt, sync::Arc};

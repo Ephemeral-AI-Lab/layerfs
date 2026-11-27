@@ -2,10 +2,8 @@
 //! over a real canonical namespace and Overlay. A visit decides from current
 //! rows, from the request's facts of the Workspace's present base, and from
 //! canonical objects already in memory; it never reaches the provider.
-#[path = "../support/fixture.rs"]
-mod common;
-#[path = "../support/harness.rs"]
-mod harness;
+use crate::common;
+use crate::harness;
 use common::name;
 use harness::{create, mkdir, Bench, T1, T2};
 use layerfs_content::{

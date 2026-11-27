@@ -1,7 +1,6 @@
 //! Probes name what each kind is missing; a stand-in tool reports its version.
 #![cfg(unix)]
-#[path = "../support/standin.rs"]
-mod standin;
+use crate::standin;
 #[path = "../support/engine.rs"]
 mod support;
 use layerfs_machine::platform::{native_missing, probe, HostOs, Platform};

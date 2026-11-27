@@ -5,9 +5,7 @@
 //! check, the archive's own whiteouts, one unpack per digest, and the entries
 //! a Sandbox root refuses.
 #![cfg(target_os = "linux")]
-#[allow(dead_code)]
-#[path = "../support/image.rs"]
-mod image;
+use crate::image;
 use image::{archive, hex, legacy_archive, pax_record, unpacked_at, Scratch, Tar, DIGEST, OTHER};
 use layerfs_sandbox::{
     namespaces::rootfs::{self, ImageRoot},

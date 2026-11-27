@@ -18,8 +18,7 @@ use std::io::Read;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-#[path = "../support/worker_store.rs"]
-mod worker_store;
+use crate::worker_store;
 use worker_store::{placed, sent, until, Placed, SECRET};
 
 fn with(tag: &str, faults: Faults) -> (Placed, Arc<Faults>) {

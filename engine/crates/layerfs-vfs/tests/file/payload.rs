@@ -1,7 +1,6 @@
 //! Public S5 proofs over a real content-built root: writes without base
 //! payload demand, composed reads, truncate/regrow across capture and install.
-#[path = "../support/fixture.rs"]
-mod common;
+use crate::common;
 #[path = "../support/harness.rs"]
 mod harness;
 use common::file;

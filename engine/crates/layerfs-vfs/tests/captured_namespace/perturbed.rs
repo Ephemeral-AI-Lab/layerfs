@@ -4,14 +4,9 @@
 //! and the name point. Content must refuse a second parent and a cycle after
 //! the producer sealed its rows; a name under a parent created and removed in
 //! the capture must be dropped; a whiteout over nothing must change nothing.
-#[path = "../support/fixture.rs"]
-mod common;
-#[path = "../support/harness.rs"]
-mod harness;
-#[path = "../support/oracle.rs"]
-mod oracle;
-#[path = "../support/producer.rs"]
-mod producer;
+use crate::harness;
+use crate::oracle;
+use crate::producer;
 use harness::Bench;
 use layerfs_content::{ContentError, ObjectRole};
 use layerfs_overlay::DirectoryEntry;

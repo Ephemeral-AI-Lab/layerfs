@@ -1,8 +1,7 @@
 //! Command construction for apple-container, docker and native through
 //! stand-in tools. No VM or container is made.
 #![cfg(unix)]
-#[path = "../support/standin.rs"]
-mod standin;
+use crate::standin;
 use layerfs_machine::platform::{self as machine, native_missing, Code, HostOs, Platform, State};
 use standin::Scratch;
 

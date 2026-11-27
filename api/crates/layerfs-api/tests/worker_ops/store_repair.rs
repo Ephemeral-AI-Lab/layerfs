@@ -4,8 +4,7 @@
 //! diagnostic reports the same state without settling anything. The lean
 //! schema keeps no Store-side audit table; release retains the done row and
 //! the bounded audit read reports it.
-#[path = "../support/worker_store.rs"]
-mod worker_store;
+use crate::worker_store;
 
 use layerfs_history::records::{GcIntent, GcIntentKind, GcScopeKind};
 use layerfs_history::{HistoryName, NamedSnapshot, PlaceAuthority};

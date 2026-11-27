@@ -1,3 +1,5 @@
+#[path = "../support/fixture.rs"]
+mod common;
 mod decoded_pages;
 mod lengths;
 mod payload;

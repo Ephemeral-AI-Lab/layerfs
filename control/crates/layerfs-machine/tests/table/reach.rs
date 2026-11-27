@@ -11,8 +11,7 @@
 //! message holds the URL's password, and no provider tool runs: every
 //! stand-in here logs its call and fails.
 #![cfg(unix)]
-#[path = "../support/standin.rs"]
-mod standin;
+use crate::standin;
 use layerfs_machine::platform::{self as machine, Code, MachineError, Platform, Spec};
 use standin::Scratch;
 

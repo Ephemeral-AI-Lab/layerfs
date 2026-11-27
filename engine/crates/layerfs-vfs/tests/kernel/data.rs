@@ -3,10 +3,8 @@
 //! bytes and names the base root of the rest; the reply is then finished
 //! over the base only when an inherited byte or an unknown fact needs it.
 //! Every answer is compared with the ordinary source-holding read.
-#[path = "../support/fixture.rs"]
-mod common;
-#[path = "../support/harness.rs"]
-mod harness;
+use crate::common;
+use crate::harness;
 use common::name;
 use harness::{create, resize, write, Bench, T1};
 use layerfs_content::filesystem::SymlinkTarget;

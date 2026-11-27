@@ -2,15 +2,12 @@
 //! make carries the fix its cause has (or none, with the reason in the slice's
 //! decisions file) and redacted evidence: observed against expected facts, no
 //! secrets, no `Debug` text. Doctor stays observational: no case runs a fix.
-#[path = "../support/doctor_own.rs"]
-mod doctor_own;
+use crate::doctor_own;
 mod target {
     pub use layerfs_inspect::doctor::budget::{Budget, Checks};
 }
-#[path = "../../src/home/bucket.rs"]
-mod backup_target;
-#[path = "../../../layerfs-store/tests/support/doctor_s3.rs"]
-mod peer;
+use crate::bucket as backup_target;
+use crate::peer;
 use layerfs_home::home::{self, paths, private_dir, write_entity, write_record};
 use layerfs_home::process;
 use layerfs_inspect::{Kind, Options};

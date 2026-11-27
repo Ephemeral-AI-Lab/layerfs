@@ -5,14 +5,10 @@
 //! each of its rows, byte for byte - while a real change writes the inline
 //! form with the live mode and mtime. Untouched root-form rows keep their
 //! exact stored bytes.
-#[path = "../support/fixture.rs"]
-mod common;
-#[path = "../support/harness.rs"]
-mod harness;
-#[path = "../support/oracle.rs"]
-mod oracle;
-#[path = "../support/producer.rs"]
-mod producer;
+use crate::common;
+use crate::harness;
+use crate::oracle;
+use crate::producer;
 use common::{file, metadata, name, Fixture, Store};
 use harness::Bench;
 use layerfs_content::compare::{

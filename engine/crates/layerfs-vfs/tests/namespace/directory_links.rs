@@ -5,10 +5,8 @@
 //!
 //! Every expectation is checked twice: against the stated number, and against
 //! an independent count of the directory's listed children by kind.
-#[path = "../support/fixture.rs"]
-mod common;
-#[path = "../support/harness.rs"]
-mod harness;
+use crate::common;
+use crate::harness;
 use common::{file, metadata, name, Fixture, Store};
 use harness::{create, link, mkdir, path, rename, rmdir, unlink, Bench, T1, T2};
 use layerfs_content::filesystem::{

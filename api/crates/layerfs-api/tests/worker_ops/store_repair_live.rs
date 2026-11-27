@@ -8,8 +8,7 @@
 //! the worker's root, with the place/lease/fence evidence each mount records.
 //! The lean schema keeps no Store-side machine-authority row. The test never
 //! touches the live Store.
-#[path = "../support/worker_store.rs"]
-mod worker_store;
+use crate::worker_store;
 
 use layerfs_history::records::{GcIntent, GcIntentKind, GcScopeKind};
 use layerfs_history::PlaceAuthority;

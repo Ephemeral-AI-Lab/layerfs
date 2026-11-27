@@ -18,8 +18,7 @@ use std::path::PathBuf;
 use std::sync::{mpsc, Arc};
 use std::time::{Duration, Instant};
 
-#[path = "../support/worker_store.rs"]
-mod worker_store;
+use crate::worker_store;
 use worker_store::{scratch, sent, until, SECRET};
 
 /// A worker of this build with `faults`, serving a new root.

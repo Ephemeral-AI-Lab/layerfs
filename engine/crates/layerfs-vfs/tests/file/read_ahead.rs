@@ -3,8 +3,7 @@
 //! cache of at least two windows; random reads, small files and a small
 //! cache fetch nothing ahead. Public API over a content-built base, with an
 //! upstream that records each demand.
-#[path = "../support/fixture.rs"]
-mod common;
+use crate::common;
 use common::{fixture_with, Fixture, Store};
 use layerfs_content::{AuthenticatedObjects, ContentResult, ObjectId};
 use layerfs_vfs::{BaseView, CanonicalCache, CanonicalClient};

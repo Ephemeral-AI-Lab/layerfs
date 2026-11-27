@@ -191,7 +191,7 @@ impl<R: Read> Json<R> {
                         match self.byte()? {
                             b']' => break,
                             b',' => (),
-                            _ => return Err(JsonError("JSON array separator".to_owned()).into()),
+                            _ => return Err(JsonError("JSON array separator".to_owned())),
                         }
                     }
                 }

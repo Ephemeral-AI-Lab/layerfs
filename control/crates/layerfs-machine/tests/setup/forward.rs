@@ -9,8 +9,7 @@
 //! assesses a new script at its first run (about 0.4 s here), which would
 //! otherwise eat the forward's 0.6 s settle time.
 #![cfg(unix)]
-#[path = "../support/standin.rs"]
-mod standin;
+use crate::standin;
 use layerfs_machine::platform::{self as machine, Code, Forward, Platform, Spec};
 use standin::Scratch;
 use std::net::SocketAddr;

@@ -2,14 +2,8 @@
 //! every captured page is applied before the next page is requested, and real
 //! mutations published between two producer passes never reach the root of
 //! the capture. The recording provider numbers every call in one sequence.
-#[path = "../support/fixture.rs"]
-mod common;
-#[path = "../support/harness.rs"]
-mod harness;
-#[path = "../support/oracle.rs"]
-mod oracle;
-#[path = "../support/producer.rs"]
-mod producer;
+use crate::harness;
+use crate::producer;
 use harness::{create, rename, unlink, write, Bench};
 use layerfs_overlay::PAGE_ROWS;
 use layerfs_vfs::{Operation, Time};

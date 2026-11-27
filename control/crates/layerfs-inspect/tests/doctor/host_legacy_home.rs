@@ -1,6 +1,5 @@
 //! Host naming compatibility for development homes, including a read-only diagnosis.
-#[path = "../support/doctor_own.rs"]
-mod doctor_own;
+use crate::doctor_own;
 
 use layerfs_home::home::{self, private_dir, write_record};
 use layerfs_inspect::{Kind, Options};

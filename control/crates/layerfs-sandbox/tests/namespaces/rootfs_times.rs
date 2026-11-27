@@ -5,9 +5,7 @@
 //! an older unpack that did not, and a reopen finds only that root. Like `namespaces_rootfs`, these need no root, no Engine and no
 //! namespaces.
 #![cfg(target_os = "linux")]
-#[allow(dead_code)]
-#[path = "../support/image.rs"]
-mod image;
+use crate::image;
 use image::{archive, base256, hex, pax_record, unpacked_at, Scratch, Tar, DIGEST, OTHER};
 use layerfs_sandbox::{namespaces::rootfs, Image};
 use std::{fs, os::unix::fs::MetadataExt, path::Path};

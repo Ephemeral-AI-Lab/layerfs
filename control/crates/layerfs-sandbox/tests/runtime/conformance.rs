@@ -22,8 +22,7 @@
 //! ([`binds`], [`options`], [`record`], [`runtime`], [`lifecycle`]): a new
 //! backend does not compile here until it states them.
 #![cfg(unix)]
-#[path = "../support/json.rs"]
-mod support_json;
+use crate::support_json;
 use layerfs_sandbox::{
     Backend, Bind, CommandIdentity, ContainerId, HelperSpec, Image, LaunchPhase, LaunchRequest,
     LocalRecord, MountDriver, NamespaceRecord, ProviderLaunchOptions, Runtime, RuntimeError,

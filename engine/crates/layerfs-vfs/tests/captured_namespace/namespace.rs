@@ -1,14 +1,9 @@
 //! R4-1 and the producer side of R4-8: one captured reader becomes one complete
 //! canonical root. Every result is walked completely and compared with an
 //! independent model; counters are counted work, never timing.
-#[path = "../support/fixture.rs"]
-mod common;
-#[path = "../support/harness.rs"]
-mod harness;
-#[path = "../support/oracle.rs"]
-mod oracle;
-#[path = "../support/producer.rs"]
-mod producer;
+use crate::harness;
+use crate::oracle;
+use crate::producer;
 use harness::Bench;
 use layerfs_content::{
     filesystem::{

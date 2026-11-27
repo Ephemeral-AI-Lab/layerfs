@@ -12,13 +12,13 @@
 use layerfs_home::home::{self, paths, write_record};
 use layerfs_home::names::HOST_MACHINE;
 use layerfs_protocol::sdk::SdkValue;
+use layerfs_sandbox::deploy::Side;
 use layerfs_sandbox::record::{DaemonRecord, Local};
 use layerfs_sandbox::{force, sweep};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime};
-use {layerfs_inspect, layerfs_sandbox::deploy::Side};
 
 static NEXT: AtomicU32 = AtomicU32::new(0);
 /// The inspect permits are the process's: the tests that take one take

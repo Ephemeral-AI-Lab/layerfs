@@ -21,8 +21,7 @@ use std::path::Path;
 use std::sync::{mpsc, Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
-#[path = "../support/worker_store.rs"]
-mod worker_store;
+use crate::worker_store;
 use worker_store::{placed, until, Placed, SECRET};
 
 static PROCESS: Mutex<()> = Mutex::new(());

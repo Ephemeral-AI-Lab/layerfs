@@ -4,8 +4,7 @@
 //! client answers what is remembered and nothing else, and an allowance that
 //! cannot hold an answer only costs another demand. Public API over a
 //! content-built base; the length provider counts its demands.
-#[path = "../support/fixture.rs"]
-mod common;
+use crate::common;
 use common::{fixture, Fixture, Store};
 use layerfs_content::ObjectId;
 use layerfs_vfs::{

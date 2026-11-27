@@ -1,8 +1,7 @@
 //! Lima commands and the generated template, through a stand-in `limactl`
 //! (and a stand-in `ssh` for guest commands). No VM is made.
 #![cfg(unix)]
-#[path = "../support/standin.rs"]
-mod standin;
+use crate::standin;
 use layerfs_machine::platform::{self as machine, Code, HostOs, Platform, State};
 use standin::{read, Scratch};
 

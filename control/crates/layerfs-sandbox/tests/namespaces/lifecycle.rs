@@ -12,9 +12,7 @@
 //! nowhere else in the Sandbox. Without those conditions it reports why and
 //! returns, and the run is not proof.
 #![cfg(target_os = "linux")]
-#[allow(dead_code)]
-#[path = "../support/image.rs"]
-mod image;
+use crate::image;
 use image::{archive, hex, unpacked_at, Tar, DIGEST};
 use layerfs_sandbox::{
     cancel::{cancel, Cancelled, ExecSlot, Stop},

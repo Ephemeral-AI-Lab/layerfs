@@ -5,14 +5,9 @@
 //! kinds of one fixed scenario, not every call, and names the slot each must
 //! land in before it runs. Refusals caused by changed rows rather than failed
 //! calls are in captured_namespace_perturbed.rs.
-#[path = "../support/fixture.rs"]
-mod common;
-#[path = "../support/harness.rs"]
-mod harness;
-#[path = "../support/oracle.rs"]
-mod oracle;
-#[path = "../support/producer.rs"]
-mod producer;
+use crate::harness;
+use crate::oracle;
+use crate::producer;
 use harness::Bench;
 use layerfs_content::{ContentError, ObjectRole};
 use layerfs_overlay::OverlayError;

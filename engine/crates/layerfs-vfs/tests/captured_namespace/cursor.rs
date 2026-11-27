@@ -1,14 +1,8 @@
 //! R4-5 and R4-7 on the producer side: every cursor pass and point the update
 //! makes answers the same sealed rows, pages stay within the service window,
 //! and counted work follows the change, not the base. No timing is measured.
-#[path = "../support/fixture.rs"]
-mod common;
-#[path = "../support/harness.rs"]
-mod harness;
-#[path = "../support/oracle.rs"]
-mod oracle;
-#[path = "../support/producer.rs"]
-mod producer;
+use crate::harness;
+use crate::producer;
 use harness::Bench;
 use layerfs_content::filesystem::FilesystemUpdateCounters;
 use layerfs_overlay::{DirectoryEntry, PAGE_ROWS, RECORD_ROWS};

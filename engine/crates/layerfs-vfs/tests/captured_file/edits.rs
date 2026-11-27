@@ -1,8 +1,6 @@
 //! Real owner normalization with an independent final-byte/canonical oracle.
-#[path = "../support/captured.rs"]
-mod captured_support;
-#[path = "../support/fixture.rs"]
-mod common;
+use crate::captured_support;
+use crate::common;
 use captured_support::*;
 use common::{file, Store};
 use layerfs_content::{

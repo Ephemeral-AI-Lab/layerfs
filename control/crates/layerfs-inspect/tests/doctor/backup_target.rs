@@ -2,10 +2,8 @@
 mod target {
     pub use layerfs_inspect::doctor::budget::{Budget, Checks};
 }
-#[path = "../../src/home/bucket.rs"]
-mod backup_target;
-#[path = "../../../layerfs-store/tests/support/doctor_s3.rs"]
-mod peer;
+use crate::bucket as backup_target;
+use crate::peer;
 use layerfs_home::home::{self, paths, write_entity};
 use layerfs_protocol::sdk::SdkValue;
 use peer::{Mode, Server};

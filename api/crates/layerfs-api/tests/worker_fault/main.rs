@@ -7,3 +7,5 @@
 mod connection;
 mod inspect;
 mod store;
+#[path = "../support/worker_store.rs"]
+mod worker_store;

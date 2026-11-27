@@ -5,14 +5,9 @@
 //! fixture. Root identity is claimed only between shapes whose unwritten
 //! ranges are unwritten in both; a hole against written zeros is compared by
 //! bytes only.
-#[path = "../support/fixture.rs"]
-mod common;
-#[path = "../support/harness.rs"]
-mod harness;
-#[path = "../support/oracle.rs"]
-mod oracle;
-#[path = "../support/producer.rs"]
-mod producer;
+use crate::harness;
+use crate::oracle;
+use crate::producer;
 use harness::{append, create, resize, write, Bench, T1};
 use layerfs_content::{filesystem::FilesystemRootId, ObjectId};
 use layerfs_overlay::OpenFile;

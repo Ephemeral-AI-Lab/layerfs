@@ -4,14 +4,9 @@
 //! and in the next capture over the installed result. Each case states which
 //! hold it uses; the result is always the complete walk against the model,
 //! including the decoded inode table.
-#[path = "../support/fixture.rs"]
-mod common;
-#[path = "../support/harness.rs"]
-mod harness;
-#[path = "../support/oracle.rs"]
-mod oracle;
-#[path = "../support/producer.rs"]
-mod producer;
+use crate::harness;
+use crate::oracle;
+use crate::producer;
 use harness::Bench;
 use layerfs_overlay::Inode;
 use oracle::absent;

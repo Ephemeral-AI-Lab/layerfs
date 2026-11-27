@@ -1,6 +1,5 @@
 //! The home's own checks observe records without opening or changing a home.
-#[path = "../support/doctor_own.rs"]
-mod doctor_own;
+use crate::doctor_own;
 use doctor_own::{complete, outcome, own, own_within};
 use layerfs_home::home::{paths, private_dir, write_entity, write_record};
 use layerfs_home::names::HOST_MACHINE;

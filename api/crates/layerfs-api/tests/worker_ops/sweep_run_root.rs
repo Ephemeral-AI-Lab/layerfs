@@ -23,8 +23,7 @@ use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
-#[path = "../support/worker_store.rs"]
-mod worker_store;
+use crate::worker_store;
 
 fn t(text: &str) -> SdkValue {
     SdkValue::text(text)

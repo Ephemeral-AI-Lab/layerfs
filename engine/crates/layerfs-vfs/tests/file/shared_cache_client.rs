@@ -4,8 +4,7 @@
 //!
 //! The upstream here is the test's own and records every demand. Counts
 //! only, except one labelled host timing that asserts nothing.
-#[path = "../support/fixture.rs"]
-mod common;
+use crate::common;
 use common::name;
 use layerfs_content::{
     file::mapping::encode_chunk_object, policy::WHOLE_FILE_CANONICAL_OVERHEAD,

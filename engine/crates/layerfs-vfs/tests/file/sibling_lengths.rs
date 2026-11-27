@@ -2,8 +2,7 @@
 //! lengths of the files listed after it in the same base directory, in one
 //! provider demand bounded by a window, so a tree walk's later lookups are
 //! answered from memory. Public API over a content-built base.
-#[path = "../support/fixture.rs"]
-mod common;
+use crate::common;
 use common::{file, metadata, name, Store};
 use layerfs_content::filesystem::{
     build_filesystem, scope_for_seed, DirectoryUpdate, FilesystemInput, FilesystemObjects,

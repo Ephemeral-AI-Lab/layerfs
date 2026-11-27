@@ -1,10 +1,8 @@
 //! A file the base does not hold, built on the direct route (record 033 F2)
 //! and on the normalized-edit record route, from the same captured input:
 //! the same root, length, final bytes and emitted object identities.
-#[path = "../support/captured.rs"]
-mod captured_support;
-#[path = "../support/fixture.rs"]
-mod common;
+use crate::captured_support;
+use crate::common;
 use captured_support::*;
 use common::Store;
 use layerfs_content::{

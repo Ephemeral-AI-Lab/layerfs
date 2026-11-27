@@ -1,7 +1,6 @@
 //! Engine-owned content tags must reuse images across homes and runtime builds.
 #![cfg(any(target_os = "linux", target_os = "macos"))]
-#[path = "../support/standin.rs"]
-mod standin;
+use crate::standin;
 use layerfs_machine::platform::{self as machine, Code, Platform};
 use standin::Scratch;
 

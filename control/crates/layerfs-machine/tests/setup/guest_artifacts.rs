@@ -1,7 +1,6 @@
 //! Exercise real tar streams into a private stand-in guest filesystem.
 #![cfg(target_os = "macos")]
-#[path = "../support/standin.rs"]
-mod standin;
+use crate::standin;
 use layerfs_machine::platform::{self as machine, Platform};
 use standin::Scratch;
 use std::fs;
