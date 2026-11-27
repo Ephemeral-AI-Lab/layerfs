@@ -242,6 +242,10 @@ fn unmount(control: &mut Control, ready: &ReadyMount) {
         "the mount is still in the kernel's table"
     );
 }
+/// The Branch's Commits as the Store holds them, each compared with a
+/// daemon reply. The Store keeps every Workspace Commit's attempt; the reply's
+/// decoder leaves it out, since no reader derives an identity from it (#776
+/// R1). So each record must carry one, and the rest is compared.
 fn history(
     manifest: &layerfs_protocol::provision::manifest::StoreManifest,
     branch: BranchId,
@@ -249,6 +253,16 @@ fn history(
     let page = support::commits(manifest, branch, 4);
     assert!(page.continuation.is_none());
     page.records
+        .into_iter()
+        .map(|mut record| {
+            assert!(
+                record.meta.attempt.is_some(),
+                "a stored Workspace Commit's attempt"
+            );
+            record.meta.attempt = None;
+            record
+        })
+        .collect()
 }
 /// The comparison of a mounted tree with the replay: everything exactly,
 /// except which instant the clock chose.
