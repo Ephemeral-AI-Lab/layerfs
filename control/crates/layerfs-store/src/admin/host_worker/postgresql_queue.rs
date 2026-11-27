@@ -12,7 +12,7 @@
 //! PostgreSQL write. A streamed PostgreSQL write comes in on the write
 //! endpoint and waits for its slot in the write lane (`write.rs`).
 use super::server::{log, peer_gone, Activity, Endpoint, HostServer, Pending, Served, POSTGRES};
-use crate::postgresql::pool::{self, Kind, Reservation};
+use crate::backend::postgresql::pool::{self, Kind, Reservation};
 use layerfs_protocol::sdk::SdkValue;
 use std::os::unix::net::UnixStream;
 
@@ -142,11 +142,11 @@ impl HostServer {
         }
         let args = request.get("args")?;
         let kind = match request.get_text("op")? {
-            crate::host_postgresql::OP => {
-                crate::host_postgresql::checks(args).then_some(Kind::Read)?
+            crate::admin::host_worker::postgresql::OP => {
+                crate::admin::host_worker::postgresql::checks(args).then_some(Kind::Read)?
             }
-            crate::host_write::OP => {
-                let (.., body, _) = crate::host_write::header(args).ok()?;
+            crate::admin::host_worker::write::OP => {
+                let (.., body, _) = crate::admin::host_worker::write::header(args).ok()?;
                 (body == "none").then_some(Kind::Write)?
             }
             _ => return None,
@@ -235,7 +235,7 @@ pub(super) fn purge_gone(activity: &mut Activity) {
     });
     queue.outstanding -= before - queue.pending.len();
     for request in gone.into_iter().flatten() {
-        crate::host_postgresql::wipe_request(request);
+        crate::admin::host_worker::postgresql::wipe_request(request);
     }
 }
 

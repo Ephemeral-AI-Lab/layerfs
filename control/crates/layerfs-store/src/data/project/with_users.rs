@@ -4,9 +4,9 @@
 //! the Sandboxes that use it; and the project reads, which take this
 //! layer's machine state (`project.get`, `project.list`). The other
 //! `project` calls are `layerfs-store`'s own.
-use crate::project::op::{self, DELETE, INIT};
-use crate::project::read::{self, ProjectList};
-use crate::project::record::ProjectRecord;
+use crate::data::project::record::intent::{self, DELETE, INIT};
+use crate::data::project::record::project::ProjectRecord;
+use crate::data::project::status::get::{self, ProjectList};
 use crate::StoreUsers;
 use layerfs_home::events::Events;
 use layerfs_home::names::ProjectRef;
@@ -51,26 +51,27 @@ pub fn delete(
     let left_init = prior
         .as_ref()
         .is_some_and(|op| op.name() == INIT && op.standing() != Standing::Running);
-    op::begin(home, store, name, DELETE, "mark")?;
-    let outcome = match crate::project::delete::delete(home, events, project, users.related) {
-        Err(refusal) if refusal.code == "NoSuchProject" => {
-            // a list that cannot be read leaves the Store's answer and
-            // the entry as they are
-            let clear = left_init || unlisted(home, store, name).unwrap_or(false);
-            match clear {
-                true => op::remove_entry(home, store, name)
-                    .map(|()| removed(layerfs_home::home::now_ms(), true)),
-                false => Err(refusal),
+    intent::begin(home, store, name, DELETE, "mark")?;
+    let outcome =
+        match crate::data::project::delete::run::delete(home, events, project, users.related) {
+            Err(refusal) if refusal.code == "NoSuchProject" => {
+                // a list that cannot be read leaves the Store's answer and
+                // the entry as they are
+                let clear = left_init || unlisted(home, store, name).unwrap_or(false);
+                match clear {
+                    true => intent::remove_entry(home, store, name)
+                        .map(|()| removed(layerfs_home::home::now_ms(), true)),
+                    false => Err(refusal),
+                }
             }
-        }
-        Ok(value) => {
-            let deleted_ms = value
-                .get_int("deleted_ms")
-                .unwrap_or_else(layerfs_home::home::now_ms);
-            Ok(removed(deleted_ms, value.get_bool("home_entry_removed")))
-        }
-        Err(refusal) => Err(refusal),
-    };
+            Ok(value) => {
+                let deleted_ms = value
+                    .get_int("deleted_ms")
+                    .unwrap_or_else(layerfs_home::home::now_ms);
+                Ok(removed(deleted_ms, value.get_bool("home_entry_removed")))
+            }
+            Err(refusal) => Err(refusal),
+        };
     settle(home, store, name, &outcome);
     // an Init this process ran ended once it was marked uncertain
     let settled = prior.as_ref().filter(|op| {
@@ -90,8 +91,8 @@ pub fn delete(
 /// line of the home's `log/sweep.jsonl`; the delete's outcome does not
 /// change.
 fn discard_copy(home: &Path, (store, name): (&str, &str), args: &SdkValue) {
-    use crate::place::{on_machine, Executor};
-    use crate::project::frame::{StageFrame, StageStep};
+    use crate::admin::route::executor::{on_machine, Executor};
+    use crate::data::project::frame::{StageFrame, StageStep};
     let (Some(copy), Some(machine)) = (args.get_text("copy"), args.get_text("machine")) else {
         return;
     };
@@ -107,10 +108,10 @@ fn discard_copy(home: &Path, (store, name): (&str, &str), args: &SdkValue) {
                 .map_err(|unreached| unreached.0)
                 .and_then(|outcome| outcome)
         }
-        Ok(Executor::Local) => crate::project::staged::run(home, &frame),
+        Ok(Executor::Local) => crate::data::project::init::staged::run(home, &frame),
         Err(refusal) => Err(refusal),
     };
-    let shown = crate::project::send::left(machine, copy);
+    let shown = crate::data::project::init::send::left(machine, copy);
     let log =
         |outcome| layerfs_home::home::log_swept(home, "init_copy", Path::new(&shown), &outcome);
     match discarded {
@@ -129,13 +130,13 @@ fn discard_copy(home: &Path, (store, name): (&str, &str), args: &SdkValue) {
 /// that cannot be read is its refusal.
 fn unlisted(home: &Path, store: &str, name: &str) -> Result<bool, SdkRefusal> {
     let (Some(record), Some(project)) = (
-        crate::record::StoreRecord::read(home, store)?,
+        crate::admin::record::store::StoreRecord::read(home, store)?,
         ProjectRecord::read(home, store, name)?,
     ) else {
         return Ok(false);
     };
-    let projects = crate::project::live::projects(home, store, &record, false)?;
-    Ok(crate::project::live::find(&project, name, &projects).is_none())
+    let projects = crate::data::project::status::live::projects(home, store, &record, false)?;
+    Ok(crate::data::project::status::live::find(&project, name, &projects).is_none())
 }
 
 /// The delete's answer.
@@ -156,8 +157,8 @@ fn removed(deleted_ms: i64, home_entry_removed: bool) -> SdkValue {
 fn settle(home: &Path, store: &str, name: &str, outcome: &Result<SdkValue, SdkRefusal>) {
     let _ = match outcome {
         Err(refusal) if refusal.code == "Unknown" => {
-            op::uncertain(home, store, name, &refusal.message, true)
+            intent::uncertain(home, store, name, &refusal.message, true)
         }
-        _ => op::end(home, store, name),
+        _ => intent::end(home, store, name),
     };
 }

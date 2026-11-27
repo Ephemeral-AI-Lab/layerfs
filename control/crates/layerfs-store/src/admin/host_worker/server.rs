@@ -63,7 +63,7 @@ const WRITES: Lane = Lane {
 pub(crate) const POSTGRES: Lane = Lane {
     index: 2,
     slots: 64,
-    threads: crate::postgresql::pool::PER_PROCESS,
+    threads: crate::backend::postgresql::pool::PER_PROCESS,
     name: "layerfs-host-postgresql",
 };
 
@@ -401,7 +401,8 @@ impl HostServer {
         if control && op == "drain" {
             return self.drain_answer();
         }
-        let stores = (control && op == "ping").then(|| crate::open::host_store_count(&self.home));
+        let stores = (control && op == "ping")
+            .then(|| crate::admin::open::cache::host_store_count(&self.home));
         enum Operation {
             Ping,
             CloseStore,
@@ -411,10 +412,10 @@ impl HostServer {
         }
         let operation = match (control, op) {
             (true, "ping") => Operation::Ping,
-            (true, crate::host_maintenance::CLOSE) => Operation::CloseStore,
-            (false, crate::host_read::OP) => Operation::StoreCall,
-            (false, crate::host_postgresql::OP) => Operation::PostgresRead,
-            (true, crate::host_postgresql::RETIRE) => Operation::PostgresRetire,
+            (true, crate::admin::host_worker::handoff::CLOSE) => Operation::CloseStore,
+            (false, crate::admin::host_worker::read::OP) => Operation::StoreCall,
+            (false, crate::admin::host_worker::postgresql::OP) => Operation::PostgresRead,
+            (true, crate::admin::host_worker::postgresql::RETIRE) => Operation::PostgresRetire,
             _ => {
                 return Err(refused(
                     "Unsupported",
@@ -484,15 +485,15 @@ impl HostServer {
             }
             Operation::StoreCall => {
                 drop(activity);
-                crate::host_read::serve(&self.home, args)
+                crate::admin::host_worker::read::serve(&self.home, args)
             }
             Operation::PostgresRead => {
                 drop(activity);
-                crate::host_postgresql::serve(&self.home, args)
+                crate::admin::host_worker::postgresql::serve(&self.home, args)
             }
             Operation::PostgresRetire => {
                 drop(activity);
-                crate::host_postgresql::retire_request(&self.home, args)
+                crate::admin::host_worker::postgresql::retire_request(&self.home, args)
             }
         }
     }
@@ -517,7 +518,8 @@ impl HostServer {
     }
 
     fn close_store(&self, args: &SdkValue) -> Outcome {
-        let report = crate::host_maintenance::close_at(&self.home, &self.hello.generation, args);
+        let report =
+            crate::admin::host_worker::handoff::close_at(&self.home, &self.hello.generation, args);
         self.record_close(
             args.get_text("store").unwrap_or_default(),
             "maintenance",
@@ -538,7 +540,7 @@ impl HostServer {
         &self,
         store: &str,
         reason: &str,
-        report: &Result<crate::open::CloseReport, SdkRefusal>,
+        report: &Result<crate::admin::open::cache::CloseReport, SdkRefusal>,
     ) {
         // Do not put an arbitrary request value into the worker log or ping.
         if layerfs_home::names::StoreName::parse(store).is_err() {
@@ -578,7 +580,7 @@ impl HostServer {
     }
 
     fn close_drained_stores(&self) {
-        for (path, report) in crate::open::close_idle_report(Duration::ZERO) {
+        for (path, report) in crate::admin::open::cache::close_idle_report(Duration::ZERO) {
             if let Some(store) = path
                 .parent()
                 .and_then(Path::file_name)
@@ -731,7 +733,7 @@ fn run(
 /// This entry runs in its own process, above the Store and machine crates.
 pub fn serve_host(home: &Path) -> Result<layerfs_machine::worker::accept::Served, SdkRefusal> {
     // before any request, which may carry a PostgreSQL password, is read
-    crate::host_postgresql::limit_core_dumps();
+    crate::admin::host_worker::postgresql::limit_core_dumps();
     let paths = HostPaths::new(home)?;
     let guard = paths.try_hold()?.ok_or_else(|| {
         refused(
