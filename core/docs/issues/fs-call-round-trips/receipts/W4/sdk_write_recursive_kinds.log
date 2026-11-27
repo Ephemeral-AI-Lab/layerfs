@@ -1,8 +1,0 @@
-
-running 2 tests
-test postgresql_recursive_rm_and_cp_by_page_kinds ... ok
-test sqlite_recursive_rm_and_cp_by_page_kinds ... ok
-
-test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.81s
-
-run_bounded: exit 0 after 3.7 s

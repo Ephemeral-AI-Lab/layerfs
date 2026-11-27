@@ -1,9 +1,0 @@
-    Finished `test` profile [optimized + debuginfo] target(s) in 0.09s
-     Running tests/sdk_reads_during_publish.rs (target/debug/deps/sdk_reads_during_publish-7e9f51a154661846)
-
-running 1 test
-test reads_do_not_wait_for_a_held_publication_lane ... ok
-
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.06s
-
-run_bounded: exit 0 after 4.0 s

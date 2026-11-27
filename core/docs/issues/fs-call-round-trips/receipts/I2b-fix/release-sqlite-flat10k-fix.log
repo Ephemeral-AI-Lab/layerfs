@@ -1,9 +1,0 @@
-# fix a99d36b75b0d2b96 load 9.65 9.94 8.02
-
-running 1 test
-FS_RT {"arm":"sqlite","case":"init.flat_10k","method":"project.init","entries":10002,"ms":298.8,"client_storage":{"connects":0,"round_trips":0,"prepares":0,"statements":2502,"transactions":60,"returned_rows":122171},"server":null,"logical":118890,"walked":118890,"stored":253461,"canonical":1380691,"load1":"9.65"}
-test init_flat_10k ... ok
-
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 1.55s
-
-run_bounded: exit 0 after 2.1 s

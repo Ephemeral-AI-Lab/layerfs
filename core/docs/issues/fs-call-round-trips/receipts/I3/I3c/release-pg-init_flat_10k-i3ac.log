@@ -1,9 +1,0 @@
-# i3ac 54fd02e5d015f707 load 9.68 8.12 7.65
-
-running 1 test
-FS_RT {"arm":"pg","case":"init.flat_10k","method":"project.init","entries":10002,"ms":8668.2,"client_storage":{"connects":0,"round_trips":342,"prepares":47,"statements":281,"transactions":36,"returned_rows":90249},"server":{"toplevel_calls":586,"nested_calls":30264,"evicted":false,"distinct":68,"top":[[36,"COMMIT"],[36,"SET LOCAL search_path TO lfs818_init_87678"],[34,"BEGIN ISOLATION LEVEL READ COMMITTED"],[34,"SELECT $1 FROM store_lane WHERE id = $2 FOR UPDATE"],[34,"SELECT pg_advisory_unlock($1, $2) FROM (SELECT pg_advisory_lock($3, $4) OFFSET $5) AS barrier"],[34,"SET LOCAL lock_timeout TO 30000"]]},"logical":118890,"walked":118890,"stored":253457,"canonical":1380691,"load1":"8.92"}
-test init_flat_10k ... ok
-
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 15.40s
-
-run_bounded: exit 0 after 16.4 s

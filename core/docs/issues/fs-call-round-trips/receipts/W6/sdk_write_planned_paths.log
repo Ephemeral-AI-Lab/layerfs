@@ -1,8 +1,0 @@
-
-running 2 tests
-test postgresql_planned_paths_answer_as_before ... ok
-test sqlite_planned_paths_answer_as_before ... ok
-
-test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.98s
-
-run_bounded: exit 0 after 1.5 s

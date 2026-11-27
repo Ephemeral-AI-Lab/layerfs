@@ -1,7 +1,0 @@
-
-running 1 test
-test the_backend_killed_at_any_message_of_a_warm_commit ... ok
-
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 13.89s
-
-run_bounded: exit 0 after 14.6 s

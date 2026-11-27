@@ -1,9 +1,0 @@
-
-running 2 tests
-test a_connection_cut_at_every_reply_leaves_the_store_wholly_old_or_new ... 40 cuts: 21 wholly old, 19 wholly new
-ok
-test message_two_is_one_query_frame_and_one_wait ... ok
-
-test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 11.30s
-
-run_bounded: exit 0 after 11.8 s

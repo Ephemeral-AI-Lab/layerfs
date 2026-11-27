@@ -1,8 +1,0 @@
-
-running 2 tests
-test a_short_identity_is_not_a_missing_branch ... ok
-test the_first_fault_met_is_the_refusal ... ok
-
-test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
-
-run_bounded: exit 0 after 1.0 s

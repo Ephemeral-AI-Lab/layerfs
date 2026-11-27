@@ -1,9 +1,0 @@
-    Finished `test` profile [optimized + debuginfo] target(s) in 0.08s
-     Running tests/sdk_grep_reads.rs (target/debug/deps/sdk_grep_reads-041273fe6f5542ce)
-
-running 1 test
-test grep_reads_each_root_once_whatever_its_size ... ok
-
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
-
-run_bounded: exit 0 after 1.0 s

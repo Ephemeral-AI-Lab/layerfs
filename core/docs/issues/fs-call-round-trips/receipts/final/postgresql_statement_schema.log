@@ -1,8 +1,0 @@
-
-running 2 tests
-test every_one_statement_read_names_the_schema ... ok
-test postgresql_one_statement_reads_answer ... ok
-
-test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
-
-run_bounded: exit 0 after 0.9 s

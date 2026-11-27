@@ -1,7 +1,0 @@
-
-running 1 test
-test postgresql_init_1k_flat ... FS_RT {"case":"init.flat_1k","method":"project.init","entries":1002,"ms":1399.6,"client_storage":{"connects":0,"round_trips":2246,"prepares":49,"statements":2125,"transactions":37,"returned_rows":12128},"server":{"calls":5433,"toplevel_calls":2397,"distinct":72,"top":[[2004,"SELECT $2 FROM ONLY \"lfs818_init_95350\".\"init_operation\" x WHERE \"operation_id\" OPERATOR(p"],[1028,"SELECT $2 FROM ONLY \"lfs818_init_95350\".\"pack\" x WHERE \"pack_id\" OPERATOR(pg_catalog.=) $1"],[1000,"INSERT INTO init_host_file(operation_id,canonical_position,device,inode,evidence,host_path"],[1000,"UPDATE init_entry SET position=$4::bigint,canonical_position=$5::bigint,host_identity=$6 W"],[37,"COMMIT"],[37,"SET LOCAL search_path TO lfs818_init_95350"]]}}
-ok
-
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 1.67s
-

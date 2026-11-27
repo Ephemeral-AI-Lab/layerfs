@@ -1,9 +1,0 @@
-    Finished `test` profile [optimized + debuginfo] target(s) in 0.08s
-     Running tests/sdk_reads_under_publish.rs (target/debug/deps/sdk_reads_under_publish-bc3a6ce470e569c0)
-
-running 1 test
-test reads_of_main_are_unchanged_while_another_branch_publishes ... ok
-
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.40s
-
-run_bounded: exit 0 after 1.4 s

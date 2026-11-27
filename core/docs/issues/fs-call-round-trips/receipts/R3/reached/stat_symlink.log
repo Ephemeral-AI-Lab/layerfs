@@ -1,9 +1,0 @@
-    Finished `test` profile [optimized + debuginfo] target(s) in 0.09s
-     Running tests/stat_symlink.rs (target/debug/deps/stat_symlink-e72fc39247055695)
-
-running 1 test
-test a_symlink_size_is_its_target_length ... ok
-
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
-
-run_bounded: exit 0 after 0.9 s

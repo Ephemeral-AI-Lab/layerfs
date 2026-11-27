@@ -1,9 +1,0 @@
-    Finished `test` profile [optimized + debuginfo] target(s) in 0.09s
-     Running tests/sdk_list_entries.rs (target/debug/deps/sdk_list_entries-93eb721b42f7d37b)
-
-running 1 test
-test a_listing_costs_the_same_in_a_small_and_a_large_tree ... ok
-
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.08s
-
-run_bounded: exit 0 after 6.1 s

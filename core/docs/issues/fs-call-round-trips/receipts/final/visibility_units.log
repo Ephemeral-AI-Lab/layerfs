@@ -1,8 +1,0 @@
-
-running 2 tests
-test markers_in_memory_filter_as_read_ones ... ok
-test only_unsupported_marker_reads_mean_no_markers ... ok
-
-test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
-
-run_bounded: exit 0 after 0.6 s

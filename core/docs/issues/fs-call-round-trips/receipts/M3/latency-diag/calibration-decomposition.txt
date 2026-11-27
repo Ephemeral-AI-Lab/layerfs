@@ -1,8 +1,0 @@
-pg10-history
-calibration SELECT 1 exchanges 399
-n=199 overshoot(reply_first-req-netem) min 0.16 med 2.30 p90 5.64 mean 2.86 | wire gap (reply out->next req in) min 0.27 med 0.76 p90 1.47 mean 0.91
-n=200 overshoot(reply_first-req-netem) min -9.98 med -9.96 p90 -9.93 mean -9.95 | wire gap (reply out->next req in) min 0.20 med 0.39 p90 0.75 mean 0.48
-pg10-writes
-calibration SELECT 1 exchanges 398
-n=199 overshoot(reply_first-req-netem) min 0.19 med 1.62 p90 5.60 mean 2.45 | wire gap (reply out->next req in) min 0.66 med 1.06 p90 2.89 mean 1.73
-n=199 overshoot(reply_first-req-netem) min -9.95 med -9.89 p90 -9.75 mean -9.85 | wire gap (reply out->next req in) min 0.38 med 0.71 p90 3.57 mean 1.53

@@ -1,9 +1,0 @@
-
-running 3 tests
-test postgresql_named_bind_keeps_the_refusal_order ... ok
-test sqlite_named_bind_keeps_the_refusal_order ... ok
-test sqlite_reader_refusal_keeps_the_lookups_first ... ok
-
-test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.40s
-
-run_bounded: exit 0 after 1.3 s
