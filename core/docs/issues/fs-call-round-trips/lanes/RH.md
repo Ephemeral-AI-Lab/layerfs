@@ -470,3 +470,47 @@ its `Result` shape (control's `project/export/walk.rs` calls it).
   `verify_history_readback`, `sdk_compare` (attribution),
   `history_ancestry_oracle`, `sdk_file_compare_budget` green.
 - No new server message: no sweep. Deleted tests: none.
+
+### H2 — revision walks once (both backends)
+
+**Prediction (written before the code).**
+
+- Mechanism: `fs.revision`'s walk reads node N's `now` and its parent's
+  `before` (a path walk from each root, and each one's serial when the
+  entry exists); the next node is that parent, so its `now` and serial are
+  the carried `before` and serial (kept before the hidden filter). A
+  `hidden_before` stop ends the walk, so nothing is carried there. The same
+  carry in `fs.list_revisions` (`operator/files.rs`, not pinned).
+  `comparedTo` already costs no read since H1 (held row, name memo).
+- Per walked node: −1 path walk (root open + two lookups + value through
+  the bare reader, ≈ 10–12 trips) and −1 serial: ≈ −11..−13 per node.
+  - `revision.h100` warm control 3,161 → ~1,860 (range 1,860–2,060); cold
+    3,389 → ~2,090.
+  - `revision.h10` cold 420 → ~295.
+  - `blame`, `diff_files`: unchanged.
+- SQLite: the same walk's statements and serial reads per node: about
+  −20..−40 per node: `revision.h100` 10,483 → ~7,000–8,500; `revision.h10`
+  1,106 → ~800–900.
+- Invariants: iteration order unchanged, so `candidateIndex`, boundaries,
+  continuation tokens and `revision_pages` are unchanged;
+  `sdk_file_history.rs` pages pass unchanged. No new message: no sweep.
+
+**Measured (receipts `receipts/H2/`).**
+
+| Case | before | predicted | measured |
+|---|---|---|---|
+| PG `revision.h100` warm (cold) | 3,161 (3,389) | ~1,860–2,060 (~2,090) | 1,705 (1,933) |
+| PG `revision.h10` cold | 420 | ~295 | 260 |
+| SQLite `revision.h100` warm (cold) | 10,483 (10,827) | ~7,000–8,500 | 5,797 (6,141) |
+| SQLite `revision.h10` cold | 1,106 | ~800–900 | 634 |
+
+- −14.6 trips per node on PostgreSQL (−16 at h10), beyond 15% of my
+  −11..−13 and better. Diagnosed once: a path walk through the bare reader
+  costs ≈ 13.5 trips here (root open, two lookups, value, pooled leaves),
+  not 10–12; SPEC's ≈ −13 per node is within 15%. Recorded, no change.
+- `blame`, `diff_files`, writer: unchanged. Formula check holds.
+- `sdk_file_history` (pages unchanged), `history_surface`,
+  `operator_history`, `sdk_history_depth`, `history_wire_codes`,
+  `sdk_method_golden`, `sdk_round_trip_equivalence_seeded`,
+  `method_refusal_order`, `verify_history_readback` green. No new message:
+  no sweep. Deleted tests: none.

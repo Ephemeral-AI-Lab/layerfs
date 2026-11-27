@@ -1,0 +1,18 @@
+ 8:24  up 3 days,  6:57, 1 user, load averages: 11.21 8.66 7.89
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.12s
+     Running tests/sdk_file_history.rs (target/debug/deps/sdk_file_history-2bc7007727ab05a8)
+
+running 9 tests
+test a_bounded_blame_window_does_not_refuse_a_large_total_file ... ok
+test binary_size_clipping_and_coarse_alignment_never_claim_exact_owner_changes ... ok
+test blame_reply_admits_duplicated_owner_messages_and_json_escaping ... ok
+test branch_revisions_compare_first_commit_to_base_and_pin_matching_pages ... ok
+test equal_text_independent_owners_and_publication_source_are_distinct ... ok
+test equal_whole_tree_roots_do_not_shortcut_file_ownership ... ok
+test first_changed_inherited_file_is_modified_and_provenance_includes_init ... ok
+test missing_sides_are_opt_in_and_content_edits_are_not_attribution_only ... ok
+test supporting_reads_return_pins_and_numbered_queries_do_not_skip_matches ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.59s
+
+run_bounded: exit 0 after 1.7 s

@@ -30,20 +30,46 @@ pub fn entry(
     snapshot::entry(reader, &tree, path)
 }
 
+/// A walk's parent side: the node and the path's entry there.
+type Carried = Option<(NodeId, Option<EntryFacts>)>;
+
+/// The path's entry at `node` (its `root`) and at its `parent`. The parent's
+/// is kept in `carried`: it is the next node's own, read once (#818 H2).
+#[allow(clippy::type_complexity)]
+fn sides(
+    reader: &StorePorts,
+    rows: &mut Rows<'_>,
+    carried: &mut Carried,
+    node: NodeId,
+    root: layerfs_content::ObjectId,
+    parent: Option<NodeId>,
+    path: &str,
+) -> Result<(Option<EntryFacts>, Option<EntryFacts>), SdkRefusal> {
+    let now = match carried.take() {
+        Some((held, found)) if held == node => found,
+        _ => entry(reader, root, path)?,
+    };
+    let before = match parent {
+        Some(parent) => {
+            let found = entry(reader, rows.record(parent)?.root(), path)?;
+            *carried = Some((parent, found));
+            found
+        }
+        None => None,
+    };
+    Ok((now, before))
+}
+
 pub fn history(store: &Arc<Store>, args: &SdkValue) -> Answer {
     let (_, reader, snap) = super::args::snapshot(store, args)?;
     let path = checked(text(args, "path")?)?;
     let (limit, pos) = paging(args)?;
     let (mut next, mut seen, mut items, mut spent, mut more) =
         (Some(snap.node), 0u64, Vec::new(), 0, false);
-    let mut rows = Rows::new(store);
+    let (mut rows, mut carried) = (Rows::new(store), None);
     while let Some(node) = next {
         let (root, parent, record) = rows.revision(node)?;
-        let now = entry(&reader, root, &path)?;
-        let before = match parent {
-            Some(parent) => entry(&reader, rows.record(parent)?.root(), &path)?,
-            None => None,
-        };
+        let (now, before) = sides(&reader, &mut rows, &mut carried, node, root, parent, &path)?;
         next = parent;
         let same = match (now, before) {
             (None, None) => true,
@@ -114,14 +140,10 @@ pub fn stats(store: &Arc<Store>, args: &SdkValue) -> Answer {
     let mut count = 0i64;
     let mut logical = 0u64;
     let mut next = Some(snap.node);
-    let mut rows = Rows::new(store);
+    let (mut rows, mut carried) = (Rows::new(store), None);
     while let Some(node) = next {
         let (root, parent, _) = rows.revision(node)?;
-        let now = entry(&reader, root, &path)?;
-        let before = match parent {
-            Some(p) => entry(&reader, rows.record(p)?.root(), &path)?,
-            None => None,
-        };
+        let (now, before) = sides(&reader, &mut rows, &mut carried, node, root, parent, &path)?;
         next = parent;
         if now.map(|e| e.value.content_root) == before.map(|e| e.value.content_root) {
             continue;

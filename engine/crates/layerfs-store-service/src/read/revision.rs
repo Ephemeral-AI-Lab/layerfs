@@ -9,6 +9,7 @@ use crate::history::{lookup as args, rows::Rows};
 use crate::operator::files::entry;
 use crate::store::{Store, StorePorts};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_content::compare::EntryFacts;
 use layerfs_history::{LayerStackId, NodeId};
 use std::sync::Arc;
 
@@ -47,7 +48,9 @@ pub struct Request<'a> {
 ///
 /// The walk reads each node's row once, as the previous node's parent, and
 /// builds each item's `ref`, `comparedTo` and record from the rows it holds,
-/// each Branch name read once per call (#818 H1).
+/// each Branch name read once per call (#818 H1). Each node's path entry and
+/// serial are read once too: a node's parent side is the next node's own
+/// (#818 H2).
 pub fn list(
     store: &Arc<Store>,
     reader: &StorePorts,
@@ -131,6 +134,9 @@ pub fn list(
         candidate,
     };
     let mut content_budget = file_facts::CONTENT_QUERY_BYTES;
+    // The previous node's parent side, which is this node's own (#818 H2):
+    // its entry before the hidden filter, and its serial when it exists.
+    let mut carried: Option<(NodeId, Option<EntryFacts>, Option<u64>)> = None;
     while let Some(node) = next {
         if examined as u64 == query::MAXIMUM_QUERY_WORK {
             return Err(args::refuse(
@@ -141,25 +147,30 @@ pub fn list(
         }
         examined += 1;
         let previous = parent(&mut rows, node, provenance)?;
-        let now = entry(reader, rows.record(node)?.root(), path)?;
+        let (now, serial) = match carried.take() {
+            Some((held, found, serial)) if held == node => (found, serial),
+            _ => (entry(reader, rows.record(node)?.root(), path)?, None),
+        };
         // A node the marker hides is never a returned version: the walk stops
         // at the first one rather than listing it or walking past it.
-        if now.is_some()
-            && visibility
-                .hidden_at(path, Visibility::node_serial(store, node)?)
-                .is_some()
-        {
-            break;
+        if now.is_some() {
+            let serial = match serial {
+                Some(serial) => serial,
+                None => Visibility::node_serial(store, node)?,
+            };
+            if visibility.hidden_at(path, serial).is_some() {
+                break;
+            }
         }
         let mut hidden_before = false;
         let before = previous
             .map(|p| {
                 let found = entry(reader, rows.record(p)?.root(), path)?;
-                if found.is_some()
-                    && visibility
-                        .hidden_at(path, Visibility::node_serial(store, p)?)
-                        .is_some()
-                {
+                let serial = found
+                    .map(|_| Visibility::node_serial(store, p))
+                    .transpose()?;
+                carried = Some((p, found, serial));
+                if serial.is_some_and(|serial| visibility.hidden_at(path, serial).is_some()) {
                     hidden_before = true;
                     Ok(None)
                 } else {

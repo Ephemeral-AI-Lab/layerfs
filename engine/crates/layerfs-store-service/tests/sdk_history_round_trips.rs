@@ -56,6 +56,10 @@ const NONE: Counts = [0, 0, 0, 0];
 ///   6,746 → 5,829, `blame.h10` 621 → 548, `revision.h100` 12,382 → 10,483,
 ///   `revision.h10` cold 1,325 → 1,106; writer reads 0 on all four;
 ///   `diff_files` unchanged.
+/// - #818 H2 (dedupe): `revision` walks each node's path once (a node's
+///   parent side, entry and serial, is the next node's own): `revision.h100`
+///   warm 10,483 → 5,797, cold 10,827 → 6,141; `revision.h10` cold 1,106 →
+///   634; `blame` and `diff_files` unchanged.
 const SQLITE: &[Pin] = &[
     // probe blame.h10: 714 statements
     pin("blame.h10.cold", NONE, [0, 0, 589, 24], NONE),
@@ -64,10 +68,10 @@ const SQLITE: &[Pin] = &[
     pin("blame.h100.cold", NONE, [0, 0, 6185, 205], NONE),
     pin("blame.h100.warm", NONE, [0, 0, 5829, 205], NONE),
     // probe revision.h10 (appended at P0): 1,314
-    pin("revision.h10.cold", NONE, [0, 0, 1106, 39], NONE),
+    pin("revision.h10.cold", NONE, [0, 0, 634, 29], NONE),
     // probe revision.h100: 12,658
-    pin("revision.h100.cold", NONE, [0, 0, 10827, 294], NONE),
-    pin("revision.h100.warm", NONE, [0, 0, 10483, 294], NONE),
+    pin("revision.h100.cold", NONE, [0, 0, 6141, 203], NONE),
+    pin("revision.h100.warm", NONE, [0, 0, 5797, 203], NONE),
     // probe diff_files.h10_vs_h99: 198
     pin("diff_files.h10_vs_h99.cold", NONE, [0, 0, 218, 15], NONE),
     pin("diff_files.h10_vs_h99.warm", NONE, [0, 0, 187, 15], NONE),
@@ -92,6 +96,9 @@ const SQLITE: &[Pin] = &[
 ///   call on the control reader); control warm `blame.h100` 2,021 → 1,768,
 ///   `blame.h10` 221 → 193, `revision.h100` 3,794 → 3,161; cold alike
 ///   (`revision.h10` 493 → 420); `diff_files` unchanged.
+/// - #818 H2 (dedupe, see SQLITE): one path walk and serial per node fewer:
+///   `revision.h100` warm 3,161 → 1,705, cold 3,389 → 1,933;
+///   `revision.h10` cold 420 → 260.
 const POSTGRESQL: &[Pin] = &[
     // probe blame.h10: 267 trips
     pin("blame.h10.cold", NONE, [1, 231, 223, 0], NONE),
@@ -100,10 +107,10 @@ const POSTGRESQL: &[Pin] = &[
     pin("blame.h100.cold", NONE, [1, 2005, 1997, 0], NONE),
     pin("blame.h100.warm", NONE, [0, 1768, 1768, 0], NONE),
     // probe revision.h10 (appended at P0)
-    pin("revision.h10.cold", NONE, [1, 420, 409, 0], NONE),
+    pin("revision.h10.cold", NONE, [1, 260, 249, 0], NONE),
     // probe revision.h100: 3,890
-    pin("revision.h100.cold", NONE, [1, 3389, 3378, 0], NONE),
-    pin("revision.h100.warm", NONE, [0, 3161, 3161, 0], NONE),
+    pin("revision.h100.cold", NONE, [1, 1933, 1922, 0], NONE),
+    pin("revision.h100.warm", NONE, [0, 1705, 1705, 0], NONE),
     // probe diff_files.h10_vs_h99: 88
     pin("diff_files.h10_vs_h99.cold", NONE, [1, 103, 94, 0], NONE),
     pin("diff_files.h10_vs_h99.warm", NONE, [0, 77, 77, 0], NONE),
