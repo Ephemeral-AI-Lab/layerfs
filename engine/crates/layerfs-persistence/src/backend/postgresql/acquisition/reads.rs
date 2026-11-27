@@ -68,7 +68,8 @@ pub(super) fn owned(tx: &Transaction<'_>, key: &str) -> Result<String, BackendEr
 }
 
 /// Sends one owned read and returns its window's rows: `Stale` when the
-/// owner is not live, none for an empty window.
+/// owner is not live, `Integrity` when its row does not decode (the owner
+/// columns follow the window's in every row), none for an empty window.
 fn read(
     tx: &Transaction<'_>,
     owner: Owner,
@@ -81,6 +82,10 @@ fn read(
     all.extend_from_slice(params);
     let found = tx.typed(&owned(tx, key)?, &all, 16 + bytes)?;
     let first = found.first().ok_or(Failure::Stale)?;
+    let owner_at = (first.columns().iter())
+        .position(|column| column.name() == "owner_phase")
+        .ok_or(BackendError::Integrity)?;
+    super::writes::decoded(first, owner_at)?;
     if get::<Option<i32>>(first, 0)?.is_none() {
         if found.len() != 1 {
             return Err(BackendError::Integrity.into());
