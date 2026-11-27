@@ -1,0 +1,11 @@
+
+running 5 tests
+test a_damaged_pack_refuses_only_where_the_walk_reaches_it ... ok
+test a_damaged_text_refuses_only_where_the_call_reaches_it ... ok
+test a_damaged_version_refuses_only_where_the_walk_reaches_it ... ok
+test a_missing_pack_refuses_only_where_the_walk_reaches_it ... ignored, storage locate fails a per-object demand whole on a missing pack row
+test windows_answer_as_the_lone_walk ... ok
+
+test result: ok. 4 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 6.10s
+
+run_bounded: exit 0 after 6.8 s

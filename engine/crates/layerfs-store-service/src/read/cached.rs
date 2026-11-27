@@ -32,6 +32,11 @@ use std::{
 /// (#818 H5): a later demand that names it gets that error back and the
 /// object is never read again, so a window read ahead of a walk refuses only
 /// where the walk reaches the object, and no failed read is attempted twice.
+/// The record holds at most [`MEMO`] objects: a per-object read is made
+/// only while the record has room for every object it names to fail
+/// ([`Cached::room`]), so every failure it meets is recorded; past that the
+/// call reads ahead no more and each object is read where the call needs
+/// it, once, as a point read is.
 ///
 /// A call that plans its reads ahead (#818 H6) keeps the lengths it read per
 /// file, each a length or that file's own failure, and answers a lengths
@@ -50,7 +55,13 @@ pub struct Cached<'a> {
 
 /// Names a history call's directory memo keeps at most (#818 H3): lane C's
 /// [`DirectoryMemo`], shared by a call's lone walks and its version windows.
+/// Also the most objects the call's failure record and kept lengths hold.
 pub const MEMO: usize = 4_096;
+
+/// A per-object read not made: the failure record has no room for it.
+pub const FULL: ContentError = ContentError::ProviderFailure {
+    what: "per-object failure record full",
+};
 
 impl<'a> Cached<'a> {
     /// The call's caches over `ports`. Nothing is made yet, so this does
@@ -113,7 +124,8 @@ impl<'a> Cached<'a> {
                 wanted.push(*id);
             }
         }
-        if wanted.is_empty() {
+        // Nothing is read ahead once the failure record could fill.
+        if wanted.is_empty() || !self.room(wanted.len()) {
             return Ok(());
         }
         let each = self.read_canonical_each(&wanted)?;
@@ -147,6 +159,12 @@ impl<'a> Cached<'a> {
     /// The call's directory memo, for a window of versions (#818 H5).
     pub fn memo(&self) -> RefMut<'_, DirectoryMemo> {
         self.directories.borrow_mut()
+    }
+
+    /// Whether the failure record has room for `count` more objects, so a
+    /// per-object read of that many can record every failure it meets.
+    pub fn room(&self, count: usize) -> bool {
+        self.failed.borrow().len().saturating_add(count) <= MEMO
     }
 
     /// The recorded failure of the first of `ids` a per-object read found
@@ -334,38 +352,59 @@ impl AuthenticatedObjects for Cached<'_> {
     /// object's own failure is recorded and returned for it; a failure of the
     /// demand itself (the session, the transport) fails the call. An object
     /// recorded failed is not read again.
+    ///
+    /// Each object is read once however often `ids` names it. A demand that
+    /// could overfill the failure record ([`Cached::room`]) is not made: it
+    /// fails as a whole with [`FULL`], which a caller reading ahead checks
+    /// for first and never meets.
     fn read_canonical_each(&self, ids: &[ObjectId]) -> ContentResult<Vec<ContentResult<Vec<u8>>>> {
         let wanted: Vec<ObjectId> = {
             let failed = self.failed.borrow();
-            ids.iter()
-                .filter(|id| !failed.contains_key(id))
-                .copied()
-                .collect()
-        };
-        let mut read = self
-            .with(|cache| self.ports.objects_each_with(cache, &wanted))
-            .map_err(|error| error.object_demand())?
-            .into_iter();
-        let mut each = Vec::with_capacity(ids.len());
-        for id in ids {
-            if let Some(error) = self.recorded(std::slice::from_ref(id)) {
-                each.push(Err(error));
-                continue;
+            let mut wanted: Vec<ObjectId> = Vec::new();
+            let mut seen = std::collections::HashSet::new();
+            for id in ids {
+                if !failed.contains_key(id) && seen.insert(*id) {
+                    wanted.push(*id);
+                }
             }
-            let found = read
-                .next()
-                .ok_or(ContentError::BatchCardinality {
-                    requested: wanted.len(),
-                    returned: each.len(),
-                })?
-                .map_err(|error| {
-                    let error = error.object_demand();
-                    self.failed.borrow_mut().insert(*id, error.clone());
-                    error
-                });
-            each.push(found);
+            wanted
+        };
+        if !self.room(wanted.len()) {
+            return Err(FULL);
         }
-        Ok(each)
+        let read = if wanted.is_empty() {
+            Vec::new()
+        } else {
+            self.with(|cache| self.ports.objects_each_with(cache, &wanted))
+                .map_err(|error| error.object_demand())?
+        };
+        if read.len() != wanted.len() {
+            return Err(ContentError::BatchCardinality {
+                requested: wanted.len(),
+                returned: read.len(),
+            });
+        }
+        let mut found: HashMap<ObjectId, Vec<u8>> = HashMap::with_capacity(wanted.len());
+        {
+            let mut failed = self.failed.borrow_mut();
+            for (id, read) in wanted.into_iter().zip(read) {
+                match read {
+                    Ok(bytes) => {
+                        found.insert(id, bytes);
+                    }
+                    Err(error) => {
+                        failed.insert(id, error.object_demand());
+                    }
+                }
+            }
+        }
+        Ok(ids
+            .iter()
+            .map(|id| match self.recorded(std::slice::from_ref(id)) {
+                Some(error) => Err(error),
+                None => found.get(id).cloned().ok_or(ContentError::MissingObject),
+            })
+            .collect())
     }
 
     fn reads_each_at_once(&self) -> bool {

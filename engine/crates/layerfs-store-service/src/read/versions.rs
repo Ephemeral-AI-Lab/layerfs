@@ -30,6 +30,10 @@
 //! ahead is kept or held by the call's caches and served where the walk asks
 //! for it, a recorded failure there too.
 //!
+//! Once the call's failure record could fill ([`Cached::room`]), no window
+//! reads further: its versions are walked alone, each object read once where
+//! the walk needs it.
+//!
 //! Elsewhere (SQLite, or a reader without per-object demands) each version
 //! is walked alone, as before.
 use super::cached::{batches, Cached, ROOTS};
@@ -284,6 +288,11 @@ struct Each<'r, 'c> {
 
 impl AuthenticatedObjects for Each<'_, '_> {
     fn read_canonical_batch(&self, ids: &[ObjectId]) -> ContentResult<Vec<Vec<u8>>> {
+        // No room to record these objects' failures: the window reads no
+        // further and its versions are walked alone (not a demand failure).
+        if !self.reader.room(ids.len()) {
+            return Err(super::cached::FULL);
+        }
         match self.reader.read_canonical_each(ids) {
             Ok(each) => each.into_iter().collect(),
             Err(error) => {

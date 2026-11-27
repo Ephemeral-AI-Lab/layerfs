@@ -986,3 +986,50 @@ Checks once: `sdk_read_round_trips` (both backends, repinned),
 `fs_call_round_trips`, `sdk_round_trip_equivalence_seeded`,
 `method_refusal_order`. No new message, no sweep. Clippy clean.
 Deleted tests: none.
+
+## M3 independent review — fixes (2026-11-27)
+
+1. **Bug, damaged Store:** `PortError::object_owned` accepted only
+   `ObjectMissing`/`Content`/`Integrity`/`Unpublished`/`VisibilityCeiling`,
+   while lane S's storage reports more per object (`Io` wrapping
+   `PersistenceError::Missing`/`Malformed`, `MissingDependency`,
+   `Collision`, `CapacityExceeded`). It is now exactly
+   `!layerfs_storage::read::call_failure` (made `pub` and re-exported from
+   `layerfs_storage::read`, one predicate, not a copy). New PostgreSQL test
+   `a_damaged_pack_refuses_only_where_the_walk_reaches_it`: the pack holding
+   a tree root 10 Commits below the head has every byte after its directory
+   overwritten; blame of `a.txt` and a one-item revision page answer as
+   alone, blame and the revision list of `kept.txt` refuse as alone. With
+   the old predicate it fails (`blame stops before`: the window refuses
+   with `storage I/O failure`; the per-object error was
+   `Io(Malformed)`). The location-row test now also checks the revision
+   list of `kept.txt`.
+   - **Open (storage, not changed here):** with the pack *row deleted*, the
+     storage reader's `Fetch::locate` (via the persistence locate of the
+     window's whole page) fails the per-object demand as a whole with
+     `Io(Malformed)` before any per-object classification, so the window
+     refuses where the lone walk answers. Kept as an ignored test,
+     `a_missing_pack_refuses_only_where_the_walk_reaches_it`; the fix
+     belongs to the storage reader's per-object locate (lane S files).
+     Treating such an unattributed whole failure as "walk alone" would
+     re-read the demand's objects, which the H5 decision rules out.
+2. `Cached::read_canonical_each` reads each distinct id once and answers
+   every position from that one result (`[A, A, B]` with A failing gave
+   A's second failure to B). Test: `sdk_cached_each_rh` (SQLite).
+3. `Cached.failed` holds at most `MEMO` (4,096) objects: a per-object read
+   is made only while the record has room for all it names
+   (`Cached::room`); `hold_each` reads nothing ahead without room, and the
+   window adapter fails the window (not as a demand failure) so its
+   versions are walked alone, each object read once where needed, as a
+   point read refuses. Same test.
+4. `layerfs-history/src/lib.rs` formatted (`rustfmt --check` clean).
+
+Recorded, no change (reviewer notes): whole-pack cohort reads refuse every
+object in a pack on a frame failure where a lone point read might take a
+ranged read; `chains_each` base dedupe can let an over-depth chain escape
+the depth refusal (as the batched `read` before).
+
+Reruns, once each: `sdk_history_versions_rh` (4 passed, 1 ignored),
+`sdk_cached_each_rh`, history and read pins (both backends, unchanged),
+`sdk_read_large_rh`, `sdk_history_fault_rh_{drop,kill}`, equivalence,
+`method_refusal_order`. Clippy clean on storage, store-service, history.

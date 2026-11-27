@@ -1,0 +1,8 @@
+
+running 2 tests
+test fs_calls_answer_alike_on_both_backends ... ok
+test init_past_the_write_window_answers_alike_on_both_backends ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.46s
+
+run_bounded: exit 0 after 8.1 s

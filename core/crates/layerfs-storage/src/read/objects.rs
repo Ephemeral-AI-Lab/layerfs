@@ -412,7 +412,7 @@ impl ReadState {
 /// transport or admission failure, or an unknown outcome. A provider's
 /// `Missing` or `Malformed` answer for one unit, and every physical, framing,
 /// content or bound failure of one unit, belong to the objects that need it.
-pub(crate) fn call_failure(error: &StorageError) -> bool {
+pub fn call_failure(error: &StorageError) -> bool {
     match error {
         StorageError::Io(io) => !matches!(
             io.get_ref()
