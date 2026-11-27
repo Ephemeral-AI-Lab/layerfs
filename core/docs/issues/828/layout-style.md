@@ -336,8 +336,11 @@ folder small enough to read at a glance, named for what its code does.
   `s3_api/sign.rs`), so the planned `bucket/provider.rs`, per-provider
   `auth.rs`/`checks.rs` and local-folder `url.rs`/`settings.rs` are not
   built; they arrive with the provider feature.
-- Still open: construction `reference/` and `reference_index/` names
-  (reference-count effects; "reference" also means overlay reference pieces).
+- Construction `reference/` → `reference_count/` and `reference_index/` →
+  `reference_count_index/` (owner go-ahead, 2026-11-28): the code's own word
+  for the concept is `reference_count`, and "reference" alone also means
+  overlay reference pieces and the retired v0.1.6 reference. Folders only;
+  type names such as `ReferenceReducer` keep theirs.
 
 ## 6. How a proposal is written
 

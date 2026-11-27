@@ -1,10 +1,10 @@
 //! Non-destructive sealed membership passes; final rows restart after release.
 use super::{
-    super::reference::{meaning, record::Row},
+    super::reference_count::{meaning, record::Row},
     reduce::{IndexedReducer, PASS_ROWS},
     wire,
 };
-use crate::filesystem::construction::reference::reduce::{FinalChange, ReferenceWork};
+use crate::filesystem::construction::reference_count::reduce::{FinalChange, ReferenceWork};
 use crate::filesystem::tree::inode::read::{lookup_many, InodeReadWork, InodeTable};
 use crate::{AuthenticatedObjects, ContentError, ContentResult};
 use std::collections::VecDeque;

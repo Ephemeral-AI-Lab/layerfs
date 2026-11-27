@@ -2,7 +2,7 @@
 use super::{
     FinalChange, FinalRows, OrderingBacking, ReferenceReducer, ReferenceWork, ReleaseWork,
 };
-use crate::filesystem::construction::reference_index::{
+use crate::filesystem::construction::reference_count_index::{
     reduce::IndexedReducer, release, rows::IndexedRows,
 };
 use crate::filesystem::{

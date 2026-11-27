@@ -2,9 +2,9 @@
 
 use std::collections::BTreeMap;
 
-use layerfs_content::filesystem::construction::reference::backing::OrderingBacking;
-use layerfs_content::filesystem::construction::reference::record::Row;
-use layerfs_content::filesystem::construction::reference::runs::RunStore;
+use layerfs_content::filesystem::construction::reference_count::backing::OrderingBacking;
+use layerfs_content::filesystem::construction::reference_count::record::Row;
+use layerfs_content::filesystem::construction::reference_count::runs::RunStore;
 use layerfs_content::object::inode_leaf::InodeKind;
 use support::filesystem::{synthetic, value, RecordingBacking, TempDir};
 

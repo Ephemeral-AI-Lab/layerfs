@@ -135,7 +135,7 @@ and these calls ran 57–419× slower than on SQLite (5–33× locally) (measure
 
 - **What it looks like.** Removing a directory's last binding releases every entry
   under it: `release_zero_count` in
-  `core/crates/layerfs-content/src/filesystem/construction/reference/release.rs` reads the
+  `core/crates/layerfs-content/src/filesystem/construction/reference_count/release.rs` reads the
   removed tree's pages and base records while writing almost nothing.
 - **Cost seen.** B2 at `056e920166`, 11,439 entries deleted: 1,417 directory pages
   and 1,649 objects read in 33 waves, 4 objects written; 114 trips (92 in

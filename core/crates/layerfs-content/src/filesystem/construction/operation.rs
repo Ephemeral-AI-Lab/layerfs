@@ -14,12 +14,12 @@ use crate::filesystem::construction::input::view::{OperationInput, ResidentInput
 use crate::filesystem::construction::input::{
     check_operation_input, PreparedDirectoryStreams, PreparedRows,
 };
-use crate::filesystem::construction::reference::backing::OrderingBacking;
-use crate::filesystem::construction::reference::reduce::{
+use crate::filesystem::construction::reference_count::backing::OrderingBacking;
+use crate::filesystem::construction::reference_count::reduce::{
     PendingState, ReferenceReducer, ReferenceWork,
 };
-use crate::filesystem::construction::reference::release::{release_zero_count, ReleaseWork};
-use crate::filesystem::construction::reference::OperationReducer;
+use crate::filesystem::construction::reference_count::release::{release_zero_count, ReleaseWork};
+use crate::filesystem::construction::reference_count::OperationReducer;
 use crate::filesystem::construction::serial_state::{
     DroppedParents, InitialRows, RebuiltRoots, SerialState,
 };
@@ -883,7 +883,9 @@ fn zero_count_serials(
                 PendingState::New { count, .. } => *count,
                 PendingState::Existing { delta, .. } => {
                     let base_count = base.map_or(0, |value| value.namespace_ref_count);
-                    crate::filesystem::construction::reference::derived_count(base_count, *delta)?
+                    crate::filesystem::construction::reference_count::derived_count(
+                        base_count, *delta,
+                    )?
                 }
             };
             // A directory this batch drops is not a released inode: it was never

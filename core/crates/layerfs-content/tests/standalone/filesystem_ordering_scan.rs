@@ -12,8 +12,8 @@ use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
 #[path = "../support/mod.rs"]
 mod support;
 
-use layerfs_content::filesystem::construction::reference::record::Row;
-use layerfs_content::filesystem::construction::reference::runs::RunStore;
+use layerfs_content::filesystem::construction::reference_count::record::Row;
+use layerfs_content::filesystem::construction::reference_count::runs::RunStore;
 use layerfs_content::object::inode_leaf::InodeKind;
 use support::filesystem::{synthetic, value, RecordingBacking, TempDir};
 

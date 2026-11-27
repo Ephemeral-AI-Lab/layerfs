@@ -29,11 +29,11 @@
 use std::collections::BTreeMap;
 
 use crate::error::{ContentError, ContentResult};
-use crate::filesystem::construction::reference::backing::OrderingBacking;
-use crate::filesystem::construction::reference::merge::{
+use crate::filesystem::construction::reference_count::backing::OrderingBacking;
+use crate::filesystem::construction::reference_count::merge::{
     merge_runs, MergeWork, Run, RunReader, RunScan,
 };
-use crate::filesystem::construction::reference::record::{Row, ROW_BYTES};
+use crate::filesystem::construction::reference_count::record::{Row, ROW_BYTES};
 
 /// Default bytes of one merge buffer.
 pub const DEFAULT_MERGE_BUFFER_BYTES: usize = 16 * 1024;
@@ -534,7 +534,8 @@ impl<'r, 'b> RunStore<'r, 'b> {
     /// descriptor, not a pathname lookup.
     pub fn take_single_handle(
         &mut self,
-    ) -> Option<Box<dyn crate::filesystem::construction::reference::backing::OrderingRun>> {
+    ) -> Option<Box<dyn crate::filesystem::construction::reference_count::backing::OrderingRun>>
+    {
         let slot = self.levels.iter_mut().find(|slot| slot.is_some())?;
         let handle = slot.take().map(|run| run.handle);
         self.reset_scans();

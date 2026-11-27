@@ -9,8 +9,8 @@
 //! before it mutates it.
 
 use crate::error::{ContentError, ContentResult};
-use crate::filesystem::construction::reference::backing::OrderingRun;
-use crate::filesystem::construction::reference::record::{Row, ROW_BYTES};
+use crate::filesystem::construction::reference_count::backing::OrderingRun;
+use crate::filesystem::construction::reference_count::record::{Row, ROW_BYTES};
 
 /// One immutable sorted run of ordering rows.
 pub struct Run {
@@ -198,7 +198,7 @@ impl<'a> RunReader<'a> {
 /// Both inputs stay borrowed until the caller installs the finished output, so a
 /// failed write leaves the previous tiers exactly as they were.
 pub fn merge_runs(
-    backing: &mut dyn crate::filesystem::construction::reference::backing::OrderingBacking,
+    backing: &mut dyn crate::filesystem::construction::reference_count::backing::OrderingBacking,
     older: &Run,
     newer: &Run,
     buffer_bytes: usize,

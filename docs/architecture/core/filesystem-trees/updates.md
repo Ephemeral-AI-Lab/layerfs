@@ -73,7 +73,7 @@ They count work; they are not a persistence claim.
 | `InodeUpdate.value` | typed final value; its count is replaced by the derived count | same |
 | `new_inodes` | serials the caller's allocator just created; checked absent from the base | same, [`checked.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/validate/checked.rs) |
 | `scratch_bytes` | sorted-engine scratch; default 4 MiB, at least 1,024 | [`resident.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/input/resident.rs) |
-| `maximum_pending_records`, `merge_buffer_bytes`, `ordering_bytes` | reducer memory (default 4,096 rows), merge buffer (16 KiB), the one ordering ceiling (64 MiB) | [`reference/reduce.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/reference/reduce.rs), [`reference/runs.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/reference/runs.rs) |
+| `maximum_pending_records`, `merge_buffer_bytes`, `ordering_bytes` | reducer memory (default 4,096 rows), merge buffer (16 KiB), the one ordering ceiling (64 MiB) | [`reference_count/reduce.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/reference_count/reduce.rs), [`reference_count/runs.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/reference_count/runs.rs) |
 | `base_read_batch` | base records per read wave, capped at 4,096 | [`resident.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/input/resident.rs), [`objects.rs`](../../../../core/crates/layerfs-content/src/filesystem/objects.rs) |
 
 Declared row totals are checked against what the cursors return; an
@@ -110,11 +110,11 @@ references belong to [Objects](../objects/README.md).
 
 | Part | What it holds | Source |
 | --- | --- | --- |
-| Ordering record | fixed 96 bytes: serial, version, tag (1 new-inode count, 2 effect total), length, value flag, tally, optional 73-byte value, reserved zeros | [`record.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/reference/record.rs) |
-| Pending map | at most `maximum_pending_records` rows in memory | [`runs.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/reference/runs.rs) |
-| Runs | sorted spilled batches merged into tiers; the newer row wins on equal keys; at most 32 tiers | [`runs.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/reference/runs.rs), [`merge.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/reference/merge.rs) |
-| Ordering backing | caller-supplied run storage with one byte account, released exactly once; `FileBacking` is the local implementation | [`backing.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/reference/backing.rs) |
-| Indexed state | with backed serial state, the same meanings in caller records instead of runs | [`reduce.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/reference_index/reduce.rs), [`operation.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/reference/operation.rs) |
+| Ordering record | fixed 96 bytes: serial, version, tag (1 new-inode count, 2 effect total), length, value flag, tally, optional 73-byte value, reserved zeros | [`record.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/reference_count/record.rs) |
+| Pending map | at most `maximum_pending_records` rows in memory | [`runs.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/reference_count/runs.rs) |
+| Runs | sorted spilled batches merged into tiers; the newer row wins on equal keys; at most 32 tiers | [`runs.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/reference_count/runs.rs), [`merge.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/reference_count/merge.rs) |
+| Ordering backing | caller-supplied run storage with one byte account, released exactly once; `FileBacking` is the local implementation | [`backing.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/reference_count/backing.rs) |
+| Indexed state | with backed serial state, the same meanings in caller records instead of runs | [`reduce.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/reference_count_index/reduce.rs), [`operation.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/reference_count/operation.rs) |
 
 ## statistics.rs
 

@@ -1,8 +1,8 @@
 //! Indexed FIFO and namespace-depth frames with guarded cursor acknowledgement.
 use super::reduce::{IndexedReducer, RELEASE_ROWS};
-use super::{super::reference::meaning, rows::RowCursor, wire};
-use crate::filesystem::construction::reference::record::Row;
-use crate::filesystem::construction::reference::release::ReleaseWork;
+use super::{super::reference_count::meaning, rows::RowCursor, wire};
+use crate::filesystem::construction::reference_count::record::Row;
+use crate::filesystem::construction::reference_count::release::ReleaseWork;
 use crate::filesystem::objects::FilesystemObjects;
 use crate::filesystem::tree::directory::read::{list_after, DirectoryReadWork};
 use crate::filesystem::tree::inode::read::{lookup_many, InodeReadWork, InodeTable};

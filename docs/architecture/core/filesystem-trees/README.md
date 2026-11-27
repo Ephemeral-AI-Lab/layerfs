@@ -121,11 +121,11 @@ with `ENOSYS` ([`request/callbacks.rs`](../../../../engine/crates/layerfs-fuse/s
 | Case | Result | Source |
 | --- | --- | --- |
 | Symlink target | opaque bytes ≤ 4,096, no NUL; never resolved, normalized or UTF-8-checked; broken and absolute targets stored as given | [`symlink.rs`](../../../../core/crates/layerfs-content/src/filesystem/name/symlink.rs) |
-| Two names, one serial | one inode, one content root, count 2 (regular files and symlinks only) | [`reference/reduce.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/reference/reduce.rs) |
-| Count of a new inode | the bindings this operation retained; the supplied count is ignored | [`reference/record.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/reference/record.rs) |
-| Count of an existing inode | stored count plus the signed effect the merge observed; aliases off the changed paths are not read | [`reference/reduce.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/reference/reduce.rs) |
+| Two names, one serial | one inode, one content root, count 2 (regular files and symlinks only) | [`reference_count/reduce.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/reference_count/reduce.rs) |
+| Count of a new inode | the bindings this operation retained; the supplied count is ignored | [`reference_count/record.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/reference_count/record.rs) |
+| Count of an existing inode | stored count plus the signed effect the merge observed; aliases off the changed paths are not read | [`reference_count/reduce.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/reference_count/reduce.rs) |
 | A move | addition observed before removal, so a count never passes through 0 | `observe` in [`operation.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/operation.rs) |
-| A directory reaches 0 | its entries lose one reference each, a page at a time, stopping at an inode that still has an alias | [`reference/release.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/reference/release.rs) |
+| A directory reaches 0 | its entries lose one reference each, a page at a time, stopping at an inode that still has an alias | [`reference_count/release.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/reference_count/release.rs) |
 
 Equal bytes in two files do not make a hard link: a link is a shared serial.
 Directory parentage stays singular. Older binaries may reject a tree with a
@@ -140,7 +140,7 @@ multiply bound symlink; keep CLI, daemon, worker and bundle builds matched.
 | Only the profile `scoped-inline/v1` is accepted, before any mutation | `FilesystemRoot::decode` in [`root.rs`](../../../../core/crates/layerfs-content/src/filesystem/root.rs) |
 | Serials are 1 to `i64::MAX`; Content never allocates them | `InodeIdentity::new` in [`identity.rs`](../../../../core/crates/layerfs-content/src/filesystem/name/identity.rs) |
 | Root is a directory with count 0; other directories have count 1; files and symlinks ≥ 1 | `InodeValue::validate` in [`inode_leaf.rs`](../../../../core/crates/layerfs-content/src/object/inode_leaf.rs) |
-| Every final count is derived from retained bindings | [`reference/reduce.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/reference/reduce.rs) |
+| Every final count is derived from retained bindings | [`reference_count/reduce.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/reference_count/reduce.rs) |
 | No directory cycle and no unreachable new directory | [`validate/cycles.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/validate/cycles.rs) |
 | An unchanged subtree keeps its ID and is not read | [`pages/merge.rs`](../../../../core/crates/layerfs-content/src/filesystem/tree/pages/merge.rs) |
 | A failed operation emits no root and releases its ordering backing once | `run_state` in [`operation.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/operation.rs) |

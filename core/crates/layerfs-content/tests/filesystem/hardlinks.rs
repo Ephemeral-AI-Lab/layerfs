@@ -6,7 +6,7 @@
 
 use crate::support;
 
-use layerfs_content::filesystem::construction::reference::ReferenceReducer;
+use layerfs_content::filesystem::construction::reference_count::ReferenceReducer;
 use layerfs_content::filesystem::{
     DirectoryUpdate, InodeUpdate, LogicalPath, PathName, SymlinkTarget,
 };
@@ -414,7 +414,7 @@ fn a_declared_new_inode_cannot_lose_a_binding() {
     assert_eq!(
         reducer.state(77).expect("state"),
         Some(
-            layerfs_content::filesystem::construction::reference::PendingState::Existing {
+            layerfs_content::filesystem::construction::reference_count::PendingState::Existing {
                 value: None,
                 delta: -1,
             }

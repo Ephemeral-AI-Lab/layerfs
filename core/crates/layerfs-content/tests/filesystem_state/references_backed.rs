@@ -1,7 +1,7 @@
 //! Public backed reference/release operations. Providers here are explicit
 //! external memory fixtures; this does not qualify the real Save owner wiring.
 use crate::support;
-use layerfs_content::filesystem::construction::reference::record::Row;
+use layerfs_content::filesystem::construction::reference_count::record::Row;
 use layerfs_content::filesystem::{
     build_filesystem, scope_for_seed, update_filesystem, update_filesystem_streamed_backed,
     DirectoryUpdate, FilesystemInput, FilesystemObjects, FilesystemRead, FilesystemResources,
@@ -1033,7 +1033,7 @@ fn new_child_inside_released_rebuilt_parent_remains_an_explicit_refusal_with_kno
 #[test]
 fn authenticated_max_count_plus_one_is_length_overflow_before_release_or_final_root_on_both_routes()
 {
-    use layerfs_content::filesystem::construction::reference::ReferenceReducer;
+    use layerfs_content::filesystem::construction::reference_count::ReferenceReducer;
     use layerfs_content::filesystem::tree::inode::read::InodeTable;
     use layerfs_content::object::inode_leaf::{decode_inode_value, encode_inode_value, InodeLeaf};
     let (mut store, original) = base(

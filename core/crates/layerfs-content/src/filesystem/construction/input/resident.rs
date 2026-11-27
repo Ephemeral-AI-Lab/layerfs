@@ -78,12 +78,13 @@ impl Default for FilesystemResources {
         Self {
             scratch_bytes: crate::filesystem::tree::pages::MAXIMUM_SCRATCH_BYTES,
             maximum_pending_records:
-                crate::filesystem::construction::reference::reduce::DEFAULT_MAXIMUM_PENDING,
+                crate::filesystem::construction::reference_count::reduce::DEFAULT_MAXIMUM_PENDING,
             merge_buffer_bytes:
-                crate::filesystem::construction::reference::runs::DEFAULT_MERGE_BUFFER_BYTES,
-            base_read_batch: crate::filesystem::construction::reference::reduce::DEFAULT_BASE_BATCH,
+                crate::filesystem::construction::reference_count::runs::DEFAULT_MERGE_BUFFER_BYTES,
+            base_read_batch:
+                crate::filesystem::construction::reference_count::reduce::DEFAULT_BASE_BATCH,
             ordering_bytes:
-                crate::filesystem::construction::reference::runs::DEFAULT_ORDERING_BYTES,
+                crate::filesystem::construction::reference_count::runs::DEFAULT_ORDERING_BYTES,
         }
     }
 }
@@ -116,7 +117,9 @@ impl FilesystemResources {
                 what: "ordering pending records",
             });
         }
-        if self.merge_buffer_bytes < crate::filesystem::construction::reference::record::ROW_BYTES {
+        if self.merge_buffer_bytes
+            < crate::filesystem::construction::reference_count::record::ROW_BYTES
+        {
             return Err(ContentError::ResourceUnavailable {
                 what: "ordering merge buffer",
             });
@@ -127,7 +130,7 @@ impl FilesystemResources {
             });
         }
         if self.ordering_bytes
-            < crate::filesystem::construction::reference::record::ROW_BYTES as u64
+            < crate::filesystem::construction::reference_count::record::ROW_BYTES as u64
         {
             return Err(ContentError::ResourceUnavailable {
                 what: "ordering bytes",

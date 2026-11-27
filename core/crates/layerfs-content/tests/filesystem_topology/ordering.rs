@@ -9,9 +9,9 @@ use crate::support;
 
 use std::collections::BTreeMap;
 
-use layerfs_content::filesystem::construction::reference::backing::OrderingBacking;
-use layerfs_content::filesystem::construction::reference::record::{Row, ROW_BYTES};
-use layerfs_content::filesystem::construction::reference::runs::RunStore;
+use layerfs_content::filesystem::construction::reference_count::backing::OrderingBacking;
+use layerfs_content::filesystem::construction::reference_count::record::{Row, ROW_BYTES};
+use layerfs_content::filesystem::construction::reference_count::runs::RunStore;
 use layerfs_content::filesystem::{
     build_filesystem, update_filesystem, DirectoryUpdate, FilesystemInput, FilesystemObjects,
     FilesystemResources, FilesystemRoot, FilesystemRootId, InodeUpdate, PathName,
@@ -277,7 +277,7 @@ fn a_removal_that_fails_is_visible_instead_of_being_hidden_in_drop() {
     std::fs::write(path.join("occupied"), b"x").expect("content");
     drop(run);
     let failure =
-        layerfs_content::filesystem::construction::reference::backing::FileBacking::with_capacity(
+        layerfs_content::filesystem::construction::reference_count::backing::FileBacking::with_capacity(
             temp.path(),
             1024,
         );
@@ -687,7 +687,7 @@ fn run_lookup_answers_every_serial_in_every_order() {
 /// "still owned".
 #[test]
 fn a_failed_run_removal_keeps_the_file_and_its_bytes_in_the_account() {
-    use layerfs_content::filesystem::construction::reference::backing::{
+    use layerfs_content::filesystem::construction::reference_count::backing::{
         FileBacking, OrderingBacking,
     };
 
@@ -739,7 +739,7 @@ fn a_failed_run_removal_keeps_the_file_and_its_bytes_in_the_account() {
 /// from the directory, so the stale file is left alone and the new backing works.
 #[test]
 fn a_stale_run_file_does_not_block_a_later_backing() {
-    use layerfs_content::filesystem::construction::reference::backing::{
+    use layerfs_content::filesystem::construction::reference_count::backing::{
         FileBacking, OrderingBacking,
     };
 
@@ -1205,7 +1205,9 @@ fn carried_state_removes_the_zero_count_re_pass() {
     // must answer the zero-count derivation without a second lookup. Before the
     // change the caller called `state()` per serial, and every run-held serial paid
     // at least one run read for it — on the forced-64 row that was 1,968 reads.
-    use layerfs_content::filesystem::construction::reference::{PendingState, ReferenceReducer};
+    use layerfs_content::filesystem::construction::reference_count::{
+        PendingState, ReferenceReducer,
+    };
 
     let temp = TempDir::new("ordering-carried-state");
     let mut backing = RecordingBacking::new(temp.path());

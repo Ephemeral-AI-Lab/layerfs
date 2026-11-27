@@ -10,7 +10,9 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::time::Instant;
 
-use layerfs_content::filesystem::construction::reference::backing::{FileBacking, OrderingBacking};
+use layerfs_content::filesystem::construction::reference_count::backing::{
+    FileBacking, OrderingBacking,
+};
 use layerfs_content::filesystem::tree::attribute::codec::AttributeEntry;
 use layerfs_content::filesystem::tree::attribute::keys::AttributeKey;
 use layerfs_content::filesystem::tree::attribute::patch::{
