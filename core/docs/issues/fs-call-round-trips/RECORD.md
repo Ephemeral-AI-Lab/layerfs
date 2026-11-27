@@ -460,3 +460,66 @@ unchanged (no-change check). Flags: SQLite Init flat_10k time (I2b scan, fixed o
 lane I's branch, merges at M3); read.lines_100_200 latency 1.13 on 5 trips; load
 8.5–11.5; peak memory +1.5–4.3 MiB per command (history 18.1 MiB: H3's 3 MiB-bounded
 per-call cache plus memo; writes moved too without code change).
+
+## M3 in progress
+
+### Lane I — I3 (branch `rt818-lane-i`; merges at M3)
+
+- `24c69d577b` I3a: acquisition read units as one fenced autocommit statement
+  (owner joined in; sizing reads folded). Exact to prediction on every shape.
+- `cef20dfd63` I2b SQLite fix (M1 benchmark flag): the window `UPDATE … FROM`
+  scanned every child of the parent per window (~3.1M rows / 314 windows at
+  flat 10k); now a primary-key probe per child. Release flat_10k 494 → 299 ms
+  (pre-I2b 510). Same statements, rows, answers; plan-guard test added.
+- `e49ef69187` I3c (D12): Init's three Saves publish through `publish_flight`
+  behind `Save::publishing_in_flights`, via `publish_captured_tail` (no payloads
+  kept; untrusted completion answers Unknown as the ordinary path). −36 at 10k
+  (predicted −25: a pack COPY is 2 trips). Sweeps 68 + 68.
+- I3d: **not done** (D13 not taken).
+- I3b: **decision (orchestrator): C now, then A; not B.** The spec's one-message
+  write unit with the dependency check as its one wait cannot be built on
+  today's session layer: `DecidedTurn::send` prepares uncached statements
+  inside a READ ONLY BEGIN…COMMIT, which inside an open write unit would commit
+  it half-way. Options were (A) a session-layer capability (lane W's files),
+  (B) an optimistic one-flight unit that continues on today's path after a
+  dependency refusal — extends the owner's Commit-only fallback exception, so
+  owner decision, not taken; (C) build only the no-wait units.
+  - `8f5c180c6c` I3b part C: `complete_files`, `set_directory_roots`,
+    `advance`, `discard`, `dispose` as one fenced flight each (new
+    `acquisition/flights.rs`). nested_10k 303 → 245, flat_10k 342 → 284
+    (predicted ~245 / ~284); 1k shapes −26 (predicted −22; the 1k `dispose`
+    falls back to two tail lookups, diagnosed). Sweeps 327 + 327 over 7 unit
+    kinds. Production LOC +312.
+  - Part A: lane W implements the session capability (note
+    `I3b-session-capability.md` in the shared notes folder), then lane I
+    builds `put_entries` / `place_children` waiting units on it.
+- Production LOC through part C: 228,392 -> 228,755 (+363 on lane I's branch).
+
+### M2 independent review (fresh subagent, diff `ba5386f3ae..7a79aaaea5`)
+
+No healthy-path bug. R5 SQL/decoding and order, H1 rows, H2 carry, H3 memo
+(keyed by directory content root: exact), W2 fix, W6 (SQLite unchanged, PG walk
+order) and `across.rs` checked correct. Findings, sent to the owning lanes:
+1. `history/rows.rs` per-call Branch-name map unbounded (operator history/stats)
+   → RH: bound it.
+2. `diff_files` with attribution holds two `Cached` (≈2 × 3 MiB) → RH: share one.
+3. `across.rs:151` `DirectoryMemo` outer map grows when full → RH.
+4. Fault/corruption-only refusal order: R5 statement failure before the `path`
+   argument refusal; corrupt marker row before "belongs to another project";
+   W6 plan-read failure before that change's own argument refusal → RH and W
+   restore where no trip is needed; any residue goes to the owner as a named
+   change (Principle 5).
+5. Nit: `operator/files.rs` Branch-name read error text differs only on a fault.
+
+### Disk episode (2026-11-27)
+
+Host free fell to 87.6 GB and the Docker guest to 0 B (PostgreSQL refused Store
+creation with `Capacity`; lane RH paused H4). One cleanup episode via
+`tools/cleanup.py` plan/apply (pass folders `~/.cache/layerfs-cleanup/2026-11-27/`):
+host 87.60 → 166.72 GB (net +79.12 GB; **300 GB target not met, short 220.9 GB**);
+guest 0 → 82.6 GB free. Most of the gain came from another session shrinking its
+own target volume; this pass removed ~2.9 GB (6 idle volumes, 101 orphan
+anonymous volumes, the two finished #818 agent worktrees, archived under
+`refs/cleanup/20261127T011107Z-5c90d6ee436a/*`). Protected/uncertain allocations
+(other sessions' #819 targets and volumes, #816 measurement data, dsh, BuildKit
+cache, launcher records) were left alone.
