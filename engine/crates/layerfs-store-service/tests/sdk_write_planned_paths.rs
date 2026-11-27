@@ -7,7 +7,15 @@
 //! that is a file, a missing parent), each at its change's index; and a
 //! list of 1,100 changes (past one plan of `PLAN_PATHS` = 1,024) commits
 //! every change. Runs on SQLite, and on PostgreSQL with
-//! `LAYERFS_TEST_POSTGRES_URL` (NOT_RUN without it).
+//! `LAYERFS_TEST_POSTGRES_URL` (NOT_RUN without it). On PostgreSQL a drop
+//! sweep checks that a plan read never refuses ahead of a change refused
+//! before any read.
+#[path = "support/adversary.rs"]
+#[allow(dead_code)]
+mod adversary;
+#[path = "support/fault_proxy.rs"]
+#[allow(dead_code)]
+mod fault_proxy;
 #[path = "support/round_trips.rs"]
 mod rt;
 
@@ -176,4 +184,76 @@ fn postgresql_planned_paths_answer_as_before() {
         return;
     };
     scenario(&mut store);
+}
+
+/// The refusal order of a call whose first change is refused before any
+/// read (here by its arguments: a relative path) while a later change
+/// names base paths to plan (W6 review). The connection is dropped at each
+/// server message of the call in turn. Every answer that names a change is
+/// that first change's own refusal, at index 0, as without a plan. A
+/// failure before the changes (the bind, the snapshot, the close) names
+/// none. The call never commits.
+#[test]
+fn postgresql_unread_refusal_comes_before_the_plan() {
+    use adversary::{Service, TestStore};
+    use fault_proxy::{Fault, FaultProxy};
+    let _turn = rt::postgresql_turn();
+    let seed: &[(&str, &[u8])] = &[("/dir/inner", b"inner\n")];
+    let Some(store) = TestStore::postgres("w6order", seed) else {
+        return;
+    };
+    store.fork("work");
+    let call = |service: &Service| {
+        let changes = vec![
+            write("relative.txt", "x\n"),
+            write("/dir/deeper/new.txt", "y\n"),
+        ];
+        let fields = vec![("branch", t("work")), ("changes", SdkValue::List(changes))];
+        service.call("fs.apply", fields)
+    };
+    let named = |refusal: &SdkRefusal| {
+        let index = refusal.detail.get_int("index");
+        (refusal.code.clone(), refusal.message.clone(), index)
+    };
+    let direct = store.open();
+    let expected = named(&call(&direct).expect_err("the relative path is refused"));
+    direct.stop();
+    assert_eq!(expected.2, Some(0), "{expected:?}");
+
+    let (url, _) = store.postgres.clone().unwrap();
+    let (proxy, proxied) = FaultProxy::start(&url);
+    let selection = store.selection_via(&proxied);
+    let service = Service::open(&store, selection.clone());
+    proxy.arm(None);
+    let clean = call(&service).expect_err("refused through the proxy");
+    let window = proxy.disarm();
+    service.stop();
+    assert_eq!(named(&clean), expected);
+    assert!(window.seen > 0, "the call sends something");
+    let mut states = std::collections::BTreeMap::<String, u64>::new();
+    for n in 0..window.seen {
+        let service = Service::open(&store, selection.clone());
+        proxy.arm(Some((n, Fault::Drop)));
+        let armed = call(&service);
+        let fired = proxy.disarm().fired.is_some();
+        assert!(fired, "n{n}: the fault fired");
+        let refusal = armed.expect_err("the call never commits");
+        let answer = named(&refusal);
+        match answer.2 {
+            Some(_) => assert_eq!(answer, expected, "n{n}: the first change's own refusal"),
+            None => assert!(
+                matches!(answer.0.as_str(), "Unknown" | "Failed"),
+                "n{n}: a failure before the changes: {answer:?}"
+            ),
+        }
+        *states
+            .entry(format!("{} {:?}", answer.0, answer.2))
+            .or_default() += 1;
+        service.abandon();
+    }
+    println!("W6_ORDER_STATES K={} {states:?}", window.seen);
+    assert!(
+        store.no_open_transaction(),
+        "no backend left in a transaction"
+    );
 }

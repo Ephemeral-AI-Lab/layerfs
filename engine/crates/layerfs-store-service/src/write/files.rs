@@ -355,7 +355,8 @@ fn change(
     for (index, change) in changes.iter().enumerate() {
         result = (|| {
             // #818 W6: the next window's paths are planned before its first
-            // change; a failed plan read refuses at that change.
+            // change; a failed plan read refuses at that change. A change
+            // refused before any read is never planned over (`Mutation::plan`).
             if index % super::plan::PLAN_PATHS == 0 {
                 let end = changes.len().min(index + super::plan::PLAN_PATHS);
                 mutation.plan(&changes[index..end])?;
