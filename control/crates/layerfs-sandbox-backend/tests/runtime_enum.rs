@@ -4,11 +4,11 @@
 #![cfg(unix)]
 use layerfs_sandbox_backend::{Backend, IsolationModel, MountDriver};
 
-/// Records keep their values: `Backend::Native` is stored as `"native"` (G6).
+/// Records keep their values: `Backend::Process` is stored as `"native"` (G6).
 #[test]
 fn stored_names_parse_back_and_do_not_follow_the_rust_names() {
     let names: Vec<&str> = Backend::ALL.iter().map(|b| b.stored_name()).collect();
-    assert_eq!(names, ["native", "namespaces"]);
+    assert_eq!(names, ["process", "namespaces"]);
     for backend in Backend::ALL {
         assert_eq!(Backend::parse(backend.stored_name()), Some(backend));
         assert!(!backend.description().is_empty(), "{backend:?}");
@@ -21,11 +21,11 @@ fn stored_names_parse_back_and_do_not_follow_the_rust_names() {
 
 #[test]
 fn each_backend_fixes_its_capabilities() {
-    let host = Backend::Native.capabilities();
+    let host = Backend::Process.capabilities();
     assert_eq!(
         (host.name, host.isolation, host.mount_driver),
         (
-            "native-macos",
+            "process-macos",
             IsolationModel::HostProcess,
             MountDriver::LoopbackNfs
         )
@@ -54,7 +54,7 @@ fn each_backend_fixes_its_capabilities() {
 #[test]
 fn a_bind_is_refused_where_the_backend_does_not_bind() {
     use layerfs_sandbox_backend::{
-        Bind, CommandIdentity, LaunchRequest, NativeProvider, ProviderLaunchOptions, Runtime,
+        Bind, CommandIdentity, LaunchRequest, ProcessProvider, ProviderLaunchOptions, Runtime,
         RuntimeError,
     };
     use std::time::Duration;
@@ -72,7 +72,7 @@ fn a_bind_is_refused_where_the_backend_does_not_bind() {
     };
     let root = std::env::temp_dir().join(format!("lfs-binds-{}", std::process::id()));
     std::fs::create_dir_all(&root).unwrap();
-    let runtime = Runtime::Native(NativeProvider::new(&root).unwrap());
+    let runtime = Runtime::Process(ProcessProvider::new(&root).unwrap());
     let failure = runtime.launch_with_binds(request, vec![bind]).unwrap_err();
     assert!(
         matches!(failure.cause, RuntimeError::Unsupported(why) if why.contains("no bind")),

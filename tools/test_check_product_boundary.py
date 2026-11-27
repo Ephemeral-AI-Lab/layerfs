@@ -220,7 +220,7 @@ class ProductBoundaryTests(unittest.TestCase):
         # the driver's remaining darwin.rs (mount facts) is no allowance.
         darwin = Path("engine/crates/layerfs-bridge/src/process/darwin.rs")
         self.assertFalse(unsafe_violations(darwin, "fn f() { unsafe { libc::proc_listallpids(); } }"))
-        left = Path("control/crates/layerfs-sandbox-backend/src/backend/native/macos/darwin.rs")
+        left = Path("control/crates/layerfs-sandbox-backend/src/backend/process/macos/darwin.rs")
         self.assertTrue(unsafe_violations(left, "fn f() { unsafe { libc::proc_listallpids(); } }"))
         for sibling in ("process/identity.rs", "process/linux.rs", "process/mod.rs", "control.rs"):
             with self.subTest(sibling=sibling):
@@ -235,7 +235,7 @@ class ProductBoundaryTests(unittest.TestCase):
         for sibling in (
             "backend/namespaces/linux/mounts.rs",
             "backend/namespaces/network/setup.rs",
-            "backend/native/groups.rs",
+            "backend/process/groups.rs",
             "bin/layerfs-sandbox-helper/exec.rs",
         ):
             with self.subTest(sibling=sibling):
@@ -246,7 +246,7 @@ class ProductBoundaryTests(unittest.TestCase):
         self.assertTrue(unsafe_violations(other, "fn f() { unsafe { call(); } }"))
         self.assertTrue(
             unsafe_violations(
-                Path("control/crates/layerfs-sandbox-backend/src/backend/native/macos/mounts.rs"),
+                Path("control/crates/layerfs-sandbox-backend/src/backend/process/macos/mounts.rs"),
                 "fn f() { unsafe { call(); } }",
             )
         )

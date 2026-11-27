@@ -20,6 +20,14 @@ mod client;
 mod diagnostic;
 mod frame;
 mod hello;
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+mod host;
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+mod host_diagnostic;
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+mod host_frame;
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+mod host_hello;
 
 pub use client::{
     call, hello, hello_within, ping, request, send, send_within, Budget, Endpoint, EventSink,
@@ -32,3 +40,18 @@ pub use frame::{
 #[cfg(feature = "machine")]
 pub(crate) use hello::sealed_hash;
 pub use hello::{is_mismatch, replace_with, Hello, PROTOCOL};
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+pub use host::{
+    host_check_peer, HostGuard, HostPaths, StreamFrame, StreamReader, StreamSender,
+    HOST_HELD_WRITES, STREAM_KEEPALIVE, STREAM_PIECE, STREAM_PROGRESS, STREAM_WAIT,
+};
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+pub use host_diagnostic::{HostObservation, HostProbe};
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+pub use host_frame::{
+    read_host_frame, value_within_budget, within_budget, write_host_frame, FRAME_LIMITS,
+    HOST_MAX_REPLY, HOST_MAX_REQUEST,
+};
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+pub use host_hello::{set_host_build, HostHello, HOST_PROTOCOL};

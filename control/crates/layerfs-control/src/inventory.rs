@@ -390,7 +390,15 @@ pub fn can_remove_project(home: &Path, project: &str) -> Result<()> {
 /// `fix` removes them. Under the home lock and the Store's lock (it
 /// removes stale leases).
 pub fn store_idle(home: &Path, store: &str) -> Result<()> {
-    let holders = lease::holders(home, store)?;
+    store_idle_with(home, store, None)
+}
+
+pub(crate) fn store_idle_with(
+    home: &Path,
+    store: &str,
+    owner: Option<&lease::Owner>,
+) -> Result<()> {
+    let holders = lease::holders_except(home, store, owner)?;
     let sandboxes = sandboxes_of_store(home, store)?;
     let mut why = Vec::new();
     if !holders.is_empty() {

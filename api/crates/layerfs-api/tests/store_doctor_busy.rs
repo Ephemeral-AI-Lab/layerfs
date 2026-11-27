@@ -59,8 +59,7 @@ fn a_store_another_writer_holds_is_busy_not_a_schema_error() {
     home::private_dir(file.parent().unwrap()).unwrap();
     drop(
         SqliteHandles::create(
-            PersistenceConfig::sqlite(&file)
-                .with_sqlite_profile(SqlitePersistenceProfile::Normal),
+            PersistenceConfig::sqlite(&file).with_sqlite_profile(SqlitePersistenceProfile::Normal),
             StoragePolicy::frozen_default(),
             &HistoryCatalogConfig {
                 binding_key: BINDING.to_vec(),
@@ -75,7 +74,7 @@ fn a_store_another_writer_holds_is_busy_not_a_schema_error() {
         &SdkValue::map([
             ("name", SdkValue::text("held")),
             ("kind", SdkValue::text("sqlite")),
-            ("machine", SdkValue::text("native")),
+            ("machine", SdkValue::text(layerfs_home::names::HOST_MACHINE)),
             ("binding", SdkValue::Bytes(BINDING.to_vec())),
             ("cursor", SdkValue::Bytes(vec![9; 32])),
         ]),

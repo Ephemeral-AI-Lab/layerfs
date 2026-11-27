@@ -40,6 +40,10 @@ fn bytes(n: usize) -> SdkValue {
 fn word(arg: &Arg, value: &SdkValue) -> Option<SdkValue> {
     Some(match (arg.kind, value) {
         (Kind::Function, _) => return None,
+        // an input the CLI left unread for its route: its size is not known
+        (Kind::Content | Kind::Json, _) if layerfs_store::host_write::deferred() => {
+            SdkValue::text("<input>")
+        }
         (Kind::Content, SdkValue::Text(text)) => bytes(text.len()),
         (Kind::Content, SdkValue::Bytes(raw)) => bytes(raw.len()),
         (Kind::Content | Kind::Json, value) => bytes(layerfs_home::json::print(value).len()),

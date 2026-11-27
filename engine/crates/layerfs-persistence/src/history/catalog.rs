@@ -273,9 +273,9 @@ impl HistoryCatalog for HistoryProvider {
 
     fn publish_lane(&self) -> HistoryResult<PublishLane> {
         match &self.engine {
-            crate::backend::Engine::Sqlite(session) => {
-                Ok(PublishLane::new(Box::new(session.hold_lane()?)))
-            }
+            crate::backend::Engine::Sqlite(session) => Ok(PublishLane::new(Box::new(
+                self.sqlite_write_session(session)?.hold_lane()?,
+            ))),
             crate::backend::Engine::Postgres(session) => {
                 Ok(PublishLane::new(Box::new(session.hold_lane()?)))
             }

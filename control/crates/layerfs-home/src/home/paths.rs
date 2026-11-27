@@ -56,6 +56,32 @@ pub fn worker_record(home: &Path, machine: &str) -> PathBuf {
     machine_dir(home, machine).join("worker.json")
 }
 
+/// The native worker's ordinary endpoint.
+pub fn host_worker_socket(home: &Path) -> PathBuf {
+    machine_dir(home, crate::names::HOST_MACHINE).join("worker.sock")
+}
+
+/// The native worker's endpoint for streamed file writes, with admission
+/// of its own: a held write never takes a place of the ordinary endpoint.
+pub fn host_worker_writes(home: &Path) -> PathBuf {
+    machine_dir(home, crate::names::HOST_MACHINE).join("writes.sock")
+}
+
+/// The native worker's management endpoint, with independent admission.
+pub fn host_worker_control(home: &Path) -> PathBuf {
+    machine_dir(home, crate::names::HOST_MACHINE).join("worker.ctl")
+}
+
+/// Stable lock held by the worker until its endpoints have been removed.
+pub fn host_worker_lock(home: &Path) -> PathBuf {
+    machine_dir(home, crate::names::HOST_MACHINE).join("worker.lock")
+}
+
+/// Serializes launch attempts without relinquishing the worker's lifetime lock.
+pub fn host_worker_startup_lock(home: &Path) -> PathBuf {
+    machine_dir(home, crate::names::HOST_MACHINE).join("worker-start.lock")
+}
+
 /// `machine/<machine>/sandbox-retired/`: one tombstone per closed Sandbox,
 /// outside `sandbox/` so a Sandbox listing never mistakes it for one.
 pub fn sandbox_retired_dir(home: &Path, machine: &str) -> PathBuf {
@@ -88,14 +114,24 @@ pub fn workspace_dir(home: &Path, sandbox: &str) -> PathBuf {
     sandbox_dir(home, sandbox).join("workspace")
 }
 
-/// `machine/native/run/`: the local Sandbox backends' runtime root (0755),
-/// one directory per Sandbox beside the image cache the namespaces backend
-/// keeps there (`images/`), in the home and under a worker's root. The
-/// `native` folder name predates the namespaces backend; the docker
-/// machine's worker uses the same path under its root since D-8
-/// (layerfs-project#111), so the name is kept rather than moved.
+/// The folder under `machine/` that names a worker root's run root: every
+/// worker root (docker, lima, apple-container) is a Linux guest.
+pub const GUEST_RUN: &str = "linux-guest";
+
+/// The local Sandbox backends' runtime root (0755) of side root `root`, a
+/// home or a worker's root: one directory per Sandbox beside the image
+/// cache the namespaces backend keeps there (`images/`). It is named for
+/// the side's kernel and role (#819 R): `machine/linux-guest/run/` in a
+/// worker's root ([`crate::home::guest::is_root`], which the worker marks
+/// before it sweeps or serves anything), else the host machine's own
+/// folder, `machine/macos-host/run/` or `machine/linux-host/run/`. The
+/// earlier `machine/native/run/` is not read.
 pub fn run_root(root: &Path) -> PathBuf {
-    machine_dir(root, "native").join("run")
+    let folder = match crate::home::guest::is_root(root) {
+        true => GUEST_RUN,
+        false => crate::names::HOST_MACHINE,
+    };
+    machine_dir(root, folder).join("run")
 }
 
 /// `log/`: `uncertain.jsonl` (never rotated) and the logs that rotate

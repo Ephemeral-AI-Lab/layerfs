@@ -1,14 +1,15 @@
 //! Explicit creation/open, binding validation and read-only authority.
 use crate::{
-    backend::Session, AcquisitionProvider, HistoryProvider, PersistenceConfig, SqliteHandles,
-    StorageProvider,
+    backend::{records::BackendError, sqlite::lifecycle::identity::FileIdentity, Session},
+    AcquisitionProvider, Committer, HistoryProvider, MergeScratch, PersistenceConfig,
+    SqliteHandles, StorageProvider,
 };
 use layerfs_history::{CatalogId, HistoryCatalogConfig};
 use layerfs_storage::{port::PersistenceError, StoragePolicy};
 use std::{
     fs::OpenOptions,
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{Arc, Mutex, OnceLock},
 };
 impl SqliteHandles {
     /// Creates a fresh combined Store, refusing existing files and unsupported engines.
@@ -43,7 +44,12 @@ impl SqliteHandles {
         )?);
         session.initialize(policy, history, catalog_id)?;
         let directory = config.path.parent().map(Path::to_path_buf);
-        Self::validated(session, directory, &history.binding_key, history.cursor_key)
+        Ok(Self::validated(
+            session,
+            directory,
+            &history.binding_key,
+            history.cursor_key,
+        )?)
     }
     /// Opens validated authority with the explicitly selected profile; acknowledged reservations persist.
     pub fn open_writable(
@@ -51,7 +57,10 @@ impl SqliteHandles {
         binding: &[u8],
         cursor_key: [u8; 32],
     ) -> Result<Self, PersistenceError> {
-        Self::open(config, binding, cursor_key, true)
+        if !cfg!(any(target_os = "macos", target_os = "linux")) {
+            return Err(PersistenceError::BackendUnavailable);
+        }
+        Ok(Self::open(config, binding, cursor_key, true, None)?)
     }
     /// Opens one read-only session. Mutation is refused before BEGIN or SQL.
     pub fn open_read_only(
@@ -59,7 +68,10 @@ impl SqliteHandles {
         binding: &[u8],
         cursor_key: [u8; 32],
     ) -> Result<Self, PersistenceError> {
-        Self::open(config, binding, cursor_key, false)
+        if !cfg!(any(target_os = "macos", target_os = "linux")) {
+            return Err(PersistenceError::BackendUnavailable);
+        }
+        Ok(Self::open(config, binding, cursor_key, false, None)?)
     }
     /// Opens for diagnosis without changing journal/checkpoint settings or
     /// migrating the source. Uses the Normal profile, read-only.
@@ -69,12 +81,12 @@ impl SqliteHandles {
         cursor_key: [u8; 32],
     ) -> Result<Self, PersistenceError> {
         let session = Arc::new(Session::connect_diagnostic(path)?);
-        Self::validated(
+        Ok(Self::validated(
             session,
             path.parent().map(std::path::Path::to_path_buf),
             binding,
             cursor_key,
-        )
+        )?)
     }
     /// Whether the sqlite Store at `path` records the identity `binding`,
     /// read without validating its schema (diagnosis only).
@@ -91,19 +103,26 @@ impl SqliteHandles {
         binding: &[u8],
         cursor_key: [u8; 32],
         writable: bool,
-    ) -> Result<Self, PersistenceError> {
-        if !cfg!(any(target_os = "macos", target_os = "linux")) {
-            return Err(PersistenceError::BackendUnavailable);
-        }
+        expected: Option<FileIdentity>,
+    ) -> Result<Self, BackendError> {
         let directory = config.path.parent().map(Path::to_path_buf);
-        let session = Arc::new(Session::connect(
-            &config.path,
-            writable,
-            false,
-            config.sqlite_profile,
-            config.sqlite_pack_layout,
-            config.sqlite_acquisition,
-        )?);
+        let session = Arc::new(match expected {
+            Some(identity) => Session::connect_pinned_writer(
+                &config.path,
+                config.sqlite_profile,
+                config.sqlite_pack_layout,
+                config.sqlite_acquisition,
+                identity,
+            )?,
+            None => Session::connect(
+                &config.path,
+                writable,
+                false,
+                config.sqlite_profile,
+                config.sqlite_pack_layout,
+                config.sqlite_acquisition,
+            )?,
+        });
         // An existing Store keeps the layout and acquisition schema it was
         // written with; the creation-only config selection does not name it.
         // A current Store runs none of the additive migrations below; only one
@@ -137,11 +156,11 @@ impl SqliteHandles {
         directory: Option<PathBuf>,
         binding: &[u8],
         cursor_key: [u8; 32],
-    ) -> Result<Self, PersistenceError> {
+    ) -> Result<Self, BackendError> {
         if cursor_key == [0; 32] {
-            return Err(PersistenceError::Malformed);
+            return Err(BackendError::Integrity);
         }
-        let catalog_id = CatalogId::derive(binding).map_err(|_| PersistenceError::Malformed)?;
+        let catalog_id = CatalogId::derive(binding).map_err(|_| BackendError::Integrity)?;
         let (incarnation, digest_floor, trace_salt) = session.validate(catalog_id, binding)?;
         let storage = Arc::new(StorageProvider {
             session: session.clone(),
@@ -150,6 +169,7 @@ impl SqliteHandles {
             storage,
             acquisition: AcquisitionProvider::new(session.clone(), directory),
             history: HistoryProvider {
+                sqlite_writer: None,
                 engine: crate::backend::Engine::Sqlite(session),
                 catalog_id,
                 incarnation,
@@ -159,5 +179,91 @@ impl SqliteHandles {
                 mark_budget: std::sync::atomic::AtomicU64::new(crate::history::spill::BUDGET_BYTES),
             },
         })
+    }
+}
+
+/// Writer capabilities published together after the first successful start.
+pub struct SqliteWriter {
+    /// The writable physical provider, also used for checkpoints.
+    pub storage: Arc<StorageProvider>,
+    /// Fused Commit publication on the writable session.
+    pub committer: Committer,
+    /// Merge build records on the writable session.
+    pub merge_scratch: MergeScratch,
+}
+
+/// One optional writable session for a Store opened for in-process calls.
+/// A failed open leaves the slot empty. Only the caller holding the
+/// initializer makes an attempt, and readers never wait for that turn.
+pub struct DeferredSqliteWriter {
+    config: PersistenceConfig,
+    binding: Vec<u8>,
+    cursor_key: [u8; 32],
+    identity: FileIdentity,
+    initialize: Mutex<()>,
+    opened: OnceLock<SqliteWriter>,
+}
+
+impl DeferredSqliteWriter {
+    /// Opens a validated reader and the mixed read/write catalog over that
+    /// authority. The reader's catalog remains read-only for control lookups.
+    pub fn open(
+        config: PersistenceConfig,
+        binding: &[u8],
+        cursor_key: [u8; 32],
+    ) -> Result<(SqliteHandles, HistoryProvider, Arc<Self>), PersistenceError> {
+        let reader = SqliteHandles::open_read_only(config.clone(), binding, cursor_key)?;
+        let deferred = Arc::new(Self {
+            config,
+            binding: binding.to_vec(),
+            cursor_key,
+            identity: reader
+                .storage
+                .session
+                .identity
+                .ok_or(PersistenceError::BackendUnavailable)?,
+            initialize: Mutex::default(),
+            opened: OnceLock::new(),
+        });
+        let history = reader.history.with_sqlite_writer(deferred.clone());
+        Ok((reader, history, deferred))
+    }
+
+    /// The current writer, without opening one or waiting for a start.
+    pub fn get(&self) -> Option<&SqliteWriter> {
+        self.opened.get()
+    }
+
+    /// Returns the writer, making at most one opening attempt for this call.
+    pub fn start(&self) -> Result<&SqliteWriter, PersistenceError> {
+        Ok(self.start_writer()?)
+    }
+
+    /// Starts the writer before a history mutation prepares its effect.
+    pub fn prepare_history_write(&self) -> layerfs_history::HistoryResult<()> {
+        self.start_writer()?;
+        Ok(())
+    }
+
+    pub(crate) fn start_writer(&self) -> Result<&SqliteWriter, BackendError> {
+        if let Some(writer) = self.opened.get() {
+            return Ok(writer);
+        }
+        let _turn = self.initialize.lock().map_err(|_| BackendError::Closed)?;
+        if let Some(writer) = self.opened.get() {
+            return Ok(writer);
+        }
+        let handles = SqliteHandles::open(
+            self.config.clone(),
+            &self.binding,
+            self.cursor_key,
+            true,
+            Some(self.identity),
+        )?;
+        Ok(self.opened.get_or_init(|| SqliteWriter {
+            committer: handles.history.committer(),
+            merge_scratch: handles.storage.merge_scratch(),
+            storage: handles.storage,
+        }))
     }
 }

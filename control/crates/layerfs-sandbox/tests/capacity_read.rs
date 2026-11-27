@@ -213,7 +213,7 @@ fn sandbox_folder(home: &Path, endpoint: SocketAddr, forward: bool) {
         let record = SdkValue::map([
             ("name", t("s1")),
             ("project", t("shop/api")),
-            ("machine", t("native")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
             ("id", t("s-1")),
             (
                 "daemon",
@@ -221,14 +221,14 @@ fn sandbox_folder(home: &Path, endpoint: SocketAddr, forward: bool) {
                     "forward",
                     SdkValue::map([
                         ("address", t(&endpoint.to_string())),
-                        ("machine", t("native")),
+                        ("machine", t(layerfs_home::names::HOST_MACHINE)),
                     ]),
                 )]),
             ),
         ]);
         layerfs_home::home::records::write_record(&dir.join("record.json"), &record).unwrap();
         layerfs_home::home::records::write_record(
-            &paths::worker_record(home, "native"),
+            &paths::worker_record(home, layerfs_home::names::HOST_MACHINE),
             &SdkValue::map([("address", t("127.0.0.1:1")), ("secret", t("5e"))]),
         )
         .unwrap();

@@ -2,12 +2,12 @@
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-The `backup` calls: connect r2 or S3-endpoint buckets, list the Store files on them, copy a sqlite Store up to a bucket or back down to `native`, and check a bucket, within the [SDK](README.md). `backup.doctor` is one of [the doctors](../../control/doctor/README.md).
+The `backup` calls: connect r2 or S3-endpoint buckets, list the Store files on them, copy a sqlite Store up to a bucket or back down to the host machine, and check a bucket, within the [SDK](README.md). `backup.doctor` is one of [the doctors](../../control/doctor/README.md).
 
 | | |
 | --- | --- |
 | Source | [`api/crates/layerfs-api/src/backup`](../../../../api/crates/layerfs-api/src/backup) (one file per call), [`layerfs-store/src/backup`](../../../../control/crates/layerfs-store/src/backup), [`layerfs-control/src/backup.rs`](../../../../control/crates/layerfs-control/src/backup.rs), [`layerfs-bucket`](../../../../control/crates/layerfs-bucket/src) |
-| Runs by default | the caller's process (records, bucket I/O); `backup.create` stages its snapshot on the Store's machine (here for `native`, else in its worker) and the bytes go machine → this computer → bucket |
+| Runs by default | the caller's process (records, bucket I/O); `backup.create` stages its snapshot on the Store's machine (here for the host machine, else in its worker) and the bytes go machine → this computer → bucket |
 | Design | [Backups](../../control/backups/README.md), [buckets](../../control/backups/buckets.md) |
 
 ## Calls
@@ -19,7 +19,7 @@ The `backup` calls: connect r2 or S3-endpoint buckets, list the Store files on t
     |   behind | changed | missing | not_listed        |
  create <store> <bucket> [--file F]  (sqlite Store -> bucket) -- link saved
     v
- restore <bucket> <file> <store>     (bucket -> sqlite Store on native) -- link saved
+ restore <bucket> <file> <store>     (bucket -> sqlite Store on the host machine) -- link saved
     v
  doctor <bucket> [--full]            (record, key, reach, one listing; --full writes)
  disconnect <bucket>                 (forget bucket, key and links; files stay)
@@ -251,7 +251,7 @@ Python  layerfs.backup.restore(bucket, file, store, *, on_progress=None)
 
 Reads `file` from the bucket into the sqlite Store `store` on this computer:
 a new Store (`outcome` `created`), or a replacement for an idle Store on
-`native` unchanged since its last backup or restore through this bucket
+the host machine unchanged since its last backup or restore through this bucket
 (`outcome` `replaced`), held as the Store's `op` (`restore`). If
 `store/<name>/` already exists, the kernel guard runs before anything is
 staged and again under the home lock before the install. Progress phases:
@@ -269,7 +269,7 @@ next restore
 
 | Refusal | When |
 | --- | --- |
-| `Unsupported` | the Store to replace is not on `native` (move it there first); `store/<name>/` exists and is not a private `0700` folder of this user |
+| `Unsupported` | the Store to replace is not on the host machine (move it there first); `store/<name>/` exists and is not a private `0700` folder of this user |
 | `InUse` | a process holds the Store, a Sandbox of it is recorded (the next field `sandboxes` names them; when no process holds it the `fix` removes them, as `store.move`'s), or its `-wal`/`-shm` exists |
 | `Conflict` | the Store changed since its last transfer through this bucket, has no link, or was replaced during the download |
 | `Exists` | a Store of that name was made during the download |

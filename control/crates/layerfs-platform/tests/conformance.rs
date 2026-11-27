@@ -361,7 +361,7 @@ enum Loopback {
 
 fn loopback(spec: &Spec) -> Loopback {
     match spec.kind {
-        Platform::Native => Loopback::Shared,
+        Platform::Host => Loopback::Shared,
         // a Linux Engine's worker shares the host's network; Docker
         // Desktop's resolves `host.docker.internal` (D-8)
         Platform::Docker if cfg!(target_os = "linux") => Loopback::Shared,
@@ -646,7 +646,7 @@ enum DaemonPort {
 
 fn daemon_port(spec: &Spec) -> DaemonPort {
     match spec.kind {
-        Platform::Native => DaemonPort::Shared,
+        Platform::Host => DaemonPort::Shared,
         Platform::Lima => DaemonPort::Tunnel,
         Platform::Docker => DaemonPort::Refused(Code::Unsupported, "Docker publishes a container's ports only when it starts, so a Sandbox daemon's port in the worker container cannot be published later; its Workspace calls go through the worker"),
         Platform::AppleContainer => DaemonPort::Refused(Code::Unsupported, "the container CLI publishes a port only when the machine's container is created, so a Sandbox daemon's port cannot be published later; its Workspace calls go through the worker"),

@@ -7,20 +7,19 @@ use crate::banner::paint;
 use crate::output;
 use layerfs_api::Call;
 use layerfs_bridge::control::SdkValue;
-use std::io::Write;
-use std::process::ExitCode;
+use std::io::{self, Write};
 
 /// Prints `value`, the answer of `call` given as `words`, readably: the
 /// call's own view, else the generic one; then, on stderr, the command
 /// line of the next page (`next_cursor`) or line window (`next_line`).
-pub fn show(call: &Call, words: &[String], value: &SdkValue) -> ExitCode {
+pub fn show(call: &Call, words: &[String], value: &SdkValue) -> io::Result<()> {
     let hunks = |item: &SdkValue| item.get("hunks").is_some();
     let printed = match call.name().as_str() {
         "file.blame" => blame(value),
         "commit.diff" if items(value).iter().any(hunks) => diff(value),
         _ => output::readable(&without(value, "next_cursor"), call.form),
     };
-    let code = output::print(&printed);
+    output::write_stdout(&printed)?;
     let next = |key: &str, flag: &str| {
         let at = match value.get(key)? {
             SdkValue::Text(text) => text.clone(),
@@ -36,7 +35,7 @@ pub fn show(call: &Call, words: &[String], value: &SdkValue) -> ExitCode {
     if let Some(line) = next("next_cursor", "--cursor").or_else(|| next("next_line", "--line")) {
         output::diagnostic(&line);
     }
-    code
+    Ok(())
 }
 
 /// `value` without its field `key`.
@@ -168,17 +167,17 @@ fn diff(value: &SdkValue) -> String {
 /// `workspace exec` without `--stream`: the command's stdout and stderr
 /// written as they are to this process's own, then on stderr what else
 /// the answer says (a cancel, a spilled output file).
-pub fn exec(value: &SdkValue) {
+pub fn exec(value: &SdkValue) -> io::Result<()> {
     let write = |key: &str, out: &mut dyn Write| {
-        let _ = match value.get(key) {
+        match value.get(key) {
             Some(SdkValue::Text(text)) => out.write_all(text.as_bytes()),
             Some(SdkValue::Bytes(bytes)) => out.write_all(bytes),
             _ => Ok(()),
-        };
-        let _ = out.flush();
+        }?;
+        out.flush()
     };
-    write("stdout", &mut std::io::stdout().lock());
-    write("stderr", &mut std::io::stderr().lock());
+    let stdout = write("stdout", &mut io::stdout().lock());
+    let _ = write("stderr", &mut io::stderr().lock());
     if value.get("cancelled") == Some(&SdkValue::Bool(true)) {
         output::diagnostic("layerfs: the command was cancelled");
     }
@@ -187,4 +186,5 @@ pub fn exec(value: &SdkValue) {
             output::diagnostic(&format!("layerfs: the rest of its {which} is in {file}"));
         }
     }
+    stdout
 }

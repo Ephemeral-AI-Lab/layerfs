@@ -3,7 +3,7 @@
 //! `exec` runs `bash -c <command>` as the Sandbox's command identity in the
 //! Workspace directory and returns the exit code and output when it ends; the
 //! daemon is not involved. A local Sandbox
-//! (`layerfs_sandbox_backend::Sandbox::Native`) runs the same commands as
+//! (`layerfs_sandbox_backend::Sandbox::Process`) runs the same commands as
 //! processes of this kernel. Each command has an exec id, a stop handle and,
 //! on the side that keeps its Workspace's record, a record while it runs
 //! (`super::record`), through which another process cancels it.

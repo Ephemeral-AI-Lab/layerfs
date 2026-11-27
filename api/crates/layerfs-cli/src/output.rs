@@ -4,7 +4,7 @@
 use crate::run::REFUSED;
 use layerfs_api::{json, Form, Part};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use std::io::Write;
+use std::io::{self, Write};
 use std::process::ExitCode;
 
 /// Prints `refusal` on stderr: one line of JSON, `{"error","message"}`,
@@ -49,12 +49,16 @@ pub fn refusal_text(value: &SdkValue) -> String {
 /// Prints a call's result; `form` is the call's declared answer, which
 /// the readable form reads for the columns its rows may leave out.
 pub fn result(value: &SdkValue, text: bool, form: Option<&Form>) -> ExitCode {
+    stdout_status(write_result(value, text, form))
+}
+
+pub(crate) fn write_result(value: &SdkValue, text: bool, form: Option<&Form>) -> io::Result<()> {
     let printed = if text {
         readable(value, form)
     } else {
         format!("{}\n", json::print(value))
     };
-    print(&printed)
+    write_stdout(&printed)
 }
 
 /// A doctor's report in the readable form: a count line, then each finding as
@@ -210,16 +214,44 @@ pub fn diagnostic(line: &str) {
 
 /// Writes `printed` to stdout.
 pub fn print(printed: &str) -> ExitCode {
-    let mut out = std::io::stdout().lock();
-    if out
-        .write_all(printed.as_bytes())
-        .and_then(|_| out.flush())
-        .is_err()
-    {
-        // stdout went away; the call itself succeeded
-        return ExitCode::from(REFUSED);
+    stdout_status(write_stdout(printed))
+}
+
+pub(crate) fn write_stdout(printed: &str) -> io::Result<()> {
+    let mut out = io::stdout().lock();
+    out.write_all(printed.as_bytes())?;
+    out.flush()
+}
+
+fn stdout_status(result: io::Result<()>) -> ExitCode {
+    match result {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(_) => ExitCode::from(REFUSED),
     }
-    ExitCode::SUCCESS
+}
+
+/// Report a local output failure after the call's result is known.
+pub(crate) fn completed(result: io::Result<()>, text: bool, command: Option<i64>) -> ExitCode {
+    if let Err(error) = &result {
+        let message = format!("the LayerFS call succeeded, but writing stdout failed: {error}");
+        if text {
+            let exit = command.map_or_else(String::new, |code| format!(" (command exit {code})"));
+            diagnostic(&format!("layerfs: {message}{exit}"));
+        } else {
+            let value = SdkValue::map([
+                ("error", SdkValue::text("Failed")),
+                ("message", SdkValue::text(message)),
+                ("outcome", SdkValue::text("ok")),
+                ("exit_code", command.map_or(SdkValue::Null, SdkValue::Int)),
+            ]);
+            diagnostic(&json::print(&value));
+        }
+    }
+    // The workspace command's status remains authoritative in every form.
+    command.map_or_else(
+        || stdout_status(result),
+        |code| ExitCode::from(u8::try_from(code).unwrap_or(1)),
+    )
 }
 
 /// Fields shown as human sizes, beside every `*_bytes`.

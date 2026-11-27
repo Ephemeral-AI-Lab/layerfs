@@ -251,7 +251,7 @@ impl Store {
                 identity: workspace,
                 workspace: Arc::new(Workspace::bind(route, base)),
                 gc_op,
-                admitted: (gc_op.is_some() && self.writer.batched_chain_reads())
+                admitted: (gc_op.is_some() && self.batched_chain_reads())
                     .then(|| Arc::new(std::sync::atomic::AtomicBool::new(true))),
                 committing: std::sync::atomic::AtomicBool::new(false),
                 producer: Default::default(),

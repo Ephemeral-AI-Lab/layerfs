@@ -81,9 +81,12 @@ fn a_sandbox_create_on_native_sweeps_its_run_root_first() {
     ok(&home, "store.create", &[("name", t("shop"))]);
     // the built-in machine's record, as a build with the machine calls
     // writes it
-    let native = paths::machine_record(&home, "native");
+    let native = paths::machine_record(&home, layerfs_home::names::HOST_MACHINE);
     if !native.is_file() {
-        let record = SdkValue::map([("name", t("native")), ("platform", t("native"))]);
+        let record = SdkValue::map([
+            ("name", t(layerfs_home::names::HOST_MACHINE)),
+            ("platform", t("host")),
+        ]);
         home::write_entity(&native, &record).unwrap();
     }
     write_record(
@@ -106,7 +109,7 @@ fn a_sandbox_create_on_native_sweeps_its_run_root_first() {
         &[
             ("project", t("shop/app")),
             ("name", t("tests")),
-            ("machine", t("native")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
         ],
     );
     if created.is_ok() {

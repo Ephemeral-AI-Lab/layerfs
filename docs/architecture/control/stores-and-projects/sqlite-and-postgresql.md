@@ -19,14 +19,14 @@ chooses by `StoreKind`. Every sqlite Store opens with the Normal profile
 
 | Call | Does | Refusals |
 | --- | --- | --- |
-| `store.create <s>` | an empty Store at `store/<s>/store.sqlite` on the machine whose calls run in this process (`layerfs_machine::in_process`, `native` on macOS and Linux) when no `--machine` is named | `Exists`; `Unsupported` on a host with no such machine |
+| `store.create <s>` | an empty Store at `store/<s>/store.sqlite` on the machine whose calls run in this process (`layerfs_machine::in_process`, `macos-host` on macOS and `linux-host` on Linux) when no `--machine` is named | `Exists`; `Unsupported` on a host with no such machine |
 | `store.remove <s>` | deletes the file wherever it is (here or a worker `store.file remove`), its projects, and any copy an ended move left on the other machine (`op.args.leftover`, so a second remove finishes an interrupted one); clears a gone process's unresolved `op` | `InvalidInput` for PostgreSQL (`store disconnect` keeps its data); `InUse`; `Conflict` if the Store moved meanwhile; a live `op` `Busy` |
 
 ## Transfer (`sqlite/transfer/`)
 
 `store.move <s> <machine>` moves a sqlite Store's file from the machine
-whose calls run in this process (`native` on macOS and Linux) to a
-machine's worker; `store.move <s> native` brings it back. One side is
+whose calls run in this process (`macos-host` on macOS and `linux-host` on Linux) to a
+machine's worker; `store.move <s> macos-host` (or `linux-host`) brings it back. One side is
 always that machine, since the bytes pass through this process: between
 two other machines the caller moves the Store to it, then on; each half is
 its own operation; on a host with no such machine every move is
@@ -61,7 +61,7 @@ its own operation; on a host with no such machine every move is
 | `Retire` | delete a copy the record does not name | same |
 | `Remove` | delete the Store's whole directory on the machine | same |
 
-Steps run in the caller's process for `native` and in the machine's worker
+Steps run in the caller's process for the host machine and in the machine's worker
 (`store.file`, decoded once into `StepFrame`) for every other machine.
 Paths come from the root and the Store's name only. A step that reads,
 replaces or deletes the file first closes this process's open copy; a call
@@ -123,7 +123,7 @@ both; no machine has an address or a login of its own.
 A PostgreSQL Store is on no machine. Its Sandboxes run on every attached
 machine whose platform runs PostgreSQL Sandboxes (#536 C4). This computer
 is the control process (home, records, secrets, the saved connection); it
-is never a machine. Machine native is the built-in machine whose platform
+is never a machine. The host machine (`macos-host` or `linux-host`) is the built-in machine whose platform
 runs Sandboxes directly on the host OS; what it allows (a shared loopback,
 a local executor) comes from its platform, not its name, and it runs a
 Store's Sandboxes only once attached. `store connect` attaches nothing.
@@ -186,7 +186,7 @@ with the same check, then every attached machine, or `--machine` alone) and
 a Sandbox create on a machine (`{ at, ok: true }`, on the host after the
 reply, [`route.rs`](../../../../control/crates/layerfs-sandbox/src/route.rs)
 `reach`). `here` is this computer, the process that holds the connection;
-machine native's reach is `reach.native`, like any machine's, and neither
+the host machine's reach is `reach.macos-host` or `reach.linux-host`, like any machine's, and neither
 is read as the other. A
 writer runs after its Store I/O, under the Store's lock, and writes nothing
 once the record is gone; a write never fails its call and moves no
@@ -222,7 +222,7 @@ is refused `InvalidInput` with `layerfs store connect <store> <url>
                          read back by the client before it is dialled)
       v
  machine reach(spec, url) -> postgresql field of ONE request
-      |  native: same process; else worker sandbox.host, whose decode
+      |  host machine: same process; else worker sandbox.host, whose decode
       |  drops url and password from the Store record it keeps
       v
  DaemonStore::Postgres in the daemon setup -> <sandbox>/config/daemon.setup
@@ -235,6 +235,72 @@ is refused `InvalidInput` with `layerfs store connect <store> <url>
 | Every byte of the user and password outside `A-Z a-z 0-9 - . _ ~` is percent-encoded | [`postgresql/address.rs`](../../../../control/crates/layerfs-store/src/postgresql/address.rs) `percent` |
 | Put in again on each call; the full URL is never written to a record, log, trace or `Debug` output | same; [`host/frame.rs`](../../../../control/crates/layerfs-sandbox/src/host/frame.rs) `decode` |
 | The daemon runs `--config <setup file>`; the setup is in neither its arguments nor its environment; `DaemonStore` prints `url` as `[redacted]` | [`shared/daemon.rs`](../../../../control/crates/layerfs-sandbox-backend/src/shared/daemon.rs), [`store.rs`](../../../../engine/crates/layerfs-bridge/src/store.rs) |
+
+#### Held sessions in the host worker (#819 P-B)
+
+A Store record written by `store connect` (new or updated) carries
+`login_revision`: 16 random bytes in hex, not a secret, new on every such
+write and never reused. The CLI's `file.read`, `file.stat` and `file.list`
+send the saved password with that revision to the host worker
+(`store.postgresql_read`). Under the Store's lock the worker re-reads the
+record and refuses `Conflict` unless the revision matches, the record is
+unblocked and the host is admitted. It then takes a held read-only session
+([`postgresql/pool.rs`](../../../../control/crates/layerfs-store/src/postgresql/pool.rs)),
+probing it if it was idle, and only with the session in hand takes the
+call's lease, under the Store's lock with the record checked again; it runs
+the call once and drops the lease when the call ends. A read waiting for a
+session, or for its probe, holds no lease, so `store disconnect` and
+`store upgrade` are never held off by a read that has not started.
+
+| Rule | Value |
+| --- | --- |
+| Session identity | Store key, login revision and the address dialled with the sent password. Revisions have no order; the record does: a call naming another revision than the sessions' is compared, under the Store's lock, with the record's current revision. The current one replaces the old identity (idle sessions close, lent ones close when they come back); any other is refused `Conflict` with nothing run and the sessions untouched, so a late call admitted before a rotation never displaces the newer login |
+| Retire | `store connect` (update) and `store disconnect` send `store.postgresql_retire { store, revision }` naming the revision they replaced or removed, past their own locks, to a running worker only. The worker never retires the record's current revision; a lost retire changes nothing, since the record comparison refuses the old revision anyway |
+| Before reuse | one Light check within 5 s on one held session ([engine](../../engine/store/postgresql.md)). If it fails, every idle session of the Store closes and the call opens exactly one new session. This is a route decision taken before any byte of the call's operation is sent, as a mount reader's `usable()` is: nothing is retried |
+| After the call | `Unknown` or `StaleStore` drops the session; any other outcome keeps it. A guard gives the session's slot back on every path, a panic included |
+| Bounds | 4 sessions per Store and 8 per worker process, idle, lent and reserved (owner, 2026-11-27); an idle session of another Store closes to make room; idle ones close after the open-Store reaper's idle time, and on drain. A read starts only once it holds one of its Store's slots (a reservation, taken without waiting); nothing waits inside the pool. The slot is taken before the read's record is checked, so a read refused there may have closed another Store's idle session, which that Store's next read replaces with one login |
+| Threads | an ordinary thread reads the request, checks it and hands a PostgreSQL read to the worker's own PostgreSQL lane (8 threads, up to 64 reads handed over and unanswered), so PostgreSQL reads never hold an ordinary thread or slot. A read its request alone refuses (another worker generation, an invalid request ID, a method the route does not serve, arguments `serve` would refuse) is answered on the ordinary thread with the refusal the lane would give, and takes no lane place or slot; a handed-over request keeps only the fields a host request is read by, so each is small ([per-lane memory](../machines/workers-and-reach.md#host-worker-exchange-20-implementation-plan)). A lane thread starts the oldest queued read whose Store has a free slot. A read of a busy Store waits in the queue, on no thread, and a Store whose sessions are stuck never holds the threads another Store's reads need. Lane threads sleep until a read is queued or one ends; nothing wakes them on a timer. Queued reads whose caller has closed its socket (end of file, hang-up or error; bytes the caller sends are not a close) are dropped unrun before any queued read starts and whenever a read is handed over |
+| Full lane | at 64 unanswered reads the ordinary thread answers the read at once `Unavailable` (`detail { state: postgresql-reads-full, reads: 64 }`), naming the load, and never waits on the PostgreSQL lane. The answer comes after the request was read; §8.5 allows that because nothing of the read ran |
+| Password lifetime | the worker reads no secret from its environment or the home and writes none. One helper ([`layerfs_home::wipe`](../../../../control/crates/layerfs-home/src/wipe.rs)) overwrites a buffer's whole allocation, spare capacity included, between compiler fences; control forbids `unsafe` code, so these are ordinary writes that `black_box` makes likely to stay, not guaranteed as `write_volatile` would be. Overwritten before they are freed: a host frame that carries a login (`args.password`), once decoded or sent, and the CLI's trial frame that checks the request fits, in the worker and in the CLI; the decoded request in the worker once answered, refused or dropped unrun, and the CLI's request value on every path; the address dialled with the password, built in a buffer sized so it never grows, once the call ends or when it is refused; the pool's copy of a Store's address when its identity is replaced or its last session closes; the URL handed to a session's open once it is open; the saved login `store connect` kept to put back, the password a connect was given and the address it dialled, the saved password a call read, and the copy and text of a saved login as it is written or read. Still holding a copy, not overwritten: the PostgreSQL client's parsed settings (the check that reads the dialled address back, and each open session's, kept while it lives, as reconnects within it need them) and its authentication exchange; JSON printing and parsing internals; and freed allocator memory of those. A core dump cannot hold any of them (below) |
+| Core dumps | the host worker sets `RLIMIT_CORE` to 0 before it reads its first request; on Linux it also clears `PR_SET_DUMPABLE` as soon as it decodes its first PostgreSQL request, before any session holds the password, so another process of the user cannot read or trace it from then on. The request frame holding that first password is decoded just before; setting the flag at start would hide every worker's environment from the check that proves it cleared. macOS has no non-dumpable flag: there only the core file limit is set, and a debugger of the same user can still attach |
+| Upgrade | `store upgrade` renews the login revision when it writes its `op` (§8.7) and sends the worker `store.postgresql_retire` for the revision it replaced, past its locks. While `op` stands the worker admits no PostgreSQL read; a call admitted at the old revision is refused `Conflict`, and no session held before the upgrade serves after it. A record with no revision gets none and stays direct |
+| Ping | the worker's ping and `machine doctor`'s ping evidence report `postgresql { stores, idle, lent, writes, reads, queued }`: `lent` counts slots reserved or lent, `writes` the write slots among them, `reads` the calls (reads and single-change writes) handed over and unanswered, `queued` those not yet started |
+| Login order | `store connect` saves a new password before it writes the record with the new revision, so a revision is never visible without its password. When the record cannot be written, an update puts the saved login it replaced back and a first connect removes the one it saved; a put-back or removal that fails is said in the refusal |
+| Records without a revision | 2.0 keeps no compatibility path for them: such a record stays on the direct route (P-A) until `store connect` is run again |
+
+#### Held write sessions (#819 P-B writes)
+
+The CLI's file writes (`write`, `edit`, `mkdir`, `rm`, `cp`, `mv`, `apply`)
+on a PostgreSQL Store whose record holds a login revision go to the host
+worker as `store.write`, the request the SQLite host route sends, with the
+record's `login_revision` and the saved password added
+([`host_write.rs`](../../../../control/crates/layerfs-store/src/host_write.rs)).
+The route is chosen before anything is sent, under the same conditions as
+a read: the CLI, the host machine not stopped, the record unblocked and
+the request within the host envelope; any other write stays direct (P-A).
+The worker admits a write as it admits a read (the record re-read under
+the Store's lock, the revision compared, the lease taken only once a
+session is in hand) and runs it once on a held write session
+([`host_postgresql.rs`](../../../../control/crates/layerfs-store/src/host_postgresql.rs)
+`serve_write`).
+
+| Rule | Value |
+| --- | --- |
+| Session | a writable Store service (`StoreService::open_postgres`): its writer (reopen enabled, #817), its lane connection, its control reader and the Workspace readers its calls' private Workspaces open and hand back, with its own private overlay directory. A session is of one kind: a read session never serves a write, nor a write session a read. It is lent to one call at a time; closing it stops its overlay owner and removes its directory |
+| Bounds | the same 4 sessions per Store and 8 per process, both kinds counted, idle, lent and reserved. Write slots lent at once are at most 2 per Store and 4 per process (half of each bound), so reads always keep the other half; an idle session of the other kind, of this Store or another, closes to make room |
+| Before reuse | the same one Light check, on the write session's writer (`postgres_session_current`). A failure closes every idle session of the Store, both kinds, and the call opens one new write session: a route decision before any byte of the write is sent |
+| After the call | `Unknown` or `StaleStore` drops the write session; any other outcome keeps it. An uncertain outcome is recorded before its answer, as on the SQLite route ([host worker exchange](../machines/workers-and-reach.md#host-worker-exchange-20-implementation-plan)) |
+| Single-change writes | read by an ordinary thread, their header checked there (`host_write::header`), and handed to the PostgreSQL lane, as a read is: they never run on an ordinary thread, so one waiting on a held Store writer (the publication lane, up to its `lock_timeout`, 30 s) holds no ordinary thread. The lane starts one only when its Store and the process have a free write slot, so at most 4 lane threads wait on writers and the other 4 keep serving reads |
+| Streamed writes | `write` and an unscoped `apply` come in on the write socket and wait for a write thread as on the SQLite route; a write thread starts the oldest waiting write that can start: a SQLite write, or a PostgreSQL write whose Store has a free write slot, taken then. One that has none waits with nothing sent but its request, and later writes start meanwhile |
+| Outcome boundary | unchanged from the SQLite route: a worker lost before the input's end is sent leaves the write `Unavailable`, nothing committed; after the end, `Unknown`. A session lost in flight (a server restart, a terminated backend) is `Unknown` for that write alone; waiting writes run once on new sessions, or are refused before anything is sent when no session can be opened. A new session (read or write) the server refused is said plainly, its code still `Failed` (`postgresql::open::new_session_refused`): "the PostgreSQL server refused a new session (it may be restarting, or the database, user or password changed); nothing was sent and nothing was committed" for the engine's `Refused { status: "Rejected" }`, "no new session to the PostgreSQL server could be made (it may be restarting or unreachable); …" for `"Closed"`, with the fix `layerfs store get <store> --with live`; the message names no address or login. Nothing is resent |
+| Password copies | the CLI's request value and trial frame as for a read; the encoded request frame once sent on the write socket; the worker's decoded request and each held write's arguments once answered or dropped. A write session's reader factory keeps one copy of the dialled address for the readers it opens, while the session lives |
+| Connections | one write session holds its writer and, while used, its lane connection and control reader, plus the readers its calls open and keep idle; up to 4 write sessions per process (8 with idle ones) on top of the read sessions. All of them count against the server's `max_connections` |
+
+Memory: a write session keeps its Store service's caches (64 KiB of
+immutable objects) and, while a call runs, that call's private overlay
+(4 MiB page cache); a write's streamed input is read in bounded frames as
+on the SQLite route. No buffer grows with the file, the list of changes or
+the number of writes.
 
 The URL is never rewritten for a machine; which URLs a machine refuses is
 [Reach](../machines/workers-and-reach.md#reach-reachrs).

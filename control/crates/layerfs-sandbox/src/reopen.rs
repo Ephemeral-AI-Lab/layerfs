@@ -17,7 +17,7 @@ use layerfs_home::helpers;
 use layerfs_home::outcome::shell_word;
 use layerfs_home::outcome::{failed, refused, with_fix};
 #[cfg(target_os = "macos")]
-use layerfs_sandbox_backend::native;
+use layerfs_sandbox_backend::process;
 use layerfs_sandbox_backend::LocalRecord;
 #[cfg(target_os = "linux")]
 use layerfs_sandbox_backend::SandboxRecord;
@@ -353,8 +353,8 @@ impl Recorded {
                 process,
                 port,
                 labels,
-            } => Box::new(Sandbox::Native(
-                native::Sandbox::reopen_for_stop(directory, id, process, port, labels)
+            } => Box::new(Sandbox::Process(
+                process::Sandbox::reopen_for_stop(directory, id, process, port, labels)
                     .map_err(crate::daemon::values::wire)?,
             )),
             #[cfg(target_os = "linux")]
@@ -375,8 +375,8 @@ impl Recorded {
                 process,
                 port,
                 labels,
-            } => native::Sandbox::reopen(directory, id, process, port, labels)
-                .map(|s| Box::new(Sandbox::Native(s))),
+            } => process::Sandbox::reopen(directory, id, process, port, labels)
+                .map(|s| Box::new(Sandbox::Process(s))),
             #[cfg(target_os = "linux")]
             Self::Namespaces(runtime, id, record) => runtime.reopen(id, &record).map(Box::new),
         }
@@ -391,7 +391,7 @@ impl Recorded {
                 process,
                 port,
                 labels,
-            } => Box::new(Sandbox::Native(native::Sandbox::stopped(
+            } => Box::new(Sandbox::Process(process::Sandbox::stopped(
                 directory, id, process, port, labels,
             ))),
             #[cfg(target_os = "linux")]

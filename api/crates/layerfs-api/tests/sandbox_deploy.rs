@@ -59,7 +59,7 @@ fn the_daemon_and_the_linux_bundle_come_from_the_versioned_cache() {
     let args = SdkValue::map([
         ("project", t("shop/app")),
         ("name", t("t")),
-        ("machine", t("native")),
+        ("machine", t(layerfs_home::names::HOST_MACHINE)),
     ]);
     let refusal = layerfs_api::call(Some(&home), "sandbox.create", args, &mut |event| {
         events.push(event)

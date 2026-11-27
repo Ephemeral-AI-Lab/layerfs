@@ -13,6 +13,7 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { client } from "../src/index.js";
 
+const hostMachine = process.platform === "darwin" ? "macos-host" : "linux-host";
 const root = fileURLToPath(new URL("../../../", import.meta.url));
 const target = process.env.CARGO_TARGET_DIR ? resolve(root, process.env.CARGO_TARGET_DIR) : join(root, "target");
 const command = join(target, "debug", "layerfs");
@@ -86,7 +87,7 @@ test("a throwing on_progress does not stop a push; every event comes before it s
 
     // and back, counting: no event after the call settles
     const phases = [];
-    await lfs.store.move("shop", "native", { on_progress: (p) => phases.push(p.phase) });
+    await lfs.store.move("shop", hostMachine, { on_progress: (p) => phases.push(p.phase) });
     const settled = phases.slice();
     assert.equal(settled[0], "check");
     assert.equal(settled[settled.length - 1], "retire", settled.join(","));
@@ -107,12 +108,12 @@ test("exec output: the stdout and stderr functions, and stream: true without the
   writeFileSync(join(folder, "README.md"), "streamed\n");
   const lfs = client({ home });
   await lfs.store.create("shop");
-  const daemon = ["machine", "update", "native", "--daemon", process.env.LAYERFS_DAEMON];
+  const daemon = ["machine", "update", hostMachine, "--daemon", process.env.LAYERFS_DAEMON];
   const updated = spawnSync(command, daemon, { env: { ...process.env, LAYERFS_HOME: home }, timeout: 30_000 });
   assert.equal(updated.status, 0, String(updated.stderr));
   await lfs.project.init("shop/api", folder);
   await lfs.branch.fork("shop/api", "dev", "main");
-  await lfs.sandbox.create("shop/api", "s1", { machine: "native" });
+  await lfs.sandbox.create("shop/api", "s1", { machine: hostMachine });
   let ws;
   try {
     ({ workspace: ws } = await lfs.workspace.mount("s1", "dev"));

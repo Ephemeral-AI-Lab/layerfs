@@ -49,7 +49,15 @@ pub fn list(home: &Path, live: bool) -> Outcome {
 /// `machine.get`: from its record; with `live`, one probe and the `live`
 /// section.
 pub fn get(home: &Path, name: &MachineName, live: bool) -> Outcome {
-    layerfs_machine::get(home, name, live, RELATED)
+    let answer = layerfs_machine::get(home, name, live, RELATED)?;
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    if live
+        && name.as_str() == layerfs_home::names::HOST_MACHINE
+        && answer.get_text("platform") == Some("host")
+    {
+        return Ok(crate::doctor::host_worker::live(home, answer));
+    }
+    Ok(answer)
 }
 
 /// `machine.start`, with its phases on `events`. The start stops a previous
@@ -60,6 +68,10 @@ pub fn get(home: &Path, name: &MachineName, live: bool) -> Outcome {
 /// the token fails before any settle; a Store the reconcile cannot reach is
 /// left for the next start.
 pub fn start(home: &Path, events: &mut Events<'_>, name: &MachineName) -> Outcome {
+    #[cfg(unix)]
+    if name.as_str() == layerfs_home::names::HOST_MACHINE {
+        return crate::host_power::start(home, name);
+    }
     let started = layerfs_machine::start(home, name, RELATED, events)?;
     let incarnation = record_start(home, name)?;
     let _ = reconcile_stores(home, name, incarnation.as_deref());
@@ -99,7 +111,7 @@ fn record_start(home: &Path, machine: &MachineName) -> Result<Option<String>, Sd
 }
 
 /// The incarnation the machine's running worker reports, or `None` when its
-/// calls run in this process (a `native` machine has no worker). Reads the
+/// calls run in this process (the host machine has no machine worker). Reads the
 /// endpoint the start recorded and asks it once; it never starts a machine, so
 /// a failed read cannot restart one.
 fn worker_incarnation(home: &Path, machine: &str) -> Result<Option<String>, SdkRefusal> {
@@ -155,6 +167,10 @@ pub fn running(home: &Path, name: &str) -> Result<Option<Endpoint>, SdkRefusal> 
 /// `machine.stop`, with its phases on `events`; `force` stops it and this
 /// home's Sandboxes on it without asking its worker.
 pub fn stop(home: &Path, events: &mut Events<'_>, name: &MachineName, force: bool) -> Outcome {
+    #[cfg(unix)]
+    if name.as_str() == layerfs_home::names::HOST_MACHINE {
+        return crate::host_power::stop(home, events, name, force);
+    }
     match force {
         true => crate::machine_force::stop(home, events, name),
         false => layerfs_machine::stop(home, name, RELATED, events),

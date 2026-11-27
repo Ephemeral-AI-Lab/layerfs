@@ -35,7 +35,7 @@ fn native_exec_keeps_large_binary_output_cancellation_and_effects_on_closed_stdo
         Some(&home),
         "machine.update",
         SdkValue::map([
-            ("machine", SdkValue::text("native")),
+            ("machine", SdkValue::text(layerfs_api::names::HOST_MACHINE)),
             ("daemon", SdkValue::text(daemon.as_str())),
         ]),
         &mut |_| {},
@@ -65,7 +65,7 @@ fn native_exec_keeps_large_binary_output_cancellation_and_effects_on_closed_stdo
         &[
             ("project", t("live/p")),
             ("name", t("s1")),
-            ("machine", t("native")),
+            ("machine", t(layerfs_api::names::HOST_MACHINE)),
         ],
     );
     let mounted = call(

@@ -5,9 +5,9 @@
 #![cfg(any(target_os = "macos", target_os = "linux"))]
 mod support;
 
-use layerfs_history::HistoryCatalogConfig;
+use layerfs_history::{HistoryCatalog, HistoryCatalogConfig, Page};
 use layerfs_persistence::{
-    thread_work, PersistenceConfig, SqliteHandles, SqlitePersistenceProfile,
+    thread_work, DeferredSqliteWriter, PersistenceConfig, SqliteHandles, SqlitePersistenceProfile,
 };
 use layerfs_storage::StoragePolicy;
 use support::{Temp, BINDING};
@@ -66,27 +66,52 @@ fn a_store_left_before_the_next_serial_column_still_gains_it() {
     let temp = Temp::new("open-interrupted");
     let path = temp.join("store.sqlite");
     create(&path);
-    // What an open interrupted between `add_gc` and `add_position_state`
-    // leaves: the current source recorded, the column not yet appended.
-    {
-        let sql = rusqlite::Connection::open(&path).unwrap();
-        sql.execute_batch("ALTER TABLE history_meta DROP COLUMN next_history_serial")
-            .unwrap();
-        let definition: String = sql
-            .prepare("SELECT type,name,sql FROM sqlite_schema WHERE substr(name,1,7)!='sqlite_' ORDER BY type,name")
-            .unwrap()
-            .query_map([], |r| Ok([r.get::<_, String>(0)?, r.get(1)?, r.get(2)?]))
-            .unwrap()
-            .map(|r| r.unwrap().map(|v| v + "\n").concat())
-            .collect();
-        sql.execute(
-            "UPDATE history_meta SET schema_definition=?1",
-            rusqlite::params![definition],
-        )
-        .unwrap();
-    }
+    remove_next_serial(&path);
     assert!(!has_next_serial(&path));
     assert!(open_write_transactions(&path) > 1);
     assert!(has_next_serial(&path));
     assert_eq!(open_write_transactions(&path), 1);
+}
+
+fn remove_next_serial(path: &std::path::Path) {
+    // What an open interrupted between `add_gc` and `add_position_state`
+    // leaves: the current source recorded, the column not yet appended.
+    let sql = rusqlite::Connection::open(path).unwrap();
+    sql.execute_batch("ALTER TABLE history_meta DROP COLUMN next_history_serial")
+        .unwrap();
+    let definition: String = sql
+        .prepare("SELECT type,name,sql FROM sqlite_schema WHERE substr(name,1,7)!='sqlite_' ORDER BY type,name")
+        .unwrap()
+        .query_map([], |r| Ok([r.get::<_, String>(0)?, r.get(1)?, r.get(2)?]))
+        .unwrap()
+        .map(|r| r.unwrap().map(|v| v + "\n").concat())
+        .collect();
+    sql.execute(
+        "UPDATE history_meta SET schema_definition=?1",
+        rusqlite::params![definition],
+    )
+    .unwrap();
+}
+
+#[test]
+fn a_deferred_writer_completes_the_interrupted_open_on_first_use() {
+    let temp = Temp::new("open-interrupted-deferred");
+    let path = temp.join("store.sqlite");
+    create(&path);
+    remove_next_serial(&path);
+
+    let (_, history, writer) =
+        DeferredSqliteWriter::open(config(&path), BINDING, [76; 32]).unwrap();
+    let stacks = history
+        .layer_stacks(&Page {
+            cursor: None,
+            limit: 1,
+        })
+        .unwrap();
+    assert!(stacks.records.is_empty());
+    assert!(writer.get().is_none());
+    assert!(!has_next_serial(&path));
+
+    writer.start().unwrap();
+    assert!(has_next_serial(&path));
 }

@@ -13,7 +13,7 @@ use std::path::Path;
 pub fn runs_here(home: &Path, machine: &str) -> Result<bool, SdkRefusal> {
     use layerfs_platform::{ExecutorKind, HostOs, Platform};
     let platform = match machine {
-        "native" => Platform::Native,
+        layerfs_home::names::HOST_MACHINE if in_process().is_some() => Platform::Host,
         _ => crate::record::MachineRecord::of(home, machine)?.platform()?,
     };
     Ok(platform.executor(HostOs::current()) == ExecutorKind::Local)
@@ -24,7 +24,7 @@ pub fn runs_here(home: &Path, machine: &str) -> Result<bool, SdkRefusal> {
 /// records.
 #[cfg(not(feature = "machine"))]
 pub fn runs_here(_: &Path, machine: &str) -> Result<bool, SdkRefusal> {
-    Ok(machine == "native")
+    Ok(in_process() == Some(machine))
 }
 
 /// The machine whose calls run in this process on this host: the built-in
@@ -34,18 +34,16 @@ pub fn runs_here(_: &Path, machine: &str) -> Result<bool, SdkRefusal> {
 /// its name.
 #[cfg(feature = "machine")]
 pub fn in_process() -> Option<&'static str> {
-    use layerfs_platform::{ExecutorKind, HostOs, Platform};
-    let local = |name: &&str| {
-        Platform::parse(name).is_some_and(|p| p.executor(HostOs::current()) == ExecutorKind::Local)
-    };
-    layerfs_home::names::BUILT_IN.into_iter().find(local)
+    layerfs_home::names::BUILT_IN
+        .into_iter()
+        .find(|name| *name == layerfs_home::names::HOST_MACHINE)
 }
 
 /// Without the machine adapters (the guest worker's build): the guest's
 /// own `native`, as [`runs_here`] says.
 #[cfg(not(feature = "machine"))]
 pub fn in_process() -> Option<&'static str> {
-    Some("native")
+    Some(layerfs_home::names::HOST_MACHINE)
 }
 
 /// Refuses `what`, which needs a machine whose calls run in this process,
@@ -76,5 +74,5 @@ pub fn provided(platform: &str) -> bool {
 /// guest's own `native` has no provider.
 #[cfg(not(feature = "machine"))]
 pub fn provided(platform: &str) -> bool {
-    platform != "native"
+    platform != "host"
 }

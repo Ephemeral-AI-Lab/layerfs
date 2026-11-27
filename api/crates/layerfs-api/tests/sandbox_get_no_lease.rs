@@ -336,7 +336,7 @@ fn home_records(home: &Path, machine: &str, platform: &str, worker: Option<(Sock
     ];
     // every 2.0 create records its provider name; `native` has none
     let vm_name = format!("layerfs-test-{machine}");
-    if platform != "native" {
+    if platform != "host" {
         fields.push(("vm_name", t(&vm_name)));
     }
     if worker.is_some() {
@@ -400,7 +400,7 @@ fn sandbox_named(root: &Path, name: &str, endpoint: SocketAddr, items: &[SdkValu
         platform: "macos".to_owned(),
         name: name.clone(),
         container: "ab".repeat(32),
-        runtime: "native",
+        runtime: "process",
         uid: home::flock::euid(),
         gid: home::flock::egid(),
         directory: paths::run_root(root).join(&name).display().to_string(),
@@ -415,9 +415,9 @@ fn sandbox_named(root: &Path, name: &str, endpoint: SocketAddr, items: &[SdkValu
         &map(&[
             ("name", t("s1")),
             ("project", t("shop/api")),
-            ("machine", t("native")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
             ("id", t("s1")),
-            ("runtime", t("native")),
+            ("runtime", t("process")),
             ("daemon", daemon.to_record()),
         ]),
     )
@@ -577,7 +577,7 @@ fn a_native_sandbox_s_get_takes_no_lease_and_writes_nothing() {
         let (endpoint, seen) = daemon(items.clone(), false);
         let home = tempdir(&format!("native-{count}"));
         let id = home::open(&home).unwrap().id;
-        home_records(&home, "native", "native", None);
+        home_records(&home, layerfs_home::names::HOST_MACHINE, "host", None);
         local_sandbox(&home, &id, endpoint, &items);
         settle(&home);
         let _push = pushing(&home);
@@ -607,7 +607,7 @@ fn the_holder_of_the_store_finds_no_lease_after_a_get() {
     let (endpoint, _seen) = daemon(items.clone(), false);
     let home = tempdir("holder");
     let id = home::open(&home).unwrap().id;
-    home_records(&home, "native", "native", None);
+    home_records(&home, layerfs_home::names::HOST_MACHINE, "host", None);
     local_sandbox(&home, &id, endpoint, &items);
     settle(&home);
     let push = pushing(&home);
@@ -641,7 +641,7 @@ fn a_daemon_from_before_the_option_gives_the_same_answer() {
         let (endpoint, seen) = daemon(items.clone(), old);
         let home = tempdir(&format!("old-{old}"));
         let id = home::open(&home).unwrap().id;
-        home_records(&home, "native", "native", None);
+        home_records(&home, layerfs_home::names::HOST_MACHINE, "host", None);
         local_sandbox(&home, &id, endpoint, &items);
         settle(&home);
         let got = get(&home).unwrap();
@@ -675,7 +675,7 @@ fn a_get_reopens_a_sandbox_under_the_name_its_record_holds() {
     let (endpoint, seen) = daemon(items.clone(), false);
     let home = tempdir("named-native");
     let id = home::open(&home).unwrap().id;
-    home_records(&home, "native", "native", None);
+    home_records(&home, layerfs_home::names::HOST_MACHINE, "host", None);
     sandbox_named(&home, &format!("layerfs-{}-s1", &id[..8]), endpoint, &items);
     running(&get(&home).unwrap(), &items);
     asked_workspaces_only(&seen);
@@ -699,7 +699,7 @@ fn a_get_reopens_a_sandbox_under_the_name_its_record_holds() {
     let (endpoint, seen) = daemon(items.clone(), false);
     let home = tempdir("named-other");
     let id = home::open(&home).unwrap().id;
-    home_records(&home, "native", "native", None);
+    home_records(&home, layerfs_home::names::HOST_MACHINE, "host", None);
     sandbox_named(&home, &format!("other-{}-s1", &id[..8]), endpoint, &items);
     let (code, message) = get(&home).unwrap_err();
     assert_eq!(code, "InvalidInput", "{message}");
@@ -813,14 +813,14 @@ fn a_worker_leaves_the_records_it_holds_as_they_are() {
 fn forwarded_sandbox(home: &Path, endpoint: SocketAddr, items: &[SdkValue]) {
     let forward = map(&[
         ("address", t(&endpoint.to_string())),
-        ("machine", t("native")),
+        ("machine", t(layerfs_home::names::HOST_MACHINE)),
     ]);
     write_record(
         &paths::sandbox_record(home, "s1"),
         &map(&[
             ("name", t("s1")),
             ("project", t("shop/api")),
-            ("machine", t("native")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
             ("id", t("s-1")),
             (
                 "daemon",
@@ -857,7 +857,12 @@ fn a_forwarded_sandbox_s_get_takes_no_lease_and_writes_nothing() {
         home::open(&home).unwrap();
         // the forward's machine answers: its worker is recorded
         let nowhere: SocketAddr = "127.0.0.1:1".parse().unwrap();
-        home_records(&home, "native", "native", Some((nowhere, "5e")));
+        home_records(
+            &home,
+            layerfs_home::names::HOST_MACHINE,
+            "host",
+            Some((nowhere, "5e")),
+        );
         forwarded_sandbox(&home, endpoint, &items);
         settle(&home);
         let _push = pushing(&home);
@@ -901,7 +906,7 @@ fn a_stopped_machine_s_get_is_its_record_and_touches_nothing() {
     let (endpoint, seen) = daemon(vec![item(1)], false);
     let home = tempdir("stop-recorded");
     let id = home::open(&home).unwrap().id;
-    home_records(&home, "native", "native", None);
+    home_records(&home, layerfs_home::names::HOST_MACHINE, "host", None);
     local_sandbox(&home, &id, endpoint, &[]);
     let path = paths::sandbox_record(&home, "s1");
     let record = read_record(&path).unwrap().unwrap();
@@ -933,7 +938,7 @@ fn unasked(got: &SdkValue) {
 }
 
 /// The three sides a get's Workspace list is built on.
-const SIDES: [&str; 3] = ["native", "worker", "forwarded"];
+const SIDES: [&str; 3] = [layerfs_home::names::HOST_MACHINE, "worker", "forwarded"];
 
 /// Sandbox `s1` with Workspaces `items` on `side`: the scratch folder to
 /// remove, the home, and the root that keeps the Sandbox's Workspace and
@@ -944,8 +949,8 @@ fn on_side(side: &str, tag: &str, items: &[SdkValue]) -> (PathBuf, PathBuf, Path
     let (home, root) = (scratch.join("home"), scratch.join("data"));
     let id = home::open(&home).unwrap().id;
     match side {
-        "native" => {
-            home_records(&home, "native", "native", None);
+        layerfs_home::names::HOST_MACHINE => {
+            home_records(&home, layerfs_home::names::HOST_MACHINE, "host", None);
             local_sandbox(&home, &id, endpoint, items);
             (scratch, home.clone(), home)
         }
@@ -959,7 +964,12 @@ fn on_side(side: &str, tag: &str, items: &[SdkValue]) -> (PathBuf, PathBuf, Path
         }
         _ => {
             let nowhere: SocketAddr = "127.0.0.1:1".parse().unwrap();
-            home_records(&home, "native", "native", Some((nowhere, "5e")));
+            home_records(
+                &home,
+                layerfs_home::names::HOST_MACHINE,
+                "host",
+                Some((nowhere, "5e")),
+            );
             forwarded_sandbox(&home, endpoint, items);
             (scratch, home.clone(), home)
         }
@@ -1051,7 +1061,7 @@ fn a_get_lists_the_commands_another_client_runs_in_each_workspace() {
             made.started = started;
             made.owner = owner;
             if side == "forwarded" {
-                made.route = Route::Machine("native".to_owned());
+                made.route = Route::Machine(layerfs_home::names::HOST_MACHINE.to_owned());
             }
             let SdkValue::Map(fields) = made.encode() else {
                 panic!()
@@ -1271,7 +1281,7 @@ fn redaemon(root: &Path, change: impl FnOnce(SdkValue) -> SdkValue) {
 #[test]
 fn a_get_shows_the_daemon_process_as_the_side_that_runs_it_sees_it() {
     let me = layerfs_bridge::process::LocalProcess::observe(std::process::id()).unwrap();
-    for side in ["native", "worker"] {
+    for side in [layerfs_home::names::HOST_MACHINE, "worker"] {
         let items = vec![item(1)];
         let (scratch, home, root) = on_side(side, "process", &items);
         settle(&home);
@@ -1330,7 +1340,7 @@ fn a_get_of_a_sandbox_whose_daemon_ended_finds_it_lost() {
         let daemon = home::with_field(daemon, "start", start);
         home::with_field(daemon, "boot", owner.get("pid_boot").unwrap().clone())
     };
-    for side in ["native", "worker"] {
+    for side in [layerfs_home::names::HOST_MACHINE, "worker"] {
         let (scratch, home, root) = on_side(side, "ended", &[item(1)]);
         redaemon(&root, dead);
         settle(&home);

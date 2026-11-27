@@ -38,6 +38,7 @@ fn every_new_work_route_refuses_before_writes_or_worker_and_daemon_connections()
             std::env::temp_dir().join(format!("lfs-disabled-{platform}-{}", std::process::id()));
         std::fs::create_dir(&home).unwrap();
         let data = CASES
+            .replace("$host", layerfs_api::names::HOST_MACHINE)
             .replace("$platform", platform)
             .replace("$address", &listener.local_addr().unwrap().to_string());
         let data = json::parse(&data).unwrap();

@@ -135,7 +135,7 @@ fn native_sandbox(home: &Path, log: &str) -> std::path::PathBuf {
     std::fs::write(folder.join("daemon.log"), log).unwrap();
     let daemon = SdkValue::map([
         ("name", t("layerfs-0a1b2c3d-s1")),
-        ("runtime", t("native")),
+        ("runtime", t("process")),
         ("directory", t(&folder.display().to_string())),
     ]);
     write_record(
@@ -143,9 +143,9 @@ fn native_sandbox(home: &Path, log: &str) -> std::path::PathBuf {
         &SdkValue::map([
             ("name", t("s1")),
             ("project", t("shop/api")),
-            ("machine", t("native")),
+            ("machine", t(layerfs_api::names::HOST_MACHINE)),
             ("id", t("s1")),
-            ("runtime", t("native")),
+            ("runtime", t("process")),
             ("daemon", daemon),
         ]),
     )
@@ -345,9 +345,26 @@ fn the_cli_reads_a_machine_s_files_and_logs_no_line() {
     // a wrong command line is exit 2 and calls nothing
     for usage in [
         &["machine", "files"][..],
-        &["machine", "files", "native", "--depth", "deep"],
-        &["machine", "files", "native", "/a", "/b"],
-        &["machine", "files", "native", "--bogus"],
+        &[
+            "machine",
+            "files",
+            layerfs_api::names::HOST_MACHINE,
+            "--depth",
+            "deep",
+        ],
+        &[
+            "machine",
+            "files",
+            layerfs_api::names::HOST_MACHINE,
+            "/a",
+            "/b",
+        ],
+        &[
+            "machine",
+            "files",
+            layerfs_api::names::HOST_MACHINE,
+            "--bogus",
+        ],
     ] {
         assert_eq!(run_cli(&home, usage).0, Some(2), "{usage:?}");
     }
@@ -360,13 +377,16 @@ fn the_cli_reads_a_machine_s_files_and_logs_no_line() {
     std::fs::write(folder.join("config/x"), "key").unwrap();
     // only the folders that are there are listed: a home with no Store
     // yet has no `store`
-    let (_, early, _) = run_cli(&home, &["machine", "files", "native"]);
+    let (_, early, _) = run_cli(
+        &home,
+        &["machine", "files", layerfs_api::names::HOST_MACHINE],
+    );
     assert!(!early.contains("\"stores\""), "{early}");
     for part in ["log", "store"] {
         std::fs::create_dir_all(home.join(part)).unwrap();
     }
     let read = |words: &[&str]| {
-        let mut line = vec!["machine", "files", "native"];
+        let mut line = vec!["machine", "files", layerfs_api::names::HOST_MACHINE];
         line.extend(words);
         let (code, out, err) = run_cli(&home, &line);
         assert_eq!(code, Some(0), "{words:?}: {err}");
@@ -418,21 +438,54 @@ fn the_cli_reads_a_machine_s_files_and_logs_no_line() {
     for (words, code) in [
         (&["machine", "files", "nobody"][..], "NotFound"),
         (
-            &["machine", "files", "native", "/etc/hosts"],
+            &[
+                "machine",
+                "files",
+                layerfs_api::names::HOST_MACHINE,
+                "/etc/hosts",
+            ],
             "InvalidInput",
         ),
-        (&["machine", "files", "native", "/"], "InvalidInput"),
         (
-            &["machine", "files", "native", &name("config/x")],
+            &["machine", "files", layerfs_api::names::HOST_MACHINE, "/"],
             "InvalidInput",
         ),
-        (&["machine", "files", "native", "relative"], "InvalidInput"),
         (
-            &["machine", "files", "native", &name("nothing")],
+            &[
+                "machine",
+                "files",
+                layerfs_api::names::HOST_MACHINE,
+                &name("config/x"),
+            ],
+            "InvalidInput",
+        ),
+        (
+            &[
+                "machine",
+                "files",
+                layerfs_api::names::HOST_MACHINE,
+                "relative",
+            ],
+            "InvalidInput",
+        ),
+        (
+            &[
+                "machine",
+                "files",
+                layerfs_api::names::HOST_MACHINE,
+                &name("nothing"),
+            ],
             "NotFound",
         ),
         (
-            &["machine", "files", "native", &run, "--limit", "0"],
+            &[
+                "machine",
+                "files",
+                layerfs_api::names::HOST_MACHINE,
+                &run,
+                "--limit",
+                "0",
+            ],
             "InvalidInput",
         ),
     ] {

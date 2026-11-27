@@ -5,9 +5,9 @@
       "host": "macos",
       "platforms": [
         {
-          "platform": "native",
+          "platform": "host",
           "how": "built_in",
-          "backend": "native",
+          "backend": "process",
           "kernel": "nfs",
           "sqlite": "in_process",
           "postgresql": { "store_calls": "in_process", "sandbox": true, "reason": null },
@@ -50,7 +50,7 @@
       "host": "linux",
       "platforms": [
         {
-          "platform": "native",
+          "platform": "host",
           "how": "built_in",
           "backend": "namespaces",
           "kernel": "fuse",
@@ -95,7 +95,7 @@
       "host": "windows",
       "platforms": [
         {
-          "platform": "native",
+          "platform": "host",
           "how": "built_in",
           "backend": null,
           "kernel": null,

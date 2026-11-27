@@ -1,6 +1,7 @@
 //! The folders above a namespaces Sandbox's local root (#533 terminal pass):
 //! its commands run as another identity, so the worker's root and the home's
-//! folders down to `machine/native/run` must let others pass (o+x),
+//! folders down to its run root (`machine/<host machine>/run`) must let
+//! others pass (o+x),
 //! while staying unlistable. Folders above the home are left alone. (The
 //! host's private-home check, which accepts o+x on a folder and nothing
 //! more, is covered through `project.init` in layerfs-api's
@@ -32,14 +33,19 @@ fn the_home_s_folders_down_to_the_local_root_let_others_pass() {
     let top = tempdir("home");
     let home = top.join("h");
     let local = home::paths::run_root(&home);
+    let machine = local.parent().unwrap().to_owned();
+    assert_eq!(
+        machine,
+        home.join("machine").join(layerfs_home::names::HOST_MACHINE)
+    );
     std::fs::create_dir_all(&local).unwrap();
-    for folder in [&home, &home.join("machine"), &home.join("machine/native")] {
+    for folder in [&home, &home.join("machine"), &machine] {
         set(folder, 0o700);
     }
     set(&local, 0o755);
     set(&top, 0o750);
     home::traversable(&home, &local).unwrap();
-    for folder in [&home, &home.join("machine"), &home.join("machine/native")] {
+    for folder in [&home, &home.join("machine"), &machine] {
         assert_eq!(mode(folder), 0o701, "{}", folder.display());
     }
     assert_eq!(

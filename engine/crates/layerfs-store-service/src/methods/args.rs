@@ -220,8 +220,9 @@ fn mode(change: &SdkValue) -> Result<Option<u32>, SdkRefusal> {
 }
 
 /// One change of a file call, from its `op` and that op's fields. A write
-/// whose bytes were to follow the call (`streamed`) is refused: no bytes
-/// follow a call on the in-process route.
+/// whose bytes follow it (`streamed: true`) takes them from the call's
+/// streamed source; without one it is refused where it is applied. A
+/// declared byte length (`streamed: n`) is refused: no route sends one.
 pub fn change(change: &SdkValue) -> Arg<Change<'_>> {
     let kind = text(change, "op")?;
     let p = |name| path(change, name);
@@ -245,6 +246,11 @@ pub fn change(change: &SdkValue) -> Arg<Change<'_>> {
                 p("path")?;
                 return Err(invalid("streamed body beyond the declared bytes"));
             }
+            // bytes that follow the change in a streamed call's source
+            (None, None, Some(SdkValue::Bool(true))) => Change::Streamed {
+                path: p("path")?,
+                mode: mode(change)?,
+            },
             _ => return Err(invalid("write content must be text or bytes")),
         },
         "edit" => Change::Edit {
@@ -291,13 +297,34 @@ pub fn single(args: &SdkValue, kind: &str) -> SdkValue {
 
 /// Commits `changes` once to the call's `branch` of its `project`.
 pub fn commit(service: &StoreService, args: &SdkValue, changes: &[SdkValue]) -> Answer {
-    let project = text(args, "project")?;
     let changes: Vec<_> = changes.iter().map(change).collect();
+    commit_from(service, args, files::Changes::Listed(&changes))
+}
+
+/// Commits the changes `source` streams once, as [`commit`] commits listed
+/// ones: one private Workspace, one Commit after the source's last change.
+pub fn commit_streamed(
+    service: &StoreService,
+    args: &SdkValue,
+    source: &mut dyn files::Source,
+) -> Answer {
+    commit_from(
+        service,
+        args,
+        files::Changes::Streamed {
+            source,
+            parse: change,
+        },
+    )
+}
+
+fn commit_from(service: &StoreService, args: &SdkValue, changes: files::Changes<'_, '_>) -> Answer {
+    let project = text(args, "project")?;
     files::commit(
         service,
         project,
         text(args, "branch"),
-        &changes,
+        changes,
         args.get_text("message"),
         args.get_text("expected"),
     )

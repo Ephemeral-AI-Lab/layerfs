@@ -16,6 +16,7 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { client, table, LayerFSError } from "../src/index.js";
 
+const hostMachine = process.platform === "darwin" ? "macos-host" : "linux-host";
 const root = fileURLToPath(new URL("../../../", import.meta.url));
 const target = process.env.CARGO_TARGET_DIR ? resolve(root, process.env.CARGO_TARGET_DIR) : join(root, "target");
 const command = join(target, "debug", "layerfs");
@@ -197,7 +198,7 @@ test("through a worker: push, pull and init report bytes per phase; null outside
       ["check", "send", "install", "record"]);
 
     const pulled = [];
-    await lfs.store.move("shop", "native", { on_progress: (p) => pulled.push(p) });
+    await lfs.store.move("shop", hostMachine, { on_progress: (p) => pulled.push(p) });
     assert.equal(pulled[0].phase, "check");
     assert.equal(pulled[pulled.length - 1].phase, "retire");
 

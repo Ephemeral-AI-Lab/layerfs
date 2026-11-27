@@ -59,7 +59,7 @@ as `exec/<workspace id>/<exec id>.stdout` (and `.stderr`), which
 
 ```bash
 $ layerfs sandbox files tests
-{"items":[{"path":"/tmp/demo/home/machine/native/run/layerfs-8a7387b2-tests/workspaces/1","type":"dir","not_read":"mount"},{"path":"/tmp/demo/home/machine/native/run/layerfs-8a7387b2-tests/tmp","type":"dir"},{"path":"/tmp/demo/home/machine/native/run/layerfs-8a7387b2-tests/daemon.log","type":"file","size":38}]}
+{"items":[{"path":"/tmp/demo/home/machine/macos-host/run/layerfs-8a7387b2-tests/workspaces/1","type":"dir","not_read":"mount"},{"path":"/tmp/demo/home/machine/macos-host/run/layerfs-8a7387b2-tests/tmp","type":"dir"},{"path":"/tmp/demo/home/machine/macos-host/run/layerfs-8a7387b2-tests/daemon.log","type":"file","size":38}]}
 ```
 
 **`sandbox.remove` deletes the run folder with the log.** Save what you need

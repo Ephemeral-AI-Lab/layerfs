@@ -35,7 +35,7 @@ fn host_args(
 ) -> Result<Host> {
     let id = layerfs_home::home::opened(home)?.id;
     let backend = if cfg!(target_os = "macos") {
-        "native"
+        "process"
     } else {
         "namespaces"
     };
@@ -529,7 +529,7 @@ pub fn in_worker(
     let (store, project) = (store.as_str(), project.as_str());
     layerfs_home::names::StoreName::parse(store)?;
     layerfs_home::names::ProjectName::parse(project)?;
-    let record = store_record.with("machine", SdkValue::text("native"));
+    let record = store_record.with("machine", SdkValue::text(layerfs_home::names::HOST_MACHINE));
     let kind = record.kind()?;
     // `sandbox.get`'s reads ask only the Sandbox's daemon
     // (layerfs-project#181): this side writes neither record, makes no run

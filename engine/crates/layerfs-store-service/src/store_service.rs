@@ -1,5 +1,7 @@
 //! One opened global Store and the overlay owner its file-changing calls
 //! construct through: what a Store call needs, and nothing of a Sandbox.
+//! The owner and its template file start at the first file-changing call,
+//! so a process that only reads never creates them (#819).
 //!
 //! A file-changing call (`fs.write`, `fs.apply`, ...) binds one private
 //! Workspace, changes it, commits it once and closes it. The binding is this
@@ -7,7 +9,7 @@
 //! outcome is uncertain keeps its Workspace here, with the original failure,
 //! instead of closing it: the call is answered `Unknown` and nothing is
 //! resent or discarded.
-use crate::bootstrap::{open_store_observed, OpenedStore};
+use crate::bootstrap::{open_sqlite_for_calls, open_store_observed, OpenedStore};
 use crate::kernel_guard::{self, Unsupported};
 use crate::store::{
     BindRefusal, BindRequest, BindSuccess, BoundWorkspace, CommitFailure, NamedBindRequest, Store,
@@ -19,7 +21,7 @@ use layerfs_overlay::ProfileConfig;
 use layerfs_persistence::{PersistenceConfig, SqlitePersistenceProfile};
 use layerfs_storage::ReservationBlocks;
 use layerfs_telemetry::timer::{Active, TimingScope};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -107,22 +109,46 @@ fn outdated(error: &layerfs_storage::StorageError) -> Option<&'static str> {
 pub struct StoreService {
     pub opened: OpenedStore,
     pub store: Arc<Store>,
-    owned: Option<Owner>,
-    owner: OwnerClient,
+    /// The overlay owner, or where the first `bind` starts it.
+    overlay: Mutex<Overlay>,
     capacity: usize,
     bound: AtomicUsize,
     retained: Mutex<Vec<Retained>>,
 }
 
+/// A service's overlay owner: not started yet (the template it starts
+/// over), or started, by the service (`owned`) or by its caller.
+enum Overlay {
+    ReadOnly,
+    Later(PathBuf),
+    Started {
+        owned: Option<Owner>,
+        client: OwnerClient,
+    },
+}
+
 impl StoreService {
     /// Serves Store calls over `opened`, constructing through `owner`.
     pub fn new(opened: OpenedStore, owner: &Owner) -> Self {
+        let overlay = Overlay::Started {
+            owned: None,
+            client: owner.client(),
+        };
+        Self::serving(opened, overlay, owner.configuration().namespaces)
+    }
+
+    /// Serves Store calls over `opened`; the overlay owner starts over
+    /// `template` when the first file-changing call needs it.
+    fn later(opened: OpenedStore, template: &Path) -> Self {
+        Self::serving(opened, Overlay::Later(template.to_path_buf()), CALLS)
+    }
+
+    fn serving(opened: OpenedStore, overlay: Overlay, capacity: usize) -> Self {
         Self {
             store: opened.store.clone(),
             opened,
-            owned: None,
-            owner: owner.client(),
-            capacity: owner.configuration().namespaces,
+            overlay: Mutex::new(overlay),
+            capacity,
             bound: AtomicUsize::new(0),
             retained: Mutex::new(Vec::new()),
         }
@@ -130,10 +156,9 @@ impl StoreService {
 
     /// Opens the installed Store at `store` for this process's Store calls.
     /// The kernel guard runs first, before any file is opened; then the
-    /// Store, selected Normal explicitly, and the overlay template at
-    /// `template` (a local file, created here) for the calls' private
-    /// Workspaces. No busy handler, retry or fsync: one more opener, as a
-    /// daemon is.
+    /// control reader, with Normal selected explicitly. The writer starts
+    /// on the first mutation. The overlay template at `template` is created
+    /// by the first file-changing call.
     pub fn open_direct(
         store: &Path,
         binding: &[u8],
@@ -147,7 +172,7 @@ impl StoreService {
                 store.display()
             )));
         }
-        let opened = open_store_observed(
+        let opened = open_sqlite_for_calls(
             PersistenceConfig::sqlite(store).with_sqlite_profile(SqlitePersistenceProfile::Normal),
             binding,
             cursor_key,
@@ -156,7 +181,7 @@ impl StoreService {
             ReservationBlocks::default(),
         )
         .map_err(open_refusal)?;
-        Self::owning(opened, template)
+        Ok(Self::later(opened, template))
     }
 
     /// Opens a PostgreSQL Store (#506) for this process's Store calls, with
@@ -178,36 +203,64 @@ impl StoreService {
             ReservationBlocks::default(),
         )
         .map_err(open_refusal)?;
-        // #818 W4: one flight, so a first create prepares nothing.
+        // #818 W4: one flight, so a first create prepares nothing. Only
+        // this writable open: SQLite's deferred writer and the read-only
+        // sessions have no writer statements to prepare.
         opened.prepare_sdk_writes().map_err(open_refusal)?;
-        Self::owning(opened, template)
+        Ok(Self::later(opened, template))
     }
 
-    /// Serves `opened`, starting the overlay owner over `template`.
-    fn owning(opened: OpenedStore, template: &Path) -> Result<Self, OpenRefusal> {
-        let owner = Owner::start(
-            template,
-            ProfileConfig {
-                pager_kib: PAGER_KIB,
-                max_pages: None,
-            },
-            OwnerConfig { namespaces: CALLS },
-        )
-        .map_err(|error| OpenRefusal::Failed(format!("overlay template: {error}")))?;
-        let mut service = Self::new(opened, &owner);
-        service.owned = Some(owner);
-        Ok(service)
+    /// Opens the CLI's PostgreSQL read path over one Full-checked session:
+    /// one call's (P-A), or a host worker's held read session (P-B), which
+    /// checks `opened.postgres_session_current()` before each later call. There
+    /// is no writer or private Workspace.
+    pub fn open_postgres_read_only(
+        selection: &layerfs_persistence::PostgresSelection,
+        binding: &[u8],
+        cursor_key: [u8; 32],
+    ) -> Result<Self, OpenRefusal> {
+        let opened =
+            crate::bootstrap::open_postgres_read_only(selection, binding, cursor_key, CACHE_BYTES)
+                .map_err(open_refusal)?;
+        Ok(Self::serving(opened, Overlay::ReadOnly, 0))
+    }
+
+    /// The overlay owner, started over the template by the first call that
+    /// needs it. A start that fails fails that call alone; nothing is retried
+    /// for it.
+    fn owner(&self) -> Result<OwnerClient, String> {
+        let mut overlay = self.overlay.lock().unwrap_or_else(|e| e.into_inner());
+        let template = match &*overlay {
+            Overlay::ReadOnly => return Err("one-shot read has no overlay owner".to_owned()),
+            Overlay::Started { client, .. } => return Ok(client.clone()),
+            Overlay::Later(template) => template,
+        };
+        let profile = ProfileConfig {
+            pager_kib: PAGER_KIB,
+            max_pages: None,
+        };
+        let owned = Owner::start(template, profile, OwnerConfig { namespaces: CALLS })
+            .map_err(|error| format!("overlay template: {error}"))?;
+        let client = owned.client();
+        *overlay = Overlay::Started {
+            owned: Some(owned),
+            client: client.clone(),
+        };
+        Ok(client)
     }
 
     /// Returns the Store's idle producer handle's kept ordinals
     /// ([`Store::release_producer`]), then stops the overlay owner this
     /// service started. Private Workspaces kept with an uncertain Commit stay
     /// with it until then.
-    pub fn close(mut self) -> Result<(), String> {
+    pub fn close(self) -> Result<(), String> {
         self.store.release_producer();
-        match self.owned.take() {
-            Some(owner) => owner.stop().map_err(|error| error.to_string()),
-            None => Ok(()),
+        let overlay = self.overlay.into_inner().unwrap_or_else(|e| e.into_inner());
+        match overlay {
+            Overlay::Started {
+                owned: Some(owner), ..
+            } => owner.stop().map_err(|error| error.to_string()),
+            _ => Ok(()),
         }
     }
 
@@ -218,10 +271,10 @@ impl StoreService {
         branch: BranchId,
         timing: &TimingScope<'_, Active>,
     ) -> Result<Arc<BoundWorkspace>, String> {
-        self.admit()?;
+        let owner = self.admit()?;
         let bound = crate::telemetry::phase(timing, "store.bind", || {
             self.store
-                .bind_private(self.owner.clone(), BindRequest { workspace, branch })
+                .bind_private(owner, BindRequest { workspace, branch })
         });
         self.bound_or_released(bound)
             .map_err(|refusal| refusal.to_string())
@@ -236,7 +289,7 @@ impl StoreService {
         branch: &str,
         timing: &TimingScope<'_, Active>,
     ) -> Result<Arc<BoundWorkspace>, NamedBindFailure> {
-        self.admit().map_err(NamedBindFailure::Admission)?;
+        let owner = self.admit().map_err(NamedBindFailure::Admission)?;
         let request = NamedBindRequest {
             workspace,
             project: project.to_owned(),
@@ -244,7 +297,7 @@ impl StoreService {
         };
         let looked_up = std::cell::Cell::new(false);
         let bound = crate::telemetry::phase(timing, "store.bind", || {
-            (self.store).bind_named_private(self.owner.clone(), request, &looked_up)
+            (self.store).bind_named_private(owner, request, &looked_up)
         });
         self.bound_or_released(bound)
             .map_err(|refusal| NamedBindFailure::Bind {
@@ -253,15 +306,13 @@ impl StoreService {
             })
     }
 
-    /// Admits one more private Workspace, before any read: refused while
-    /// the overlay owner's maintenance is stopped or the call capacity is
-    /// full.
-    fn admit(&self) -> Result<(), String> {
-        if let Some(stopped) = self
-            .owner
-            .maintenance_failure()
-            .map_err(|e| e.to_string())?
-        {
+    /// Admits one more private Workspace, before any read: starts the
+    /// overlay owner if no call has yet, then refuses while its maintenance
+    /// is stopped or the call capacity is full. A start that fails refuses
+    /// this call alone.
+    fn admit(&self) -> Result<OwnerClient, String> {
+        let owner = self.owner()?;
+        if let Some(stopped) = owner.maintenance_failure().map_err(|e| e.to_string())? {
             return Err(format!("overlay maintenance stopped: {stopped}"));
         }
         let admitted = self
@@ -272,7 +323,7 @@ impl StoreService {
         if admitted.is_err() {
             return Err("Capacity: Store call Workspace capacity".to_owned());
         }
-        Ok(())
+        Ok(owner)
     }
 
     /// The bound Workspace, or the refusal with its admission given back.
@@ -291,29 +342,55 @@ impl StoreService {
     pub fn release(&self, workspace: &BoundWorkspace) -> Result<(), String> {
         workspace.close().map_err(|e| format!("{e:?}"))?;
         self.bound.fetch_sub(1, Ordering::AcqRel);
-        self.owner
+        self.owner()?
             .retire_namespace(workspace.route().namespace())
             .map_err(|e| e.to_string())
     }
 
     /// Keeps a private Workspace whose Commit outcome is uncertain, with its
-    /// failure, and answers the call `Unknown`.
+    /// failure, and answers the call `Unknown`. The answer carries the
+    /// evidence that decides the outcome later, outside this process (§8.5):
+    /// the Commit's attempt, unique in the Store, with the head it expected
+    /// and the root it would publish, so a holder of the answer can keep it
+    /// beyond this Workspace.
     pub fn retain(
         &self,
         workspace: Arc<BoundWorkspace>,
         failure: Box<CommitFailure>,
     ) -> SdkRefusal {
+        use crate::history::lookup::hex;
+        let intent = failure.intent.as_ref();
         let refusal = SdkRefusal {
             code: "Unknown".to_owned(),
             message: failure.to_string(),
             detail: SdkValue::map([
                 (
                     "workspace",
-                    SdkValue::text(crate::history::lookup::hex(
-                        &workspace.identity().to_bytes(),
-                    )),
+                    SdkValue::text(hex(&workspace.identity().to_bytes())),
                 ),
                 ("namespace", SdkValue::Int(workspace.route().namespace())),
+                ("phase", SdkValue::text(failure.phase.as_str())),
+                ("published", SdkValue::Bool(failure.published.is_some())),
+                (
+                    "attempt",
+                    SdkValue::opt_text(
+                        intent
+                            .and_then(|intent| intent.meta.attempt)
+                            .map(|attempt| hex(attempt.as_slice())),
+                    ),
+                ),
+                (
+                    "expected_head",
+                    SdkValue::opt_text(
+                        intent
+                            .and_then(|intent| intent.expected_head)
+                            .map(|head| hex(&head.to_bytes())),
+                    ),
+                ),
+                (
+                    "candidate_root",
+                    SdkValue::opt_text(intent.map(|intent| hex(intent.candidate_root.as_bytes()))),
+                ),
             ]),
         };
         self.retained

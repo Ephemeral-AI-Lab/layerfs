@@ -26,6 +26,7 @@ mod text;
 pub use check::size;
 pub use context::Context;
 pub use dispatch::{asks_detail, call, call_scoped, close, home, Client, DETAIL, WITH};
+pub(crate) use dispatch::{call_cli, cli_defers};
 pub use form::{Asked, Form, Paging, Part, Place, Profile, Section, THING};
 pub use layerfs_home::json;
 pub use platform_policy::Policy;

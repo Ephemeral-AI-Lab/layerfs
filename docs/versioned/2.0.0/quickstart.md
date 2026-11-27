@@ -24,7 +24,7 @@ scratch home with the debug build of branch `cs20-pkg-z` (from
   [api/README.md](../../../api/README.md#package-and-install) lists the
   steps to install the Node tarball, the wheel and the command outside the
   checkout.
-- **A Sandbox** on the `native` machine needs the LayerFS daemon of the same
+- **A Sandbox** on the host machine needs the LayerFS daemon of the same
   build (see [step 4](#4-a-sandbox-a-workspace-and-a-commit)).
 
 No package is published.
@@ -63,10 +63,10 @@ $ layerfs project init shop/api /tmp/demo/src --progress
 $ layerfs project list
 {"items":[{"project":"shop/api"}]}
 $ layerfs project get shop/api --detail
-{"store":"shop","state":"ready","commit":"32919f55…","op":null,"blocked_by":null,"reason":null,"fix":null,"project":"shop/api","engine":"sqlite","machine":"native","created_at":"2026-11-18T22:04:02Z"}
+{"store":"shop","state":"ready","commit":"32919f55…","op":null,"blocked_by":null,"reason":null,"fix":null,"project":"shop/api","engine":"sqlite","machine":"macos-host","created_at":"2026-11-18T22:04:02Z"}
 ```
 
-- `store create` makes an empty sqlite Store on the `native` machine.
+- `store create` makes an empty sqlite Store on the host machine.
 - `project init` imports the folder as project `api` of Store `shop` and
   answers main's first Commit. Init never creates a Store. `--progress`
   writes its phases to stderr.
@@ -116,7 +116,7 @@ $ layerfs sandbox create shop/api tests --progress
 {"phase":"start","done":1,"total":1}
 {"ok":true}
 $ layerfs workspace mount tests agent
-{"workspace":"tests:agent","path":"/tmp/demo/home/machine/native/run/layerfs-8a7387b2-tests/workspaces/1"}
+{"workspace":"tests:agent","path":"/tmp/demo/home/machine/macos-host/run/layerfs-8a7387b2-tests/workspaces/1"}
 $ layerfs workspace exec tests:agent 'echo hello > out.txt && uname -s'
 {"exit_code":0,"stdout":"Darwin\n"}
 $ layerfs workspace status tests:agent
@@ -138,11 +138,11 @@ the Workspace lists it as removed; see
 
 - A Sandbox runs on the machine that holds its sqlite Store, or with
   `--machine M` on another machine for a PostgreSQL Store. A Store made by
-  `store create` is on `native`, so its Sandboxes run on `native`.
-- On macOS, `native` runs the daemon as a host process with a loopback NFS
-  mount. On Linux it uses namespaces and needs root.
-- The `native` daemon is the native machine record's `daemon` (set by
-  `layerfs machine update native --daemon <path>`, as on the scratch home
+  `store create` is on the host machine, so its Sandboxes run on the host machine.
+- On macOS, `macos-host` runs the daemon as a host process with a loopback NFS
+  mount. On Linux, `linux-host` uses namespaces and needs root.
+- The host machine's daemon is its record's `daemon` (set by
+  `layerfs machine update macos-host --daemon <path>`, as on the scratch home
   here), else `~/.cache/layerfs/bundle/<version>/<os>-<arch>/layerfs-daemon`.
   `layerfs home get --detail` shows which one this build would use.
 - `workspace mount` answers the Workspace's handle, `<sandbox>:<name>`; its
@@ -157,7 +157,7 @@ the Workspace lists it as removed; see
   moved head instead. Nothing commits or unmounts for you.
 - `sandbox remove` refuses `InUse` while a Workspace is mounted; `--force`
   stops the Sandbox anyway and names the Workspaces it ended.
-- A Sandbox is not named `native` or `docker` (`InvalidInput`).
+- A Sandbox cannot take a built-in machine name (`InvalidInput`).
 
 ## 5. The same in JavaScript
 
@@ -192,7 +192,7 @@ await lfs.sandbox.remove("tests");                                 // {"ok":true
 layerfs.close();
 ```
 
-Run as one file on a fresh scratch home, with `machine.update("native", {
+Run as one file on a fresh scratch home, with `machine.update("macos-host", {
 daemon })` first (step 4). Longer runs are in [the examples](examples/README.md).
 
 ## 6. The same in Python

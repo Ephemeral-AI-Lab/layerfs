@@ -8,6 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import layerfs, { client, table, families, LayerFSError } from "../src/index.js";
 
+const hostMachine = process.platform === "darwin" ? "macos-host" : "linux-host";
 const temp = (tag) => {
   const dir = mkdtempSync(join(tmpdir(), `layerfs-node-${tag}-`));
   chmodSync(dir, 0o700);
@@ -75,7 +76,7 @@ test("every call reaches the library, which checks its arguments first", async (
   assert.deepEqual((await lfs.sandbox.list()).items, []);
   assert.deepEqual((await lfs.backup.list()).items, []);
   const machines = await lfs.machine.list();
-  assert.deepEqual(machines.items.map((m) => m.machine), ["docker", "native"]);
+  assert.deepEqual(machines.items.map((m) => m.machine), (process.platform === "win32" ? ["docker"] : ["docker", hostMachine]));
   await assert.rejects(lfs.store.get("shop", { bogus: 1 }), /unknown option "bogus"/);
   rmSync(home, { recursive: true, force: true });
 });

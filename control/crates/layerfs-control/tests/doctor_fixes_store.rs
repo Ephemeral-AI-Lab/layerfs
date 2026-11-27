@@ -38,7 +38,7 @@ fn fields(name: &str) -> SdkValue {
     SdkValue::map([
         ("name", SdkValue::text(name)),
         ("kind", SdkValue::text("sqlite")),
-        ("machine", SdkValue::text("native")),
+        ("machine", SdkValue::text(layerfs_home::names::HOST_MACHINE)),
         ("binding", SdkValue::Bytes(BINDING.to_vec())),
         ("cursor", SdkValue::Bytes(vec![9; 32])),
     ])
@@ -109,7 +109,10 @@ fn a_missing_file_fails_with_remove_only_when_there_is_no_backup() {
         "{found:?}"
     );
     assert_eq!(ev_text(&found, "reason"), Some("missing"));
-    assert_eq!(ev_text(&found, "machine"), Some("native"));
+    assert_eq!(
+        ev_text(&found, "machine"),
+        Some(layerfs_home::names::HOST_MACHINE)
+    );
     // with a backup link there is no valid in-place restore command either:
     // backup restore protects the recorded Store from replacement it cannot
     // prove unchanged
@@ -269,7 +272,7 @@ fn a_project_record_that_cannot_be_read_says_why_without_a_fix() {
 }
 
 #[test]
-fn stale_leases_get_their_own_removal_command_not_a_read() {
+fn stale_leases_are_reported_without_removing_them() {
     let f = Fixture::new();
     write_entity(&paths::store_record(&f.root, "one"), &fields("one")).unwrap();
     let lease_dir = paths::lease_dir(&f.root, "one");
@@ -278,19 +281,12 @@ fn stale_leases_get_their_own_removal_command_not_a_read() {
     std::fs::write(&lease, "1\n").unwrap();
     let out = report(&f.root, Kind::Store, "one");
     let found = finding(&out, "store.operation");
-    assert_eq!(
-        fix_of(&found),
-        format!("rm {}", lease.display()),
-        "{found:?}"
-    );
+    assert_eq!(fix_of(&found), "", "{found:?}");
     assert_eq!(
         evidence(&found, "stale_pids"),
         Some(&SdkValue::List(vec![SdkValue::Int(99999999)]))
     );
-    assert!(
-        !fix_of(&found).contains("store get"),
-        "a read does not remove stale leases: {found:?}"
-    );
+    assert_eq!(std::fs::read_to_string(lease).unwrap(), "1\n");
 }
 
 #[test]

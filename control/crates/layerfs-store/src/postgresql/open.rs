@@ -85,16 +85,18 @@ pub fn open(
         identity.cursor_key,
         template,
     )
-    .map_err(|refusal| {
-        let reason = match refusal {
-            OpenRefusal::Outdated(status) => return refused(crate::state::OLD_STORE, status),
-            OpenRefusal::Unsupported(reason) => reason.0,
-            OpenRefusal::Missing(reason)
-            | OpenRefusal::Busy(reason)
-            | OpenRefusal::Failed(reason) => reason,
-        };
-        refused("Failed", reason)
-    })
+    .map_err(open_refusal)
+}
+
+fn open_refusal(refusal: OpenRefusal) -> SdkRefusal {
+    let reason = match refusal {
+        OpenRefusal::Outdated(status) => return refused(crate::state::OLD_STORE, status),
+        OpenRefusal::Unsupported(reason) => reason.0,
+        OpenRefusal::Missing(reason) | OpenRefusal::Busy(reason) | OpenRefusal::Failed(reason) => {
+            reason
+        }
+    };
+    refused("Failed", reason)
 }
 
 /// The binding key the schema of a call's `postgresql { url, schema,
@@ -120,6 +122,38 @@ pub fn no_session(error: &layerfs_storage::port::PersistenceError) -> Option<Sdk
         _ => return None,
     };
     Some(refused("Unavailable", message))
+}
+
+/// A held session's open (#819 P-B) that the server refused before a
+/// session existed: a server restarting or down after the held sessions
+/// were lost, a dropped database or a changed login. Its engine text
+/// (`Store open: ... Refused { status: "Rejected" }`, or `"Closed"` when
+/// no connection was made) is said plainly with the check to run; the
+/// code and the outcome stay as they are (a definite failure: nothing of
+/// the call was sent, nothing was committed, nothing is resent). The
+/// message names no address or login. Any other refusal is returned as
+/// it is.
+pub(crate) fn new_session_refused(store: &str, refusal: SdkRefusal) -> SdkRefusal {
+    use layerfs_storage::port::PersistenceError::Refused;
+    let status = |status: &str| {
+        Refused {
+            status: status.to_owned(),
+        }
+        .to_string()
+    };
+    let said = if refusal.message.ends_with(&status("Rejected")) {
+        "the PostgreSQL server refused a new session (it may be restarting, or the database, user or password changed)"
+    } else if refusal.message.ends_with(&status("Closed")) {
+        "no new session to the PostgreSQL server could be made (it may be restarting or unreachable)"
+    } else {
+        return refusal;
+    };
+    let fix = format!(
+        "layerfs store get {} --with live",
+        layerfs_home::outcome::shell_word(store)
+    );
+    let message = format!("{said}; nothing was sent and nothing was committed");
+    layerfs_home::outcome::with_fix(SdkRefusal { message, ..refusal }, fix)
 }
 
 /// How [`no_session`] says that no connection was made.
@@ -249,6 +283,44 @@ pub fn open_postgres(
     identity: &Identity,
     template: &Path,
 ) -> Result<StoreService, SdkRefusal> {
+    let (url, schema, sync) = resolve_postgres(postgresql, identity)?;
+    open(url, schema, sync, identity, template)
+}
+
+/// A host worker's held writable service (#819 P-B writes): opened as
+/// [`open_postgres`] does, the copy of the URL made for it overwritten
+/// after; the service's own copies hold the login while it stays open.
+pub(crate) fn open_postgres_held(
+    postgresql: Option<&PgSelection>,
+    identity: &Identity,
+    template: &Path,
+) -> Result<StoreService, SdkRefusal> {
+    let (url, schema, sync) = resolve_postgres(postgresql, identity)?;
+    let mut chosen = selection(url, schema, sync);
+    let opened =
+        StoreService::open_postgres(&chosen, &identity.binding, identity.cursor_key, template);
+    layerfs_home::wipe::text(std::mem::take(&mut chosen.url));
+    opened.map_err(open_refusal)
+}
+
+/// The fresh command's Store-call session, Full-checked once at open.
+pub(crate) fn open_read_only(
+    postgresql: Option<&PgSelection>,
+    identity: &Identity,
+) -> Result<StoreService, SdkRefusal> {
+    let (url, schema, sync) = resolve_postgres(postgresql, identity)?;
+    let mut chosen = selection(url, schema, sync);
+    let opened =
+        StoreService::open_postgres_read_only(&chosen, &identity.binding, identity.cursor_key);
+    // this copy of the URL may hold the login (#819 P-B)
+    layerfs_home::wipe::text(std::mem::take(&mut chosen.url));
+    opened.map_err(open_refusal)
+}
+
+fn resolve_postgres<'a>(
+    postgresql: Option<&'a PgSelection>,
+    identity: &'a Identity,
+) -> Result<(&'a str, &'a str, &'a str), SdkRefusal> {
     let Kind::Postgresql {
         schema,
         synchronous_commit,
@@ -264,5 +336,5 @@ pub fn open_postgres(
                 "a PostgreSQL Store call needs postgresql.url (passed per call, never stored)",
             )
         })?;
-    crate::postgresql::open::open(url, schema, synchronous_commit, identity, template)
+    Ok((url, schema, synchronous_commit))
 }

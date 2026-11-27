@@ -8,8 +8,8 @@
 //! - `shared/`: the process lifecycle both backends use (daemon start, its
 //!   listener, search path, streams, confined reads).
 //! - `backend/`: one folder per Sandbox backend, named as records store it
-//!   (`native`, `namespaces`), holding everything only that backend uses,
-//!   its operating-system facts included (macOS runs only `native`, Linux
+//!   (`process`, `namespaces`), holding everything only that backend uses,
+//!   its operating-system facts included (macOS runs only `process`, Linux
 //!   only `namespaces`); `backend/adapter.rs` is the one match for what is
 //!   fixed per backend (G2). The docker backend and its Engine client are
 //!   retired (D-8, layerfs-project#111: the docker machine runs namespaces
@@ -36,7 +36,7 @@ pub use backend::namespaces::{self, NamespaceProvider};
 #[cfg(unix)]
 pub use backend::namespaces::{network, rootfs, HelperSpec, SpecNetwork, RESOLVER_FILES};
 #[cfg(target_os = "macos")]
-pub use backend::native::{self, NativeProvider};
+pub use backend::process::{self, ProcessProvider};
 #[cfg(unix)]
 pub use backend::Backend;
 #[cfg(any(target_os = "linux", target_os = "macos"))]

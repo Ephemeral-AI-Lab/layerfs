@@ -180,7 +180,7 @@ impl BoundWorkspace {
         held: &mut CapturedConstruction,
         constructed: Option<&mut ConstructedObjects>,
     ) -> Result<Candidate, CommitError> {
-        let planned_reads = self.store.writer.batched_chain_reads();
+        let planned_reads = self.store.batched_chain_reads();
         let locators = self.admitted.as_ref().map(|admitted| {
             std::sync::Arc::new(layerfs_storage::read::CapturedLocators::new(
                 admitted.clone(),

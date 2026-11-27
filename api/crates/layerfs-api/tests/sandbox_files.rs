@@ -84,7 +84,7 @@ fn home_records(home: &Path, machine: &str, platform: &str, worker: Option<(Sock
         ("platform", t(platform)),
         ("daemon", t(&daemon)),
     ];
-    if machine != "native" {
+    if machine != layerfs_home::names::HOST_MACHINE {
         fields.push(("vm_name", t(&vm_name)));
     }
     write_record(&paths::machine_record(home, machine), &map(&fields)).unwrap();
@@ -118,7 +118,7 @@ fn home_records(home: &Path, machine: &str, platform: &str, worker: Option<(Sock
 /// runs it records it, with its run folder as a start leaves it and two
 /// files a command left in its home; answers the folder.
 fn local_sandbox(root: &Path) -> PathBuf {
-    sandbox_as(root, "native")
+    sandbox_as(root, layerfs_home::names::HOST_MACHINE)
 }
 
 /// [`local_sandbox`] under backend `runtime`: `namespaces` is a Sandbox
@@ -153,7 +153,7 @@ fn sandbox_as(root: &Path, runtime: &'static str) -> PathBuf {
         &map(&[
             ("name", t("s1")),
             ("project", t("shop/api")),
-            ("machine", t("native")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
             ("id", t("s1")),
             ("runtime", t(runtime)),
             ("daemon", daemon.to_record()),
@@ -461,14 +461,14 @@ fn the_table_lists_the_call_quiet_with_a_path_and_its_options() {
 #[test]
 fn a_native_sandbox_s_files_are_read_here_with_no_lock_line_or_write() {
     let _turn = serial();
-    let home = tempdir("native");
+    let home = tempdir(layerfs_home::names::HOST_MACHINE);
     home::open(&home).unwrap();
-    home_records(&home, "native", "native", None);
+    home_records(&home, layerfs_home::names::HOST_MACHINE, "host", None);
     let folder = local_sandbox(&home);
     let first = workspace(&home, 1, &folder.join("workspaces/1"));
     let second = workspace(&home, 2, &folder.join("workspaces/2"));
     settle(&home);
-    held(&home, "native");
+    held(&home, layerfs_home::names::HOST_MACHINE);
     let push = pushing(&home);
     let log = std::fs::read(paths::calls_file(&home)).unwrap();
     let before = files(&home);
@@ -709,7 +709,7 @@ fn a_stopped_machine_is_unavailable_and_nothing_starts_it() {
     worker_sandbox(&home);
     settle(&home);
     let before = files(&home);
-    for path in [None, Some("/layerfs/data/machine/native/run/x/tmp")] {
+    for path in [None, Some("/layerfs/data/machine/linux-guest/run/x/tmp")] {
         let mut asked = vec![("sandbox", t("s1"))];
         asked.extend(path.map(|path| ("path", t(path))));
         let (code, message) = call(&home, "sandbox.files", &asked).unwrap_err();

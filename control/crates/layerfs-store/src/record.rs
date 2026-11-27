@@ -17,6 +17,9 @@ use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
+/// The record field of a PostgreSQL Store's [`StoreRecord::login_revision`].
+const LOGIN_REVISION: &str = "login_revision";
+
 /// The kind a Store record names; a record with no `kind`, or any other
 /// text, is refused, never read as sqlite.
 pub fn kind_of(record: &SdkValue) -> Result<StoreKind> {
@@ -138,12 +141,28 @@ pub struct StoreRecord {
 /// never before it, and never held across a worker call or a byte
 /// transfer. A Store with no folder is `NotFound`.
 pub fn lock(home: &Path, name: &str) -> Result<EntityLock> {
+    take_lock(home, name, entity_lock::WAIT)
+}
+
+/// A management slot must be available for other work while a record is held.
+pub(crate) fn lock_for_host_close(home: &Path, name: &str) -> Result<EntityLock> {
+    take_lock(home, name, std::time::Duration::ZERO).map_err(|error| {
+        if error.code != "Unavailable" {
+            return error;
+        }
+        let error = refused("InUse", format!("Store {name}'s record lock is held"));
+        let error = with_next(error, "store", SdkValue::text(name));
+        with_next(error, "state", SdkValue::text("record-locked"))
+    })
+}
+
+fn take_lock(home: &Path, name: &str, wait: std::time::Duration) -> Result<EntityLock> {
     let dir = paths::store_dir(home, name);
     if !dir.is_dir() {
         return Err(refused("NotFound", format!("no Store named {name}")));
     }
     let held = format!("Store {name}'s lock was held");
-    entity_lock::take(&dir.join("lock"), entity_lock::WAIT, &held)
+    entity_lock::take(&dir.join("lock"), wait, &held)
 }
 
 /// The record field listing the machines attached to a PostgreSQL Store.
@@ -210,6 +229,14 @@ impl StoreRecord {
         self.parsed.as_ref().map_err(Clone::clone)
     }
 
+    /// Checks the admission fence of this Store's local host, when it has one.
+    pub(crate) fn admit_machine(&self, home: &Path) -> Result<()> {
+        if let StoreRef::Sqlite { machine, .. } = self.store_ref()? {
+            layerfs_machine::record::MachineRecord::admit_host(home, machine)?;
+        }
+        Ok(())
+    }
+
     /// The Store's kind.
     pub fn kind(&self) -> Result<StoreKind> {
         Ok(self.store_ref()?.kind())
@@ -267,6 +294,21 @@ impl StoreRecord {
         }
     }
 
+    /// A PostgreSQL Store's login revision (#819 P-B): a non-secret token
+    /// `store connect` writes with every login it saves and an upgrade
+    /// renews. A host worker serves a call only at the revision the record
+    /// holds now, and never on a session opened at another one.
+    pub fn login_revision(&self) -> Option<&str> {
+        self.text(LOGIN_REVISION)
+            .filter(|revision| !revision.is_empty())
+    }
+
+    /// The record with a new [`Self::login_revision`].
+    pub fn with_new_login_revision(self) -> Result<Self> {
+        let token = layerfs_bridge::sdk_values::hex(&layerfs_home::helpers::random()?[..16]);
+        Ok(self.with(LOGIN_REVISION, SdkValue::text(token)))
+    }
+
     /// The record without field `field`.
     pub fn without(self, field: &str) -> Self {
         let fields = match self.fields {
@@ -295,7 +337,7 @@ impl StoreRecord {
     /// decides what may run beside it.
     pub fn unblocked(&self) -> Result<()> {
         match self.op() {
-            Some(op) if intent::exclusive(op.name()) => self.refuse(&op),
+            Some(op) if intent::blocks(&op) => self.refuse(&op),
             _ => Ok(()),
         }
     }

@@ -6,11 +6,11 @@ use std::{
     os::unix::fs::MetadataExt,
     path::{Component, Path, PathBuf},
 };
-// a native daemon's start (macOS only)
+// a process daemon's start (macOS only)
 #[cfg(target_os = "macos")]
 use {
     super::{listener, search_path::search_path},
-    crate::backend::native::sandbox::Sandbox,
+    crate::backend::process::sandbox::Sandbox,
     layerfs_bridge::process::LocalProcess,
     nix::fcntl::OFlag,
     std::{
@@ -34,7 +34,7 @@ pub(crate) const LOG: &str = "daemon.log";
 pub struct Local {
     root: PathBuf,
     name: Option<String>,
-    /// Variables the daemon starts with besides `PATH` (a native daemon's,
+    /// Variables the daemon starts with besides `PATH` (a process daemon's,
     /// macOS only).
     #[cfg(target_os = "macos")]
     environment: Vec<(String, String)>,
@@ -88,7 +88,7 @@ impl Local {
     /// another identity, so one closed directory on the way, such as a 0700
     /// `/root`, would fail every command at spawn).
     pub fn new(root: impl AsRef<Path>) -> Result<Self, RuntimeError> {
-        let local = Self::native(root.as_ref())?;
+        let local = Self::process(root.as_ref())?;
         let root = root.as_ref();
         // every directory on the path as given and on the path it resolves to
         let resolved = fs::canonicalize(root)?;
@@ -107,11 +107,11 @@ impl Local {
         }
         Ok(local)
     }
-    /// Selects `root` for the native route, whose commands run as this user
+    /// Selects `root` for the process route, whose commands run as this user
     /// (no other identity): the root's own checks as in [`Self::new`], but
     /// the directories above it need not be traversable by others (a macOS
     /// home is 0750).
-    pub fn native(root: impl AsRef<Path>) -> Result<Self, RuntimeError> {
+    pub fn process(root: impl AsRef<Path>) -> Result<Self, RuntimeError> {
         let root = root.as_ref();
         if !root.is_absolute()
             || root
@@ -182,7 +182,7 @@ impl Local {
     /// daemon setup naming [`Self::paths`]) 0600, spawns `executable
     /// --config <setup>` in its own process group with no inherited
     /// environment but the search path, and waits up to `wait` for its
-    /// listener line. Once anything is made, a failure returns it. A native
+    /// listener line. Once anything is made, a failure returns it. A process
     /// daemon's start, macOS only.
     #[cfg(target_os = "macos")]
     pub fn create(

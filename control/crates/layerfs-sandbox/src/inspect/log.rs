@@ -64,8 +64,10 @@ impl Window {
     }
 }
 
-/// `Unsupported` `{reason: 'no_worker'}`: the machine's calls run in the
-/// caller's process, so it has no worker and no worker log.
+/// `Unsupported` `{reason: 'no_worker'}`: the host machine runs its machine
+/// and Sandbox calls in the caller's process, so no machine worker keeps a
+/// log for this call. Its host worker serves the CLI's Store calls only and
+/// writes the home's `log/worker.log`, which this call does not read.
 /// `machine` is the one asked, when known.
 fn no_worker(machine: Option<&str>) -> SdkRefusal {
     let machine = machine.map_or("the machine".to_owned(), |m| format!("machine {m}"));
@@ -74,7 +76,7 @@ fn no_worker(machine: Option<&str>) -> SdkRefusal {
         ..refused(
             "Unsupported",
             format!(
-                "{machine} has no worker (its calls run in the caller's process), so it has no worker log"
+                "{machine} runs its calls in the caller's process, so it has no machine worker log; its host worker's log is the home's log/worker.log"
             ),
         )
     }
@@ -83,7 +85,7 @@ fn no_worker(machine: Option<&str>) -> SdkRefusal {
 /// `machine.log(machine, { cursor, before, limit })`: one window of the
 /// machine's worker log, `{ lines: [{ text, continued? }], cursor,
 /// before?, has_more }` (`layerfs_home::tail::read`). A machine whose calls
-/// run in this process (`native` on macOS and Linux) has no worker and is
+/// run in this process (the host machine, `macos-host` or `linux-host`) is
 /// `Unsupported`; one whose worker does not
 /// answer is `Unavailable`; nothing is started.
 pub fn machine_log(home: &Path, machine: &MachineName, window: &Window) -> Outcome {

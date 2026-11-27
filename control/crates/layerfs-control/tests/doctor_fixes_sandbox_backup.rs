@@ -48,7 +48,10 @@ fn home() -> PathBuf {
     .unwrap();
     write_entity(
         &paths::store_record(&home, "s"),
-        &SdkValue::map([("kind", t("sqlite")), ("machine", t("native"))]),
+        &SdkValue::map([
+            ("kind", t("sqlite")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
+        ]),
     )
     .unwrap();
     write_entity(&paths::project_record(&home, "s", "p"), &SdkValue::map([])).unwrap();
@@ -121,7 +124,7 @@ fn sandbox(home: &Path, machine: &str, daemon: SdkValue) {
 fn local_record() -> SdkValue {
     let (start, boot) = process::me().unwrap();
     SdkValue::map([
-        ("runtime", t("native")),
+        ("runtime", t("process")),
         ("pid", SdkValue::Int(std::process::id().into())),
         ("start", t(&start.to_string())),
         ("boot", t(&format!("{boot:032x}"))),
@@ -257,9 +260,9 @@ fn dead_runtime_names_the_remove_fix_says_what_is_lost_and_leaves_daemon_checks_
     let (_, boot) = process::me().unwrap();
     sandbox(
         &home,
-        "native",
+        layerfs_home::names::HOST_MACHINE,
         SdkValue::map([
-            ("runtime", t("native")),
+            ("runtime", t("process")),
             ("pid", SdkValue::Int(pid.into())),
             ("start", t("1")),
             ("boot", t(&format!("{boot:032x}"))),
@@ -316,8 +319,8 @@ fn runtime_with_an_incomplete_identity_is_a_warning_with_no_fix() {
     let home = home();
     sandbox(
         &home,
-        "native",
-        SdkValue::map([("runtime", t("native")), ("pid", SdkValue::Int(1))]),
+        layerfs_home::names::HOST_MACHINE,
+        SdkValue::map([("runtime", t("process")), ("pid", SdkValue::Int(1))]),
     );
     let report = run(&home);
     let found = finding(
@@ -375,7 +378,7 @@ fn record_findings_name_their_cause_and_no_fix() {
 #[test]
 fn references_keep_the_remove_fix_and_carry_evidence() {
     let home = home();
-    sandbox(&home, "vm9", SdkValue::map([("runtime", t("native"))]));
+    sandbox(&home, "vm9", SdkValue::map([("runtime", t("process"))]));
     std::fs::remove_file(paths::project_record(&home, "s", "p")).unwrap();
     let report = run(&home);
     let machine = finding(
@@ -411,25 +414,29 @@ fn a_store_on_another_machine_is_fixed_by_moving_it() {
         &SdkValue::map([("kind", t("sqlite")), ("machine", t("vm1"))]),
     )
     .unwrap();
-    sandbox(&home, "native", local_record());
+    sandbox(&home, layerfs_home::names::HOST_MACHINE, local_record());
     let report = run(&home);
+    let fix = format!("layerfs store move s {}", layerfs_home::names::HOST_MACHINE);
     let found = finding(
         &report,
         "sandbox.store_placement",
         "error",
-        Some("layerfs store move s native"),
+        Some(&fix),
         &["store", "store_machine", "sandbox_machine"],
     );
     let evidence = found.get("evidence").unwrap();
     assert_eq!(evidence.get_text("store_machine"), Some("vm1"));
-    assert_eq!(evidence.get_text("sandbox_machine"), Some("native"));
+    assert_eq!(
+        evidence.get_text("sandbox_machine"),
+        Some(layerfs_home::names::HOST_MACHINE)
+    );
     std::fs::remove_dir_all(home).unwrap();
 }
 
 #[test]
 fn daemon_keys_findings_carry_evidence() {
     let home = home();
-    sandbox(&home, "native", local_record());
+    sandbox(&home, layerfs_home::names::HOST_MACHINE, local_record());
     // no keys file
     let report = run(&home);
     let found = finding(
@@ -463,7 +470,7 @@ fn daemon_keys_findings_carry_evidence() {
 #[test]
 fn daemon_connect_refused_carries_the_remove_fix_and_evidence() {
     let home = home();
-    sandbox(&home, "native", local_record());
+    sandbox(&home, layerfs_home::names::HOST_MACHINE, local_record());
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let address = listener.local_addr().unwrap().to_string();
     drop(listener);
@@ -490,7 +497,7 @@ fn daemon_instance_and_ready_findings() {
     // message the caller can authenticate, which the doctor reads as `lost`.
     // another instance answers
     let home = home();
-    sandbox(&home, "native", local_record());
+    sandbox(&home, layerfs_home::names::HOST_MACHINE, local_record());
     let server = daemon(&home, 52, 8, DaemonPhase::ControlReady, Vec::new());
     let report = run(&home);
     let found = finding(
@@ -508,7 +515,7 @@ fn daemon_instance_and_ready_findings() {
     std::fs::remove_dir_all(home).unwrap();
     // a startup that failed and is retained
     let home = self::home();
-    sandbox(&home, "native", local_record());
+    sandbox(&home, layerfs_home::names::HOST_MACHINE, local_record());
     let server = daemon(&home, 52, 9, DaemonPhase::Retained, Vec::new());
     let report = run(&home);
     let found = finding(
@@ -529,7 +536,7 @@ fn daemon_instance_and_ready_findings() {
 #[test]
 fn a_daemon_still_starting_is_a_warning_without_a_fix() {
     let home = home();
-    sandbox(&home, "native", local_record());
+    sandbox(&home, layerfs_home::names::HOST_MACHINE, local_record());
     let server = daemon(&home, 52, 9, DaemonPhase::Installing, Vec::new());
     let report = run(&home);
     let found = finding(&report, "sandbox.daemon_ready", "warning", None, &["phase"]);
@@ -553,7 +560,7 @@ fn workspace_finding<'a>(report: &'a SdkValue, workspace: &str, check: &str) -> 
 #[test]
 fn workspace_findings_carry_the_unmount_fix_and_evidence() {
     let home = home();
-    sandbox(&home, "native", local_record());
+    sandbox(&home, layerfs_home::names::HOST_MACHINE, local_record());
     recorded(&home, &id(2), "build");
     recorded(&home, &id(9), "gone");
     let server = daemon(
@@ -608,7 +615,7 @@ fn workspace_findings_carry_the_unmount_fix_and_evidence() {
 #[test]
 fn a_mount_being_made_is_a_notice_with_evidence_and_no_fix() {
     let home = home();
-    sandbox(&home, "native", local_record());
+    sandbox(&home, layerfs_home::names::HOST_MACHINE, local_record());
     let server = daemon(
         &home,
         52,

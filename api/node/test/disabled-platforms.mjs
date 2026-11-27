@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { createServer } from "node:net";
 import { client, table } from "../src/index.js";
+const hostMachine = process.platform === "darwin" ? "macos-host" : "linux-host";
 const fixture = readFileSync(new URL("../../test/disabled-platforms.json", import.meta.url), "utf8");
 function snapshot(root, dir = root) {
   return readdirSync(dir, { withFileTypes: true }).sort((a,b) => a.name.localeCompare(b.name)).flatMap(e => {
@@ -20,7 +21,7 @@ for (const platform of ["firecracker", "ssh", "microsandbox"]) test(`${platform}
   let contacts = 0;
   await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
   try {
-    const data = JSON.parse(fixture.replaceAll("$platform", platform).replaceAll("$address", `127.0.0.1:${server.address().port}`));
+    const data = JSON.parse(fixture.replaceAll("$host", hostMachine).replaceAll("$platform", platform).replaceAll("$address", `127.0.0.1:${server.address().port}`));
     for (const [file, value] of Object.entries(data.files)) {
       mkdirSync(dirname(join(home, file)), { recursive: true });
       writeFileSync(join(home, file), JSON.stringify(value));

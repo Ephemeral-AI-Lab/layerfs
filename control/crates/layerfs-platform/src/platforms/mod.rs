@@ -3,8 +3,8 @@
 //! `/layerfs/data` holding many Stores and one worker. No guest mounts the
 //! host home. `crate::setup::vm` holds what the adapters share;
 //! `crate::setup::forward` is the detached `ssh -L` that `lima` uses.
-//! `native` and `docker` are the built-in kinds.
+//! `host` and `docker` are the built-in kinds.
 pub(crate) mod apple_container;
 pub(crate) mod docker;
+pub(crate) mod host;
 pub(crate) mod lima;
-pub(crate) mod native;

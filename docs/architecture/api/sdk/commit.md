@@ -84,7 +84,7 @@ Commit was made: `workspace`, `file` or `merge`, and on `main` `publish` or
 `next_cursor` carries the Commit the first page started at, so a later page
 lists the same history while the Branch moves on.
 
-Run on macOS native with a debug build (ids are full, cursor shortened here to `…`):
+Run on macOS (`macos-host`) with a debug build (ids are full, cursor shortened here to `…`):
 
 ```console
 $ layerfs commit list shop/api agent --limit 2
@@ -172,7 +172,7 @@ long form adds `from`, `to`, `from_root` and `to_root` (`from` and
 Commits the first page compared and the filters, so a later page compares
 the same two Commits.
 
-Run on macOS native with a debug build:
+Run on macOS (`macos-host`) with a debug build:
 
 ```console
 $ layerfs commit diff shop/api agent

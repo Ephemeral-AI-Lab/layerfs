@@ -45,6 +45,7 @@ fn unused(home: &Path, name: &str) -> Result<(), SdkRefusal> {
 fn related() -> Related {
     Related {
         store_idle: unused,
+        store_idle_except: None,
         can_remove_project: unused,
     }
 }
@@ -79,7 +80,12 @@ fn a_folder_made_unprivate_during_the_download_is_refused_before_the_install() {
     let store = "shop";
     let directory = paths::store_dir(&home, store);
     let staged = staged(&home);
-    let record = StoreRecord::restored(store, "native", b"binding", &[7; 32]);
+    let record = StoreRecord::restored(
+        store,
+        layerfs_home::names::HOST_MACHINE,
+        b"binding",
+        &[7; 32],
+    );
     let _lock = home::lock::take(&home).unwrap();
 
     // the restore's own first check saw no folder; the download ran
@@ -138,7 +144,12 @@ fn a_replaced_stores_folder_is_checked_again_before_the_install() {
     let store = "shop";
     let directory = paths::store_dir(&home, store);
     let staged = staged(&home);
-    let existing = StoreRecord::restored(store, "native", b"binding", &[9; 32]);
+    let existing = StoreRecord::restored(
+        store,
+        layerfs_home::names::HOST_MACHINE,
+        b"binding",
+        &[9; 32],
+    );
     existing.write(&home).unwrap();
     set_mode(&directory, 0o755);
     let _lock = home::lock::take(&home).unwrap();
@@ -179,7 +190,12 @@ fn an_absent_folder_is_made_private_by_the_install() {
     let home = scratch("absent");
     let store = "shop";
     let staged = staged(&home);
-    let record = StoreRecord::restored(store, "native", b"binding", &[3; 32]);
+    let record = StoreRecord::restored(
+        store,
+        layerfs_home::names::HOST_MACHINE,
+        b"binding",
+        &[3; 32],
+    );
     let _lock = home::lock::take(&home).unwrap();
     assert!(!paths::store_dir(&home, store).exists());
 

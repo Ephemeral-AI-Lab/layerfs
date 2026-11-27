@@ -176,16 +176,27 @@ const SECOND: Duration = Duration::from_secs(5);
 fn machine_checks_report_in_order_and_preserve_the_home() {
     let f = Fixture::new();
     is(&f.report("missing", SECOND), "machine.record", Some("fail"));
-    // native: no provider, worker or data disk
-    MachineRecord::built_in("native", &f.id)
+    // Native uses the host and its optional worker.
+    MachineRecord::built_in(layerfs_home::names::HOST_MACHINE, &f.id)
         .write(&f.home)
         .unwrap();
-    let native = f.report("native", SECOND);
-    assert_eq!(
-        ids(&native),
-        ["machine.record", "machine.operation", "machine.state"]
-    );
-    assert_eq!(json(&native), r#"{"ok":true}"#);
+    let native = f.report(layerfs_home::names::HOST_MACHINE, SECOND);
+    let mut native_checks = vec![
+        "machine.record",
+        "machine.operation",
+        "machine.state",
+        "machine.worker.endpoint",
+        "machine.worker.retained",
+    ];
+    let host_network = cfg!(target_os = "linux") && nix::unistd::Uid::effective().is_root();
+    if host_network {
+        native_checks.push("machine.network");
+    }
+    assert_eq!(ids(&native), native_checks);
+    is(&native, "machine.worker.endpoint", Some("pass"));
+    if !host_network || outcome(&native, "machine.network").as_deref() == Some("pass") {
+        assert_eq!(json(&native), r#"{"ok":true}"#);
+    }
     // Docker is not running: engine_down, with the fix that starts it
     MachineRecord::built_in("docker", &f.id)
         .write(&f.home)
@@ -424,20 +435,24 @@ fn machine_checks_report_in_order_and_preserve_the_home() {
         SdkValue::text(sensitive),
         SdkValue::map([("secret", SdkValue::text(sensitive))]),
     ] {
-        MachineRecord::built_in("native", &f.id)
+        MachineRecord::built_in(layerfs_home::names::HOST_MACHINE, &f.id)
             .with("state", state)
             .write(&f.home)
             .unwrap();
-        let report = f.report("native", SECOND);
+        let report = f.report(layerfs_home::names::HOST_MACHINE, SECOND);
         is(&report, "machine.record", Some("fail"));
         assert!(!format!("{report:?}").contains(sensitive));
     }
     for state in ["running", "stopped", "failed"] {
-        MachineRecord::built_in("native", &f.id)
+        MachineRecord::built_in(layerfs_home::names::HOST_MACHINE, &f.id)
             .with("state", SdkValue::text(state))
             .write(&f.home)
             .unwrap();
-        is(&f.report("native", SECOND), "machine.record", Some("pass"));
+        is(
+            &f.report(layerfs_home::names::HOST_MACHINE, SECOND),
+            "machine.record",
+            Some("pass"),
+        );
     }
     let malformed_op = SdkValue::map([
         ("id", SdkValue::map([("secret", SdkValue::text(sensitive))])),
@@ -451,11 +466,11 @@ fn machine_checks_report_in_order_and_preserve_the_home() {
         ("owner", SdkValue::map([("pid", SdkValue::Int(0))])),
         ("uncertain", SdkValue::Bool(true)),
     ]);
-    MachineRecord::built_in("native", &f.id)
+    MachineRecord::built_in(layerfs_home::names::HOST_MACHINE, &f.id)
         .with("op", malformed_op)
         .write(&f.home)
         .unwrap();
-    let report = f.report("native", SECOND);
+    let report = f.report(layerfs_home::names::HOST_MACHINE, SECOND);
     assert!(!format!("{report:?}").contains(sensitive));
     assert_eq!(f.calls(), asked);
 }

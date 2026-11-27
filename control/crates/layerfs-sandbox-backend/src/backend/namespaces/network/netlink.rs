@@ -78,7 +78,7 @@ impl Message {
         self.attr(kind, &data)
     }
 
-    /// A native-endian `u32` attribute (routing messages).
+    /// A process-endian `u32` attribute (routing messages).
     pub(crate) fn u32(self, kind: u16, value: u32) -> Self {
         self.attr(kind, &value.to_ne_bytes())
     }
@@ -148,7 +148,7 @@ pub(crate) fn text(data: &[u8]) -> String {
     String::from_utf8_lossy(&data[..end]).into_owned()
 }
 
-/// A native-endian `u32` attribute's value.
+/// A process-endian `u32` attribute's value.
 pub(crate) fn u32_of(data: &[u8]) -> Option<u32> {
     Some(u32::from_ne_bytes(data.get(..4)?.try_into().ok()?))
 }

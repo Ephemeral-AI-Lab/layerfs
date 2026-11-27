@@ -106,7 +106,7 @@ for (const n of report.not_checked) console.log("not checked:", JSON.stringify(n
   `record`, `operation` and `state` in the run); then each Store and Sandbox
   on it. A stopped machine gets no worker checks.
 - **`home.doctor`**: `home.build`, `home.prerequisites`, `home.layout`,
-  `home.records`, `home.bundle`, `home.native_daemon`, `home.artifacts`,
+  `home.records`, `home.bundle`, `home.host_daemon`, `home.artifacts`,
   `home.capacity`; then
   each machine, PostgreSQL Store and bucket.
 - **`backup.doctor`**: `bucket.configuration`, `bucket.credentials`,

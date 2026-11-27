@@ -109,6 +109,7 @@ fn remove(home: &std::path::Path) -> Result<SdkValue, layerfs_bridge::control::S
         &ProjectRef::parse("shop/app").unwrap(),
         Related {
             store_idle: unused,
+            store_idle_except: None,
             can_remove_project: unused,
         },
     )

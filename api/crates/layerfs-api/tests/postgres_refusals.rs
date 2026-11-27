@@ -440,10 +440,19 @@ fn attach_and_detach_refuse_what_is_not_theirs() {
     );
     // `native` is checked like any machine: nothing listens on the
     // Store's address, so it is not attached
-    let native = refusal(&home, "store.attach", &on("pg", "native"));
+    let native = refusal(
+        &home,
+        "store.attach",
+        &on("pg", layerfs_home::names::HOST_MACHINE),
+    );
     assert_eq!(native.code, "Unavailable", "{native:?}");
     assert_eq!(
-        refusal(&home, "store.detach", &on("pg", "native")).code,
+        refusal(
+            &home,
+            "store.detach",
+            &on("pg", layerfs_home::names::HOST_MACHINE)
+        )
+        .code,
         "NotFound"
     );
     assert_eq!(

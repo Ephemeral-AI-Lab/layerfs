@@ -142,9 +142,7 @@ pub(super) fn placed(
 ) -> Result<Placed, layerfs_bridge::control::SdkRefusal> {
     let record = MachineRecord::read(home, name)?;
     // a built-in machine with no record yet has the platform of its name
-    let built_in = layerfs_home::names::BUILT_IN
-        .contains(&name)
-        .then_some(name);
+    let built_in = layerfs_home::names::built_in_platform(name);
     let platform = (record.as_ref())
         .and_then(MachineRecord::platform_name)
         .or(built_in)

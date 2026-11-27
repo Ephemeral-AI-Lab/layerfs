@@ -28,8 +28,9 @@ pub const DEFAULT_DISK: i64 = 20 << 30;
 /// found or written (#535 R6).
 static ENSURED: Mutex<BTreeSet<(PathBuf, String)>> = Mutex::new(BTreeSet::new());
 
-/// `machine/native/` and `machine/docker/` exist from the first call and
-/// are never removed. Checked once per process for each home, by its path
+/// The host machine's folder (`machine/macos-host/` or
+/// `machine/linux-host/`) and `machine/docker/` exist from the first call
+/// and are never removed. Checked once per process for each home, by its path
 /// and its id `id` (a home made again at the same path is checked again),
 /// not on every call (#535 R6). Read first; the home lock is taken only to
 /// write one.
@@ -262,7 +263,7 @@ pub fn refusal(error: MachineError) -> SdkRefusal {
 }
 
 /// The backend a machine's Sandboxes run on, on this host, as records
-/// store it (`native` for `Backend::Native`, G6).
+/// store it (`native` for `Backend::Process`, G6).
 pub fn backend_name(kind: Platform) -> &'static str {
     kind.backend(HostOs::current())
         .map_or("-", layerfs_platform::Backend::stored_name)

@@ -578,12 +578,12 @@ class Calls(unittest.TestCase):
         Path(folder, "README.md").write_text("streamed\n")
         lfs = layerfs.client(home=home)
         lfs.store.create("shop")
-        daemon = [str(COMMAND), "machine", "update", "native", "--daemon", os.environ["LAYERFS_DAEMON"]]
+        daemon = [str(COMMAND), "machine", "update", ("macos-host" if sys.platform == "darwin" else "linux-host"), "--daemon", os.environ["LAYERFS_DAEMON"]]
         updated = subprocess.run(daemon, env={**os.environ, "LAYERFS_HOME": home}, capture_output=True, timeout=30)
         self.assertEqual(updated.returncode, 0, updated.stderr)
         lfs.project.init("shop/api", folder)
         lfs.branch.fork("shop/api", "dev", "main")
-        lfs.sandbox.create("shop/api", "s1", machine="native")
+        lfs.sandbox.create("shop/api", "s1", machine=("macos-host" if sys.platform == "darwin" else "linux-host"))
         ws = None
         try:
             ws = lfs.workspace.mount("s1", "dev")["workspace"]

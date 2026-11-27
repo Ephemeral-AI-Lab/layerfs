@@ -168,7 +168,7 @@ These are not calls and are not in the matrix.
 [`contract.mjs`](../../../../api/node/test/contract.mjs) runs the case list
 in [`contract/cases.mjs`](../../../../api/node/test/contract/cases.mjs)
 through Node, Python, Python `aio` and the command, each in its own fresh
-temporary home (a native SQLite Store `shop`, project `shop/api`, Branch
+temporary home (a SQLite Store `shop` on the host machine, project `shop/api`, Branch
 `agent`). Answers are compared step by step after ids, times, inode numbers,
 stored sizes and home paths are normalized, and every case also asserts its
 expected value; a refusal is compared by `code`, key set and, unless the

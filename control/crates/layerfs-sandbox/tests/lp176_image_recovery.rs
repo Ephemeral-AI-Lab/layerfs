@@ -280,7 +280,7 @@ fn run_load(
 }
 
 fn native_name() -> MachineName {
-    MachineName::parse("native").unwrap()
+    MachineName::parse(layerfs_home::names::HOST_MACHINE).unwrap()
 }
 
 fn image_rows(home: &Path) -> Vec<SdkValue> {
@@ -400,7 +400,7 @@ fn real_docker_tag_move_leaves_enumerable_part_and_clears_stale_ref_on_publish()
     let docker = real_docker();
 
     // 1. Load V1 under repo_tag.
-    let loaded1 = run_load(&docker, &home, "native", &repo_tag).unwrap();
+    let loaded1 = run_load(&docker, &home, layerfs_home::names::HOST_MACHINE, &repo_tag).unwrap();
     assert_eq!(loaded1.id, v1_id);
     assert!(!loaded1.reused);
 
@@ -410,7 +410,7 @@ fn real_docker_tag_move_leaves_enumerable_part_and_clears_stale_ref_on_publish()
         Command::new(std::env::current_exe().unwrap())
             .args(["--exact", "helper_pause_load", "--nocapture"])
             .env("LP176_REC_PAUSE_HOME", &home)
-            .env("LP176_REC_PAUSE_MACHINE", "native")
+            .env("LP176_REC_PAUSE_MACHINE", layerfs_home::names::HOST_MACHINE)
             .env("LP176_REC_PAUSE_IMAGE", &repo_tag)
             .stdout(Stdio::null())
             .stderr(Stdio::null())
@@ -453,7 +453,7 @@ fn real_docker_tag_move_leaves_enumerable_part_and_clears_stale_ref_on_publish()
 
     // 4. Finish loading repo_tag: V2 publishes, clears stale repo_tag from V1 sidecar, records config.
     std::thread::sleep(Duration::from_millis(2200));
-    let loaded2 = run_load(&docker, &home, "native", &repo_tag).unwrap();
+    let loaded2 = run_load(&docker, &home, layerfs_home::names::HOST_MACHINE, &repo_tag).unwrap();
     assert_eq!(loaded2.id, v2_id);
     assert!(!loaded2.reused);
 
@@ -548,7 +548,7 @@ fn prune_reclaims_parts_temps_and_stranded_while_protecting_live_locks_and_in_us
         Command::new(std::env::current_exe().unwrap())
             .args(["--exact", "helper_hold_image_lock", "--nocapture"])
             .env("LP176_REC_LOCK_HOME", &home)
-            .env("LP176_REC_LOCK_MACHINE", "native")
+            .env("LP176_REC_LOCK_MACHINE", layerfs_home::names::HOST_MACHINE)
             .env("LP176_REC_LOCK_IMAGE", &id_locked)
             .stdout(Stdio::null())
             .stderr(Stdio::null())
@@ -808,7 +808,13 @@ esac
     fs::write(standin_dir.join("export.tar"), &tar_bytes).unwrap();
 
     let docker = Docker::at(Some(dbin), None);
-    let loaded = run_load(&docker, &home, "native", "rec/app:1").unwrap();
+    let loaded = run_load(
+        &docker,
+        &home,
+        layerfs_home::names::HOST_MACHINE,
+        "rec/app:1",
+    )
+    .unwrap();
     assert_eq!(loaded.id, id);
     assert!(!loaded.reused);
     assert!(Sidecar::read(&cache_dir, &hex).unwrap().is_some());
@@ -892,7 +898,13 @@ fn ambiguous_ref_is_refused_and_moved_ref_never_selects_old_image() {
     );
 
     let offline = Docker::at(None, None);
-    let load_err = run_load(&offline, &home, "native", "shared/app:latest").unwrap_err();
+    let load_err = run_load(
+        &offline,
+        &home,
+        layerfs_home::names::HOST_MACHINE,
+        "shared/app:latest",
+    )
+    .unwrap_err();
     assert!(
         load_err.message.contains("shared/app:latest"),
         "{load_err:?}"
@@ -1365,7 +1377,13 @@ fn real_docker_and_small_tar_preserve_mtime_mode_sha_and_record_config() {
         let dhex = did.strip_prefix("sha256:").unwrap().to_owned();
         let (dhome, _) = guard.make_home("dhome");
         let docker = real_docker();
-        run_load(&docker, &dhome, "native", &final_tag).unwrap();
+        run_load(
+            &docker,
+            &dhome,
+            layerfs_home::names::HOST_MACHINE,
+            &final_tag,
+        )
+        .unwrap();
         let droot = cache::cache(&dhome).join(format!("{dhex}.2"));
         assert!(!droot.join("app/p.fifo").exists());
         assert_eq!(
@@ -1422,13 +1440,13 @@ fn prune_skips_unwritable_lock_dir_and_bad_lock_symlinks_while_reclaiming_others
     cache::write(&cache1, &hex_existing, 0, b"part-existing").unwrap();
     cache::write(&cache1, &hex_new, 0, b"part-new").unwrap();
     drop(
-        ImageLock::try_take(&home1, "native", &id_existing)
+        ImageLock::try_take(&home1, layerfs_home::names::HOST_MACHINE, &id_existing)
             .unwrap()
             .unwrap(),
     );
-    assert!(ImageLock::path(&home1, "native", &hex_existing).is_file());
+    assert!(ImageLock::path(&home1, layerfs_home::names::HOST_MACHINE, &hex_existing).is_file());
 
-    let lock_dir1 = ImageLock::dir(&home1, "native");
+    let lock_dir1 = ImageLock::dir(&home1, layerfs_home::names::HOST_MACHINE);
     let _mode_guard = ModeGuard(lock_dir1.clone(), 0o700);
     fs::set_permissions(&lock_dir1, fs::Permissions::from_mode(0o555)).unwrap();
 
@@ -1443,7 +1461,7 @@ fn prune_skips_unwritable_lock_dir_and_bad_lock_symlinks_while_reclaiming_others
     assert!(!cache1.join(format!(".recv-{hex_new}.part")).exists());
     assert!(out1.get("skipped").is_none(), "{out1:?}");
     assert!(
-        !ImageLock::path(&home1, "native", &hex_new).exists(),
+        !ImageLock::path(&home1, layerfs_home::names::HOST_MACHINE, &hex_new).exists(),
         "prune creates no lock file"
     );
     drop(_mode_guard);
@@ -1457,7 +1475,7 @@ fn prune_skips_unwritable_lock_dir_and_bad_lock_symlinks_while_reclaiming_others
     home::ensure(&home2).unwrap();
     let cache2 = cache::cache(&home2);
     fs::create_dir_all(&cache2).unwrap();
-    let lock_dir2 = ImageLock::dir(&home2, "native");
+    let lock_dir2 = ImageLock::dir(&home2, layerfs_home::names::HOST_MACHINE);
     fs::create_dir_all(&lock_dir2).unwrap();
 
     let hex_good_unused = "3".repeat(64);
@@ -1478,7 +1496,7 @@ fn prune_skips_unwritable_lock_dir_and_bad_lock_symlinks_while_reclaiming_others
     fs::write(&dummy_target, b"x").unwrap();
     symlink(
         &dummy_target,
-        ImageLock::path(&home2, "native", &hex_bad_lock),
+        ImageLock::path(&home2, layerfs_home::names::HOST_MACHINE, &hex_bad_lock),
     )
     .unwrap();
     symlink(&dummy_target, cache2.join(format!("{hex_bad_hold}.2.lock"))).unwrap();
@@ -1942,7 +1960,7 @@ esac
                         ("free", SdkValue::Int(512 * 1024)),
                         (
                             "root",
-                            SdkValue::text("/layerfs/data/machine/native/run/images"),
+                            SdkValue::text("/layerfs/data/machine/linux-guest/run/images"),
                         ),
                         ("present", SdkValue::Bool(false)),
                     ]),

@@ -81,7 +81,7 @@ fn home_records(home: &Path, machine: &str, platform: &str, worker: Option<(Sock
         ("platform", t(platform)),
         ("daemon", t(&daemon)),
     ];
-    if machine != "native" {
+    if machine != layerfs_home::names::HOST_MACHINE {
         fields.push(("vm_name", t(&vm_name)));
     }
     write_record(&paths::machine_record(home, machine), &map(&fields)).unwrap();
@@ -129,7 +129,7 @@ fn local_sandbox(root: &Path) -> PathBuf {
         platform: "macos".to_owned(),
         name: name.to_owned(),
         container: "ab".repeat(32),
-        runtime: "native",
+        runtime: "process",
         uid: home::flock::euid(),
         gid: home::flock::egid(),
         directory: folder.display().to_string(),
@@ -144,9 +144,9 @@ fn local_sandbox(root: &Path) -> PathBuf {
         &map(&[
             ("name", t("s1")),
             ("project", t("shop/api")),
-            ("machine", t("native")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
             ("id", t("s1")),
-            ("runtime", t("native")),
+            ("runtime", t("process")),
             ("daemon", daemon.to_record()),
         ]),
     )
@@ -368,36 +368,41 @@ fn the_table_lists_the_call_quiet_with_a_path_and_its_options() {
 #[test]
 fn a_native_machine_s_layerfs_folders_are_read_here_with_no_lock_line_or_write() {
     let _turn = serial();
-    let home = tempdir("native");
+    let home = tempdir(layerfs_home::names::HOST_MACHINE);
     home::open(&home).unwrap();
-    home_records(&home, "native", "native", None);
+    home_records(&home, layerfs_home::names::HOST_MACHINE, "host", None);
     let folder = local_sandbox(&home);
     // a mounted Workspace's folder is there; its record names it
     std::fs::create_dir(folder.join("workspaces/1")).unwrap();
     let id = workspace(&home, 1, &folder.join("workspaces/1"));
     std::fs::create_dir_all(paths::log_dir(&home)).unwrap();
     settle(&home);
-    held(&home, "native");
+    held(&home, layerfs_home::names::HOST_MACHINE);
     let push = pushing(&home);
     let log = std::fs::read(paths::calls_file(&home)).unwrap();
     let before = files(&home);
     let at = Instant::now();
 
-    let roots = files_of(&home, "native", &[]).unwrap();
+    let roots = files_of(&home, layerfs_home::names::HOST_MACHINE, &[]).unwrap();
     // the Store's lock was held throughout
     assert!(at.elapsed() < Duration::from_secs(10), "{:?}", at.elapsed());
+    // the home's run root is its host machine's (#819 R)
+    let run_root = format!(
+        "machine/{}/run dir run_folders",
+        layerfs_home::names::HOST_MACHINE
+    );
     assert_eq!(
         shown(&roots, &home),
         [
             "store dir stores",
             "sandbox dir sandbox_records",
-            "machine/native/run dir run_folders",
+            run_root.as_str(),
             "log dir logs"
         ]
     );
     let run = files_of(
         &home,
-        "native",
+        layerfs_home::names::HOST_MACHINE,
         &[("path", p(&folder)), ("depth", SdkValue::Int(2))],
     )
     .unwrap();
@@ -420,13 +425,13 @@ fn a_native_machine_s_layerfs_folders_are_read_here_with_no_lock_line_or_write()
         ("depth", SdkValue::Int(2)),
         ("limit", SdkValue::Int(1)),
     ];
-    let first = files_of(&home, "native", &one).unwrap();
+    let first = files_of(&home, layerfs_home::names::HOST_MACHINE, &one).unwrap();
     assert_eq!(shown(&first, &folder), ["config dir restricted"]);
     let cursor = first.get("next_cursor").cloned().unwrap();
     assert!(matches!(cursor, SdkValue::Text(_)), "{first:?}");
     let mut next = one.to_vec();
     next.push(("cursor", cursor));
-    let second = files_of(&home, "native", &next).unwrap();
+    let second = files_of(&home, layerfs_home::names::HOST_MACHINE, &next).unwrap();
     assert_eq!(shown(&second, &folder), ["daemon.log file log"]);
     let window = [
         ("path", p(&folder.join("tmp/notes.txt"))),
@@ -434,20 +439,35 @@ fn a_native_machine_s_layerfs_folders_are_read_here_with_no_lock_line_or_write()
         ("byte_length", SdkValue::Int(4)),
     ];
     assert_eq!(
-        layerfs_api::json::print(&files_of(&home, "native", &window).unwrap()),
+        layerfs_api::json::print(
+            &files_of(&home, layerfs_home::names::HOST_MACHINE, &window).unwrap()
+        ),
         r#"{"items":null,"next_cursor":null,"text":"by a","binary":false,"size":null,"next_byte_offset":9,"type":"file"}"#
     );
     for (path, code) in [
         (folder.join("config/daemon.setup"), "InvalidInput"),
         (paths::store_file(&home, "shop"), "NotFound"),
-        (paths::worker_record(&home, "native"), "InvalidInput"),
+        (
+            paths::worker_record(&home, layerfs_home::names::HOST_MACHINE),
+            "InvalidInput",
+        ),
         (PathBuf::from("/etc/hosts"), "InvalidInput"),
         (PathBuf::from("/"), "InvalidInput"),
     ] {
-        let (refused, message) = files_of(&home, "native", &[("path", p(&path))]).unwrap_err();
+        let (refused, message) = files_of(
+            &home,
+            layerfs_home::names::HOST_MACHINE,
+            &[("path", p(&path))],
+        )
+        .unwrap_err();
         assert_eq!(refused, code, "{}: {message}", path.display());
     }
-    let (code, message) = files_of(&home, "native", &[("limit", SdkValue::Int(1001))]).unwrap_err();
+    let (code, message) = files_of(
+        &home,
+        layerfs_home::names::HOST_MACHINE,
+        &[("limit", SdkValue::Int(1001))],
+    )
+    .unwrap_err();
     assert_eq!(
         (code.as_str(), message.as_str()),
         ("InvalidInput", "machine.files: `limit` is 1 to 1000")
@@ -496,7 +516,7 @@ fn a_worker_reads_its_machine_s_files_and_neither_side_changes() {
             "data dir data",
             "data/store dir stores",
             "data/sandbox dir sandbox_records",
-            "data/machine/native/run dir run_folders",
+            "data/machine/linux-guest/run dir run_folders",
             "state dir state",
             "/ dir machine"
         ]

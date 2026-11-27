@@ -77,10 +77,13 @@ fn initialized(tag: &str) -> PathBuf {
     let daemon = home.join("layerfs-daemon");
     std::fs::write(&daemon, "#!/bin/sh\n").unwrap();
     std::fs::set_permissions(&daemon, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let path = paths::machine_record(&home, "native");
-    let native = read_record(&path)
-        .unwrap()
-        .unwrap_or_else(|| SdkValue::map([("name", t("native")), ("platform", t("native"))]));
+    let path = paths::machine_record(&home, layerfs_home::names::HOST_MACHINE);
+    let native = read_record(&path).unwrap().unwrap_or_else(|| {
+        SdkValue::map([
+            ("name", t(layerfs_home::names::HOST_MACHINE)),
+            ("platform", t("host")),
+        ])
+    });
     let native = with_field(native, "daemon", t(&daemon.display().to_string()));
     write_entity(&path, &native).unwrap();
     home
@@ -189,7 +192,7 @@ fn home_and_machine_doctors_answer_from_their_frozen_checks() {
         "home.layout",
         "home.records",
         "home.bundle",
-        "home.native_daemon",
+        "home.host_daemon",
         "home.artifacts",
         "home.capacity",
     ];
@@ -203,7 +206,7 @@ fn home_and_machine_doctors_answer_from_their_frozen_checks() {
     let names: Vec<&str> = (machines.iter())
         .filter_map(|m| m.get_text("machine"))
         .collect();
-    assert_eq!(names, ["docker", "native"]);
+    assert_eq!(names, ["docker", layerfs_home::names::HOST_MACHINE]);
     assert_eq!(
         checks(&machines[0]),
         [
@@ -214,9 +217,17 @@ fn home_and_machine_doctors_answer_from_their_frozen_checks() {
             "machine.state"
         ]
     );
+    // the host machine adds its worker's endpoint (none is published here)
+    // and the write outcomes its worker retained
     assert_eq!(
         checks(&machines[1]),
-        ["machine.record", "machine.operation", "machine.state"]
+        [
+            "machine.record",
+            "machine.operation",
+            "machine.state",
+            "machine.worker.endpoint",
+            "machine.worker.retained"
+        ]
     );
     assert_eq!(events, 3, "the home, then each machine");
 

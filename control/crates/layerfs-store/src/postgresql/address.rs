@@ -351,15 +351,23 @@ fn fields(read: &Config) -> (String, String, String) {
     (hosts.join(","), port, database)
 }
 
-fn percent(text: &str) -> String {
-    text.bytes()
-        .map(|b| match b {
+/// Appends `text` percent-encoded to `out`, one byte at a time with no
+/// temporary string: `out` is sized by the caller, so a password written
+/// here leaves no copy behind in a grown buffer.
+fn percent(out: &mut String, text: &str) {
+    const HEX: &[u8; 16] = b"0123456789ABCDEF";
+    for b in text.bytes() {
+        match b {
             b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
-                (b as char).to_string()
+                out.push(b as char)
             }
-            _ => format!("%{b:02X}"),
-        })
-        .collect()
+            _ => {
+                out.push('%');
+                out.push(HEX[usize::from(b >> 4)] as char);
+                out.push(HEX[usize::from(b & 15)] as char);
+            }
+        }
+    }
 }
 
 /// `url`, an address alone ([`refuse_login`]), with the login `user` and
@@ -371,7 +379,17 @@ fn percent(text: &str) -> String {
 pub fn with_login(url: &str, user: &str, password: &str) -> Result<String> {
     refuse_login(url)?;
     let (scheme, after) = scheme(url)?;
-    let dialled = format!("{scheme}://{}:{}@{after}", percent(user), percent(password));
+    // sized for the longest encoding, so it never grows while it holds the
+    // password
+    let capacity = scheme.len() + 5 + 3 * (user.len() + password.len()) + after.len();
+    let mut dialled = String::with_capacity(capacity);
+    dialled.push_str(scheme);
+    dialled.push_str("://");
+    percent(&mut dialled, user);
+    dialled.push(':');
+    percent(&mut dialled, password);
+    dialled.push('@');
+    dialled.push_str(after);
     match (reading(url), reading(&dialled)) {
         (Some(given), Some(read))
             if read.get_user() == Some(user)
@@ -380,9 +398,12 @@ pub fn with_login(url: &str, user: &str, password: &str) -> Result<String> {
         {
             Ok(dialled)
         }
-        _ => Err(refused(
+        _ => Err({
+            layerfs_home::wipe::text(dialled);
+            refused(
             "InvalidInput",
             "the saved login cannot be put into the URL so that its client reads it and the address as given; nothing was dialled",
-        )),
+            )
+        }),
     }
 }

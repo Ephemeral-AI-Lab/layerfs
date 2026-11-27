@@ -12,6 +12,8 @@ Storage is separate from compute (D1). A **machine** is one kernel where
 Sandboxes run. A **Store** holds projects and their history. A **backup** is
 a copy of a sqlite Store in a bucket.
 
+The built-in machine is `macos-host` on macOS and `linux-host` on Linux. Its platform is `host`. macOS Sandboxes use the `process` backend and Linux Sandboxes use `namespaces`. The examples below use a macOS home.
+
 ## Machines
 
 Firecracker, Microsandbox and SSH machines were removed in 2.0; see
@@ -20,7 +22,7 @@ the [contract](../../architecture/control/machines/platforms.md#removed-platform
 
 | Kind | How many | Made by | Sandboxes run as | Tool |
 | --- | --- | --- | --- | --- |
-| `native` | one, built in | — | macOS: host processes with a loopback NFS mount (each sqlite Store's directory must be owned by this user and private, mode `0700`). Linux: namespaces (needs root). Windows: none; `native` holds only records (O5) | — |
+| `host` | `macos-host` or `linux-host`, built in | — | macOS: host processes with a loopback NFS mount (each sqlite Store's directory must be owned by this user and private, mode `0700`). Linux: namespaces (needs root). Windows has only the built-in Docker machine | — |
 | `docker` | one, built in | — | namespaces inside its worker container (D-8), rooted in the bundle's Sandbox image or an image copied from the host's Docker (`--image`). The image `machine update docker --image` records, else the bundle's Sandbox image loaded into Docker once (#535 P5), is the worker container's; see Routes | `docker` |
 | `apple-container` | many | `machine create` | namespaces inside the VM | `container` |
 | `lima` | many | `machine create` | namespaces inside the VM | `limactl` |
@@ -29,11 +31,11 @@ the [contract](../../architecture/control/machines/platforms.md#removed-platform
   Sandbox runs; the kind decides.
 - `machine list` and `machine get` answer every machine from the home's
   records, starting and probing nothing: its `platform`, its `state` (`ready`,
-  `busy` with `op`, `stopped`, or `broken` with `reason` and `fix`; `native`
-  is always `ready`, the built-in `docker` `stopped` until `machine start
+  `busy` with `op`, `stopped`, or `broken` with `reason` and `fix`; the host
+  starts enabled, the built-in `docker` `stopped` until `machine start
   docker`) and, in the long form, `supports` (`sqlite`, `postgresql_sandbox`,
   and `log` when the machine has a worker whose log can be read, never on
-  `native`), its sizes, image, Stores and Sandboxes. `--with live` probes the
+  the host machine), its sizes, image, Stores and Sandboxes. `--with live` probes the
   provider and says hello to the worker once (every machine at the same time
   for `list`), within 10 s, starting nothing; a probe that does not answer
   is `unknown` with `observed_at`. `layerfs home get --with platforms`
@@ -42,7 +44,7 @@ the [contract](../../architecture/control/machines/platforms.md#removed-platform
   (such as `tool:limactl`), the tool's `version` and the options `machine
   create` takes; the same rows as `control/SUPPORT.json`. See
   [`machine`](calls.md#machine-14) for every key.
-- `native` and `docker` are never created or removed.
+- The host machine and `docker` are built in.
 - Every namespaces Sandbox's commands have a network of their own: two
   Sandboxes can both listen on `127.0.0.1:3000`, a Sandbox reaches the
   internet, this computer and the machine's services as before, and it
@@ -53,14 +55,14 @@ the [contract](../../architecture/control/machines/platforms.md#removed-platform
   guarded by their secrets, which no command can read (owner to confirm).
   The daemon stays on the machine's network and resolves names with the
   machine's own resolver file, so a PostgreSQL Store URL is dialled as
-  before. On a Linux host (`native`,
+  before. On a Linux host (`linux-host`,
   `docker` on a Linux Engine) LayerFS adds the firewall table
   `inet layerfs` and one `lfs<id>` link per Sandbox to this host's network,
   never changes `net.ipv4.ip_forward`, and refuses `sandbox.create`
   (`Unavailable`, with the fix) when forwarding is off, when another
   table's forward chain would drop the Sandboxes' traffic (a Docker host's
   `FORWARD` policy, ufw), or when the resolver names no IPv4 server a
-  Sandbox reaches (only loopback or IPv6 ones, with no IPv4 upstream). macOS `native` Sandboxes keep this computer's network
+  Sandbox reaches (only loopback or IPv6 ones, with no IPv4 upstream). macOS `macos-host` Sandboxes keep this computer's network
   ([Backends](../../architecture/control/sandboxes/backends.md#every-namespaces-sandboxs-own-network)).
 
 ### Removed platforms: Firecracker, Microsandbox and SSH
@@ -118,7 +120,7 @@ layerfs machine create dev lima --cpus 4 --memory 8G --disk 40G
   `layerfs-352-runtime:node24-https-apt-20261024` (image digest
   `sha256:afa1ef9c…f38e`: Node 24, Rust 1.85.1, the SQLite headers,
   Chromium and Selenium), sealed into the bundle as `sandbox-image.tar`.
-  `--image` (and `machine update native --image`) chooses another. On
+  `--image` (and `machine update macos-host --image`) chooses another. On
   `docker` the recorded `image` is only its worker container's image; its
   Sandboxes' root is the bundle's `sandbox-image.tar` (D-8) unless
   `sandbox create --image` names another. Any local Docker image (a
@@ -173,7 +175,7 @@ layerfs machine create dev lima --cpus 4 --memory 8G --disk 40G
   that is gone after a known outcome holds nothing.
 - A remove is refused only while another process's `op`
   lives: it is the call that clears an `unresolved` machine.
-- `machine update native` and `machine update docker` set `image`,
+- `machine update macos-host` and `machine update docker` set `image`,
   `docker` (the Docker socket) and `daemon` (the daemon their Sandboxes
   run: an absolute path to a file, replacing what was recorded;
   `machine get` shows it); `wsl` is a Windows host's setting. Any
@@ -181,13 +183,13 @@ layerfs machine create dev lima --cpus 4 --memory 8G --disk 40G
 - A recorded daemon that is not there (its build moved or was removed)
   refuses a Sandbox on that machine `Unavailable` before any launch,
   naming `machine update <name> --daemon <path>`; `layerfs home doctor`
-  (check `home.native_daemon`) reports it as an error.
+  (check `home.host_daemon`) reports it as an error.
 - Resizing a VM with `machine update` is `Unsupported` ("not built yet");
   nothing is changed.
 
 ### Starting and stopping (manual, #535 D11)
 
-- A machine runs only between `machine start <name>` and `machine stop
+- A guest machine runs only between `machine start <name>` and `machine stop
   <name>`. Nothing starts or stops one by itself: no call starts a stopped
   machine, and a running machine, its worker and its Sandboxes stay up
   however long they are unused. A Store is still closed after a quiet
@@ -219,7 +221,7 @@ layerfs machine create dev lima --cpus 4 --memory 8G --disk 40G
   once. `machine stop <name>` stops the worker and, where there is one, the
   VM (`docker`: its worker container);
   disks and Stores stay. It is `InUse` while Sandboxes run on the machine
-  (`detail.related` names them). `native` answers both at once (#535 P1).
+  (`detail.related` names them).
 - No list, get, status or doctor call starts a machine (#535 P4): they
   answer from records and live probes. A stopped machine reads `stopped`,
   and what is on it `blocked` with `blocked_by {machine, reason: stopped}`
@@ -239,10 +241,22 @@ layerfs machine create dev lima --cpus 4 --memory 8G --disk 40G
   observing. There is no change event; callers poll `home get`'s
   `generation`.
 
+The OS host is enabled on a new home. Starting it explicitly enables it and verifies
+the host worker. Idle worker exit leaves the host enabled. Stopping records
+`stopped` before the worker drains. New local SQLite Store calls, maintenance operations, and new Sandboxes
+on this host then receive `Unavailable` with a start command. A previously admitted
+call finishes. The stopping process's own idle Store copies close first; an
+SDK app's call still running holds the host. If holders remain, stop reports
+`InUse` with the Sandbox names and Store process IDs (or the Store and why
+it could not be closed or read), and the host stays stopped. A later stop checks again.
+A forced stop performs the host Sandbox teardown and records its outcomes.
+A later explicit forced stop can reconcile an uncertain previous stop after
+its owner exits. Direct PostgreSQL calls continue while the host is stopped.
+
 ### Routes
 
 - Calls on a sqlite Store on a machine whose calls run in the caller's
-  process (`native` on macOS and Linux; on Windows `native` has a worker),
+  process (`macos-host` on macOS and `linux-host` on Linux; Windows has no host machine),
   and calls on a PostgreSQL Store, run in the caller's process.
 - Calls on a sqlite Store on any other machine go to that machine's worker,
   behind a secret, over a forwarded loopback port. The caller sends the
@@ -280,7 +294,7 @@ layerfs machine create dev lima --cpus 4 --memory 8G --disk 40G
   `sandbox-image.tar`, or the image `--image` names: a digest that archive
   holds, or a host Docker image (reference or Id) that the host exports
   and sends to the worker once, unpacked under the worker's
-  `machines/native/run/images/`. The worker never sees the Docker socket.
+  `machine/linux-guest/run/images/`. The worker never sees the Docker socket.
   Its record keeps `platform: "docker"` and shows
   `backend: "namespaces"`. A PostgreSQL Store's Sandbox starts the same way
   as a sqlite Store's on that machine; it binds no Store file. A Sandbox
@@ -326,8 +340,8 @@ profile label is `normal` (a record that says `disposable` reads as `normal`). A
 ```console
 $ layerfs store create shop
 {"ok":true}
-$ layerfs store move shop native
-{"error":"InvalidInput","message":"store move, check: Store shop is already on native"}
+$ layerfs store move shop macos-host
+{"error":"InvalidInput","message":"store move, check: Store shop is already on macos-host"}
 ```
 
 (Run for this manual on macOS. `store move shop dev` to a VM and back was
@@ -335,19 +349,38 @@ run as `store push` and `store pull` on 2026-11-08 on `docker`, `lima` and
 `apple-container`, before the two became `store move`; not rerun.)
 
 - `store create <store>` makes an empty sqlite Store on the machine whose
-  calls run in this process (`native` on macOS and Linux), at
+  calls run in this process (`macos-host` on macOS and `linux-host` on Linux), at
   `store/<store>/store.sqlite`; `--machine M` makes it on a running machine
   directly, through its worker. On a host with no such machine (Windows) a
   create without `--machine` is `Unsupported`. `store get` and `store list` answer its
   `engine`, `state`, `machine` and `projects`, and never the Store's keys.
+
+Opening a new local SQLite connection for ordinary Store calls waits for
+the Store directory's writer lane before SQLite attaches to the WAL. A new
+connection may wait while a write or maintenance holds the lane. Reads on
+an open connection continue without that wait.
+
+For a local SQLite Store held open by a host worker, move, remove,
+compact and upgrade record a `worker-close` phase and ask that worker to
+release its Store. The phase keeps new calls out until the caller verifies
+release. A held Store record lock yields `InUse` before the worker closes
+its handle. A lease-file removal error appears as a close failure. A lost
+or malformed close reply yields `Unknown` with a request ID and leaves
+the Store `unresolved`. The same maintenance command can proceed once the
+original worker releases its lease or is proved dead. Compaction refuses
+a live host worker lease it cannot verify and displays its process ID.
+SDK and Sandbox holders retain their normal admission rules. The worker
+records close and checkpoint outcomes in
+`log/worker-close.jsonl`.
+
 - `store move <store> <machine>` moves the file between the machine whose
-  calls run in this process (`native` on macOS and Linux) and another
-  machine: from `native` to a machine, or from its machine back to `native`
+  calls run in this process (`macos-host` on macOS and `linux-host` on Linux) and another
+  machine: from the host machine to a machine, or from its machine back to the host machine
   (#536 H1). A Store on a machine moves to another machine by `store move
-  <store> native` first; asked directly it is `InvalidInput`, naming that
+  <store> macos-host` (or `linux-host`) first; asked directly it is `InvalidInput`, naming that
   call. On a host with no such machine every move is `Unsupported`. The phases are `check`, `snapshot`, `send`, `verify`, `install`,
   `record` and `retire`, once each. The bytes pass through the calling
-  process in pieces. Retire deletes the source's copy: on `native` (in this process) the file
+  process in pieces. Retire deletes the source's copy: on the host machine (in this process) the file
   with its `-wal`, `-shm` and any partial copy (the folder keeps the home's
   records); on another machine the Store's whole folder under its worker's
   root (a symlink in it is removed, never followed). Short: `{moved_bytes}`.
@@ -436,7 +469,7 @@ for this manual's [`store`](calls.md#store-11) section against a local
 ```console
 $ printf '%s' "$PG_PASSWORD" | layerfs store connect shop-pg 'postgresql://127.0.0.1:55437/shop?sslmode=disable' --user postgres --password-stdin
 {"ok":true}
-$ layerfs store attach shop-pg --machine native
+$ layerfs store attach shop-pg --machine macos-host
 {"outcome":"attached","latency_ms":1}
 $ layerfs project init shop-pg/load ./load        # not run here
 $ layerfs store attach shop-pg --machine build-vm  # not run: needs a reachable address
@@ -444,6 +477,49 @@ $ layerfs store connect shop-pg 'postgresql://127.0.0.1:55437/shop?sslmode=disab
 $ layerfs store doctor shop-pg
 {"ok":true}
 ```
+
+On macOS and Linux, the CLI sends `file read`, `file stat` and `file list`
+on a PostgreSQL Store to the host worker on this computer, which keeps
+read-only PostgreSQL connections open between calls, so a later read logs
+in nothing. The CLI's file writes (`write`, `edit`, `mkdir`, `rm`, `cp`,
+`mv`, `apply`) go there too and run on writable sessions the worker keeps
+open the same way; each holds a few connections (its writer, its
+publication lane, a control reader and the readers its writes open). The CLI sends the saved password in its request; the worker
+saves it nowhere, overwrites its own copies once a call no longer needs
+them, keeps it only in the settings of that Store's open connections (and
+in memory its PostgreSQL client and JSON decoder used, freed but not
+overwritten), and runs
+with core dumps off (on Linux it also cannot be read by your other
+processes; macOS has no such setting). Each connection
+checks the schema and the Store binding when it opens, using the TLS mode
+from the Store's URL, and repeats a short check of the Store's identity
+before each later call; if that check fails, the worker closes the Store's
+idle connections and opens one new one. A Store keeps at most 4 such
+sessions, read and write together, and a worker 8; at most 2 of a Store's
+and 4 of a worker's serve writes at once, so reads always keep the rest
+and a write waiting on another writer never delays a read. They close
+after a minute unused, and `store
+connect` (a new password) or `store disconnect` closes them. PostgreSQL
+reads wait on their own threads, and a read waits for a connection of its
+Store without holding a thread, so reads of other Stores never wait behind
+a busy Store. A read that has not started yet does not keep `store
+disconnect` or `store upgrade` waiting. When 64 PostgreSQL reads are
+already waiting or running, the next one is refused `Unavailable` at once,
+without being run; a read whose caller went away before it started is never
+run. Writes wait the same way: a write whose Store has no free write
+session waits without holding a thread, and is never refused for waiting.
+A write whose connection is lost while it runs (a server restart) is
+`Unknown`, with its record kept as on SQLite; writes still waiting then run
+once on new connections, or are refused with nothing sent when none can be
+opened: `Failed`, "the PostgreSQL server refused a new session (it may be
+restarting, or the database, user or password changed); nothing was sent
+and nothing was committed" (or "no new session to the PostgreSQL server
+could be made" when no connection was made), with the fix `layerfs store
+get <store> --with live`. Nothing is sent twice. `store upgrade` closes the worker's
+connections to that Store too. A Store connected before this release has no login revision:
+it keeps the direct route, one read-only connection per call opened and
+checked the same way, until `store connect` is run for it again. So do a
+stopped host machine, other platforms, and SDK calls.
 
 - **`store connect <store> <url> --user U --password-stdin`.** The user and
   password are required on a Store's first connect and are checked from
@@ -509,7 +585,7 @@ $ layerfs store doctor shop-pg
   records nothing (`outcome: "tested"`). A refused check names the
   `machine` and the connection `step` it stopped at (`configuration`,
   `transport`, `tls`, `authentication`, `database`, `schema`, `identity`,
-  the doctor's `store.connection.<step>`). Machine native is attached
+  the doctor's `store.connection.<step>`). The host machine is attached
   like any other (`store connect` attaches nothing); its platform decides
   whether a loopback URL is allowed, and its reach is its own, apart from
   this computer's. `store detach <store> --machine M` removes it,
@@ -536,7 +612,7 @@ $ layerfs store doctor shop-pg
   is refused with `store attach` as its fix; several are listed and one
   must be named). The machine must be attached to the Store (refused
   `InvalidInput`, with `store attach` as its fix, otherwise) and its
-  platform must run PostgreSQL Sandboxes (`native` on
+  platform must run PostgreSQL Sandboxes (`host` on
   macOS and Linux, `docker`, `lima`, `apple-container`); `sandbox create`
   checks from the machine that the server answers and holds this Store.
   The URL is dialled exactly as configured, never rewritten. On a machine
@@ -547,7 +623,7 @@ $ layerfs store doctor shop-pg
   (`host.docker.internal`; `host.lima.internal`; `apple-container`: its
   network's gateway, on which the server must listen) and advising to
   connect the Store again with an address the machine reaches (`layerfs
-  store connect <store> <url>`); `native` and `docker` on a Linux Engine
+  store connect <store> <url>`); the host machine and `docker` on a Linux Engine
   share the loopback and dial it as given. A Sandbox resolves names as its
   machine does. Only the calls that dial the URL (`sandbox create`,
   Commit, a Workspace status) are refused for it: a Sandbox whose URL its
@@ -620,13 +696,13 @@ layerfs backup doctor lab --full
   machine), `hash`, `upload`. Short: `{file, size}`.
 - **`backup restore <bucket> <file> <store>`.** It downloads the file,
   verifies it and installs it as the sqlite Store `store` on the machine
-  whose calls run in this process (`native` on macOS and Linux;
+  whose calls run in this process (`macos-host` on macOS and `linux-host` on Linux;
   `Unsupported` on a host with none): a new Store, or one that replaces an
   idle Store there. Replacing a Store
   that changed since its last backup or restore through that bucket is
   `Conflict`; one that a process holds open, or one of whose projects has a
   running Sandbox, is `InUse`. A Store on another machine is `Unsupported`
-  (`store move <store> native` first). Progress: `check`, `download`,
+  (`store move <store> macos-host` first). Progress: `check`, `download`,
   `verify`, `install`. Short: `{projects}`, or `{"ok":true}` for an empty
   Store.
 - A backup or restore is the Store's `op` (`backup`, `restore`), so every
@@ -666,3 +742,38 @@ password this home does not hold is refused when it is dialled, with the
 fix `layerfs store connect <store> <url> --password-stdin`, and a bucket
 record with no key id is refused with the fix that connects it again
 (`layerfs backup connect <name> <url> --access-key <key> --key-stdin`).
+
+### Host worker transport
+
+The host-worker transport uses private Unix sockets and checks the user of
+the other process before exchanging any operation bytes. A CLI call chooses
+its route before sending. A lost answer after an operation send starts is
+reported as `Unknown` with a request ID. The CLI makes one attempt.
+A streamed file write is sent once: input that stops before its end frame
+commits nothing and is refused; a lost answer after it is `Unknown`. The
+worker keeps outcomes its caller may not know in
+`machine/<host>/retained/` (see [`file`](calls.md#file-14)); `rm` removes
+them once their Branches were checked. `machine stop` and an
+idle exit end a stuck write's input: it is refused, nothing committed,
+and the worker does not wait for its caller.
+Two installations sharing a home may need to wait for an existing worker's
+idle exit before the other installation can use that home worker.
+
+`layerfs machine get macos-host --with live` reports `live.machine_state`
+and `live.worker.health` separately. The host machine is enabled at this
+stage. The probe reports an absent, stale, owned, unreachable, ready or
+draining endpoint, with worker identity and activity when available. A
+leftover socket is `stale` (the next start replaces it) only when no worker
+or start holds its locks, and `owned` while one does. Before a
+worker publishes its socket, the probe can observe only an absent endpoint.
+
+`layerfs machine doctor macos-host --detail` uses one authenticated probe and
+includes its evidence. An idle home passes the endpoint check. A worker
+of another build yields a compatibility notice before the ping. The
+diagnostic never starts or replaces a worker. `machine.worker.retained`
+passes when no write outcome is kept and is a notice that lists the kept
+records otherwise; it reads them from the home, so it answers with or
+without a running worker. `home doctor` checks the
+host-worker directory's ownership and permissions. `store doctor` shows
+an exact live worker lease beside other lease holders. Store operations
+perform stale lease cleanup under the Store lock.

@@ -281,6 +281,7 @@ pub fn connect(home_dir: &Path, request: &StoreConnect) -> Outcome {
     unclaimed_by_others(home_dir, name, &binding)?;
     let record = record.with("binding", SdkValue::Bytes(binding.clone()));
     let record = record.with("cursor", SdkValue::Bytes(fresh.cursor_key.to_vec()));
+    let record = record.with_new_login_revision()?;
     let directory = paths::store_dir(home_dir, name);
     // the projects the schema holds become this home's project records; a
     // schema that does not open is not connected
@@ -292,8 +293,19 @@ pub fn connect(home_dir: &Path, request: &StoreConnect) -> Outcome {
     }
     unclaimed_by_others(home_dir, name, &binding)?;
     home::private_dir(&directory)?;
-    record.write(home_dir)?;
+    // the password first: a login revision is never visible without it
     login::save(home_dir, name, password)?;
+    if let Err(mut refusal) = record.write(home_dir) {
+        // a forget that fails is said: the home then holds a password for
+        // a Store it has no record of, which the next connect replaces
+        if let Err(back) = login::forget(home_dir, name) {
+            refusal.message = format!(
+                "{}; its saved password could not be removed either ({})",
+                refusal.message, back.message
+            );
+        }
+        return Err(refusal);
+    }
     let mut projects = Vec::new();
     for project in listed {
         let stack = SdkValue::text(hex(&project.stack.to_bytes()));
@@ -382,12 +394,17 @@ fn update(home_dir: &Path, request: &StoreConnect) -> Result<Update> {
         || record.text("user") != Some(user.as_str())
         || saved.as_ref().map(login::Saved::password) != Some(password.as_str());
     let trial = changed(record.clone(), request, &user);
-    let dial = with_login(&request.url, &user, &password)?;
-    let probe = selection_at(&trial, dial.clone());
+    let dial = with_login(&request.url, &user, &password);
+    layerfs_home::wipe::text(password);
+    let dial = dial?;
+    let mut probe = selection_at(&trial, dial.clone());
     let here = super::check::same_store(&trial, &probe).map_err(|refusal| SdkRefusal {
         message: format!("PostgreSQL Store {name}: {}", refusal.message),
         ..refusal
     });
+    if let Some(url) = probe.url.take() {
+        layerfs_home::wipe::text(url);
+    }
     Ok(Update {
         record,
         trial,
@@ -406,6 +423,15 @@ fn changed(record: StoreRecord, request: &StoreConnect, user: &str) -> StoreReco
     match &request.synchronous_commit {
         Some(sync) => record.with("synchronous_commit", SdkValue::text(sync)),
         None => record,
+    }
+}
+
+impl Drop for Update {
+    fn drop(&mut self) {
+        layerfs_home::wipe::text(std::mem::take(&mut self.dial));
+        if let Some(password) = self.new_password.take() {
+            layerfs_home::wipe::text(password);
+        }
     }
 }
 
@@ -433,9 +459,10 @@ impl Update {
     /// sessions on it are closed. A running Sandbox keeps the connection
     /// it started with. Once saved, the check's reach is this computer's
     /// (`here`).
-    pub fn save(self, home_dir: &Path, request: &StoreConnect) -> Outcome {
+    pub fn save(mut self, home_dir: &Path, request: &StoreConnect) -> Outcome {
         let name = request.store.as_str();
-        let reach = crate::observed::Reach::of(&Ok(self.here?));
+        let here = std::mem::replace(&mut self.here, Ok(SdkValue::Null));
+        let reach = crate::observed::Reach::of(&Ok(here?));
         let home_lock = home::lock::take(home_dir)?;
         let store_lock = crate::record::lock(home_dir, name)?;
         let binding = self.record.binding();
@@ -453,11 +480,43 @@ impl Update {
             request,
             self.trial.text("user").unwrap_or_default(),
         );
-        current.write(home_dir)?;
+        // every saved change is a new login for the host worker (#819 P-B)
+        let replaced = current.login_revision().map(str::to_owned);
+        let current = current.with_new_login_revision()?;
+        // the password first: a login revision is never visible without it;
+        // a record that cannot be written puts the login it replaced back
+        let mut before = None;
         if let Some(password) = &self.new_password {
-            login::save(home_dir, name, password)?;
+            let kept = login::kept(home_dir, name)?;
+            if let Err(refusal) = login::save(home_dir, name, password) {
+                if let Some(kept) = kept {
+                    layerfs_home::wipe::value(kept);
+                }
+                return Err(refusal);
+            }
+            before = Some(kept);
+        }
+        let written = current.write(home_dir);
+        let put = match (&written, &before) {
+            (Err(_), Some(kept)) => login::put_back(home_dir, name, kept.as_ref()),
+            _ => Ok(()),
+        };
+        if let Some(Some(kept)) = before {
+            layerfs_home::wipe::value(kept);
+        }
+        if let Err(mut refusal) = written {
+            if let Err(back) = put {
+                refusal.message = format!(
+                    "{}; the password it replaced could not be put back either ({}): \
+                     Store {name} now holds the new password with its old login, and \
+                     connecting it again settles it",
+                    refusal.message, back.message
+                );
+            }
+            return Err(refusal);
         }
         drop((store_lock, home_lock));
+        crate::host_postgresql::retire(home_dir, name, replaced.as_deref());
         crate::observed::record(home_dir, name, None, &reach);
         Ok(answer(&current, "updated", None))
     }
@@ -474,8 +533,8 @@ pub fn disconnect(home_dir: &Path, name: &StoreName, related: Related) -> Outcom
         login::forget(home_dir, name)?;
         return Ok(disconnected(name));
     }
-    let _lock = home::lock::take(home_dir)?;
-    let _store = crate::record::lock(home_dir, name)?;
+    let lock = home::lock::take(home_dir)?;
+    let store = crate::record::lock(home_dir, name)?;
     let record = StoreRecord::read(home_dir, name)?
         .ok_or_else(|| refused("NotFound", format!("no Store named {name}")))?;
     if record.kind()? != StoreKind::Postgresql {
@@ -491,6 +550,10 @@ pub fn disconnect(home_dir: &Path, name: &StoreName, related: Related) -> Outcom
     std::fs::remove_dir_all(paths::store_dir(home_dir, name)).map_err(failed)?;
     login::forget(home_dir, name)?;
     layerfs_home::home::generation::moved(home_dir);
+    // the worker's retire reads the record without a lock; it is sent once
+    // this call's locks are released, so no call waits on them meanwhile
+    drop((store, lock));
+    crate::host_postgresql::retire(home_dir, name, record.login_revision());
     Ok(disconnected(name))
 }
 

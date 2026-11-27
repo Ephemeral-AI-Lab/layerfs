@@ -82,7 +82,10 @@ fn init_creates_a_home_then_leaves_it_and_get_reads_it_without_a_log_line() {
     );
     assert_eq!(first.get_text("outcome"), Some("created"));
     assert_eq!(first.get("unchanged"), Some(&SdkValue::Bool(false)));
-    assert_eq!(first.get("layout"), Some(&SdkValue::Int(3)));
+    assert_eq!(
+        first.get("layout"),
+        Some(&SdkValue::Int(layerfs_home::home::LAYOUT_VERSION))
+    );
     assert_eq!(first.get_text("version"), Some(env!("CARGO_PKG_VERSION")));
     assert!(home.join("layerfs.json").is_file());
     let mode = std::fs::metadata(&home).unwrap().permissions().mode() & 0o777;
@@ -102,7 +105,10 @@ fn init_creates_a_home_then_leaves_it_and_get_reads_it_without_a_log_line() {
     assert_eq!(got.get("reason"), Some(&SdkValue::Null));
     assert_eq!(got.get("fix"), Some(&SdkValue::Null));
     assert_eq!(got.get("message"), Some(&SdkValue::Null));
-    assert_eq!(got.get("layout"), Some(&SdkValue::Int(3)));
+    assert_eq!(
+        got.get("layout"),
+        Some(&SdkValue::Int(layerfs_home::home::LAYOUT_VERSION))
+    );
     assert_eq!(got.get_text("mode"), Some("0700"));
     let _ = std::fs::remove_dir_all(&home);
 }
@@ -292,8 +298,11 @@ fn the_tree_lists_a_machine_only_a_store_names() {
     let machines = tree_machines(&home);
     assert_eq!(machines.len(), 1, "{machines:?}");
     let native = &machines[0];
-    assert_eq!(native.get_text("machine"), Some("native"));
-    assert_eq!(native.get_text("platform"), Some("native"));
+    assert_eq!(
+        native.get_text("machine"),
+        Some(layerfs_home::names::HOST_MACHINE)
+    );
+    assert_eq!(native.get_text("platform"), Some("host"));
     assert_eq!(native.get_text("state"), Some("ready"));
     let Some(SdkValue::List(stores)) = native.get("stores") else {
         panic!("{native:?}")
@@ -304,8 +313,9 @@ fn the_tree_lists_a_machine_only_a_store_names() {
     // under a machine that says it is missing
     let record = home.join("store").join("shop").join("record.json");
     let text = std::fs::read_to_string(&record).unwrap();
-    assert!(text.contains(r#""machine":"native""#), "{text}");
-    let moved = text.replace(r#""machine":"native""#, r#""machine":"gone""#);
+    let placement = format!(r#""machine":"{}""#, layerfs_home::names::HOST_MACHINE);
+    assert!(text.contains(&placement), "{text}");
+    let moved = text.replace(&placement, r#""machine":"gone""#);
     std::fs::write(&record, moved).unwrap();
     let machines = tree_machines(&home);
     assert_eq!(machines.len(), 1, "{machines:?}");

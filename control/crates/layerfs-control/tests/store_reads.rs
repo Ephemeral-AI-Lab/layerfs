@@ -38,7 +38,7 @@ fn a_stale_lease_survives_every_store_read_and_is_ignored() {
     let record = SdkValue::map([
         ("name", SdkValue::text("s")),
         ("kind", SdkValue::text("sqlite")),
-        ("machine", SdkValue::text("native")),
+        ("machine", SdkValue::text(layerfs_home::names::HOST_MACHINE)),
     ]);
     write_entity(&paths::store_record(&home, "s"), &record).unwrap();
     // a process id above every kernel's pid_max: its holder is gone

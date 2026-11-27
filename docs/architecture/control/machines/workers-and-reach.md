@@ -126,7 +126,7 @@ output to `/layerfs/data/log/worker.log` (`$LAYERFS_WORKER_LOG`; folder
 | `apple-container` | `0.0.0.0:7070` | `--publish 127.0.0.1:<port>:7070` at create |
 | `docker` (macOS) | `0.0.0.0:7070` | `-p 127.0.0.1::7070`, read back with `docker port` |
 | `docker` (Linux) | `127.0.0.1:<free port>` | nothing: host network |
-| `native` (macOS, Linux) | no worker | calls run in the caller's process |
+| `host` (macOS, Linux) | no TCP port: the host worker listens on `machine/<host machine>/worker.sock`, `writes.sock` and `worker.ctl` ([below](#host-worker-exchange-20-implementation-plan)) | eligible CLI Store reads go to the host worker; other calls run in the caller's process |
 
 Every host-side address is loopback; the secret guards the worker on every
 bind address. `layerfs worker` reads its two settings, makes its root
@@ -206,7 +206,7 @@ waits at most 10 s; other operations wait as long as they run
 | `store.reach` | the check of this machine's connection to a PostgreSQL Store with the address and login the host saved (or a new one `store.connect` checks before saving it), for `store.attach`, `store.connect` and `store.doctor`; a refusal names its connection `step` |
 | `store.diagnose`, `doctor.sandbox` | doctor's read-only observations |
 | `network.inspect` | doctor's read-only observation of the machine's Sandbox network for `machine.network`: `{ table, forwarding, links: [{ link, addresses, sandbox }] }`, `sandbox` the recorded Sandbox the link is named for, or null |
-| `sandbox.host` | a Sandbox or Workspace host operation on the machine's own `native`, decoded into its typed request first; a `sandbox.create` sweeps the run root first ([Checks: leftovers](../doctor/checks.md#leftovers)) |
+| `sandbox.host` | a Sandbox or Workspace host operation on the machine's own kernel (its guest root, `namespaces` backend), decoded into its typed request first; a `sandbox.create` sweeps the run root first ([Checks: leftovers](../doctor/checks.md#leftovers)) |
 | `inspect` | one read-only inspect request `{ kind, .. }` (a window of `worker.log` or of a Sandbox's `daemon.log`, overlay file sizes with the Sandbox's process and usage, the machine's stats, which Sandboxes' daemons run) on a helper thread, two at a time, answered within 6 s; the operation adds `worker: { version, pid, started_at, protocol, bundle }` to the request ([Inspection](../sandboxes/inspect.md)) |
 | `project.stage`, `project.init`, `project.export`, `project.delete`, `project.delete.admit`, `project.delete.entry`, `project.delete.release` | write one part of a folder copy; add it as a project; stream a pinned snapshot back; admit, mark, remove the entry of and release a project's deletion |
 | anything else | `InvalidInput`, "the worker has no operation …" |
@@ -329,7 +329,7 @@ part of the URL but a loopback host. Each adapter declares its `Loopback`.
 
 | Platform | `Loopback` | The refusal names |
 | --- | --- | --- |
-| `native` | `Shared` | — |
+| `host` | `Shared` | — |
 | `docker` | `Shared` on a Linux host (`--network host`); `Apart` on Docker Desktop | `host.docker.internal` |
 | `lima` | `Apart` | `host.lima.internal` (192.168.5.2) |
 | `apple-container` | `Apart` | the gateway the last start recorded, else `192.168.64.1`; the server must listen on it, not on 127.0.0.1 alone |
@@ -365,7 +365,7 @@ process reaches it, so Workspace calls skip the worker
 
 | Platform | Answer |
 | --- | --- |
-| `native` | `127.0.0.1:<guest_port>`, no pid |
+| `host` | `127.0.0.1:<guest_port>`, no pid |
 | `lima` | a free host port through Lima's `ssh.config` with `ControlMaster=no`; the `ssh` pid |
 | `docker`, `apple-container` | `Unsupported`: "the <platform> machine <name> forwards no Sandbox daemon port: …"; Workspace calls stay on the worker |
 
@@ -382,3 +382,353 @@ process reaches it, so Workspace calls skip the worker
 - [Stores and projects](../stores-and-projects/README.md): `store.call`, `store.file` and `project.*` routes.
 - [Stores and projects: SQLite and PostgreSQL](../stores-and-projects/sqlite-and-postgresql.md): the password inside the URL.
 - [Bridge](../../engine/bridge/README.md): the daemon wire contract.
+
+## Host worker exchange (2.0 implementation plan)
+
+The host exchange is versioned independently of the guest exchange. The
+ordinary socket is `worker.sock`, the streamed write socket is
+`writes.sock` and the management socket is `worker.ctl`, in the host
+machine directory. Each listener has its own admission capacity. A
+saturated ordinary or write listener leaves its backlog in the kernel,
+while management retains two slots.
+
+Both peers check the other's effective UID before sending or reading frames.
+The server sends the first frame only after admission to the connection
+queue. It is a plain bounded JSON frame with `ready: true`, `kind: "host"`,
+`protocol: 2`, `home_id` (the current home's record ID), `generation`
+(a fresh worker incarnation token), and `build`. The build combines the
+running CLI's embedded source identity and the executable's filesystem
+identity. The client validates the home, protocol and build before sending
+a request, including when its install path has since been replaced.
+Each request uses the guest envelope's `op` and `args` keys and adds a
+`generation` echo and a `request_id` correlation token. A final answer
+echoes the request ID and has exactly one of `ok` and `error`.
+`ping`, `store.close`, `store.postgresql_retire` and `drain` are
+management operations. `store.call`, `store.postgresql_read` and a
+single-change `store.write` are ordinary operations; a streamed
+`store.write` is the write socket's only operation, and each socket
+refuses the other's writes `Unsupported`. The host resolves Store authority from its own home
+records.
+
+`store.postgresql_read` (#819 P-B) carries exactly `method`, `store`,
+`project`, `fields`, `login_revision` and `password`, and serves only its own
+three read methods (`fs.read`, `fs.stat`, `fs.list`). An ordinary thread
+reads it, checks it (this generation, a valid request ID and the
+arguments `serve` accepts, `host_postgresql::checks`) and hands it to the
+worker's PostgreSQL lane (8 threads, at most 64 handed over and
+unanswered), keeping only the request's `op`, `generation`, `request_id`,
+`trace_step` and `args`; a request that fails the check is answered on
+the ordinary thread with the refusal the lane would give. So a PostgreSQL
+read holds no ordinary thread or slot. A lane thread starts the oldest queued read whose Store has
+a free session slot, so a read of a busy Store waits in the queue on no
+thread and never holds a thread another Store could use. Queued reads whose
+caller closed its socket are dropped unrun. At 64 the ordinary thread
+answers `Unavailable` (`postgresql-reads-full`) at once, unrun: the answer
+follows the request it read, which §8.5 allows because nothing ran. The worker reads no secret from its environment or the home: it puts
+the sent password into the record's own address for the sessions of that
+Store and overwrites the copies it owns once they are no longer needed
+([password lifetime](../stores-and-projects/sqlite-and-postgresql.md#held-sessions-in-the-host-worker-819-p-b)). It sets `RLIMIT_CORE` to 0 before it
+reads its first request, and on Linux clears `PR_SET_DUMPABLE` as soon as
+it decodes its first PostgreSQL request, before any session holds the
+password (a worker that served none stays readable by its user, which
+proves its cleared environment); macOS has no such flag. `store.postgresql_retire` (`{ store, revision }`, answered
+`{ closed }`) retires that login revision's held sessions unless it is the
+record's current one; `store connect` and `store disconnect` send it, past
+their locks, to a running worker only, never starting one. The ping
+answers `postgresql { stores, idle, lent, writes, reads, queued }`.
+
+A PostgreSQL Store's `store.write` (#819 P-B writes) is the SQLite route's
+request with exactly two more envelope fields, `login_revision` and
+`password`; the worker serves a write that carries them only on a
+PostgreSQL Store and one without them only on a host SQLite Store. A
+single-change PostgreSQL write is handed to the PostgreSQL lane as a read
+is; a streamed one comes in on the write socket. Each runs on a held write
+session, at most 2 write slots per Store and 4 per process, so writes never
+take the session slots or lane threads reads keep
+([held write sessions](../stores-and-projects/sqlite-and-postgresql.md#held-write-sessions-819-p-b-writes)).
+
+The v1 host request and answer bodies are plain JSON with byte ceilings of
+64 KiB and 1 MiB respectively. Hello and management requests are limited to
+4 KiB. Check ceilings before reading a frame body and reject attachments on
+request and answer frames. A deadline-bounded receive reads any reply bytes
+buffered before the peer closed. An ordinary call waits for the first reply
+byte for the duration of the Store operation and bounds the transfer from
+that byte onward. That wait has no deadline by design (spec §8.5, §11): a
+Store call has no time cap (a long `file.grep` is legitimate), the exchange
+has no cancel message, so a client deadline would turn a live call into
+`Unknown` without stopping or freeing it, and nothing may be resent. A worker
+that exits or crashes closes the stream, so the caller sees `Unknown` at once;
+only a live worker keeps it waiting, as an in-process SDK call would. The
+caller can still be interrupted by its own caller. The guest exchange keeps
+its existing framing and hello.
+
+Each side has its own hello deadline (§11). The worker writes the hello
+within 10 s of a pool thread taking the connection, not of its accept, so a
+connection that waited in the queue is still greeted. An ordinary caller
+connected to a running worker waits up to 30 s (`CALL_HELLO_WAIT`) for its
+hello: behind 8 busy pool threads, in the 16-slot queue or in the kernel's
+listen queue. 30 s is three times the start deadline; it lets the §16.1 C7
+load (20 callers, small calls) and a queue behind calls of ordinary length
+complete. A caller still waiting at 30 s (all 8 threads held by long calls,
+or a stopped or wedged worker) gets a pre-send `Unavailable` naming the load
+("no call thread was free within 30 s"), so nothing is half sent. Only a
+caller that spawned the worker it reached keeps the startup lock to its
+hello and the 10 s deadline, as do management calls and connecting. A
+caller that took the startup lock while the listen queue was full, or while
+another worker's socket was not yet private, and started nothing releases it
+once connected and waits as any queued caller does: 30 s from its connect,
+refused naming the load. A worker that exits
+closes every waiting connection, also before anything was sent.
+
+The worker counts only ordinary calls toward its idle clock: a `ping` from
+doctor or `machine get --with live` observes it without keeping it alive
+(§8.3, §12). It is idle after 60 s without a call and with nothing in flight,
+including connections accepted but not yet admitted and held writes. It
+then first removes every socket name under its lifetime lock, so no new
+caller can join a listen
+queue, keeps serving anything already queued (a `connect` that resolved the
+name just before is in the queue within microseconds; the worker keeps reading
+for 1 s, `UNPUBLISHED`), and drains only when it is quiet with every listen
+queue empty. A caller after the removal finds no endpoint and can start the next
+worker only once this worker releases `worker.lock`. The old worker keeps
+that lock while it serves a call accepted in its last 1 s window and while it
+closes and checkpoints its Stores, so the next start is not guaranteed within
+the new caller's 10 s start deadline: that caller can get `Unavailable` with
+nothing sent, and maintenance meanwhile gets `InUse` naming the old worker's
+pid. No caller is reset mid-queue by an idle exit.
+
+A `store.write` request names its method, Store, project, field map and
+`body`: `none` (`edit`, `mkdir`, `rm`, `cp`, `mv`), `content` (`write`) or
+`changes` (`apply`). Content and changes never travel in the request. A
+streamed body follows the request on the same connection until one end
+frame:
+
+| Frame | Header | Body | Ceiling |
+| --- | --- | --- | --- |
+| change | top bit clear | `{"change": {...}}`, the Store's form of one change | 64 KiB |
+| spilled change | top bit clear | `{"spilled": true}`, then the change's JSON text as content | 64 KiB, then data frames |
+| wait | top bit clear | `{"wait": true}`: the caller's input is still coming | 64 KiB |
+| end | top bit clear | `{"end": {"changes": n, "bytes": b}}` | 64 KiB |
+| data | top bit set | content bytes; an empty data frame ends the content | 256 KiB |
+
+A streamed write in an apply is its change with `streamed: true`, then its
+data frames. The worker reads a frame only when the Store call asks for its
+next change or piece, so a faster caller blocks in the kernel socket buffer.
+A data frame is at most four engine records (4 × 65,519 = 262,076 bytes,
+about 256 KiB), so whole pieces are written as whole records.
+
+Spool. The caller streams only regular files. An input that is not one (a
+pipe, a FIFO, a terminal) is first copied in 64 KiB pieces into an unnamed
+private file: created 0600 and exclusive in the host machine's `spool`
+folder (`machine/<host>/spool/`, 0700; an existing folder that is not this
+user's or not private is not used), named `<pid>-<nanoseconds>-<n>`, and
+unlinked at once, so no exit, a signal's included, leaves it behind (the
+spooler also removes a name whose process is gone). The copy takes disk
+equal to the input, on the home's filesystem, until it is sent: the CLI
+closes the file once its input thread has read the last byte for sending
+(or, on the direct route, once it was read whole), not when the answer
+comes. So the worker always reads at disk speed: a slow or interactive
+producer is never timed out by the worker's progress rule. The request
+header is checked (`request_fits`) before the copy. If the file cannot be
+made or written (a full disk, say), the part already read and the rest of
+the input run direct, as without a worker. There is no free-space check
+before the copy: a copy that fits can leave the Store too little room for
+the Commit, which is then refused `Capacity` before any effect (a known
+residual risk on a nearly full disk, accepted in round 6 of #819).
+
+Memory. A content's size does not change it: the caller holds at most
+`QUEUED` + 2 = 4 pieces of 262,076 bytes (about 1 MiB): two queued by its
+input thread, the one that thread is reading and the one being sent; the
+worker one frame. `file apply` changes are the exception. The caller's input
+thread builds each list element whole from the input and converts it to
+the Store's form by moving its values; changes pass to the sender through a
+rendezvous channel, so the caller holds one change being read, one being
+sent and that change's printed text (within the budget below, at most
+about 1.4 MB). A write change's content is part of its change, so the
+caller's worst case is about the two largest consecutive changes, contents
+included, plus 1.4 MB. A write's content then leaves its change and
+travels as data frames. Any other change is printed once and must fit the
+worker's budget for one change, the frame budget: a decoded-size estimate
+of 4 MiB (three bytes per text byte plus 256 per container, field and
+element), 128 fields per object and 32 levels, measured on the change
+frame the worker decodes, `{"change": …}` included (one more level and
+545 more units than the change alone, so a spilled change, decoded without
+it, fits too). A change larger than a 64
+KiB frame is sent spilled; the worker builds it from its data frames under
+that budget, holding one frame and the value, and refuses one past it
+`InvalidInput` before any effect. The caller checks before sending
+anything: it reads the list once (from its regular file or its spool),
+holding one element at a time and measuring it without printing it, and,
+if any change is past the budget, routes the whole call direct (a route,
+never a refusal). A caller that sends an over-budget change anyway is
+refused by the worker before effect. Object fields are checked for
+duplicate names by sorting, O(n log n) in the width. The caller keeps
+sending `wait` while it parses a large element, since parsing runs on its
+input thread.
+
+The worker's decoded request memory, per lane, in the frame budget's
+decoded-size estimate (`B` = 4 MiB, `DECODED_BUDGET`; a request frame is
+at most 64 KiB, `HOST_MAX_REQUEST`, and a hello or management frame 4 KiB):
+
+| Lane | What it holds decoded | Bound |
+| --- | --- | --- |
+| ordinary | one request per accepted connection, 16 slots (`ORDINARY.slots`) | 16 × B = 64 MiB |
+| management | 2 slots of 4 KiB frames | 2 × B = 8 MiB (the frame budget; such a frame decodes to far less) |
+| PostgreSQL | reads and single-change writes handed over and not yet answered, 64 (`POSTGRES.slots`), each checked on the ordinary thread before it is handed over and held with only `op`, `generation`, `request_id`, `trace_step` and `args`: a write's 7 envelope fields and at most 12 named fields, all scalar (a read's 6 and 8), so at most 3 containers and 24 fields and 21 commas, each request at most W = 3 × 65,536 + 256 × 48 = 208,896 bytes; each of the 8 running calls (`POSTGRES.threads`) holds at most one more copy of part of its request (a write's held header, a read's `fields`), within W | (64 + 8) × W = 15,040,512 bytes, 14.3 MiB |
+| write | 2 intake threads reading a request (2 × B = 8 MiB); held headers, at most `HOST_HELD_WRITES` = 32, each checked before it is held: 5 envelope fields (7 for a PostgreSQL write) and at most 12 named fields, all scalar, so at most 3 × 65,536 + 256 × 38 = 206,336 bytes (32 × 206,336 = 6,602,752 bytes, 6.3 MiB); one change being built per write thread, framed or spilled (4 × B = 16 MiB) | 31,768,576 bytes, 30.3 MiB |
+| total | | 122,306,560 bytes, 116.6 MiB |
+
+These bound the requests and changes the worker decodes, not a call's own
+work (an answer up to 1 MiB, a Store's pages). The PostgreSQL lane's
+bound holds because a call is handed over only after its request's
+shape is checked: before that check moved to the ordinary thread, a
+handed-over request was bounded only by the frame budget, 64 × B =
+256 MiB. A held PostgreSQL
+session's own memory (a write session's caches and a running call's
+private overlay) is bounded by the session bounds, not by this table.
+
+A write needs a Commit per call, not a held connection. The CLI knows a
+write's route before it dials. A single-change write (`body` none) goes
+to the ordinary socket and runs on the ordinary thread that read it, as a
+read does; a PostgreSQL one is handed to the PostgreSQL lane instead, so
+a write waiting on a held Store writer never holds an ordinary thread
+(it holds one of at most 4 lane threads its write share allows). A streamed write goes to the write socket, `writes.sock`
+(same run folder, same peer UID check and hello as the others): one of 2
+intake threads reads its request and checks its request ID, generation
+and header (method, body, field names and scalar values) there, and then
+holds it, with its connection, for a separate write lane: 4 write threads
+(`WRITE_THREADS`). A write thread takes the oldest held write that can
+start: any SQLite write, or a PostgreSQL write whose Store has a free
+write slot, which it takes then; a PostgreSQL write waiting for a slot
+holds no thread, and later writes start meanwhile. So however many writes are held, they take no ordinary
+place or thread, and small reads keep all 8 ordinary threads. Calls wait
+(§11): the write socket accepts only while its connections and held
+writes together are below `HOST_HELD_WRITES` (32), so further writers
+wait in its listen queue and, past their 30 s hello bound
+(`CALL_HELLO_WAIT`), get only the hello's `Unavailable` naming the load
+("no write place was free within 30 s"), before they send anything. A
+held write waits for a write thread with nothing sent but its request:
+its caller sends input only after the worker's `go` frame
+(`{"request_id", "go": true}`), sent when a write thread starts reading
+it, and waits for it without a time bound, so a queued write is never
+timed out. A refusal instead of `go` is definite. A waiting write whose
+caller went away (a killed CLI) is dropped unrun by the same check the
+PostgreSQL lane uses (`peer_gone`), when a write thread looks for work
+and, while the write socket is full, at least every 5 s (`IDLE_CHECK`), so
+its place goes to the next writer. After `go` the caller's sends have no
+time bound either: the worker is reading, and its Store work may take as
+long as a direct call's. A worker that is stuck before `go` or before the
+input's end leaves the CLI waiting with nothing effective sent: nothing
+commits before the end frame, so Ctrl-C is safe. A write read once the
+worker drains, or still waiting for a thread then, is refused
+`Unavailable` before any effect.
+
+Minimum progress (§11): once the worker reads a write's input, the input
+must deliver 262,076 bytes (`STREAM_PROGRESS`, four engine records, frame
+headers included) within 30 s of waiting (`STREAM_WAIT`), or end. Only
+time the worker spends blocked on the input counts, never its own Store
+work or the wait for a write thread. A `wait` frame is not progress, so a
+caller that sends keepalives but no input, or slower input, is refused
+`Unavailable` ("delivered less than 262076 bytes (four engine records) in
+30 s of waiting; nothing was committed"). The CLI streams from a regular
+file and copies only pipes, FIFOs and terminals, so a regular file on a
+stalled filesystem (a hung network mount) can still meet this rule; so
+can a misbehaving caller. A caller whose input
+produced nothing for 10 seconds sends `wait`, which only shows the worker
+is still there. The end frame's counts must match what was received. The
+worker commits only after reading it, so input that stops earlier commits
+nothing. A change refused mid-stream answers at once and closes; the
+caller, whose next send fails, reads that early refusal. The request's
+frame and the end frame bound the custody boundary. Before the end frame
+is completely written the caller reports a definite refusal; after it, a
+missing or invalid answer is `Unknown` with the request ID.
+
+Drain (`machine stop`, idle exit) never stops an admitted write (§8.3): a
+running write reads its whole input and finishes as admitted, and the
+worker exits after it. Held writes not yet running are refused unrun. The
+drain answer counts the admitted writes still running (`writes_running`),
+never one taken and then refused by the drain; a drain asked again while
+draining answers the same account. `machine stop` does not
+wait for them: it reports `running_writes` and `running_writes_note` ("N
+writes still running; see worker.log") and, while a running write holds
+its Store, `InUse` naming the worker as a holder.
+
+Records (§8.5). Only an outcome the caller may not know is recorded: an
+engine `Unknown`, and a `Committed` answer the worker could not deliver.
+A definite refusal changed nothing and is never recorded. An engine
+`Unknown` is written to `machine/<host>/retained/<request id>.json` before
+its answer is sent, and its answer carries the request ID; the record's
+detail carries the engine's phase (a stable name: `admission`, `capture`,
+`begin`, `construct`, `finish`, `validate`, `publish`, `install`), whether
+it published, its attempt, expected head and candidate root. A record is
+written to a `.part` file and linked into place, so a reader never sees
+half a record and an existing record (an `uncertain` one) is never
+overwritten by a later `undelivered`. Records are not synced (the home's
+Normal profile; a power loss may lose one). A record names the call,
+Store, project, Branch, path and outcome, never content.
+
+Each record write is one attempt; nothing waits on it or retries it. One
+that fails is logged to `worker.log` without content. An uncertain outcome
+without a record still reaches its caller: its answer is the `Unknown`
+with the request ID, the engine's detail and `recorded: false`. The worker
+counts such outcomes (`unrecorded` in its ping) and lists the first 32 in
+the answer of the drain that ends it (`unrecorded`, `unrecorded_count`),
+which `machine stop` passes on as `unrecorded_writes` and
+`unrecorded_writes_count`. The list covers outcomes up to the drain; a
+write still running then (see `running_writes`) reports its own outcome to
+its caller, and one with no record only to `worker.log`. An idle exit has
+no caller and only the log.
+Drain, idle exit and a Store's close never wait for a record, so `machine
+stop` cannot be refused by one; a `machine stop --force` goes on without
+its worker's answer.
+
+At most 256 records are kept (`RETAINED_CAP`). A new one at the cap first
+removes the oldest `undelivered` records, which only inform: a killed CLI
+whose Commit landed adds one. An `uncertain` record is never removed by the
+worker; when they alone fill the cap, a new record fails as above (logged
+and reported). Drain, stop, crash and replacement leave the records;
+`machine.worker.retained` reports them, names the folder and gives `rm
+<home>/machine/<host>/retained/*.json` as its fix, once their Branches
+were checked. There is no call that removes them.
+
+A scoped apply (`file apply --scope`) runs in the caller's process, not
+through the worker: its Workspace route is not a host Store write.
+
+A separate startup lock serializes launch attempts until the child is
+ready. Only the worker holding the lifetime `worker.lock` may recover stale
+sockets, bind or remove endpoints. A worker binds each socket and then sets
+it to 0600; callers never dial a socket with another mode. Such a socket
+whose lifetime lock is free has no owner (its worker died between bind and
+chmod), so a starting caller treats it as absent and launches a worker that
+replaces it, and a caller that does not start one reports no endpoint.
+The CLI starts the worker with an empty environment except `LAYERFS_HOME`
+and `PATH`, `HOME`, `TMPDIR`, `LANG`, `LC_ALL`, `LC_CTYPE`, `SSL_CERT_FILE`
+and `SSL_CERT_DIR`, in `/`: the worker serves later callers too, so it
+takes no caller's secrets (such as `PGPASSWORD`), per-call settings or
+directory (spec P-B). A started worker holds that lock
+through listener shutdown, Store close, and socket removal. Incompatible
+builds receive a definite refusal before operation bytes, with idle exit as
+the replacement path. Transport loss after an operation send begins has
+outcome `Unknown` with the request ID and no automatic replay.
+
+## Host power and admission
+
+Host start and stop serialize on the machine lifecycle lock. The built-in
+host's record defaults to enabled. Stop atomically records stopped under
+the home lock used by Sandbox creation and worker socket publication.
+Each SQLite lease claim and reused worker Store checks the machine record
+under its Store lock. Maintenance operations check the same fence before
+recovering an old intent or recording their new one. After fencing admission, stop drains the worker,
+closes the calling process's own idle copies of the machine's Stores (as a
+move's settle does, before any record lock) and inspects holders under each
+Store lock: other processes' leases and a copy a call in the calling
+process is using still block it. A copy that fails to close, or a Store
+whose holders cannot be read, is a holder naming the failure, so the
+answer stays `InUse` with `forced_outcome` attached after `--force`. This ordering lets earlier leases
+finish and exposes the process identities still holding the Store.
+Force uses the existing per-Sandbox stop with its recorded runtime identity.
+The machine remains stopped when a holder or teardown refusal is reported.
+
+Lifecycle calls recheck the machine intent after acquiring the lifecycle lock.
+An explicit forced stop can reconcile an uncertain stop from the same or
+a terminated owner. Other unresolved operations keep their custody.

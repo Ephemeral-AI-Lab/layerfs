@@ -144,7 +144,7 @@ fn a_scope_refuses_every_call_it_does_not_cover() {
             &[
                 ("project", t("shop/api")),
                 ("name", t("s1")),
-                ("machine", t("native")),
+                ("machine", t(layerfs_home::names::HOST_MACHINE)),
             ],
         ),
         ("sandbox.list", &[]),
@@ -214,7 +214,7 @@ fn a_scoped_workspace_call_needs_a_sandbox_of_its_project() {
             &SdkValue::map([
                 ("name", t(name)),
                 ("project", t(project)),
-                ("machine", t("native")),
+                ("machine", t(layerfs_home::names::HOST_MACHINE)),
             ]),
         )
         .unwrap();

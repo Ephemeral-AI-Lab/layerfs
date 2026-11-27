@@ -28,6 +28,23 @@ pub enum CommitPhase {
     Publish,
     Install,
 }
+
+impl CommitPhase {
+    /// Its stable name in answers (§8.5 evidence): not its `Debug` text.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Admission => "admission",
+            Self::Capture => "capture",
+            Self::Begin => "begin",
+            Self::Construct => "construct",
+            Self::Finish => "finish",
+            Self::Validate => "validate",
+            Self::Publish => "publish",
+            Self::Install => "install",
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum CommitError {
     InFlight,

@@ -12,7 +12,7 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::path::Path;
 
 /// The layout this build writes.
-pub const LAYOUT_VERSION: i64 = 3;
+pub const LAYOUT_VERSION: i64 = 4;
 
 /// What `layerfs.json` holds.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -53,7 +53,15 @@ pub fn detect(home: &Path) -> Result<Layout, SdkRefusal> {
     };
     match read {
         Some(value) => Ok(match value.get_int("layout") {
-            Some(LAYOUT_VERSION) => parse(&value).map_or(Layout::Foreign, Layout::Current),
+            Some(version @ (3 | LAYOUT_VERSION)) => match parse(&value, version) {
+                Some(file) => {
+                    if version == 3 {
+                        super::legacy_host::check(home)?;
+                    }
+                    Layout::Current(file)
+                }
+                None => Layout::Foreign,
+            },
             _ => Layout::Foreign,
         }),
         None => match own_only(home) {
@@ -117,10 +125,10 @@ pub fn foreign(home: &Path) -> SdkRefusal {
 }
 
 /// A `layerfs.json` of this layout: its id must be 32 hex digits.
-fn parse(value: &SdkValue) -> Option<HomeFile> {
+fn parse(value: &SdkValue, layout: i64) -> Option<HomeFile> {
     let id = value.get_text("id")?;
     (id.len() == 32 && id.bytes().all(|b| b.is_ascii_hexdigit())).then(|| HomeFile {
-        layout: LAYOUT_VERSION,
+        layout,
         id: id.to_owned(),
     })
 }
@@ -128,10 +136,28 @@ fn parse(value: &SdkValue) -> Option<HomeFile> {
 /// The home's `layerfs.json`, written for an empty home; any other folder
 /// is refused ([`foreign`]).
 pub fn ensure(home: &Path) -> Result<HomeFile, SdkRefusal> {
+    let initial = detect(home)?;
+    let expected = match initial {
+        Layout::Current(file) if file.layout == LAYOUT_VERSION => return Ok(file),
+        Layout::Current(file) => Some(file.id),
+        Layout::Foreign => return Err(foreign(home)),
+        Layout::Empty => None,
+    };
+    let _lock = crate::home::lock::take(home)?;
     match detect(home)? {
-        Layout::Current(file) => Ok(file),
+        Layout::Current(mut file) if expected.as_ref().is_none_or(|id| id == &file.id) => {
+            if file.layout != LAYOUT_VERSION {
+                file.layout = LAYOUT_VERSION;
+                write(home, &file)?;
+            }
+            Ok(file)
+        }
+        Layout::Empty if expected.is_none() => create(home),
         Layout::Foreign => Err(foreign(home)),
-        Layout::Empty => create(home),
+        _ => Err(refused(
+            "Unavailable",
+            "home identity changed while opening it",
+        )),
     }
 }
 
@@ -143,14 +169,7 @@ pub fn open(home: &Path) -> Result<HomeFile, SdkRefusal> {
     if crate::home::guest::is_root(home) {
         return crate::home::guest::file(home);
     }
-    let file = match detect(home)? {
-        Layout::Current(file) => file,
-        Layout::Foreign => return Err(foreign(home)),
-        Layout::Empty => {
-            let _lock = crate::home::lock::take(home)?;
-            ensure(home)?
-        }
-    };
+    let file = ensure(home)?;
     crate::home::guest::opened(&file.id);
     Ok(file)
 }

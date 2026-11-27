@@ -77,7 +77,10 @@ fn fixture(tag: &str, runtime: &'static str, live: bool) -> Fixture {
     ));
     let _ = std::fs::remove_dir_all(&scratch);
     let data = scratch.join("layerfs/data");
+    // a worker's root: its run root is the guest's (#819 R)
+    layerfs_home::home::guest::serve_root(&data);
     let run = paths::run_root(&data).join("layerfs-0a1b2c3d-s1");
+    assert!(run.starts_with(data.join("machine/linux-guest/run")));
     for folder in ["tmp", "workspaces/1", "config", "overlay"] {
         std::fs::create_dir_all(run.join(folder)).unwrap();
     }
@@ -232,7 +235,7 @@ fn the_roots_offer_the_root_of_a_namespaces_sandbox_only() {
 
     // a host-process Sandbox has no root of its own: no `/`, and a path
     // outside its home is refused as it always was
-    let native = fixture("native", "native", false);
+    let native = fixture(layerfs_home::names::HOST_MACHINE, "host", false);
     let roots = read(&native, &[]).unwrap();
     assert_eq!(
         shown(&roots, &native.run),

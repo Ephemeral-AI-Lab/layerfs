@@ -46,7 +46,7 @@ pub(crate) struct Options {
     pub(crate) runtime: Option<PathBuf>,
     /// The launcher's own listening ports that are not on loopback (a
     /// worker on `0.0.0.0`), closed to the Sandbox's commands by the
-    /// firewall table; none for a loopback worker or `native`.
+    /// firewall table; none for a loopback worker or `process`.
     pub(crate) closed_ports: Vec<u16>,
 }
 

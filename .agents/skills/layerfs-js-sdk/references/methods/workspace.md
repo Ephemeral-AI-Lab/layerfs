@@ -86,7 +86,7 @@ trimmed from the ends (`Feature/Login` mounts as `feature-login`).
 
 ```bash
 $ layerfs workspace mount tests agent                                          # seen
-{"workspace":"tests:agent","path":"/tmp/demo/home/machine/native/run/layerfs-8a7387b2-tests/workspaces/1"}
+{"workspace":"tests:agent","path":"/tmp/demo/home/machine/macos-host/run/layerfs-8a7387b2-tests/workspaces/1"}
 $ layerfs workspace mount tests main                                           # seen, exit 125
 {"error":"InvalidInput","message":"main is the project's published line, not a Branch, and is not mounted: fork a Branch from it and mount that","fix":"layerfs branch fork shop/api work && layerfs workspace mount tests work"}
 ```

@@ -46,7 +46,7 @@ fn a_sandbox_killed_behind_controls_back_is_lost_until_removed() {
         Some(&home),
         "machine.update",
         SdkValue::map([
-            ("machine", SdkValue::text("native")),
+            ("machine", SdkValue::text(layerfs_home::names::HOST_MACHINE)),
             ("daemon", SdkValue::text(daemon.as_str())),
         ]),
         &mut |_| {},
@@ -68,7 +68,7 @@ fn a_sandbox_killed_behind_controls_back_is_lost_until_removed() {
             ("project", t("shop/api")),
             ("name", t("s1")),
             ("detail", SdkValue::Bool(true)),
-            ("machine", t("native")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
         ],
     );
     assert_eq!(made.get_text("state"), Some("ready"));

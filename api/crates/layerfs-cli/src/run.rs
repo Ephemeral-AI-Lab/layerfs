@@ -1,5 +1,5 @@
 //! One command line, start to exit code.
-use crate::parse::{parse, Usage};
+use crate::parse::{parse_cli, Usage};
 use crate::{help, output, view, worker};
 use layerfs_api::Scope;
 use layerfs_bridge::control::SdkValue;
@@ -23,6 +23,12 @@ pub fn main(words: Vec<String>) -> ExitCode {
             [flag] if flag == "--json" => crate::capabilities::version(),
             _ => wrong("use layerfs --version [--json]".to_owned()),
         },
+        #[cfg(all(feature = "machine", any(target_os = "macos", target_os = "linux")))]
+        Some("worker")
+            if words.get(1).map(String::as_str) == Some("--host") && words.len() == 2 =>
+        {
+            worker::host_main()
+        }
         Some("worker") if words.len() == 1 => worker::main(),
         Some(family) => {
             let Some(name) = words.get(1) else {
@@ -113,7 +119,7 @@ fn wrong_call(call: &layerfs_api::Call, message: String) -> ExitCode {
 
 /// One call of the table, made once.
 fn one(call: &layerfs_api::Call, words: &[String]) -> ExitCode {
-    let parsed = match parse(call, words, &mut std::io::stdin()) {
+    let parsed = match parse_cli(call, words) {
         Ok(parsed) => parsed,
         Err(Usage(message)) => return wrong_call(call, message),
     };
@@ -144,6 +150,7 @@ fn one(call: &layerfs_api::Call, words: &[String]) -> ExitCode {
         std::io::stderr().is_terminal() && std::env::var_os("LAYERFS_PROGRESS_JSON").is_none();
     let mut last_progress_len = 0;
     let mut progress_start: Option<std::time::Instant> = None;
+    let mut stdout_error = None;
     let mut send = |event: SdkValue| {
         if progress && event.get("progress").is_some() {
             let mut err = std::io::stderr().lock();
@@ -176,20 +183,23 @@ fn one(call: &layerfs_api::Call, words: &[String]) -> ExitCode {
                 Some(SdkValue::Text(text)) => text.as_bytes(),
                 _ => return,
             };
-            let _ = match event.get_text("stream") {
-                Some("stdout") => std::io::stdout().lock().write_all(bytes),
-                Some("stderr") => std::io::stderr().lock().write_all(bytes),
-                _ => Ok(()),
-            };
+            match event.get_text("stream") {
+                Some("stdout") if stdout_error.is_none() => {
+                    stdout_error = std::io::stdout().lock().write_all(bytes).err();
+                }
+                Some("stderr") => {
+                    let _ = std::io::stderr().lock().write_all(bytes);
+                }
+                _ => {}
+            }
         }
     };
-    let outcome = layerfs_api::call_scoped(
-        None,
+    let outcome = layerfs_api::call_cli(
         scope.as_ref(),
         &call.name(),
         parsed.args,
+        parsed.input,
         &mut send,
-        layerfs_api::Client::Cli,
     );
     // first thing after the call: a signal from now on changes nothing
     // (signals.rs names the residual window)
@@ -206,27 +216,19 @@ fn one(call: &layerfs_api::Call, words: &[String]) -> ExitCode {
     // (call surface 2.0); its result JSON is still printed, its readable
     // form is the command's own output, and `--stream` wrote that itself
     let exits = call.arg("stream").is_some();
-    match outcome {
-        Err(refusal) => output::refusal(&refusal, switches.detail, text),
-        Ok(value) if exits => {
-            let printed = match (stream, text) {
-                (true, _) => ExitCode::SUCCESS,
-                (false, true) => {
-                    view::exec(&value);
-                    ExitCode::SUCCESS
-                }
-                (false, false) => output::result(&value, false, call.form),
-            };
-            let _ = std::io::stdout().flush();
-            // a result with none is a plain success (125 is for refusals)
-            match value.get_int("exit_code") {
-                None => printed,
-                Some(code) => ExitCode::from(u8::try_from(code).unwrap_or(1)),
-            }
+    let value = match outcome {
+        Err(refusal) => return output::refusal(&refusal, switches.detail, text),
+        Ok(value) => value,
+    };
+    let printed = match (exits, stream, text) {
+        (true, true, _) => stdout_error.map_or_else(|| std::io::stdout().flush(), Err),
+        (true, false, true) => view::exec(&value),
+        (false, _, true) if call.call == "doctor" => {
+            output::write_stdout(&output::doctor_text(&value))
         }
-        // a doctor's report reads as its findings and what it could not check
-        Ok(value) if text && call.call == "doctor" => output::doctor(&value),
-        Ok(value) if text => view::show(call, words, &value),
-        Ok(value) => output::result(&value, false, call.form),
-    }
+        (false, _, true) => view::show(call, words, &value),
+        (_, _, false) => output::write_result(&value, false, call.form),
+    };
+    let command_exit = exits.then(|| value.get_int("exit_code")).flatten();
+    output::completed(printed, text, command_exit)
 }

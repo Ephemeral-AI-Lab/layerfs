@@ -83,7 +83,7 @@ Python  layerfs.workspace.list(*, sandbox=None, limit=None, cursor=None)
 | call | pages by `limit` and `cursor`; writes one call-log line; MCP `work` |
 
 The handle of every mounted Workspace, to find one again. It reads Workspace
-records: the home's own for a Sandbox on `native` or one reached directly,
+records: the home's own for a Sandbox on the host machine or one reached directly,
 and one request to each other ready machine's worker for the records it
 keeps ([`workspace/list.rs`](../../../../control/crates/layerfs-sandbox/src/workspace/list.rs)).
 A Sandbox whose machine, or which itself, is not ready is named in
@@ -123,7 +123,7 @@ Python  layerfs.workspace.mount(sandbox, branch, *, name=None)
 Mounts a Branch as a new Workspace, a complete writable view of its head,
 and answers its handle and the directory the daemon mounted it at
 (`/workspaces/<n>` in the Sandbox; a folder under its run folder on macOS
-`native`). Without `--name` the name is the Branch's made valid: lowercased,
+`macos-host`). Without `--name` the name is the Branch's made valid: lowercased,
 each character outside `a-z 0-9 _ . -` replaced by `-`, cut to 63 and
 `_ . -` trimmed from the ends (`Feature/Login` mounts as `feature-login`).
 The long form adds `outcome` (`mounted`), `branch`, `commit` (the Commit it
@@ -146,13 +146,13 @@ mounted.
 | `Capacity` | the Sandbox already holds 16 Workspaces | |
 | `NotFound` | no such Sandbox, project or Branch (the daemon's lookup, [`store/bind.rs`](../../../../engine/crates/layerfs-store-service/src/store/bind.rs)) | |
 
-Run on macOS native with a debug build:
+Run on macOS (`macos-host`) with a debug build:
 
 ```console
 $ layerfs workspace mount tests main
 {"error":"InvalidInput","message":"main is the project's published line, not a Branch, and is not mounted: fork a Branch from it and mount that","fix":"layerfs branch fork shop/api <name> main"}
 $ layerfs workspace mount tests agent
-{"workspace":"tests:agent","path":"/tmp/demo/home/machine/native/run/layerfs-8a7387b2-tests/workspaces/1"}
+{"workspace":"tests:agent","path":"/tmp/demo/home/machine/macos-host/run/layerfs-8a7387b2-tests/workspaces/1"}
 ```
 
 ### workspace.exec
@@ -188,7 +188,7 @@ command identity with `HOME` its scratch folder, and waits for it; it does
 not commit ([`exec/run.rs`](../../../../control/crates/layerfs-sandbox/src/exec/run.rs)).
 A non-zero exit is not an error. The long form adds `stdout_file`,
 `stderr_file`, `cancelled`, `exec`, `stop` (`cgroup` on Linux kernels,
-`group` on macOS `native`), `stdout_bytes`, `stderr_bytes` and
+`group` on `macos-host`), `stdout_bytes`, `stderr_bytes` and
 `duration_ms`. A stream of at most 1 MiB is answered whole; a longer one
 answers its last 1 MiB and names the file that holds all of it,
 `<run folder>/exec/<workspace id>/<exec id>.stdout`, which `sandbox files`
@@ -220,7 +220,7 @@ stdout; a refusal exits 125 with nothing on stdout.
 | `Unknown` | the reply was lost: the command may have started and may still run; it is never run again | `exec` names it; `fix`: `layerfs workspace cancel <workspace> --exec <exec>` |
 | `Failed` | the runtime could not run the command, or spooling or draining failed | |
 
-Run on macOS native with a debug build:
+Run on macOS (`macos-host`) with a debug build:
 
 ```console
 $ layerfs workspace exec tests:agent 'echo hello > out.txt && uname -s'
@@ -270,7 +270,7 @@ answers `cancelled: true` and exit code 128 plus the signal.
 
 On `namespaces` each command runs in its own cgroup
 `<sandbox cgroup>/ws-<workspace id>/exec-<exec id>`, so children that left
-its process group end too; on macOS `native` it is the command's process
+its process group end too; on `macos-host` it is the command's process
 group, which a child calling `setsid` escapes. With no record, a pending
 mark is kept for 30 s and cancels a command registered with that id in that
 time ([`exec/pending.rs`](../../../../control/crates/layerfs-sandbox/src/exec/pending.rs)).
@@ -370,7 +370,7 @@ Ends a Workspace: the daemon drains its requests, detaches the mount,
 closes its overlay connection and deletes its overlay file; the Branch's
 history stays. `--discard` drops uncommitted changes instead of refusing
 `Dirty`. `--force` cancels each running command first, then one abort write
-ends the connection (also after a normal unmount stalled); on the native NFS
+ends the connection (also after a normal unmount stalled); on the `macos-host` NFS
 route one forced client unmount takes its place. The long form's `outcome`
 is `unmounted` or `force_unmounted`, with a forced unmount's `abort`,
 `detach` and `cleanup`.
@@ -435,7 +435,7 @@ when `ready`: `busy` with its `op` (`{name, phase, started_at}`: `mount` in
 read. It changes nothing, is answered while a `sandbox create` or `remove`
 holds the Sandbox, and is the read after an uncertain `exec` or `commit`.
 
-Run on macOS native with a debug build:
+Run on macOS (`macos-host`) with a debug build:
 
 ```console
 $ layerfs workspace status tests:agent

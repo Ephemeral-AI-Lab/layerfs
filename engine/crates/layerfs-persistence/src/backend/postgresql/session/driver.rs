@@ -7,7 +7,7 @@ use super::{
 };
 use crate::backend::records::BackendError;
 use crate::PostgresSelection;
-use postgres::{types::ToSql, Row, SimpleQueryMessage, Statement};
+use postgres::{types::ToSql, Row, SimpleQueryMessage, SimpleQueryRow, Statement};
 use postgres_native_tls::MakeTlsConnector;
 use std::{
     future::Future,
@@ -470,6 +470,24 @@ impl Driver {
             Self::Diagnostic(client) => client.run(client.client.batch_execute("")).is_ok(),
             Self::Closed => false,
         }
+    }
+    /// The first row `sql` answers within `timeout` (one round trip): a
+    /// held session's readiness check, never a retry. `None` when no row
+    /// answered in time.
+    pub(crate) fn first_row(&mut self, sql: &str, timeout: Duration) -> Option<SimpleQueryRow> {
+        let Self::Ordinary(client) = self else {
+            return None;
+        };
+        let query = client.client.simple_query(sql);
+        let answer = client
+            .runtime
+            .block_on(async { tokio::time::timeout(timeout, query).await });
+        let messages = answer.ok()?.ok()?;
+        client.heard.set(Instant::now());
+        messages.into_iter().find_map(|message| match message {
+            SimpleQueryMessage::Row(row) => Some(row),
+            _ => None,
+        })
     }
     /// How long the server has not answered on this connection: zero for
     /// the diagnostic driver and a closed one.

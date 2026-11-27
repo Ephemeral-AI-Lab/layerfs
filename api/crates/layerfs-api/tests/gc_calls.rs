@@ -379,7 +379,11 @@ fn plant_mount(home: &Path, sandbox: &str) {
         branch,
     )
     .named(Some("api"), Some(sandbox))
-    .placed(Some([7; 32]), Some(sandbox), Some("native"))
+    .placed(
+        Some([7; 32]),
+        Some(sandbox),
+        Some(layerfs_home::names::HOST_MACHINE),
+    )
     .owned(Some(&runtime), Some(&boot));
     layerfs_store::service::with_service(&args, |service| {
         let catalog = service.store.history();
@@ -440,7 +444,7 @@ fn ended_native_sandbox(home: &Path, project: &str) {
         platform: "mac".to_owned(),
         name,
         container: "ab".repeat(32),
-        runtime: "native",
+        runtime: "process",
         uid: layerfs_home::home::flock::euid(),
         gid: layerfs_home::home::flock::egid(),
         directory: run.display().to_string(),
@@ -459,9 +463,9 @@ fn ended_native_sandbox(home: &Path, project: &str) {
         &map(&[
             ("name", t("sb1")),
             ("project", t(project)),
-            ("machine", t("native")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
             ("id", t("sb1")),
-            ("runtime", t("native")),
+            ("runtime", t("process")),
             ("daemon", daemon.to_record()),
         ]),
     )
@@ -644,7 +648,11 @@ fn a_close_without_a_store_url_has_its_caller_end_the_mount_intents() {
             layerfs_bridge::sdk_values::unhex(&branch).unwrap(),
         )
         .named(Some("api"), Some("sb1"))
-        .placed(Some([7; 32]), Some("sb1"), Some("native"))
+        .placed(
+            Some([7; 32]),
+            Some("sb1"),
+            Some(layerfs_home::names::HOST_MACHINE),
+        )
         .owned(Some(&runtime), Some(&boot));
         layerfs_store::service::with_service(&args, |service| {
             (service.store.history().gc_register(&intent))
@@ -661,7 +669,7 @@ fn a_close_without_a_store_url_has_its_caller_end_the_mount_intents() {
         &home,
         "machine.update",
         &[
-            ("machine", t("native")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
             ("daemon", t(&daemon.display().to_string())),
         ],
     );
@@ -671,7 +679,7 @@ fn a_close_without_a_store_url_has_its_caller_end_the_mount_intents() {
             ("v", SdkValue::Int(1)),
             ("name", t("sb1")),
             ("project", t("pg/api")),
-            ("machine", t("native")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
             ("created", SdkValue::Int(1)),
             ("id", t("sb1")),
         ]),

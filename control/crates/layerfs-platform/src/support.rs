@@ -1,7 +1,7 @@
 //! The one support table (#535 §7.3, G1, G7): for each platform, host and
 //! Store kind, whether a Sandbox is supported or the fixed reason it is
 //! refused. It encodes what is allowed; phase 5a enabled PostgreSQL
-//! Sandboxes on native (macOS and Linux) and docker, and the G7 live
+//! Sandboxes on host (macOS and Linux) and docker, and the G7 live
 //! receipts (archived at af2ad92bce,
 //! `core/docs/issues/535/receipts/g7-live/`) enabled them on the
 //! VM platforms; `control/SUPPORT.json` (rendered by [`support_json`], compared by a
@@ -61,7 +61,7 @@ pub struct Supports {
     pub reason: Option<&'static str>,
     /// Whether the machine has a worker log to read (layerfs-project#178):
     /// its calls go to a worker and the table refuses it nothing on this
-    /// host, so it is a worker this build starts. False on every `native`:
+    /// host, so it is a worker this build starts. False on every `host`:
     /// its calls run in the caller's process, and on Windows, where they
     /// would go to a WSL2 worker, the table refuses it.
     pub log: bool,
@@ -82,18 +82,18 @@ fn host_refusal(platform: Platform, host: HostOs) -> Option<&'static str> {
         Platform::Docker => "docker through WSL2 is not designed yet",
         Platform::AppleContainer => "apple-container runs on macOS hosts only",
         Platform::Lima => "lima runs on macOS hosts only",
-        Platform::Native => OTHER_HOST,
+        Platform::Host => OTHER_HOST,
     })
 }
 
 /// Why a PostgreSQL Sandbox does not run on `platform` (on a host it is
 /// on, with a backend), or `None` where it does. Every platform with a
-/// backend runs them: native (Linux namespaces with no bind; #535 phase
+/// backend runs them: host (Linux namespaces with no bind; #535 phase
 /// 5a), docker, and lima and apple-container through their `reach`
 /// routes (`platforms/*/adapter.rs`; G7 live receipts).
 fn postgresql_refusal(platform: Platform, host: HostOs) -> Option<&'static str> {
     match (platform, host) {
-        (Platform::Native, HostOs::Windows | HostOs::Other) => Some(NO_BACKEND),
+        (Platform::Host, HostOs::Windows | HostOs::Other) => Some(NO_BACKEND),
         _ => None,
     }
 }

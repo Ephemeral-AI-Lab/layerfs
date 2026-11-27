@@ -61,6 +61,9 @@ fn refused_unread(change: &Arg<Change<'_>>) -> bool {
         Ok(Change::Rm { path, .. }) => *path == "/",
         Ok(Change::Cp { from, to } | Change::Mv { from, to }) => overlap(from, to).is_err(),
         Ok(Change::Write { .. } | Change::Chmod { .. }) => false,
+        // A listed streamed write is refused before it reads (it has no
+        // streamed input); streamed changes are never planned.
+        Ok(Change::Streamed { .. }) => true,
     }
 }
 
@@ -68,6 +71,7 @@ fn refused_unread(change: &Arg<Change<'_>>) -> bool {
 fn paths<'a>(change: &'a Change<'_>) -> [Option<&'a str>; 2] {
     match change {
         Change::Write { path, .. }
+        | Change::Streamed { path, .. }
         | Change::Edit { path, .. }
         | Change::Mkdir { path, .. }
         | Change::Chmod { path, .. }

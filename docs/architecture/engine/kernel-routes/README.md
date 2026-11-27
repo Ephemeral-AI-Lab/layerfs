@@ -48,8 +48,8 @@ One engine mount of a Workspace is served by exactly one route. The daemon
 chooses it, attaches it and tears it down. The route per platform is the
 `kernel` field of [`control/SUPPORT.json`](../../../../control/SUPPORT.json),
 generated from [`support.rs`](../../../../control/crates/layerfs-platform/src/support.rs):
-`"nfs"` for the macOS native platform only; `"fuse"` for macOS docker,
-apple-container and lima and for Linux native and docker; `null` (unsupported)
+`"nfs"` for the macOS `host` platform only; `"fuse"` for macOS docker,
+apple-container and lima and for Linux `host` and docker; `null` (unsupported)
 for every other row, Windows included
 ([Control: Machines](../../control/machines/README.md)).
 

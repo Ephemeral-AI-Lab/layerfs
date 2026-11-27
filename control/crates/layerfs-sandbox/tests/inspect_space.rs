@@ -63,7 +63,7 @@ fn daemon(directory: &Path) -> DaemonRecord {
         platform: "linux".to_owned(),
         name: "layerfs-0a1b2c3d-s".to_owned(),
         container: "ab".repeat(32),
-        runtime: "native",
+        runtime: "process",
         uid: home::flock::euid(),
         gid: home::flock::egid(),
         directory: directory.display().to_string(),
@@ -86,7 +86,7 @@ fn sandbox(home: &Path, name: &str, machine: &str, run: Option<&Path>) {
         ("project", t("shop/api")),
         ("machine", t(machine)),
         ("id", t(name)),
-        ("runtime", t("native")),
+        ("runtime", t("process")),
     ];
     fields.extend(run.map(|run| ("daemon", daemon(run).to_record())));
     let record = SdkValue::Map(
@@ -139,7 +139,7 @@ fn blocks(path: &Path, skip: &[&str], seen: &mut HashSet<(u64, u64)>) -> u64 {
 }
 
 fn native() -> MachineName {
-    MachineName::parse("native").unwrap()
+    MachineName::parse(layerfs_home::names::HOST_MACHINE).unwrap()
 }
 
 /// Every file under `root` with its length and mode.
@@ -184,8 +184,8 @@ fn machine_space_counts_each_part_once_and_skips_mounts_and_private_roots() {
     std::fs::create_dir_all(&run).unwrap();
 
     // two Stores here (one with files nobody may open), one elsewhere
-    store_record(&home, "shop", "native");
-    store_record(&home, "empty", "native");
+    store_record(&home, "shop", layerfs_home::names::HOST_MACHINE);
+    store_record(&home, "empty", layerfs_home::names::HOST_MACHINE);
     store_record(&home, "far", "box");
     let shop = paths::store_file(&home, "shop");
     write(&shop, 40_960);
@@ -213,12 +213,12 @@ fn machine_space_counts_each_part_once_and_skips_mounts_and_private_roots() {
     write(&mount.join("never"), 1 << 20);
     std::fs::set_permissions(&mount, std::fs::Permissions::from_mode(0o000)).unwrap();
     write(&run.join("layerfs-0a1b2c3d-up.root").join("never"), 1 << 20);
-    sandbox(&home, "up", "native", Some(&up));
+    sandbox(&home, "up", layerfs_home::names::HOST_MACHINE, Some(&up));
     // Sandbox `gone`: recorded, its run folder removed; `far` elsewhere
     sandbox(
         &home,
         "gone",
-        "native",
+        layerfs_home::names::HOST_MACHINE,
         Some(&run.join("layerfs-0a1b2c3d-gone")),
     );
     sandbox(&home, "far", "box", Some(&up));
@@ -275,7 +275,7 @@ fn machine_space_counts_each_part_once_and_skips_mounts_and_private_roots() {
             "complete"
         ]
     );
-    assert_eq!(space.get_text("platform"), Some("native"));
+    assert_eq!(space.get_text("platform"), Some("host"));
     assert_eq!(space.get("complete"), Some(&SdkValue::Bool(true)));
     assert_eq!(int(&space, "unreadable"), 0, "{space:?}");
 
@@ -356,7 +356,7 @@ fn a_folder_that_cannot_be_listed_is_counted_as_unreadable() {
     let closed = up.join("tmp").join("closed");
     write(&closed.join("hidden"), 4_096);
     std::fs::set_permissions(&closed, std::fs::Permissions::from_mode(0o000)).unwrap();
-    sandbox(&home, "up", "native", Some(&up));
+    sandbox(&home, "up", layerfs_home::names::HOST_MACHINE, Some(&up));
 
     let space = inspect::machine_space(&home, &native()).unwrap();
     std::fs::set_permissions(&closed, std::fs::Permissions::from_mode(0o755)).unwrap();
@@ -377,7 +377,12 @@ fn a_request_with_a_bad_store_or_sandbox_name_is_refused() {
         SdkValue::map([("sandboxes", SdkValue::List(vec![t("a/b")]))]),
         SdkValue::map([("stores", t("shop"))]),
     ] {
-        let asked = inspect::ask(&home, "native", "machine_space", request);
+        let asked = inspect::ask(
+            &home,
+            layerfs_home::names::HOST_MACHINE,
+            "machine_space",
+            request,
+        );
         assert_eq!(refused(asked), "InvalidInput");
     }
     std::fs::remove_dir_all(&home).unwrap();

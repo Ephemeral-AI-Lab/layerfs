@@ -52,9 +52,9 @@ fn an_unreadable_machine_record_blocks_only_what_is_on_it() {
     );
     assert!(listed
         .iter()
-        .any(|item| item.get_text("machine") == Some("native")));
+        .any(|item| item.get_text("machine") == Some(layerfs_api::names::HOST_MACHINE)));
 
-    let (code, native) = call(&home, &["machine", "get", "native"]);
+    let (code, native) = call(&home, &["machine", "get", layerfs_api::names::HOST_MACHINE]);
     assert_eq!((code, native.get_text("state")), (Some(0), Some("ready")));
 
     let (code, refused) = call(&home, &["machine", "get", "docker"]);

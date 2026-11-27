@@ -30,7 +30,7 @@ const CONCEPTS: &[&str] = &[
     "Commit      a saved tree; its id, or a prefix of 8 or more characters",
     "Sandbox     an isolated place to run commands for one project",
     "Workspace   a Branch mounted in a Sandbox; written <sandbox>:<branch>",
-    "Machine     where Stores and Sandboxes live: native, docker, lima, apple-container",
+    "Machine     where Stores and Sandboxes live: macos-host or linux-host, docker, lima, apple-container",
     "Store       the database that holds projects: sqlite or postgresql",
 ];
 

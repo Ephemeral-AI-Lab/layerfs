@@ -95,6 +95,21 @@ pub struct MachineRecord {
 }
 
 impl MachineRecord {
+    /// Checks recorded host power before a local Store or Sandbox is admitted.
+    pub fn admit_host(home: &Path, name: &str) -> Result<()> {
+        if name == layerfs_home::names::HOST_MACHINE
+            && !layerfs_home::home::guest::is_root(home)
+            && Self::read(home, name)?
+                .is_some_and(|record| record.recorded_state() == Some("stopped"))
+        {
+            return Err(layerfs_home::outcome::with_fix(
+                refused("Unavailable", format!("host machine {name} is stopped")),
+                format!("layerfs machine start {name}"),
+            ));
+        }
+        Ok(())
+    }
+
     /// Machine `name`'s record `value`, as read.
     pub fn from_record(name: &str, value: SdkValue) -> Self {
         Self {
@@ -122,15 +137,16 @@ impl MachineRecord {
     /// name (`vm_name`), recorded like every created machine's
     /// (layerfs-project#180). `native`'s platform has no provider.
     pub fn built_in(name: &str, home_id: &str) -> Self {
+        let platform = layerfs_home::names::built_in_platform(name).unwrap_or(name);
         let record = Self::from_record(
             name,
             SdkValue::map([
                 ("name", SdkValue::text(name)),
-                ("platform", SdkValue::text(name)),
+                ("platform", SdkValue::text(platform)),
                 ("created", SdkValue::Int(home::now_ms())),
             ]),
         );
-        match crate::local::provided(name) {
+        match crate::local::provided(platform) {
             false => record,
             true => record.with("vm_name", SdkValue::text(vm_name(home_id, name))),
         }

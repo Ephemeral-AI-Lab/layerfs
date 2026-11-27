@@ -74,7 +74,7 @@ fn an_unreadable_record_is_a_broken_node_and_its_siblings_are_listed() {
         &SdkValue::map([
             ("name", t("cache")),
             ("kind", t("sqlite")),
-            ("machine", t("native")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
             ("binding", SdkValue::Bytes(vec![1; 16])),
             ("cursor", SdkValue::Bytes(vec![7; 32])),
         ]),
@@ -111,7 +111,7 @@ fn an_unreadable_record_is_a_broken_node_and_its_siblings_are_listed() {
     let lab = named(machines, "machine", "lab").unwrap_or_else(|| panic!("{tree:?}"));
     assert_eq!(lab.get_text("state"), Some("broken"));
     assert_eq!(lab.get_text("reason"), Some("failed"));
-    let native = named(machines, "machine", "native").unwrap();
+    let native = named(machines, "machine", layerfs_home::names::HOST_MACHINE).unwrap();
     assert!(
         named(list(native, "stores"), "store", "cache").is_some(),
         "{tree:?}"
@@ -127,7 +127,7 @@ fn an_unreadable_record_is_a_broken_node_and_its_siblings_are_listed() {
     let checked = list(root, "machines");
     // the built-in `docker` machine's record is written by the first call
     // only in a build with the machine calls (`ensure_built_ins`)
-    let mut expected = vec!["lab", "native"];
+    let mut expected = vec!["lab", layerfs_home::names::HOST_MACHINE];
     if cfg!(feature = "machine") {
         expected.push("docker");
     }

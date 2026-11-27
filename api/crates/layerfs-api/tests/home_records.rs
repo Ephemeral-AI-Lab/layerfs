@@ -120,10 +120,13 @@ fn first_calls_on_a_fresh_home_from_several_threads() {
         let record = read_record(&paths::store_record(&home, &format!("s{n}")))
             .unwrap()
             .expect("each Store's record");
-        assert_eq!(record.get_text("machine"), Some("native"));
+        assert_eq!(
+            record.get_text("machine"),
+            Some(layerfs_home::names::HOST_MACHINE)
+        );
     }
     if cfg!(feature = "machine") {
-        for machine in ["native", "docker"] {
+        for machine in [layerfs_home::names::HOST_MACHINE, "docker"] {
             assert!(read_record(&paths::machine_record(&home, machine))
                 .unwrap()
                 .is_some());

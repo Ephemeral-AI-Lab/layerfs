@@ -80,13 +80,14 @@ pub(super) fn run(probe: &Probe<'_>, node: &mut Node) {
             }
             _ => match record.store_ref() {
                 Ok(StoreRef::Postgres { .. }) => {
-                    operation(probe.home, &record, None, &mut checks);
+                    operation(&record, None, &mut checks);
                     postgresql(probe, &record, &identity, &mut checks)
                 }
                 Ok(StoreRef::Sqlite { .. }) => sqlite(probe, &record, &identity, &mut checks),
-                Err(_) => operation(probe.home, &record, None, &mut checks),
+                Err(_) => operation(&record, None, &mut checks),
             },
         }
+        leases(probe, name, &mut checks);
     }
     checks.fill(node, probe.checks, probe.budget.expired());
     if node.gate.is_none() {
@@ -184,12 +185,7 @@ fn resolve(home: &Path, name: &str, checks: &mut Checks) -> Option<(StoreRecord,
 /// its file as its machine read it (`report::compact_status`, null when
 /// there is none). A run live there passes, even when the home's record
 /// holds it unresolved after a lost reply.
-fn operation(
-    home: &Path,
-    record: &StoreRecord,
-    compaction: Option<&SdkValue>,
-    checks: &mut Checks,
-) {
+fn operation(record: &StoreRecord, compaction: Option<&SdkValue>, checks: &mut Checks) {
     let name = record.name();
     let there = compaction.and_then(|run| Some((run.get_text("state")?, run.get_text("phase")?)));
     match (record.op(), there) {
@@ -235,34 +231,81 @@ fn operation(
         }
         _ => checks.pass(OPERATION, "no operation on it is unfinished"),
     }
-    match layerfs_store::lease::read_holders(home, name) {
-        Ok((_, stale)) if !stale.is_empty() => {
-            let pids: Vec<String> = stale.iter().map(u32::to_string).collect();
-            checks.notice(
-                OPERATION,
-                format!(
-                    "{} lease(s) of processes that are gone remain (pids {}); the next call ignores them",
-                    stale.len(),
-                    pids.join(", ")
-                ),
-            );
-            let files: Vec<String> = stale
-                .iter()
-                .map(|pid| super::scan::shell(&paths::lease_dir(home, name).join(pid.to_string())))
-                .collect();
-            checks.fix(OPERATION, format!("rm {}", files.join(" ")));
-            let stale = stale.iter().map(|pid| SdkValue::Int(i64::from(*pid)));
-            checks.evidence(
-                OPERATION,
-                SdkValue::map([("stale_pids", SdkValue::List(stale.collect()))]),
-            );
+}
+
+fn leases(probe: &Probe<'_>, name: &str, checks: &mut Checks) {
+    match layerfs_store::lease::read_holders(probe.home, name) {
+        Ok((live, stale)) => {
+            if !stale.is_empty() {
+                checks.notice(
+                    OPERATION,
+                    format!(
+                        "{} stale lease(s) remain; the next Store operation that claims or checks leases removes them under the Store lock",
+                        stale.len(),
+                    ),
+                );
+                let stale = stale
+                    .iter()
+                    .take(20)
+                    .map(|pid| SdkValue::Int(i64::from(*pid)));
+                checks.evidence(
+                    OPERATION,
+                    SdkValue::map([("stale_pids", SdkValue::List(stale.collect()))]),
+                );
+            }
+            if !live.is_empty() {
+                live_holders(probe, name, &live, checks);
+            }
         }
-        Ok(_) => {}
         Err(error) => checks.unknown(
             OPERATION,
             format!("its leases cannot be read: {}", error.message),
         ),
     }
+}
+
+fn live_holders(probe: &Probe<'_>, name: &str, live: &[u32], checks: &mut Checks) {
+    #[cfg(all(feature = "machine", any(target_os = "macos", target_os = "linux")))]
+    let worker = super::host_worker::holder(probe.home, name, live, probe.budget);
+    #[cfg(not(all(feature = "machine", any(target_os = "macos", target_os = "linux"))))]
+    let worker = {
+        let _ = (probe, name);
+        None
+    };
+    let pids = worker
+        .into_iter()
+        .chain(live.iter().copied().filter(|pid| Some(*pid) != worker));
+    let holders = pids.take(20).map(|pid| {
+        SdkValue::map([
+            ("pid", SdkValue::Int(i64::from(pid))),
+            (
+                "kind",
+                SdkValue::text(if Some(pid) == worker {
+                    "host_worker"
+                } else {
+                    "process"
+                }),
+            ),
+        ])
+    });
+    let message = match worker {
+        Some(pid) => format!(
+            "{} live Store lease(s), including host worker {pid}",
+            live.len()
+        ),
+        None => format!("{} live Store lease(s)", live.len()),
+    };
+    checks.notice(OPERATION, message);
+    checks.evidence(
+        OPERATION,
+        SdkValue::map([
+            ("holders", SdkValue::List(holders.collect())),
+            (
+                "holder_count",
+                SdkValue::Int(i64::try_from(live.len()).unwrap_or(i64::MAX)),
+            ),
+        ]),
+    );
 }
 
 /// A sqlite Store reached where it lives: on this computer for `native`,
@@ -285,7 +328,7 @@ fn sqlite(probe: &Probe<'_>, record: &StoreRecord, identity: &Identity, checks: 
     let found = match found {
         Ok(found) => found,
         Err(error) => {
-            operation(probe.home, record, None, checks);
+            operation(record, None, checks);
             let message = format!("machine {machine} did not answer: {}", error.message);
             let seen = SdkValue::map([
                 ("machine", SdkValue::text(machine.as_str())),
@@ -305,7 +348,7 @@ fn sqlite(probe: &Probe<'_>, record: &StoreRecord, identity: &Identity, checks: 
             return;
         }
     };
-    operation(probe.home, record, found.get("compaction"), checks);
+    operation(record, found.get("compaction"), checks);
     let text = |key: &str| found.get_text(key).map(str::to_owned);
     if found.get("found") != Some(&SdkValue::Bool(true)) {
         // no in-place restore: `backup restore` protects the recorded

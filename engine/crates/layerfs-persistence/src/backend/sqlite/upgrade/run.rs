@@ -111,6 +111,10 @@ pub(crate) fn upgrade(
     request: &UpgradeRequest<'_>,
     phase: &mut dyn FnMut(&'static str),
 ) -> Result<UpgradeReport, UpgradeError> {
+    // The exclusive connection keeps its WAL index in heap memory and never
+    // opens a `-shm`; one already here (a read-only session cannot remove
+    // its sidecars when it closes) is not left by this run.
+    let shm_before = with_suffix(path, "-shm").exists();
     let connection = open(path)?;
     let application_id = first_read(&connection)?;
     let lane = match Writer::try_acquire(path) {
@@ -184,8 +188,8 @@ pub(crate) fn upgrade(
             if lane.release().is_err() {
                 warnings.push("releasing the Writer lane failed".to_owned());
             }
-            for suffix in ["-wal", "-shm"] {
-                if with_suffix(path, suffix).exists() {
+            for (suffix, before) in [("-wal", false), ("-shm", shm_before)] {
+                if !before && with_suffix(path, suffix).exists() {
                     warnings.push(format!("a {suffix} file is left beside the Store"));
                 }
             }

@@ -82,9 +82,16 @@ fn reaches_are_kept_beside_the_live_read_and_merged() {
     let lab = seen::read(&home, "pg").of("lab").unwrap();
     assert_eq!(lab.get("latency_ms"), Some(&SdkValue::Null));
     // `native` is a machine like any other, apart from this computer
-    seen::record(&home, "pg", Some("native"), &Reach::reached());
+    seen::record(
+        &home,
+        "pg",
+        Some(layerfs_home::names::HOST_MACHINE),
+        &Reach::reached(),
+    );
     let got = seen::read(&home, "pg");
-    let native = got.of("native").expect("native's reach");
+    let native = got
+        .of(layerfs_home::names::HOST_MACHINE)
+        .expect("native's reach");
     assert_eq!(native.get("ok"), Some(&SdkValue::Bool(true)));
     assert_eq!(got.here.unwrap().get("ok"), Some(&SdkValue::Bool(false)));
     std::fs::remove_dir_all(home).unwrap();

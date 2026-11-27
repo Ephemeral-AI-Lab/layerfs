@@ -22,7 +22,7 @@ Commit, merge, and publish to `main`.
 - **One home, one setting.** Every record lives under `LAYERFS_HOME`
   (default `~/.layerfs`). The 1.1.0 platform settings are gone. See
   [the home](home.md).
-- **Machines and Stores.** Compute is machines: `native` and `docker` are
+- **Machines and Stores.** Compute is machines: the host machine (`macos-host` or `linux-host`) and `docker` are
   built in; VM kinds (`apple-container`, `lima`) are created by name.
   Firecracker, Microsandbox and SSH machines were removed in 2.0. Storage is
   Stores: a sqlite Store is one file on one machine, a postgresql Store is a

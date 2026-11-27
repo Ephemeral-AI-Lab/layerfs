@@ -82,6 +82,9 @@ pub(super) fn scan(home: &Path, findings: &mut Findings) -> Result<Scanned> {
         let path = paths::machine_record(home, &name);
         if path.exists() {
             scanned.machine_names.insert(name.clone());
+        } else if name == "native" {
+            let (message, fix) = leftover(&paths::machine_dir(home, &name));
+            findings.warning(entity, message, fix);
         }
         if let Some(value) = record(&path, entity, true, findings) {
             scanned
@@ -103,6 +106,25 @@ pub(super) fn scan(home: &Path, findings: &mut Findings) -> Result<Scanned> {
         record(&path, entity, true, findings);
     }
     Ok(scanned)
+}
+
+/// The run root before #819 R, which no call reads any more. Its removal
+/// is offered only when nothing is mounted under it: `rm -rf` would walk
+/// into a Workspace an older daemon still serves and delete its files.
+fn leftover(dir: &Path) -> (String, String) {
+    let left = format!(
+        "{} is left by an earlier development build; nothing reads it",
+        dir.display()
+    );
+    match layerfs_sandbox_backend::shared::mounts_under(dir) {
+        Ok(mounts) if mounts.is_empty() => (left, format!("rm -rf {}", shell(dir))),
+        Ok(mounts) => {
+            let words: Vec<String> = mounts.iter().map(|mount| shell(mount)).collect();
+            let message = format!("{left}; something is still mounted under it: unmount it (or stop the daemon that serves it), then run doctor again");
+            (message, format!("umount {}", words.join(" ")))
+        }
+        Err(error) => (format!("{left}; the mount table could not be read ({error}): remove it once nothing is mounted under it"), String::new()),
+    }
 }
 
 /// One Store's folder: its record and its projects'.

@@ -66,12 +66,37 @@ There is no `postgresql` cargo feature: every build serves both Store kinds.
 | Call | What it answers | Source |
 | --- | --- | --- |
 | `create` | A new empty Store with Init's acquisition tables; projects reach it only by Init, nothing converts a SQLite Store | [`store/postgresql.rs`](../../../../engine/crates/layerfs-persistence/src/store/postgresql.rs) |
-| `Full` check (default) | Init, Store connect and the host's Store service; the only check that finds a column changed by hand | [`schema.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/schema.rs) |
+| `Full` check (default) | Init, Store connect, the host's Store service and the CLI's one-shot file reads; the only check that finds a column changed by hand | [`schema.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/schema.rs) |
 | `Light` check | A Sandbox daemon's writer, Workspace and control readers, and `attach_read_only`; a hand-changed column fails the statement that uses it instead | [`bootstrap.rs`](../../../../engine/crates/layerfs-store-service/src/bootstrap.rs), [`owner.rs`](../../../../engine/crates/layerfs-daemon/src/application/owner.rs) |
 | `binding(selection)` | The binding key a schema records, read in one read-only session, so a home that did not create it can open it | [`store/postgresql.rs`](../../../../engine/crates/layerfs-persistence/src/store/postgresql.rs) |
 | `attach_read_only(selection)` | One read-only session under the recorded binding, returned for the caller to compare with its own | same |
 | `postgresql_access(url, schema)` | Server version, one round trip's latency, `current_user`, whether the schema exists, and each privilege a Sandbox's reads and writes need that the role lacks: the schema's `USAGE` and `CREATE`, the database's `TEMP` (merges stage in temporary tables), each table's `SELECT`/`INSERT`/`UPDATE`/`DELETE` and each sequence's `USAGE`. What only a compaction needs (the database's `CREATE`, `pg_read_all_stats`) is not asked: `compaction_missing` checks it when a compaction starts | [`access.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/access.rs) |
 | `postgresql_status(url, schemas)` | Server version, one round trip's latency and each named schema's size | [`status.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/status.rs) |
+
+Each direct CLI `file read`, `file stat` and `file list` holds the Store's lease
+while one read-only PostgreSQL session checks the live schema and binding and
+serves the entire query. Each invocation performs the Full check with the
+configured TLS mode. It closes the session before releasing the lease.
+
+The host worker's route for the same reads (#819 P-B) keeps such sessions
+open between calls: each is opened once with the Full check, then lent to
+one call at a time. Before a held session serves another call,
+`PostgresStorage::current` runs the Light check's one statement on it,
+answered within `READER_CHECK_TIMEOUT` (5 s, counted in
+`SqlWork::round_trips`), and compares what it reads with the open: the
+schema and format version, the recorded binding and the catalog id derived
+from it, `catalog_incarnation` and the policy. A quarantined session, a
+closed or silent connection, a late answer, a compaction swap, an upgrade,
+or a schema dropped and initialized again (even at the same incarnation,
+for another binding) quarantines it. The control layer's pool then closes
+the Store's other idle sessions and opens one new session for the call, at
+most one check per call: a route decision taken before any byte of the
+call's operation is sent, as the mount reader's `usable()` above is, so
+nothing is retried. The control layer's pool owns the sessions
+([PostgreSQL credentials](../../control/stores-and-projects/sqlite-and-postgresql.md#credentials)).
+The in-process Store service still owns writable sessions and the Light
+checks for its control and pooled readers. The Sandbox reach and held-head
+paths keep their existing Light sessions.
 
 `access` and `status` open one connection for the call and close it, run
 read-only queries only and never retry. An authentication or unknown
@@ -970,7 +995,10 @@ prepared before the mount, in one flight each
   - the statements of the Commit's write transaction (`commit_branch`).
 
   They go in one flight, one read transaction like the daemon's. Reads sent
-  as autocommit statements are not in it. One round trip per SDK open; a
+  as autocommit statements are not in it. The host worker's held writable
+  service (#819 P-B writes) prepares them once, at its open; the read-only
+  service (`StoreService::open_postgres_read_only`, #819 P-A/P-B reads)
+  sends no writes and prepares none. One round trip per SDK open; a
   first create then saves 16 round trips (`write.new_file` cold 96 → 80).
   A reopened writer prepares them again with the mount statements, in one
   flight (step 5 below).

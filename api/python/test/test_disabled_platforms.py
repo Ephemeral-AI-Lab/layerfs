@@ -28,7 +28,7 @@ class DisabledPlatforms(unittest.TestCase):
                 listener.setblocking(False)
                 home = Path(folder)
                 data = json.loads(
-                    FIXTURE.replace("$platform", platform).replace("$address", f"127.0.0.1:{listener.getsockname()[1]}")
+                    FIXTURE.replace("$host", "macos-host" if sys.platform == "darwin" else "linux-host").replace("$platform", platform).replace("$address", f"127.0.0.1:{listener.getsockname()[1]}")
                 )
                 for file, value in data["files"].items():
                     path = home / file

@@ -56,6 +56,8 @@ pub use layerfs_control::machine::running;
 /// The worker protocol (`layerfs-machine`) and its server (`layerfs-control`),
 /// for the front ends and their tests.
 pub mod worker {
+    #[cfg(all(feature = "machine", any(target_os = "macos", target_os = "linux")))]
+    pub use layerfs_control::worker_server::serve_host;
     pub use layerfs_control::worker_server::{prepare_network, serve, serve_with_incarnation};
     pub use layerfs_machine::worker::*;
 }
@@ -150,6 +152,28 @@ pub fn call_scoped(
     client: Client,
 ) -> Outcome {
     machinery::call_scoped(families(), home, scope, name, args, events, client)
+}
+
+/// Runs the CLI executable's checked call on its selected Store route.
+#[doc(hidden)]
+pub fn call_cli(
+    scope: Option<&Scope>,
+    name: &str,
+    args: SdkValue,
+    input: Option<CliInput>,
+    events: &mut dyn FnMut(SdkValue),
+) -> Outcome {
+    machinery::call_cli(families(), scope, name, args, input, events)
+}
+
+/// A write input the CLI has not read yet.
+#[doc(hidden)]
+pub use layerfs_store::host_write::{Input as CliInput, InputKind as CliInputKind};
+
+/// Whether the CLI defers the input of write `name` to `project`.
+#[doc(hidden)]
+pub fn cli_defers(name: &str, project: &str) -> bool {
+    machinery::cli_defers(name, project)
 }
 
 /// [`call`] with JSON text on both sides, for the Node and Python bindings.

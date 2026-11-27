@@ -21,18 +21,30 @@ thread_local! {
     static ID: RefCell<Option<String>> = const { RefCell::new(None) };
 }
 
-/// Marks `root` as a worker's root: opening it never writes it.
+/// Marks `root` as a worker's root: opening it never writes it. Kept as
+/// given and, when it resolves, as its canonical path too.
 pub fn serve_root(root: &Path) {
     let mut roots = ROOTS.lock().unwrap_or_else(|e| e.into_inner());
-    if !roots.iter().any(|r| r == root) {
-        roots.push(root.to_owned());
+    for root in [Some(root.to_owned()), std::fs::canonicalize(root).ok()]
+        .into_iter()
+        .flatten()
+    {
+        if !roots.contains(&root) {
+            roots.push(root);
+        }
     }
 }
 
-/// Whether `path` is a root a worker of this process serves.
+/// Whether `path` is a root a worker of this process serves: as given, or
+/// by its canonical path (another spelling of the same folder). A process
+/// that serves no root answers without touching the filesystem.
 pub fn is_root(path: &Path) -> bool {
     let roots = ROOTS.lock().unwrap_or_else(|e| e.into_inner());
+    if roots.is_empty() {
+        return false;
+    }
     roots.iter().any(|r| r == path)
+        || std::fs::canonicalize(path).is_ok_and(|path| roots.contains(&path))
 }
 
 /// Notes `id` as the home this thread opened.

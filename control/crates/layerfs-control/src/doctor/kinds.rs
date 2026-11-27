@@ -28,7 +28,7 @@ const HOME: &[CheckId] = &[
     CheckId::own("home.layout"),
     CheckId::own("home.records"),
     CheckId::own("home.bundle"),
-    CheckId::own("home.native_daemon"),
+    CheckId::own("home.host_daemon"),
     CheckId::own("home.artifacts"),
     CheckId::own("home.capacity"),
 ];
@@ -44,6 +44,7 @@ const MACHINE: &[CheckId] = &[
     CheckId::own("machine.worker.auth"),
     CheckId::own("machine.worker.compatibility"),
     CheckId::own("machine.worker.ping"),
+    CheckId::own("machine.worker.retained"),
     CheckId::own("machine.capacity"),
     CheckId::own("machine.network"),
 ];

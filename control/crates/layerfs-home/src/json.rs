@@ -9,6 +9,9 @@
 use layerfs_bridge::control::SdkValue;
 use std::fmt::Write as _;
 
+mod stream;
+pub use stream::{read_value, read_value_within, Limits};
+
 /// Why JSON text could not be read.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct JsonError(pub String);

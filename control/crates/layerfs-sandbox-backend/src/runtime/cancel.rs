@@ -10,7 +10,7 @@
 //!   its Workspace's, when that is empty too): the run that waited for the
 //!   command removes it only if nothing else of it was left when the
 //!   command ended, and a signalled child may end after that.
-//! - `Group { pgid, leader }` (`native`): the command's own process
+//! - `Group { pgid, leader }` (`process`): the command's own process
 //!   group, known by its leader (id, start time, boot) against id reuse.
 //!   Cancel sends `SIGTERM` to the group, waits up to the grace, then
 //!   `SIGKILL`. A child that calls `setsid` itself escapes it.
@@ -33,7 +33,7 @@ pub enum Stop {
         /// The cgroup's directory on this kernel.
         path: PathBuf,
     },
-    /// Its own process group (`native`).
+    /// Its own process group (`process`).
     Group {
         /// The group's id: its leader's process id.
         pgid: u32,
@@ -108,7 +108,7 @@ pub fn cancel(stop: &Stop, grace: Duration) -> io::Result<Cancelled> {
             "a cgroup stop handle is acted on by the Linux kernel that holds it",
         )),
         Stop::Group { pgid, leader } => {
-            ended(&crate::backend::native::groups::Led(*pgid, *leader), grace)
+            ended(&crate::backend::process::groups::Led(*pgid, *leader), grace)
         }
     }
 }
@@ -127,7 +127,7 @@ pub fn kill(stop: &Stop) -> io::Result<Cancelled> {
             "a cgroup stop handle is acted on by the Linux kernel that holds it",
         )),
         Stop::Group { pgid, leader } => {
-            killed(&crate::backend::native::groups::Led(*pgid, *leader))
+            killed(&crate::backend::process::groups::Led(*pgid, *leader))
         }
     }
 }

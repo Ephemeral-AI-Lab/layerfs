@@ -8,7 +8,7 @@ use standin::Scratch;
 #[test]
 fn native_force_stop_never_stops_the_host() {
     let scratch = Scratch::new("force-native");
-    machine::stop_force(&scratch.spec(Platform::Native)).unwrap();
+    machine::stop_force(&scratch.spec(Platform::Host)).unwrap();
     assert!(scratch.log().is_empty());
 }
 

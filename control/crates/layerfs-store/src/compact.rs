@@ -23,6 +23,7 @@
 //! this process keeps the Store's lease and its marker. Decision D5 in
 //! `core/docs/issues/project-41/gc-42-decisions.md` records the change from
 //! the earlier local-only refusal.
+use crate::host_maintenance::{self, Worker};
 use crate::identity;
 use crate::identity::Kind;
 use crate::intent;
@@ -31,7 +32,7 @@ use crate::open::close;
 use crate::open_args::OpenArgs;
 use crate::place::{self, Executor};
 use crate::postgresql;
-use crate::record::{StoreRecord, StoreRef};
+use crate::record::{self, StoreRecord, StoreRef};
 use crate::sqlite::family::progress;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_history::GcScopeKind;
@@ -142,21 +143,27 @@ pub fn compact(home: &Path, events: &mut Events<'_>, store: &str) -> Outcome {
     let home = home.to_path_buf();
     // A live operation is `Busy`, a dead owner's record `Unresolved`; the
     // refusal is a bounded metric label and never changes what is returned.
-    let (_lease, record) = match lease::claim(&home, store) {
-        Ok(claimed) => claimed,
-        Err(refusal) => {
-            note_refusal(&refusal);
-            return Err(refusal);
-        }
+    let (_lease, record, fenced) = prepare_compaction(&home, store).inspect_err(note_refusal)?;
+    let planned = match record.store_ref()? {
+        StoreRef::Postgres { .. } => return compact_postgresql(&record, &home, events, store),
+        reference @ StoreRef::Sqlite { .. } => place::plan(&home, reference),
     };
-    let store_ref = record.store_ref()?.clone();
-    if matches!(store_ref, StoreRef::Postgres { .. }) {
-        return compact_postgresql(&record, &home, events, store);
+    if planned.is_err() {
+        if let Some((op, previous)) = &fenced {
+            let _ = intent::replace(&home, store, op.id(), previous.as_ref());
+        }
     }
-    let executor = place::plan(&home, &store_ref)?;
+    let executor = planned?;
     // The marker is this home's, whichever machine runs the rebuild: it is
     // written here, beside the caller's record, never under a worker's root.
-    let mut marker = Marker::begin(&home, store);
+    let mut marker = match fenced {
+        Some((op, _)) => Marker {
+            home: &home,
+            store,
+            op: Some(op),
+        },
+        None => Marker::begin(&home, store),
+    };
     let (outcome, left) = match executor {
         Executor::Local => {
             let outcome = compact_sqlite(
@@ -199,6 +206,68 @@ pub fn compact(home: &Path, events: &mut Events<'_>, store: &str) -> Outcome {
     };
     marker.end(left, &outcome);
     outcome
+}
+
+type CompactFence = (Op, Option<Op>);
+
+/// Pin the record and fence local cache admission in the same transaction.
+/// A live host cache releases its exact lease behind the exclusive close phase.
+fn prepare_compaction(
+    home: &Path,
+    name: &str,
+) -> Result<(lease::Lease, StoreRecord, Option<CompactFence>), SdkRefusal> {
+    host_maintenance::recover(home, name, intent::COMPACT, None)?;
+    let initial = StoreRecord::of(home, name)?;
+    let worker = host_maintenance::observe(home, &initial);
+    let (lease, record, op, previous, close_worker) = {
+        let _store = record::lock(home, name)?;
+        let record = StoreRecord::of(home, name)?;
+        record.admit_machine(home)?;
+        record.unblocked()?;
+        if !host_maintenance::local(home, &record)? {
+            return Ok((lease::claim_unblocked_locked(home, name)?, record, None));
+        }
+        let previous = record.op();
+        if previous
+            .as_ref()
+            .is_some_and(|op| op.standing() == layerfs_home::op::Standing::Running)
+        {
+            record.unheld()?;
+        }
+        let verified = Worker::holder(worker.as_ref(), home, name, &record)?;
+        let unmatched = lease::unmatched_host_workers(home, name, verified)?;
+        if !unmatched.is_empty() {
+            let pids = unmatched
+                .iter()
+                .map(u32::to_string)
+                .collect::<Vec<_>>()
+                .join(", ");
+            let error = refused(
+                "InUse",
+                format!(
+                    "Store {name} has a host worker lease that could not be verified (pids {pids})"
+                ),
+            );
+            let pids = unmatched
+                .into_iter()
+                .map(|pid| SdkValue::Int(i64::from(pid)))
+                .collect();
+            return Err(layerfs_home::outcome::with_next(
+                error,
+                "worker_pids",
+                SdkValue::List(pids),
+            ));
+        }
+        let lease = lease::claim_unblocked_locked(home, name)?;
+        let op = Op::begin(intent::COMPACT, "mark", SdkValue::Null)?.as_uncertain();
+        let close_worker = worker.as_ref().filter(|_| verified.is_some());
+        let fenced = close_worker.map_or_else(|| op.clone(), |worker| worker.fence(&op));
+        let record = record.with(layerfs_home::op::FIELD, fenced.to_record().clone());
+        record.write(home)?;
+        (lease, record, op, previous, close_worker)
+    };
+    host_maintenance::finish(home, name, &op, close_worker, None, previous.as_ref())?;
+    Ok((lease, record, Some((op, previous))))
 }
 
 /// The worker operation that compacts a sqlite Store on its machine.

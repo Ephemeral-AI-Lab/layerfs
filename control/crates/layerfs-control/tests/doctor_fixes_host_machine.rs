@@ -13,6 +13,7 @@ use layerfs_control::doctor::{Kind, Options};
 use layerfs_home::events::Events;
 use layerfs_home::home::{self, paths, private_dir, write_entity, write_record};
 use layerfs_home::names::MachineName;
+use layerfs_home::names::HOST_MACHINE;
 use layerfs_machine::record::MachineRecord;
 use layerfs_machine::worker::{read_frame_within, write_frame, MAX_HELLO, PROTOCOL};
 use std::net::TcpListener;
@@ -166,7 +167,7 @@ impl Drop for Env {
     }
 }
 
-// ---- home.layout, home.records, home.artifacts, home.native_daemon, home.bundle
+// ---- home.layout, home.records, home.artifacts, home.host_daemon, home.bundle
 
 #[test]
 fn home_layout_findings_carry_evidence_and_the_move_fix() {
@@ -208,7 +209,7 @@ fn home_records_findings_carry_evidence_and_their_fix() {
         &paths::store_record(&home, "dead"),
         &SdkValue::map([
             ("kind", t("sqlite")),
-            ("machine", t("native")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
             (
                 "op",
                 SdkValue::map([
@@ -227,7 +228,10 @@ fn home_records_findings_carry_evidence_and_their_fix() {
     std::fs::write(&lease, "1\n").unwrap();
     write_entity(
         &paths::store_record(&home, "partial"),
-        &SdkValue::map([("kind", t("sqlite")), ("machine", t("native"))]),
+        &SdkValue::map([
+            ("kind", t("sqlite")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
+        ]),
     )
     .unwrap();
     let incoming = paths::store_file(&home, "partial").with_file_name("store.sqlite.incoming");
@@ -236,14 +240,18 @@ fn home_records_findings_carry_evidence_and_their_fix() {
     // a Sandbox naming no project, and a machine whose daemon is not there
     write_entity(
         &paths::sandbox_record(&home, "sb"),
-        &SdkValue::map([("name", t("sb")), ("machine", t("native")), ("id", t("sb"))]),
+        &SdkValue::map([
+            ("name", t("sb")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
+            ("id", t("sb")),
+        ]),
     )
     .unwrap();
     write_entity(
-        &paths::machine_record(&home, "native"),
+        &paths::machine_record(&home, layerfs_home::names::HOST_MACHINE),
         &SdkValue::map([
-            ("name", t("native")),
-            ("platform", t("native")),
+            ("name", t(layerfs_home::names::HOST_MACHINE)),
+            ("platform", t("host")),
             ("daemon", t("/no/such/layerfs-daemon")),
         ]),
     )
@@ -259,7 +267,7 @@ fn home_records_findings_carry_evidence_and_their_fix() {
     keys(&orphan, &["store", "machine", "machine_record"]);
 
     let stale = found(&report, "home.records", "stale lease");
-    assert_eq!(fix(&stale), format!("rm {}", lease.display()));
+    assert_eq!(fix(&stale), "");
     keys(&stale, &["store", "pid", "path"]);
     assert_eq!(ev_int(&stale, "pid"), Some(99999999));
 
@@ -281,11 +289,11 @@ fn home_records_findings_carry_evidence_and_their_fix() {
     assert_eq!(fix(&daemon), "", "no daemon of this build is known");
     keys(&daemon, &["machine", "daemon", "present"]);
 
-    // apply the safe fixes: the lease and the partial copy go, the rest stays
-    apply(&fix(&stale));
+    // The partial-copy fix leaves the observed stale lease untouched.
     apply(&fix(&partial));
     let after = host(&home, Some(OURS));
-    assert!(gone(&after, "home.records", "stale lease"), "{after:?}");
+    found(&after, "home.records", "stale lease");
+    assert!(lease.is_file());
     assert!(gone(&after, "home.records", "partial copy"), "{after:?}");
     found(&after, "home.records", "store dead has an unresolved");
 }
@@ -318,10 +326,10 @@ fn home_daemon_findings_name_this_builds_daemon_to_record() {
     let plain = home.join("native-daemon");
     daemon_file(&plain, OURS, 0o644);
     write_entity(
-        &paths::machine_record(&home, "native"),
+        &paths::machine_record(&home, layerfs_home::names::HOST_MACHINE),
         &SdkValue::map([
-            ("name", t("native")),
-            ("platform", t("native")),
+            ("name", t(layerfs_home::names::HOST_MACHINE)),
+            ("platform", t("host")),
             ("daemon", t(&plain.display().to_string())),
         ]),
     )
@@ -353,7 +361,10 @@ fn home_daemon_findings_name_this_builds_daemon_to_record() {
     assert_eq!(fix(&plain_vm), format!("chmod +x {}", vm2.display()));
     keys(&plain_vm, &["machine", "path", "executable"]);
     apply(&fix(&plain_vm));
-    let update = format!("layerfs machine update native --daemon {}", ours.display());
+    let update = format!(
+        "layerfs machine update {HOST_MACHINE} --daemon {}",
+        ours.display()
+    );
 
     // only `native` runs this host's daemon: no fix names it for others
     let artifact = found(&report, "home.artifacts", "docker's daemon");
@@ -364,28 +375,31 @@ fn home_daemon_findings_name_this_builds_daemon_to_record() {
     let vm = found(&report, "home.artifacts", "vm1's daemon");
     assert_eq!(fix(&vm), "", "not a built-in machine");
 
-    let native = found(&report, "home.native_daemon", "not executable");
+    let native = found(&report, "home.host_daemon", "not executable");
     assert_eq!(fix(&native), format!("chmod +x {}", plain.display()));
     apply(&fix(&native));
     let after = host(&home, Some(OURS));
     assert!(
-        gone(&after, "home.native_daemon", "not executable"),
+        gone(&after, "home.host_daemon", "not executable"),
         "{after:?}"
     );
 
     // a daemon of another commit is recorded over by this build's
     daemon_file(&plain, "2222222222222222222222222222222222222222", 0o755);
     let report = host(&home, Some(OURS));
-    let other = found(&report, "home.native_daemon", "was built from");
+    let other = found(&report, "home.host_daemon", "was built from");
     assert_eq!(
         fix(&other),
-        format!("layerfs machine update native --daemon {}", ours.display())
+        format!(
+            "layerfs machine update {HOST_MACHINE} --daemon {}",
+            ours.display()
+        )
     );
     // with no daemon of this build to point at, there is no fix
     std::fs::remove_file(&ours).unwrap();
     let report = host(&home, Some(OURS));
     assert_eq!(
-        fix(&found(&report, "home.native_daemon", "was built from")),
+        fix(&found(&report, "home.host_daemon", "was built from")),
         ""
     );
     // a recorded daemon that is gone: this build's is recorded over it
@@ -393,17 +407,11 @@ fn home_daemon_findings_name_this_builds_daemon_to_record() {
     std::fs::remove_file(&plain).unwrap();
     let report = host(&home, Some(OURS));
     assert_eq!(
-        fix(&found(&report, "home.native_daemon", "not there")),
+        fix(&found(&report, "home.host_daemon", "not there")),
         update
     );
-    assert_eq!(
-        fix(&found(
-            &report,
-            "home.records",
-            "machine native's recorded daemon"
-        )),
-        update
-    );
+    let recorded = format!("machine {HOST_MACHINE}'s recorded daemon");
+    assert_eq!(fix(&found(&report, "home.records", &recorded)), update);
 }
 
 #[test]

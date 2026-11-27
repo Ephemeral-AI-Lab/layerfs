@@ -5,6 +5,7 @@ use doctor_own::{complete, outcome, own, own_within};
 use layerfs_bridge::control::SdkValue;
 use layerfs_control::doctor::{Kind, Options};
 use layerfs_home::home::{paths, private_dir, write_entity, write_record};
+use layerfs_home::names::HOST_MACHINE;
 use layerfs_home::op::Op;
 use std::collections::BTreeMap;
 use std::net::TcpListener;
@@ -67,7 +68,7 @@ const ORDER: [&str; 8] = [
     "home.layout",
     "home.records",
     "home.bundle",
-    "home.native_daemon",
+    "home.host_daemon",
     "home.artifacts",
     "home.capacity",
 ];
@@ -96,7 +97,7 @@ fn absent_home_stays_absent_and_reports_uninitialized() {
     // a home not made yet has no layout or records to check
     assert_eq!(outcome(&report, "home.layout"), None, "{report:?}");
     assert_eq!(outcome(&report, "home.records"), None, "{report:?}");
-    assert!(outcome(&report, "home.native_daemon").is_some());
+    assert!(outcome(&report, "home.host_daemon").is_some());
     assert!(outcome(&report, "home.capacity").is_some());
     in_order(&report);
 }
@@ -132,7 +133,7 @@ fn malformed_layout_fails_with_the_move_fix_and_changes_nothing() {
         r#"{"layout":"bad"}"#,
         r#"{"layout":3,"id":"xyz"}"#,
     ] {
-        let home = home(3);
+        let home = home(layerfs_home::home::LAYOUT_VERSION);
         std::fs::write(home.join("layerfs.json"), text).unwrap();
         let before = tree(&home);
         let report = run(&home);
@@ -152,7 +153,7 @@ fn malformed_layout_fails_with_the_move_fix_and_changes_nothing() {
 }
 #[test]
 fn a_layerfs_json_the_system_refuses_to_read_fails_with_the_os_error_and_no_fix() {
-    let home = home(3);
+    let home = home(layerfs_home::home::LAYOUT_VERSION);
     let file = home.join("layerfs.json");
     std::fs::remove_file(&file).unwrap();
     // a folder in its place: EISDIR, for root too
@@ -174,7 +175,7 @@ fn a_layerfs_json_the_system_refuses_to_read_fails_with_the_os_error_and_no_fix(
 }
 #[test]
 fn local_records_detect_missing_references_and_permissions_without_worker_dial() {
-    let home = home(3);
+    let home = home(layerfs_home::home::LAYOUT_VERSION);
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     listener.set_nonblocking(true).unwrap();
     write_entity(
@@ -215,7 +216,7 @@ fn local_records_detect_missing_references_and_permissions_without_worker_dial()
 }
 #[test]
 fn stale_lease_and_dead_op_remain_while_live_op_is_not_stale() {
-    let home = home(3);
+    let home = home(layerfs_home::home::LAYOUT_VERSION);
     let live = Op::begin("store.remove", "retire", SdkValue::Null).unwrap();
     for (name, op) in [
         ("live", live.to_record().clone()),
@@ -232,7 +233,11 @@ fn stale_lease_and_dead_op_remain_while_live_op_is_not_stale() {
     ] {
         write_entity(
             &paths::store_record(&home, name),
-            &SdkValue::map([("kind", t("sqlite")), ("machine", t("native")), ("op", op)]),
+            &SdkValue::map([
+                ("kind", t("sqlite")),
+                ("machine", t(layerfs_home::names::HOST_MACHINE)),
+                ("op", op),
+            ]),
         )
         .unwrap();
     }
@@ -248,7 +253,7 @@ fn stale_lease_and_dead_op_remain_while_live_op_is_not_stale() {
 }
 #[test]
 fn arbitrary_version_value_is_not_echoed_and_timeout_is_incomplete() {
-    let home = home(3);
+    let home = home(layerfs_home::home::LAYOUT_VERSION);
     write_record(
         &paths::store_record(&home, "bad"),
         &SdkValue::map([("v", t("secret-token-value"))]),
@@ -274,11 +279,14 @@ fn arbitrary_version_value_is_not_echoed_and_timeout_is_incomplete() {
 #[test]
 fn runtime_mount_and_log_subtrees_are_outside_record_fingerprinting() {
     use std::os::unix::fs::PermissionsExt;
-    let home = home(3);
-    layerfs_machine::record::MachineRecord::built_in("native", "0123456789abcdef0123456789abcdef")
-        .write(&home)
-        .unwrap();
-    let runtime = paths::machine_dir(&home, "native").join("run");
+    let home = home(layerfs_home::home::LAYOUT_VERSION);
+    layerfs_machine::record::MachineRecord::built_in(
+        layerfs_home::names::HOST_MACHINE,
+        "0123456789abcdef0123456789abcdef",
+    )
+    .write(&home)
+    .unwrap();
+    let runtime = paths::run_root(&home);
     private_dir(&runtime).unwrap();
     let trap = runtime.join("unreadable-runtime-tree");
     private_dir(&trap).unwrap();
@@ -292,7 +300,7 @@ fn runtime_mount_and_log_subtrees_are_outside_record_fingerprinting() {
 #[test]
 fn concurrent_management_record_rewrites_leave_consistency_incomplete() {
     use std::sync::{atomic::AtomicBool, Arc};
-    let home = home(3);
+    let home = home(layerfs_home::home::LAYOUT_VERSION);
     for n in 0..128 {
         write_entity(
             &paths::machine_record(&home, &format!("m{n}")),
@@ -340,10 +348,10 @@ fn row(report: &SdkValue, id: &str) -> SdkValue {
 }
 
 #[test]
-fn the_native_daemon_check_reads_the_recorded_daemon_and_its_build() {
+fn the_host_daemon_check_reads_the_recorded_daemon_and_its_build() {
     use layerfs_control::home::Build;
     use std::os::unix::fs::PermissionsExt;
-    let home = home(3);
+    let home = home(layerfs_home::home::LAYOUT_VERSION);
     let ours = "1111111111111111111111111111111111111111";
     let theirs = "2222222222222222222222222222222222222222";
     let daemon = home.join("layerfs-daemon");
@@ -355,10 +363,10 @@ fn the_native_daemon_check_reads_the_recorded_daemon_and_its_build() {
     std::fs::set_permissions(&daemon, std::fs::Permissions::from_mode(0o755)).unwrap();
     let shown = daemon.display().to_string();
     write_entity(
-        &paths::machine_record(&home, "native"),
+        &paths::machine_record(&home, layerfs_home::names::HOST_MACHINE),
         &SdkValue::map([
-            ("name", t("native")),
-            ("platform", t("native")),
+            ("name", t(layerfs_home::names::HOST_MACHINE)),
+            ("platform", t("host")),
             ("daemon", t(&shown)),
         ]),
     )
@@ -375,13 +383,13 @@ fn the_native_daemon_check_reads_the_recorded_daemon_and_its_build() {
     };
     // another commit: home.get's DaemonMismatch words, as a warning
     let other = with(ours);
-    let check = row(&other, "home.native_daemon");
+    let check = row(&other, "home.host_daemon");
     assert_eq!(check.get_text("severity"), Some("warning"), "{check:?}");
     assert_eq!(
         check.get_text("message"),
         Some(
             format!(
-                "the native daemon at {shown} was built from 22222222, this build from 11111111; record this build's daemon with `layerfs machine update native --daemon <path>`"
+                "the host machine's daemon at {shown} was built from 22222222, this build from 11111111; record this build's daemon with `layerfs machine update {HOST_MACHINE} --daemon <path>`"
             )
             .as_str()
         )
@@ -392,30 +400,31 @@ fn the_native_daemon_check_reads_the_recorded_daemon_and_its_build() {
     assert_eq!(evidence.get("matches"), Some(&SdkValue::Bool(false)));
     // the same commit, both clean
     let same = with(theirs);
-    let check = row(&same, "home.native_daemon");
+    let check = row(&same, "home.host_daemon");
     assert_eq!(check.get_text("outcome"), Some("pass"), "{check:?}");
     // a build that names no commit cannot compare: it passes
     let unknown = run(&home);
-    let check = row(&unknown, "home.native_daemon");
+    let check = row(&unknown, "home.host_daemon");
     assert_eq!(check.get_text("outcome"), Some("pass"), "{check:?}");
     // the native machine's daemon is reported here alone, not by home.artifacts
     assert!(
         !doctor_own::rows(&unknown)
             .iter()
             .any(|r| r.get_text("id") == Some("home.artifacts")
-                && r.get_text("message").is_some_and(|m| m.contains("native"))),
+                && r.get_text("message")
+                    .is_some_and(|m| m.contains(layerfs_home::names::HOST_MACHINE))),
         "{unknown:?}"
     );
     // a recorded daemon that is there and not executable says so
     std::fs::set_permissions(&daemon, std::fs::Permissions::from_mode(0o644)).unwrap();
     let plain = run(&home);
-    let check = row(&plain, "home.native_daemon");
+    let check = row(&plain, "home.host_daemon");
     assert_eq!(check.get_text("severity"), Some("error"), "{check:?}");
     assert_eq!(
         check.get_text("message"),
         Some(
             format!(
-                "the native daemon at {shown} is not executable; `chmod +x` it or record another: `layerfs machine update native --daemon <path>`"
+                "the host machine's daemon at {shown} is not executable; `chmod +x` it or record another: `layerfs machine update {HOST_MACHINE} --daemon <path>`"
             )
             .as_str()
         )
@@ -423,13 +432,13 @@ fn the_native_daemon_check_reads_the_recorded_daemon_and_its_build() {
     // a recorded daemon that is not there is an error, in the Sandbox's words
     std::fs::remove_file(&daemon).unwrap();
     let gone = run(&home);
-    let check = row(&gone, "home.native_daemon");
+    let check = row(&gone, "home.host_daemon");
     assert_eq!(check.get_text("severity"), Some("error"), "{check:?}");
     assert_eq!(
         check.get_text("message"),
         Some(
             format!(
-                "machine native's recorded daemon {shown} is not there; record another with `layerfs machine update native --daemon <path>`"
+                "machine {HOST_MACHINE}'s recorded daemon {shown} is not there; record another with `layerfs machine update {HOST_MACHINE} --daemon <path>`"
             )
             .as_str()
         )

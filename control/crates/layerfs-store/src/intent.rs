@@ -35,6 +35,8 @@ pub const UPGRADE: &str = "store.upgrade";
 pub const BACKUP: &str = "backup.create";
 /// A restore from a bucket over the Store.
 pub const RESTORE: &str = "backup.restore";
+/// Exclusive admission fence while a native worker releases its lease.
+pub const WORKER_CLOSE: &str = "worker-close";
 
 /// Whether `name` is a move, `store.move`.
 pub fn is_move(name: &str) -> bool {
@@ -47,6 +49,11 @@ pub fn is_move(name: &str) -> bool {
 /// Store's own admission.
 pub fn exclusive(name: &str) -> bool {
     !matches!(name, COMPACT | BACKUP)
+}
+
+/// A compaction is exclusive only while its native worker close is pending.
+pub fn blocks(op: &Op) -> bool {
+    exclusive(op.name()) || op.phase() == WORKER_CLOSE
 }
 
 /// The word a state's `op.name` shows for operation `name`: `move`,
@@ -119,7 +126,10 @@ pub fn begin(home: &Path, store: &str, name: &str, phase: &str, args: SdkValue) 
     let _store = record::lock(home, store)?;
     let record = StoreRecord::of(home, store)?;
     let same = |held: &Op| held.name() == name && held.standing() == Standing::Unresolved;
-    if !record.op().is_some_and(|held| same(&held)) {
+    if !record
+        .op()
+        .is_some_and(|held| held.phase() != WORKER_CLOSE && same(&held))
+    {
         record.unheld()?;
     }
     record.with(op::FIELD, op.to_record().clone()).write(home)?;
@@ -140,7 +150,10 @@ pub fn mark(
     let op = Op::begin(name, phase, args)?;
     let _store = record::lock(home, store)?;
     let record = StoreRecord::of(home, store)?;
-    if record.op().map(|held| held.standing()) == Some(Standing::Running) {
+    if record
+        .op()
+        .is_some_and(|held| held.standing() == Standing::Running || held.phase() == WORKER_CLOSE)
+    {
         return Ok(None);
     }
     record.with(op::FIELD, op.to_record().clone()).write(home)?;

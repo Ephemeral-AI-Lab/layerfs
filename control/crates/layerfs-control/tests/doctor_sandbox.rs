@@ -40,7 +40,10 @@ fn home() -> PathBuf {
     .unwrap();
     write_entity(
         &paths::store_record(&home, "s"),
-        &SdkValue::map([("kind", t("sqlite")), ("machine", t("native"))]),
+        &SdkValue::map([
+            ("kind", t("sqlite")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
+        ]),
     )
     .unwrap();
     write_entity(&paths::project_record(&home, "s", "p"), &SdkValue::map([])).unwrap();
@@ -132,7 +135,7 @@ fn sandbox(home: &Path, machine: &str, daemon: SdkValue) {
 fn local_record() -> SdkValue {
     let (start, boot) = process::me().unwrap();
     SdkValue::map([
-        ("runtime", t("native")),
+        ("runtime", t("process")),
         ("pid", SdkValue::Int(std::process::id().into())),
         ("start", t(&start.to_string())),
         ("boot", t(&format!("{boot:032x}"))),
@@ -330,7 +333,7 @@ fn daemon(home: &Path, mode: Mode) -> (String, std::thread::JoinHandle<usize>) {
 #[test]
 fn local_daemon_pages_are_complete_authenticated_and_leave_every_file_unchanged() {
     let home = home();
-    sandbox(&home, "native", local_record());
+    sandbox(&home, layerfs_home::names::HOST_MACHINE, local_record());
     let (_, server) = daemon(&home, Mode::Pages);
     let before = tree(&home);
     let report = run(&home);
@@ -396,7 +399,7 @@ fn stale_instance_and_retained_startup_are_not_daemon_health_passes() {
         (Mode::NotReady, "sandbox.daemon_ready"),
     ] {
         let home = home();
-        sandbox(&home, "native", local_record());
+        sandbox(&home, layerfs_home::names::HOST_MACHINE, local_record());
         let (_, server) = daemon(&home, mode);
         let report = run(&home);
         assert_eq!(check(&report, id).get_text("outcome"), Some("fail"));
@@ -415,7 +418,7 @@ fn busy_changed_lost_reply_and_deadline_remain_incomplete_without_replay() {
         Mode::Stalled,
     ] {
         let home = home();
-        sandbox(&home, "native", local_record());
+        sandbox(&home, layerfs_home::names::HOST_MACHINE, local_record());
         let (_, server) = daemon(&home, mode);
         let budget = if matches!(mode, Mode::Stalled) {
             Duration::from_millis(70)
@@ -554,9 +557,9 @@ fn invalid_references_and_missing_runtime_are_reported_independently() {
     let home = home();
     sandbox(
         &home,
-        "native",
+        layerfs_home::names::HOST_MACHINE,
         SdkValue::map([
-            ("runtime", t("native")),
+            ("runtime", t("process")),
             ("pid", SdkValue::Int(0)),
             ("start", t("0")),
             ("boot", t(&"0".repeat(32))),
@@ -602,7 +605,7 @@ fn worker_route_uses_fixed_root_without_lease_or_record_changes() {
     let home = home();
     let guest = home.join("guest-data");
     private_dir(&guest).unwrap();
-    sandbox(&guest, "native", local_record());
+    sandbox(&guest, layerfs_home::names::HOST_MACHINE, local_record());
     recorded(&guest, &id(1), "agent");
     let (_, daemon) = daemon(&guest, Mode::Pages);
     write_entity(
@@ -671,7 +674,7 @@ fn worker_route_uses_fixed_root_without_lease_or_record_changes() {
 #[test]
 fn incorrect_peer_close_keeps_authentication_unknown_without_echoing_keys() {
     let home = home();
-    sandbox(&home, "native", local_record());
+    sandbox(&home, layerfs_home::names::HOST_MACHINE, local_record());
     let (_, server) = daemon(&home, Mode::Pages);
     let file = paths::sandbox_control(&home, "sb");
     let keys = layerfs_home::home::read_record(&file).unwrap().unwrap();
@@ -713,7 +716,7 @@ fn finding<'a>(report: &'a SdkValue, workspace: &str, check: &str) -> &'a SdkVal
 #[test]
 fn workspace_nodes_come_from_the_daemon_s_list_and_the_folder_s_records() {
     let home = home();
-    sandbox(&home, "native", local_record());
+    sandbox(&home, layerfs_home::names::HOST_MACHINE, local_record());
     recorded(&home, &id(1), "agent");
     recorded(&home, &id(2), "build");
     recorded(&home, &id(9), "gone");
@@ -775,7 +778,7 @@ fn workspace_nodes_come_from_the_daemon_s_list_and_the_folder_s_records() {
 #[test]
 fn a_lost_daemon_blocks_its_workspaces_without_trying_them() {
     let home = home();
-    sandbox(&home, "native", local_record());
+    sandbox(&home, layerfs_home::names::HOST_MACHINE, local_record());
     recorded(&home, &id(1), "agent");
     // a saved endpoint nothing listens on any more
     let (address, server) = daemon(&home, Mode::Pages);
@@ -880,7 +883,7 @@ fn a_workspace_whose_list_was_not_asked_for_waits_on_its_sandbox_not_lost() {
 #[test]
 fn a_workspace_its_sandbox_did_not_observe_waits_on_that_sandbox() {
     let home = home();
-    sandbox(&home, "native", local_record());
+    sandbox(&home, layerfs_home::names::HOST_MACHINE, local_record());
     recorded(&home, &id(1), "agent");
     // the `workspace` kind's own run, as the frame visits a Workspace its
     // Sandbox's doctor made no node for: no probe is tried, nothing is lost

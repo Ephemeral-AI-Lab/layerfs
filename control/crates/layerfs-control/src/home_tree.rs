@@ -203,9 +203,7 @@ fn machine(
     stores: &[StoreRecord],
     sandboxes: &[SandboxRecord],
 ) -> SdkValue {
-    let built_in = layerfs_home::names::BUILT_IN
-        .contains(&name)
-        .then_some(name);
+    let built_in = layerfs_home::names::built_in_platform(name);
     let held_stores = (stores.iter())
         .filter(|record| placed(record).as_deref() == Some(name))
         .map(|record| store(home, record, Some((name, &state))))

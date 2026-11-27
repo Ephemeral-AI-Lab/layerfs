@@ -114,7 +114,7 @@ pub fn create_on(
     let name = request.name.as_str();
     let named = request.machine.as_deref().filter(|m| !m.is_empty());
     layerfs_home::names::SandboxName::parse(name)?;
-    if matches!(name, "native" | "docker") {
+    if layerfs_home::names::BUILT_IN.contains(&name) {
         return Err(refused(
             "InvalidInput",
             format!("a Sandbox is not named {name}: that names a built-in machine"),
@@ -141,6 +141,7 @@ pub fn create_on(
         (None, _) => only_attached(&target.store, target.record.attached())?,
     };
     let machine = machine.as_str();
+    layerfs_machine::record::MachineRecord::admit_host(&home, machine)?;
     // refused too while the machine is being removed
     #[cfg(feature = "machine")]
     {

@@ -27,13 +27,13 @@ writes no record.
   -------------             v              -------
               +----> layerfs-sandbox ----> layerfs-sandbox-backend
               |             |               (how a Sandbox runs:
-              |             v                native, namespaces)
+              |             v                process, namespaces)
               |      layerfs-store ------> layerfs-bucket
               |             |               (how a Store is backed up:
               |             v                local_folder, minio, r2)
               +----> layerfs-machine ----> layerfs-platform
                             |   (feature    (where Sandboxes run:
-                            v    machine)    native, docker,
+                            v    machine)    host, docker,
                       layerfs-home           apple_container, lima)
                  (home, records, locks,
                   op, names, secrets, logs)
@@ -64,7 +64,7 @@ machine's worker, or in a Sandbox's daemon.
 
 | Call | Caller's process | Machine's worker (when the Store's or Sandbox's machine is not local) | Sandbox daemon | Source |
 | --- | --- | --- | --- | --- |
-| `branch.*`, `commit.*`, `file.*` on a PostgreSQL Store | all of it: URL from the record, password resolved now, under the Store's lease | — | — | [`call.rs`](../../../control/crates/layerfs-store/src/call.rs) |
+| `branch.*`, `commit.*`, `file.*` on a PostgreSQL Store | all of it: URL from the record, password resolved now, under the Store's lease; except the CLI's `file.read`, `file.stat` and `file.list` on a Store whose record holds a `login_revision`, which go to the host worker's held sessions (#819 P-B) | — | — | [`call.rs`](../../../control/crates/layerfs-store/src/call.rs), [`host_postgresql.rs`](../../../control/crates/layerfs-store/src/host_postgresql.rs) |
 | the same on a sqlite Store, machine local | all of it, on `store/<s>/store.sqlite` | — | — | [`place.rs`](../../../control/crates/layerfs-store/src/place.rs) |
 | the same on a sqlite Store, other machine | holds the lease, sends the record | `store.call`: opens `<root>/store/<s>/store.sqlite`, holds the lease there | — | `place.rs`, [`worker_server.rs`](../../../control/crates/layerfs-control/src/worker_server.rs) |
 | `project.init` | checks; walks and copies the folder | `project.stage` (parts), then `project.init` | — | [`project/family.rs`](../../../control/crates/layerfs-store/src/project/family.rs), [`project/send.rs`](../../../control/crates/layerfs-store/src/project/send.rs) |
@@ -78,7 +78,7 @@ machine's worker, or in a Sandbox's daemon.
 | `store.attach` | records; the Store's address and login are dialled here for a locally executing machine | `store.reach`: the machine's check | — | [`layerfs-control/src/store.rs`](../../../control/crates/layerfs-control/src/store.rs) |
 | `backup.create` | uploads to the bucket | `store.file` `stage`, `read`, `unstage` | — | [`backup/create.rs`](../../../control/crates/layerfs-store/src/backup/create.rs) |
 | `machine.*`, `store.create`, `store.connect`, `store.disconnect`, `store.detach`, `backup.connect`, `backup.disconnect`, `backup.list`, `backup.restore` | all of it | — | — | [Machines](machines/README.md), [Backups](backups/README.md) |
-| `sandbox.create`, `sandbox.remove` | records, intent | `sandbox.host` with the internal host ops `sandbox.create` and `sandbox.close` (the worker runs the same host code on its `native`) | started, stopped | [`route.rs`](../../../control/crates/layerfs-sandbox/src/route.rs), [`remove.rs`](../../../control/crates/layerfs-sandbox/src/remove.rs), [`host/call.rs`](../../../control/crates/layerfs-sandbox/src/host/call.rs) |
+| `sandbox.create`, `sandbox.remove` | records, intent | `sandbox.host` with the internal host ops `sandbox.create` and `sandbox.close` (the worker runs the same host code on its own `linux-host`) | started, stopped | [`route.rs`](../../../control/crates/layerfs-sandbox/src/route.rs), [`remove.rs`](../../../control/crates/layerfs-sandbox/src/remove.rs), [`host/call.rs`](../../../control/crates/layerfs-sandbox/src/host/call.rs) |
 | `workspace.mount`, `commit`, `unmount`, `status` on a forwarded Sandbox | dials the daemon directly | — | serves it | [`direct.rs`](../../../control/crates/layerfs-sandbox/src/direct.rs) |
 | the same, not forwarded | — (local machine: dials the daemon) | `sandbox.host`; the worker dials the daemon | serves it | `route.rs` |
 | `workspace.exec` | checks the directory; keeps the command's record when forwarded (route `machine:<name>`) | runs `bash -c` through the Sandbox runtime (always the machine) | — | [`workspace/exec.rs`](../../../control/crates/layerfs-sandbox/src/workspace/exec.rs) |
@@ -86,24 +86,24 @@ machine's worker, or in a Sandbox's daemon.
 
 | Platform | sqlite Store calls on macOS / Linux / Windows | Workspace calls skip the worker? | Source |
 | --- | --- | --- | --- |
-| `native` | caller / caller / worker | yes (the daemon is on this host) | [`native/profile.rs`](../../../control/crates/layerfs-platform/src/platforms/native/profile.rs) |
+| `host` | caller / caller / worker | yes (the daemon is on this host) | [`host/profile.rs`](../../../control/crates/layerfs-platform/src/platforms/host/profile.rs) |
 | `docker` | worker / worker / — | no: ports publish only at container start | [`docker/adapter.rs`](../../../control/crates/layerfs-platform/src/platforms/docker/adapter.rs) |
 | `apple-container` | worker / — / — | no: ports publish only at create | [`apple_container/adapter.rs`](../../../control/crates/layerfs-platform/src/platforms/apple_container/adapter.rs) |
 | `lima` | worker / — / — | yes: an `ssh -L` forward | [`lima/adapter.rs`](../../../control/crates/layerfs-platform/src/platforms/lima/adapter.rs) |
 
 The machine whose calls run in this process
 ([`layerfs_machine::in_process`](../../../control/crates/layerfs-machine/src/local.rs):
-the built-in machine whose platform's executor is `Local` here, `native` on
+the built-in machine whose platform's executor is `Local` here, the host machine (`macos-host` or `linux-host`) on
 macOS and Linux, none on Windows) is where a sqlite Store goes when
 `store create` names no machine, one end of every `store move`, and the
 machine a `backup restore` installs on; on a host with none those refuse
 `Unsupported`. This computer is never a machine: see
-[Platforms](machines/platforms.md#native-platformsnative).
+[Platforms](machines/platforms.md#host-platformshost).
 
 `plan` reads no worker record and dials nothing; the first worker call
 dials `machine/<m>/worker.json` and a worker not recorded or not answering
 is `Unavailable`, naming `layerfs machine start`. A build without the
-`machine` feature (the guest worker's) has no adapters: there `native` is
+`machine` feature (the guest worker's) has no adapters: there the guest's own `linux-host` is
 local and every other machine a worker. The daemon serves no Store calls:
 a mount's caller reads no Store (the daemon finds the Branch by name), and
 a status's head read takes the Store's own route
@@ -135,12 +135,70 @@ kind or kernel route is an engine change.
 
 | Rule | Enforced by |
 | --- | --- |
-| sqlite Store calls run in a process on the Store's kernel (the caller on a local `native`, else that machine's worker); PostgreSQL Store calls and bucket I/O run in the caller's process; a sqlite Store is on exactly one machine; a PostgreSQL Store is on no machine: its Sandboxes run on every machine whose platform runs them | [`place.rs`](../../../control/crates/layerfs-store/src/place.rs), [`support.rs`](../../../control/crates/layerfs-platform/src/support.rs) |
+| sqlite Store calls run in a process on the Store's kernel (the caller on the local host machine, else that machine's worker); PostgreSQL Store calls and bucket I/O run in the caller's process (the CLI's PostgreSQL file reads in the host worker on this computer); a sqlite Store is on exactly one machine; a PostgreSQL Store is on no machine: its Sandboxes run on every machine whose platform runs them | [`place.rs`](../../../control/crates/layerfs-store/src/place.rs), [`support.rs`](../../../control/crates/layerfs-platform/src/support.rs) |
 | Workers listen on loopback behind a secret; one attempt per call, no retry, no replay; an uncertain outcome is reported, never resent | [`worker/client.rs`](../../../control/crates/layerfs-machine/src/worker/client.rs) |
-| A PostgreSQL password is resolved only in the caller, travels only in one worker request and the Sandbox's private daemon setup file, and is never written to a record, log, trace or `Debug` output | [`secrets.rs`](../../../control/crates/layerfs-home/src/secrets.rs), [SQLite and PostgreSQL](stores-and-projects/sqlite-and-postgresql.md#credentials) |
+| A PostgreSQL password is resolved only in the caller, travels only in one worker request and the Sandbox's private daemon setup file, and is never written to a record, log, trace or `Debug` output; the host worker holds one only while a call or a session of that Store needs it, never on disk, with core dumps off (and, on Linux, not dumpable) | [`secrets.rs`](../../../control/crates/layerfs-home/src/secrets.rs), [SQLite and PostgreSQL](stores-and-projects/sqlite-and-postgresql.md#credentials) |
 | Drivers know nothing of the home and write no records | [`layerfs-platform/src/lib.rs`](../../../control/crates/layerfs-platform/src/lib.rs) |
-| Stored and displayed values do not follow internal renames: the `Native` backend is stored and shown as `"native"` | [`native/adapter.rs`](../../../control/crates/layerfs-sandbox-backend/src/backend/native/adapter.rs) |
+| Stored and displayed values do not follow internal renames: the `NativeBackend` adapter is stored and shown as `"process"` | [`process/adapter.rs`](../../../control/crates/layerfs-sandbox-backend/src/backend/process/adapter.rs) |
 | sqlite Stores open with the Normal profile (WAL, synchronous=NORMAL), the only SQLite profile; their records carry the label `normal`; Durable execution is `NOT_RUN — disabled by owner until explicit reauthorization` | [`record.rs`](../../../control/crates/layerfs-store/src/record.rs) |
 
 The binding code rules for this layer are in the
 [control guide](../../../control/AGENTS.md).
+
+## Host worker bootstrap
+
+A machine-enabled CLI on macOS or Linux can start the host worker process through its
+internal `worker --host` entry. The host worker endpoint uses the real home's ID
+and preserves its directory permissions. The process holds its lifetime lock
+from endpoint setup through socket removal. It accepts ordinary and management
+connections on separate Unix sockets, and checks the peer UID before exchanging
+frames. Its bootstrap stays independent of guest root setup.
+
+The accept loop lets the kernel hold ordinary connections once all 16
+ordinary slots are occupied. Eight ordinary threads and two independently
+reserved management threads serve the admitted connections. Admission uses a
+fixed queue and a capped frame with an absolute deadline. The management
+socket reports worker identity and can request a drain even when every
+ordinary thread is occupied. The drain fences new operations, closes both
+listeners, and joins admitted connections before releasing the lifetime lock.
+The idle drain starts after 60 seconds without an admitted call, checked every
+five seconds. Connections that never submit an authenticated operation leave
+the idle deadline unchanged.
+
+The CLI can route bounded local SQLite `file.read`, `file.stat`, and
+`file.list` calls to the host worker after argument and scope checks.
+The envelope contains the Store and project names and the allowlisted
+read arguments. The worker resolves the binding and checks the current
+Store record under its admission lock. An endpoint path or request that
+does not fit uses the direct route, chosen before dialing. An error reading
+the worker's home identity is a definite refusal before any send. If operation
+bytes may have been sent and no valid reply arrives, the caller reports
+`Unknown` with a request ID, including when a success payload fails the
+requested method’s schema. The caller owns the single public audit line.
+A stdout failure after a complete result reports the known call outcome.
+The CLI's `file.read`, `file.stat` and `file.list` on a PostgreSQL Store
+whose record holds a `login_revision` go to the same worker
+(`store.postgresql_read`, #819 P-B) with the saved password and that
+revision in the authenticated request. The worker re-reads the record under
+the Store's lock, refuses another revision `Conflict`, takes the call's
+lease for the call alone and runs it on a held session
+([credentials](stores-and-projects/sqlite-and-postgresql.md#credentials)).
+A record without a revision, a stopped host machine, or a request that does
+not fit stays direct (P-A), chosen before dialing.
+
+The CLI routes `file.write`, `file.edit`, `file.mkdir`, `file.rm`,
+`file.cp`, `file.mv` and `file.apply` on the same Stores to the worker as
+one `store.write` request each (S2.2). For `file write` and an unscoped
+`file apply`, the CLI opens its stdin or `--from` input but leaves it unread
+when the Store looks eligible. At the call boundary an eligible call
+streams that input in bounded frames, and any other call reads it whole
+and runs directly, as before. A single-change write sends one request
+frame when it fits 64 KiB, and otherwise runs directly. The worker
+commits only after it has read the input's end frame. A failure before the
+caller has written that frame commits nothing and is a definite refusal
+(the worker's own, when it refused early). After it, a lost or invalid
+answer is `Unknown` with the request ID. An engine-uncertain outcome and
+an answer the worker could not deliver are kept under
+`machine/<host>/retained/` and reported by `machine.worker.retained`.
+SDK calls, PostgreSQL writes and guest Stores use their existing routes.
+See the [host exchange](machines/workers-and-reach.md#host-worker-exchange-20-implementation-plan).

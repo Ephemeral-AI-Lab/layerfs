@@ -13,6 +13,7 @@ fn cli_refuses_every_new_work_route_before_contacting_the_machine() {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         listener.set_nonblocking(true).unwrap();
         let fixture = include_str!("../../../test/disabled-platforms.json")
+            .replace("$host", layerfs_api::names::HOST_MACHINE)
             .replace("$platform", platform)
             .replace("$address", &listener.local_addr().unwrap().to_string());
         let data = json::parse(&fixture).unwrap();

@@ -36,6 +36,7 @@ import { execFileSync } from "node:child_process";
 import { client } from "../../../src/index.js";
 import { CF, IDENTITY, command, parseIdentity, parseTimed, timedLine, verifier, sha256 } from "./workloads.mjs";
 
+const hostMachine = process.platform === "darwin" ? "macos-host" : "linux-host";
 const [cell, machine, receipt] = process.argv.slice(2);
 if (!CF[cell] || !machine || !receipt) {
   console.error("usage: node cell.mjs <C01..C12> <machine> <receipt.json>");
@@ -101,7 +102,7 @@ try {
   if (process.env.LFS533_DAEMON) {
     const binary = process.env.LFS533_LAYERFS ?? new URL("../../../../../target/debug/layerfs", import.meta.url).pathname;
     await step("machine.update", async () =>
-      execFileSync(binary, ["machine", "update", "native", "--daemon", process.env.LFS533_DAEMON], {
+      execFileSync(binary, ["machine", "update", hostMachine, "--daemon", process.env.LFS533_DAEMON], {
         env: { PATH: process.env.PATH, HOME: process.env.HOME, LAYERFS_HOME: home },
         encoding: "utf8",
       }));
@@ -117,7 +118,7 @@ try {
   if (machine === "docker" && process.env.LFS533_IMAGE) {
     await step("machine.update", () => lfs.machine.update("docker", { image: process.env.LFS533_IMAGE }));
   }
-  if (machine !== "native" && !pgUrl) {
+  if (machine !== hostMachine && !pgUrl) {
     await step("store.move", () => lfs.store.move(storeName, machine));
     pushed = true;
   }
@@ -181,7 +182,7 @@ try {
     await step("store.disconnect", () => lfs.store.disconnect(storeName)).catch((error) => { out.removeError = error.message; });
   } else if (shared) {
     // the Store comes back to native, then goes; the home and its machine stay
-    if (pushed) await step("store.move", () => lfs.store.move(storeName, "native")).catch((error) => { out.pullError = error.message; });
+    if (pushed) await step("store.move", () => lfs.store.move(storeName, hostMachine)).catch((error) => { out.pullError = error.message; });
     await step("store.remove", () => lfs.store.remove(storeName)).catch((error) => { out.removeError = error.message; });
   }
   if (machine === "docker" && !shared) {

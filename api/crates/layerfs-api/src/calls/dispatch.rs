@@ -105,11 +105,88 @@ pub fn call_scoped(
     home_path: Option<&Path>,
     scope: Option<&super::Scope>,
     name: &str,
-    mut args: SdkValue,
+    args: SdkValue,
     events: &mut dyn FnMut(SdkValue),
     client: Client,
 ) -> Outcome {
+    call_from(
+        families,
+        home_path,
+        scope,
+        name,
+        args,
+        events,
+        FrontEnd::Library(client),
+    )
+}
+
+/// The CLI executable's checked call, eligible for the host worker route,
+/// with the input of a write the CLI deferred.
+pub fn call_cli(
+    families: &'static [Family],
+    scope: Option<&super::Scope>,
+    name: &str,
+    args: SdkValue,
+    input: Option<layerfs_store::host_write::Input>,
+    events: &mut dyn FnMut(SdkValue),
+) -> Outcome {
+    let front = FrontEnd::Cli;
+    layerfs_store::host_write::with_input(input, || {
+        call_from(families, None, scope, name, args, events, front)
+    })
+}
+
+/// Whether the CLI defers the input of write `name` to `project`: true only
+/// for a host-machine sqlite Store whose worker endpoint fits (the call's
+/// route is still chosen at its boundary; a deferred input it does not
+/// stream is read whole there).
+pub fn cli_defers(name: &str, project: &str) -> bool {
+    cfg!(all(
+        feature = "machine",
+        any(target_os = "macos", target_os = "linux")
+    )) && matches!(name, "file.write" | "file.apply")
+        && home(None).is_ok_and(|home| layerfs_store::host_write::likely(&home, project))
+}
+
+enum FrontEnd {
+    Cli,
+    Library(Client),
+}
+
+/// The CLI calls that may take the host worker route.
+const HOST_ROUTE: [&str; 10] = [
+    "file.read",
+    "file.stat",
+    "file.list",
+    "file.write",
+    "file.edit",
+    "file.mkdir",
+    "file.rm",
+    "file.cp",
+    "file.mv",
+    "file.apply",
+];
+
+fn call_from(
+    families: &'static [Family],
+    home_path: Option<&Path>,
+    scope: Option<&super::Scope>,
+    name: &str,
+    mut args: SdkValue,
+    events: &mut dyn FnMut(SdkValue),
+    origin: FrontEnd,
+) -> Outcome {
+    let client = match origin {
+        FrontEnd::Cli => Client::Cli,
+        FrontEnd::Library(client) => client,
+    };
     let mut log = Log::start(families, name, client, take_tag(&mut args));
+    log.host_reads = matches!(origin, FrontEnd::Cli)
+        && cfg!(all(
+            feature = "machine",
+            any(target_os = "macos", target_os = "linux")
+        ))
+        && HOST_ROUTE.contains(&name);
     let outcome = layerfs_home::trace::stepped(name, || {
         scoped(families, home_path, scope, name, args, events, &mut log)
     });
@@ -219,6 +296,7 @@ struct Log<'n> {
     at: i64,
     started: Instant,
     on: bool,
+    host_reads: bool,
 }
 
 impl<'n> Log<'n> {
@@ -246,6 +324,7 @@ impl<'n> Log<'n> {
             at: layerfs_home::home::now_ms(),
             started: Instant::now(),
             on,
+            host_reads: false,
         }
     }
 
@@ -296,8 +375,8 @@ fn scoped(
     super::platform_policy::check(&home, spec.policy, &args)?;
     if spec.opens {
         let id = layerfs_home::home::open(&home)?.id;
-        // `machine/native/` and `machine/docker/` exist from the first call;
-        // checked once per process for each home (R6)
+        // the host machine's folder and `machine/docker/` exist from the
+        // first call; checked once per process for each home (R6)
         #[cfg(feature = "machine")]
         layerfs_machine::ensure_built_ins(&home, &id)?;
         #[cfg(not(feature = "machine"))]
@@ -308,7 +387,9 @@ fn scoped(
     }
     layerfs_home::trace::step("dispatch");
     let mut context = Context::new(home, log.tag.clone(), asked.clone(), events);
-    let value = (spec.run)(&mut context, &args)?;
+    let value = layerfs_store::open::with_one_shot(log.client == Client::Cli, || {
+        layerfs_store::host_read::with_cli(log.host_reads, || (spec.run)(&mut context, &args))
+    })?;
     let value = match scope {
         Some(scope) => scope.answer(spec, value),
         None => value,
@@ -326,9 +407,15 @@ fn scoped(
 /// with no call running (`close_idle`), so a sqlite Store leaves no
 /// write-ahead log behind, and ends its idle Sandbox daemon sessions inside
 /// a short bound (layerfs-project#181), so its exit is not a dropped
-/// connection in a daemon's log. Answers how many Stores it closed.
+/// connection in a daemon's log. Answers how many Stores it closed. With
+/// `LAYERFS_TRACE_STEP` set its steps are traced as op `close`: `stores`
+/// and `sessions`.
 pub fn close() -> usize {
-    let closed = layerfs_control::store::close_idle(std::time::Duration::ZERO);
-    layerfs_sandbox::registry::end_idle_sessions(layerfs_sandbox::registry::SESSION_END);
-    closed
+    layerfs_home::trace::stepped("close", || {
+        let closed = layerfs_control::store::close_idle(std::time::Duration::ZERO);
+        layerfs_home::trace::step("stores");
+        layerfs_sandbox::registry::end_idle_sessions(layerfs_sandbox::registry::SESSION_END);
+        layerfs_home::trace::step("sessions");
+        closed
+    })
 }

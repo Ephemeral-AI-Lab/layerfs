@@ -31,6 +31,30 @@ pub fn path(value: &str) -> Result<String, SdkRefusal> {
     Ok(value.to_owned())
 }
 
+/// The changes of one call, pulled while they are applied, and the content
+/// of each streamed write among them. Only one change and one piece are held
+/// at a time. The source ends only after its whole input was received, so a
+/// call whose input stops early is refused and commits nothing.
+pub trait Source {
+    /// The next change, in the engine's form; `None` after the last one.
+    fn next(&mut self) -> Result<Option<SdkValue>, SdkRefusal>;
+    /// The next piece of the streamed write last returned; `None` at its end.
+    fn piece(&mut self) -> Result<Option<&[u8]>, SdkRefusal>;
+}
+
+/// The changes of a file call: listed in its arguments, or streamed.
+pub enum Changes<'s, 'a> {
+    /// Every change, read before the call.
+    Listed(&'s [Arg<Change<'a>>]),
+    /// Changes read from `parse`d records of a source as they are applied.
+    Streamed {
+        /// Where the records and pieces come from.
+        source: &'s mut dyn Source,
+        /// One record as its change.
+        parse: for<'v> fn(&'v SdkValue) -> Arg<Change<'v>>,
+    },
+}
+
 /// One change of a file call, with checked absolute paths.
 pub enum Change<'a> {
     /// Replace the file's bytes, creating it with `mode` (default 0o644).
@@ -40,6 +64,8 @@ pub enum Change<'a> {
         bytes: &'a [u8],
         mode: Option<u32>,
     },
+    /// [`Change::Write`] whose bytes follow the change in its source.
+    Streamed { path: String, mode: Option<u32> },
     /// Replace the one occurrence of `old` with `new`, or with `all`
     /// every occurrence.
     Edit {
@@ -73,7 +99,7 @@ pub fn commit(
     service: &StoreService,
     project: &str,
     branch: Arg<&str>,
-    changes: &[Arg<Change<'_>>],
+    changes: Changes<'_, '_>,
     message: Option<&str>,
     expected: Option<&str>,
 ) -> Answer {
@@ -88,6 +114,7 @@ pub fn commit(
             let (branch_name, branch, stack) =
                 crate::telemetry::timed("files.resolve", |_| resolve(store, project, branch))?;
             let id = workspace_id()?;
+            store.prepare_history_write().map_err(args::history)?;
             let workspace =
                 crate::telemetry::timed("files.bind", |timing| service.bind(id, branch.id, timing))
                     .map_err(args::failed)?;
@@ -248,9 +275,10 @@ fn workspace_id() -> Result<WorkspaceId, SdkRefusal> {
 /// The private Workspace on Branch `branch` of `project`, bound by name
 /// (#818 W2) with the refusals [`resolve`] gives, in its order: a refusal
 /// the call meets before the bind reads the project and Branch (no
-/// Workspace key, overlay maintenance stopped, call capacity full, a
-/// reader that did not open) comes after the lookups, as before, and is
-/// `Failed` when they pass.
+/// Workspace key, SQLite's deferred writer refused, overlay maintenance
+/// stopped or its start failed, call capacity full, a reader that did not
+/// open) comes after the lookups, as before, and is `Failed` (the writer's
+/// own refusal for the writer) when they pass.
 fn bind_named(
     service: &StoreService,
     project: &str,
@@ -263,6 +291,9 @@ fn bind_named(
         resolved.err().unwrap_or(refusal)
     };
     let id = workspace_id().map_err(lookups_first)?;
+    // #819: SQLite's deferred writer opens before any write bind; its
+    // refusal, like the others before the bind reads, follows the lookups.
+    (service.store.prepare_history_write()).map_err(|error| lookups_first(args::history(error)))?;
     let bound = crate::telemetry::timed("files.bind", |timing| {
         service.bind_named(id, project, branch, timing)
     });
@@ -306,7 +337,7 @@ fn lookup_answer(
 /// before it are finished in the overlay.
 fn change(
     workspace: &crate::store::BoundWorkspace,
-    changes: &[Arg<Change<'_>>],
+    mut changes: Changes<'_, '_>,
 ) -> Result<Result<u64, SdkRefusal>, SdkRefusal> {
     // The bound node's raw tree and markers: the private Workspace's overlay
     // already whiteouts a hidden path, so its absence there is ambiguous.
@@ -352,59 +383,90 @@ fn change(
     };
     let mut mutation = Mutation::new(workspace)?;
     let (mut result, mut replaced) = (Ok(()), 0u64);
-    for (index, change) in changes.iter().enumerate() {
-        result = (|| {
-            // #818 W6: the next window's paths are planned before its first
-            // change; a failed plan read refuses at that change. A change
-            // refused before any read is never planned over (`Mutation::plan`).
-            if index % super::plan::PLAN_PATHS == 0 {
-                let end = changes.len().min(index + super::plan::PLAN_PATHS);
-                mutation.plan(&changes[index..end])?;
+    for index in 0.. {
+        // #818 W6: a listed call's next window of paths is planned before
+        // its first change; a failed plan read refuses at that change. A
+        // change refused before any read is never planned over
+        // (`Mutation::plan`). Streamed changes are not planned: the plan
+        // needs the window's paths ahead, which a stream does not give, so
+        // each streamed change walks its own paths, as on SQLite.
+        let planned = match &changes {
+            Changes::Listed(listed)
+                if index % super::plan::PLAN_PATHS == 0 && index < listed.len() =>
+            {
+                let end = listed.len().min(index + super::plan::PLAN_PATHS);
+                mutation.plan(&listed[index..end])
             }
-            Ok(())
-        })()
-        .and_then(|()| match change.as_ref().map_err(Clone::clone)? {
-            Change::Write { path, bytes, mode } => mutation.write(path, bytes, *mode),
-            Change::Edit {
-                path,
-                old,
-                new,
-                all,
-            } => match mutation.edit(path, old, new, *all) {
-                Ok(count) => {
-                    replaced += count;
-                    Ok(())
+            _ => Ok(()),
+        };
+        let (record, parsed);
+        let (change, source): (Result<&Change<'_>, SdkRefusal>, Option<&mut dyn Source>) =
+            match &mut changes {
+                Changes::Listed(listed) => match listed.get(index) {
+                    Some(change) => (change.as_ref().map_err(Clone::clone), None),
+                    None => break,
+                },
+                Changes::Streamed { source, parse } => match source.next() {
+                    Ok(Some(value)) => {
+                        record = value;
+                        parsed = parse(&record);
+                        (parsed.as_ref().map_err(Clone::clone), Some(&mut **source))
+                    }
+                    Ok(None) => break,
+                    // a lost input is no change's refusal: nothing commits
+                    Err(lost) => {
+                        result = Err(lost);
+                        break;
+                    }
+                },
+            };
+        result = planned
+            .and_then(|()| match change? {
+                Change::Write { path, bytes, mode } => mutation.write(path, bytes, *mode),
+                Change::Streamed { path, mode } => match source {
+                    Some(source) => mutation.write_stream(path, *mode, source),
+                    None => Err(args::invalid("a streamed write needs its streamed input")),
+                },
+                Change::Edit {
+                    path,
+                    old,
+                    new,
+                    all,
+                } => match mutation.edit(path, old, new, *all) {
+                    Ok(count) => {
+                        replaced += count;
+                        Ok(())
+                    }
+                    Err(refusal) if refusal.code == "NoSuchPath" => match removed(path)? {
+                        Some(hidden) => Err(hidden),
+                        None => Err(refusal),
+                    },
+                    Err(refusal) => Err(refusal),
+                },
+                Change::Mkdir { path, mode } => mutation.mkdir(path, *mode),
+                Change::Chmod { path, mode } => mutation.chmod(path, *mode),
+                // `rm` treats a hidden path as absent for the same reason.
+                Change::Rm { path, recursive } => mutation.remove(path, *recursive),
+                Change::Cp { from, to } => match mutation.copy(from, to, index as u64) {
+                    Err(refusal) if refusal.code == "NoSuchPath" => match removed(from)? {
+                        Some(hidden) => Err(hidden),
+                        None => Err(refusal),
+                    },
+                    other => other,
+                },
+                // A hidden `from` is absent to the overlay, so `mv`-from answers
+                // `NoSuchPath` (see the `NotFound` mapping above); unlike
+                // `edit`/`cp`-from it does not consult the base view.
+                Change::Mv { from, to } => mutation.rename(from, to),
+            })
+            .map_err(|mut e| {
+                if let SdkValue::Map(fields) = &mut e.detail {
+                    fields.push(("index".into(), SdkValue::Int(index as i64)));
+                } else {
+                    e.detail = SdkValue::map([("index", SdkValue::Int(index as i64))]);
                 }
-                Err(refusal) if refusal.code == "NoSuchPath" => match removed(path)? {
-                    Some(hidden) => Err(hidden),
-                    None => Err(refusal),
-                },
-                Err(refusal) => Err(refusal),
-            },
-            Change::Mkdir { path, mode } => mutation.mkdir(path, *mode),
-            Change::Chmod { path, mode } => mutation.chmod(path, *mode),
-            // `rm` treats a hidden path as absent for the same reason.
-            Change::Rm { path, recursive } => mutation.remove(path, *recursive),
-            Change::Cp { from, to } => match mutation.copy(from, to, index as u64) {
-                Err(refusal) if refusal.code == "NoSuchPath" => match removed(from)? {
-                    Some(hidden) => Err(hidden),
-                    None => Err(refusal),
-                },
-                other => other,
-            },
-            // A hidden `from` is absent to the overlay, so `mv`-from answers
-            // `NoSuchPath` (see the `NotFound` mapping above); unlike
-            // `edit`/`cp`-from it does not consult the base view.
-            Change::Mv { from, to } => mutation.rename(from, to),
-        })
-        .map_err(|mut e| {
-            if let SdkValue::Map(fields) = &mut e.detail {
-                fields.push(("index".into(), SdkValue::Int(index as i64)));
-            } else {
-                e.detail = SdkValue::map([("index", SdkValue::Int(index as i64))]);
-            }
-            e
-        });
+                e
+            });
         if result.is_err() {
             break;
         }

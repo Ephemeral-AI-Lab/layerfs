@@ -84,7 +84,10 @@ fn named_sandboxes_on_native() {
     )
     .unwrap_err();
     assert_eq!(code, "Unsupported");
-    assert!(message.contains("native"), "{message}");
+    assert!(
+        message.contains(layerfs_home::names::HOST_MACHINE),
+        "{message}"
+    );
     assert_eq!(
         call(
             &home,
@@ -112,7 +115,7 @@ fn named_sandboxes_on_native() {
         Some(&home),
         "machine.update",
         SdkValue::map([
-            ("machine", SdkValue::text("native")),
+            ("machine", SdkValue::text(layerfs_home::names::HOST_MACHINE)),
             ("daemon", SdkValue::text(daemon.as_str())),
         ]),
         &mut |_| {},
@@ -124,7 +127,7 @@ fn named_sandboxes_on_native() {
         &[
             ("project", t("shop/api")),
             ("name", t("t1")),
-            ("machine", t("native")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
             ("detail", SdkValue::Bool(true)),
         ],
     );
@@ -150,7 +153,7 @@ fn named_sandboxes_on_native() {
         &[
             ("project", t("shop/api")),
             ("name", t("invalid-image")),
-            ("machine", t("native")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
             ("image", t("local")),
         ],
     );
@@ -167,7 +170,7 @@ fn named_sandboxes_on_native() {
         &[
             ("project", t("shop/api")),
             ("name", t("t1")),
-            ("machine", t("native")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
         ],
     );
     assert_eq!(taken.unwrap_err().0, "Exists");
@@ -180,7 +183,7 @@ fn named_sandboxes_on_native() {
         SdkValue::map([
             ("project", t("shop/api")),
             ("name", t("t2")),
-            ("machine", t("native")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
             ("mount", t("ghost")),
         ]),
         &mut |_| {},
@@ -407,7 +410,7 @@ fn named_sandboxes_on_native() {
         &[
             ("project", t("shop/api")),
             ("name", t("t1")),
-            ("machine", t("native")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
         ],
     );
 

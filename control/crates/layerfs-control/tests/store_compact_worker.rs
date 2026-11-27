@@ -299,7 +299,7 @@ fn a_worker_without_the_store_file_answers_not_found_and_makes_nothing() {
     let sqlite = SdkValue::map([
         ("name", text("shop")),
         ("kind", text("sqlite")),
-        ("machine", text("native")),
+        ("machine", text(layerfs_home::names::HOST_MACHINE)),
     ]);
     let refusal = worker::call(
         &endpoint,

@@ -172,11 +172,7 @@ pub fn remedy(home: &Path, record: &SandboxRecord) -> String {
         .ok()
         .flatten()
         .and_then(|found| found.platform_name().map(str::to_owned))
-        .or_else(|| {
-            layerfs_home::names::BUILT_IN
-                .contains(&machine)
-                .then(|| machine.to_owned())
-        });
+        .or_else(|| layerfs_home::names::built_in_platform(machine).map(str::to_owned));
     // a platform no provider holds runs Sandboxes on this computer's own kernel
     let own_os = platform
         .as_deref()

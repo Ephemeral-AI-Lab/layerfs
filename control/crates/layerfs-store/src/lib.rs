@@ -18,6 +18,11 @@ pub mod compact;
 pub mod diagnostic;
 pub mod formats;
 pub mod get;
+pub mod host_maintenance;
+pub mod host_postgresql;
+pub mod host_read;
+pub mod host_stream;
+pub mod host_write;
 #[doc(hidden)]
 pub mod identity;
 pub mod intent;

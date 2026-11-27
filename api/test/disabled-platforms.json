@@ -24,7 +24,7 @@
       "name": "local",
       "kind": "sqlite",
       "profile": "disposable",
-      "machine": "native"
+      "machine": "$host"
     },
     "store/pg/record.json": {
       "name": "pg",
@@ -34,11 +34,11 @@
       "name": "leftover",
       "kind": "sqlite",
       "profile": "disposable",
-      "machine": "native",
+      "machine": "$host",
       "last_transfer": {
         "call": "store.move",
         "from": "legacy",
-        "to": "native",
+        "to": "$host",
         "retired": false
       }
     },
@@ -138,7 +138,7 @@
       "call": "store.move",
       "args": {
         "store": "shop",
-        "machine": "native"
+        "machine": "$host"
       }
     },
     {
@@ -152,7 +152,7 @@
       "call": "store.move",
       "args": {
         "store": "leftover",
-        "machine": "native"
+        "machine": "$host"
       }
     },
     {

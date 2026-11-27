@@ -58,7 +58,7 @@ fn exec_stream_passes_output_and_the_commands_exit_code() {
         Some(&home),
         "machine.update",
         SdkValue::map([
-            ("machine", SdkValue::text("native")),
+            ("machine", SdkValue::text(layerfs_api::names::HOST_MACHINE)),
             ("daemon", SdkValue::text(daemon.as_str())),
         ]),
         &mut |_| {},
@@ -88,7 +88,7 @@ fn exec_stream_passes_output_and_the_commands_exit_code() {
         &[
             ("project", t("shop/api")),
             ("name", t("s1")),
-            ("machine", t("native")),
+            ("machine", t(layerfs_api::names::HOST_MACHINE)),
         ],
     );
     let mounted = ok(

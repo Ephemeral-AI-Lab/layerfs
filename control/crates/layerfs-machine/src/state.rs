@@ -185,7 +185,9 @@ impl MachineRecord {
             let fix = fix(name, Reason::Unsupported, true, sandboxes);
             return State::broken(Reason::Unsupported, fix.as_deref());
         }
-        // a machine no provider holds runs on the host's own OS: never stopped
+        if name == layerfs_home::names::HOST_MACHINE && self.recorded_state() == Some("stopped") {
+            return State::Stopped;
+        }
         if !self.provided() {
             return State::Ready;
         }
@@ -286,7 +288,7 @@ impl MachineRecord {
 /// other machine a Store or Sandbox still names is `broken` `missing`.
 pub fn unrecorded(name: &str) -> State {
     match layerfs_home::names::BUILT_IN.contains(&name) {
-        true if !crate::local::provided(name) => State::Ready,
+        true if layerfs_home::names::built_in_platform(name) == Some("host") => State::Ready,
         true => State::Stopped,
         false => State::broken(Reason::Missing, None),
     }

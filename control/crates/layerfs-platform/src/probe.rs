@@ -33,7 +33,7 @@ pub fn probe(kind: Platform, tools: &Tools) -> Probe {
     }
 }
 
-/// `native` on Linux needs a root caller, `/dev/fuse` and cgroup v2
+/// `host` on Linux needs a root caller, `/dev/fuse` and cgroup v2
 /// (`linuxMissing` in today's `sandbox/platforms.js`); macOS needs nothing
 /// LayerFS can check (Network Volumes access is asked by the system).
 pub fn native_missing(host: HostOs) -> Vec<String> {

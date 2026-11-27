@@ -91,7 +91,7 @@ was cut. A file that is not text answers `binary: true` and its `size`
 instead of `text` (the short form shows `size` only then; the long form
 always). `start_line` and `end_line` (long form) are the window read.
 
-Run on macOS native with a debug build:
+Run on macOS (`macos-host`) with a debug build:
 
 ```console
 $ layerfs file read shop/api agent /README.md
@@ -362,7 +362,7 @@ line (exit 2). The file is written in pieces of at most 65,519 bytes, and a
 piece equal to what is there is not rewritten. A parent that is not a folder
 or a folder at `path` is `InvalidInput`.
 
-Run on macOS native with a debug build (content on stdin):
+Run on macOS (`macos-host`) with a debug build (content on stdin):
 
 ```console
 $ layerfs file write shop/api agent /README.md -m 'Update the title'

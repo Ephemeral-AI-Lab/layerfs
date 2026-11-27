@@ -5,7 +5,7 @@
 //! cannot do an operation answers with that operation's refusal.
 use crate::error::{Code, MachineError};
 use crate::platform::{HostOs, Platform};
-use crate::platforms::{apple_container, docker, lima, native};
+use crate::platforms::{apple_container, docker, host, lima};
 use crate::setup::guest::Guest;
 use crate::setup::{State, Status};
 use crate::spec::{Bundle, Forward, NameLimit, Running, Spec, Tools};
@@ -51,7 +51,7 @@ pub(crate) trait Adapter: Sync {
 /// The platform's adapter: the one match over platforms for what they do.
 pub(crate) fn adapter(platform: Platform) -> &'static dyn Adapter {
     match platform {
-        Platform::Native => &native::ADAPTER,
+        Platform::Host => &host::ADAPTER,
         Platform::Docker => &docker::ADAPTER,
         Platform::AppleContainer => &apple_container::ADAPTER,
         Platform::Lima => &lima::ADAPTER,

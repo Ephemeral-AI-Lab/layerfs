@@ -52,7 +52,12 @@ fn aged(path: &Path, ago: Duration) {
 /// start's window) names Sandbox `sandbox`'s record folder there, with a
 /// link out of it to `outside`.
 fn run_folder(root: &Path, name: &str, sandbox: &str, outside: &Path) -> PathBuf {
-    let folder = dir(&paths::run_root(root).join(name));
+    run_folder_at(root, &paths::run_root(root), name, sandbox, outside)
+}
+
+/// [`run_folder`] in run root `run` of side root `root`.
+fn run_folder_at(root: &Path, run: &Path, name: &str, sandbox: &str, outside: &Path) -> PathBuf {
+    let folder = dir(&run.join(name));
     file(&folder.join("daemon.log"), 10);
     file(&folder.join("overlay/overlay.sqlite"), 20);
     file(&folder.join("workspaces/w1/file"), 5);
@@ -75,7 +80,7 @@ fn started(root: &Path, id: &str, folder: &Path, pid: u32) {
         platform: "mac".to_owned(),
         name: folder.file_name().unwrap().to_str().unwrap().to_owned(),
         container: "ab".repeat(32),
-        runtime: "native",
+        runtime: "process",
         uid: home::flock::euid(),
         gid: home::flock::egid(),
         directory: folder.display().to_string(),
@@ -95,9 +100,9 @@ fn started(root: &Path, id: &str, folder: &Path, pid: u32) {
             ("v", SdkValue::Int(home::RECORD_VERSION)),
             ("name", t(id)),
             ("project", t("shop/api")),
-            ("machine", t("native")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
             ("id", t(id)),
-            ("runtime", t("native")),
+            ("runtime", t("process")),
             ("daemon", daemon.to_record()),
         ]),
     )
@@ -167,7 +172,7 @@ fn the_run_root_sweep_removes_orphans_and_keeps_what_is_owned() {
             ("v", SdkValue::Int(home::RECORD_VERSION)),
             ("name", t("soon")),
             ("project", t("shop/api")),
-            ("machine", t("native")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
         ]),
     )
     .unwrap();
@@ -216,9 +221,13 @@ fn the_run_root_sweep_removes_orphans_and_keeps_what_is_owned() {
 fn a_worker_sweeps_when_it_starts_and_before_a_sandbox_create() {
     let scratch = worker_store::scratch("sweepw");
     let root = dir(&scratch.join("data"));
+    // the guest's run root (#819 R). This test does not mark the root as
+    // a worker's: the worker must do so before its start's sweep, or the
+    // sweep looks under the host machine's folder and `before` stays
+    let run = root.join("machine/linux-guest/run");
     let outside = dir(&scratch.join("outside"));
-    let before = run_folder(&root, "layerfs-0123abcd-before", "before", &outside);
-    let fresh = run_folder(&root, "layerfs-0123abcd-fresh", "fresh", &outside);
+    let before = run_folder_at(&root, &run, "layerfs-0123abcd-before", "before", &outside);
+    let fresh = run_folder_at(&root, &run, "layerfs-0123abcd-fresh", "fresh", &outside);
     aged(&fresh.join("owner"), Duration::ZERO);
 
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -233,6 +242,11 @@ fn a_worker_sweeps_when_it_starts_and_before_a_sandbox_create() {
     // the first answer comes after the start's sweep
     worker::call(&endpoint, "worker.ping", SdkValue::Null, &mut |_| {}).unwrap();
     assert!(!before.exists(), "the worker's start swept it");
+    assert_eq!(paths::run_root(&root), run);
+    assert!(!root
+        .join("machine")
+        .join(layerfs_home::names::HOST_MACHINE)
+        .exists());
     assert!(fresh.join("daemon.log").is_file(), "a fresh marker is kept");
 
     // one left after the start goes before the next create, which is

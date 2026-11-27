@@ -193,7 +193,13 @@ fn list_and_get_answer_the_records_then_the_live_state() {
     // records only: what the records say, no probe and no write
     let moved = generation(&home);
     let list = call(&home, "machine.list", &[], false);
-    for name in ["quiet", "slow", "fwd", "up", "native"] {
+    for name in [
+        "quiet",
+        "slow",
+        "fwd",
+        "up",
+        layerfs_home::names::HOST_MACHINE,
+    ] {
         let machine = listed(&list, name);
         assert_eq!(machine.get_text("state"), Some("ready"), "{machine:?}");
         assert_eq!(machine.get("observed_at"), Some(&SdkValue::Null));
@@ -219,7 +225,10 @@ fn list_and_get_answer_the_records_then_the_live_state() {
         took >= Duration::from_secs(9) && took < Duration::from_secs(20),
         "the list waited {took:?}"
     );
-    assert_eq!(listed(&list, "native").get_text("state"), Some("ready"));
+    assert_eq!(
+        listed(&list, layerfs_home::names::HOST_MACHINE).get_text("state"),
+        Some("ready")
+    );
     let forward = listed(&list, "fwd");
     assert_eq!(forward.get_text("state"), Some("broken"), "{forward:?}");
     assert_eq!(forward.get_text("reason"), Some("not_answering"));
@@ -342,27 +351,41 @@ fn list_and_get_answer_the_records_then_the_live_state() {
     let _ = std::fs::remove_dir_all(tools);
 }
 
-/// `native` is this computer: `--with live` reads the free bytes of the
-/// disk that holds the home, its data disk, and answers no provider tool
-/// and no worker (its calls run in the caller's process), so the short
-/// form shows the one value it has.
+/// The host machine is this computer: `--with live` reads the free bytes of
+/// the disk that holds the home, its data disk, and answers no provider
+/// tool. It reports the machine state and the host worker's health
+/// separately (#819 D7, spec §12): an enabled machine whose worker has not
+/// started is `absent`. The short form leaves out the worker's empty fields.
 #[test]
 fn native_with_live_answers_the_free_bytes_of_the_homes_disk() {
-    let home = tempdir("native");
-    let got = call(&home, "machine.get", &[("machine", "native")], true);
+    let home = tempdir(layerfs_home::names::HOST_MACHINE);
+    // a real home is private; the worker probe refuses one that is not
+    std::fs::set_permissions(&home, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let got = call(
+        &home,
+        "machine.get",
+        &[("machine", layerfs_home::names::HOST_MACHINE)],
+        true,
+    );
     assert_eq!(got.get_text("state"), Some("ready"), "{got:?}");
     let live = got.get("live").unwrap();
     assert!(live.get_int("disk_free_bytes").unwrap() > 0, "{live:?}");
     assert_eq!(live.get("tool_version"), Some(&SdkValue::Null));
-    assert_eq!(live.get("worker"), Some(&SdkValue::Null));
+    assert_eq!(live.get_text("machine_state"), Some("enabled"), "{live:?}");
+    let worker = live.get("worker").unwrap();
+    assert_eq!(worker.get_text("health"), Some("absent"), "{worker:?}");
+    assert_eq!(worker.get("pid"), Some(&SdkValue::Null), "{worker:?}");
     let args = SdkValue::map([
-        ("machine", SdkValue::text("native")),
+        ("machine", SdkValue::text(layerfs_home::names::HOST_MACHINE)),
         ("with", SdkValue::List(vec![SdkValue::text("live")])),
     ]);
     let short = layerfs_api::call(Some(&home), "machine.get", args, &mut |_| {}).unwrap();
     let live = short.get("live").unwrap();
     assert!(live.get_int("disk_free_bytes").unwrap() > 0, "{short:?}");
-    assert_eq!(live.get("worker"), None, "{short:?}");
+    assert_eq!(live.get_text("machine_state"), Some("enabled"), "{short:?}");
+    let worker = live.get("worker").unwrap();
+    assert_eq!(worker.get_text("health"), Some("absent"), "{short:?}");
+    assert_eq!(worker.get("pid"), None, "{short:?}");
     std::fs::remove_dir_all(home).unwrap();
 }
 

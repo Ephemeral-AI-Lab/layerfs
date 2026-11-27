@@ -62,7 +62,7 @@ fn read(home: &std::path::Path, project: &str) -> Result<SdkValue, (String, Stri
 
 #[test]
 fn a_missing_store_or_project_keeps_the_1_1_0_codes() {
-    let home = home_with(sqlite_record(t("native")));
+    let home = home_with(sqlite_record(t(layerfs_home::names::HOST_MACHINE)));
     assert_eq!(read(&home, "nope/api").unwrap_err().0, "NotFound");
     assert_eq!(read(&home, "shop/web").unwrap_err().0, "NotFound");
     std::fs::remove_dir_all(home).unwrap();
@@ -151,7 +151,7 @@ fn a_store_on_another_machine_goes_to_its_worker_with_its_record() {
 
 #[test]
 fn leases_are_held_counted_and_stale_ones_removed() {
-    let home = home_with(sqlite_record(t("native")));
+    let home = home_with(sqlite_record(t(layerfs_home::names::HOST_MACHINE)));
     let mine = paths::lease_dir(&home, "shop").join(std::process::id().to_string());
     let first = lease::hold(&home, "shop").unwrap();
     let second = lease::hold(&home, "shop").unwrap();
@@ -178,7 +178,7 @@ fn a_lease_names_its_process_so_a_reused_or_group_pid_never_holds() {
     for pid in [0, i32::MAX as u32 + 1, u32::MAX] {
         assert!(!layerfs_home::process::alive(pid), "{pid}");
     }
-    let home = home_with(sqlite_record(t("native")));
+    let home = home_with(sqlite_record(t(layerfs_home::names::HOST_MACHINE)));
     let dir = paths::lease_dir(&home, "shop");
     std::fs::create_dir_all(&dir).unwrap();
     for pid in ["0", "4294967295"] {

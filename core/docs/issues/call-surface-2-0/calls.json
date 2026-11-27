@@ -192,7 +192,7 @@
      "full_only": false
     },
     {
-     "check": "home.native_daemon",
+     "check": "home.host_daemon",
      "what": "the daemon for this computer is present and from this build",
      "full_only": false
     },
@@ -251,6 +251,11 @@
     {
      "check": "machine.worker.ping",
      "what": "the worker answers a request",
+     "full_only": false
+    },
+    {
+     "check": "machine.worker.retained",
+     "what": "the host worker keeps no write outcome its caller may not know",
      "full_only": false
     },
     {
@@ -5879,7 +5884,7 @@
        "problems: {\"findings\":[{\"machine\":\"demo-build\",\"check\":\"machine.worker.compatibility\",\"severity\":\"error\",\"message\":\"worker is from another build\",\"fix\":\"layerfs machine stop demo-build && layerfs machine start demo-build\"},{\"sandbox\":\"old-run\",\"check\":\"home.records\",\"severity\":\"error\",\"message\":\"its record names machine lab, which has no record\",\"fix\":\"layerfs sandbox remove old-run\"}]}",
        "a check gave no verdict: {\"not_checked\":[{\"store\":\"demo-experiments\",\"check\":\"store.connection\",\"reason\":\"timeout\"}]}"
       ],
-      "long": "{\"ok\":true,\"findings\":[],\"not_checked\":[],\"status\":\"ok\",\"counts\":{\"ok\":5,\"notice\":0,\"warning\":0,\"error\":0,\"not_checked\":0},\"observed_at\":\"2026-11-18T09:16:59Z\",\"tree\":{\"home\":\"/Users/me/.layerfs\",\"status\":\"ok\",\"coverage\":\"shallow\",\"checks\":[{\"check\":\"home.build\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"home.prerequisites\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"home.layout\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"home.records\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"home.bundle\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"home.native_daemon\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"home.capacity\",\"outcome\":\"pass\",\"from\":null}],\"blocked_by\":null,\"reason\":null,\"machines\":[{\"machine\":\"native\",\"status\":\"ok\",\"coverage\":\"shallow\",\"checks\":[{\"check\":\"machine.record\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"machine.state\",\"outcome\":\"pass\",\"from\":null}],\"blocked_by\":null,\"reason\":null},{\"machine\":\"docker\",\"status\":\"ok\",\"coverage\":\"shallow\",\"checks\":[{\"check\":\"machine.record\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"machine.state\",\"outcome\":\"pass\",\"from\":null}],\"blocked_by\":null,\"reason\":null}],\"stores\":[{\"store\":\"demo-experiments\",\"status\":\"ok\",\"coverage\":\"shallow\",\"checks\":[{\"check\":\"store.record\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"store.schema\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"store.connection\",\"outcome\":\"pass\",\"from\":null}],\"blocked_by\":null,\"reason\":null}],\"buckets\":[{\"bucket\":\"r2-main\",\"status\":\"ok\",\"coverage\":\"shallow\",\"checks\":[{\"check\":\"bucket.configuration\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"bucket.credentials\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"bucket.transport\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"bucket.list\",\"outcome\":\"pass\",\"from\":null}],\"blocked_by\":null,\"reason\":null}]}}"
+      "long": "{\"ok\":true,\"findings\":[],\"not_checked\":[],\"status\":\"ok\",\"counts\":{\"ok\":5,\"notice\":0,\"warning\":0,\"error\":0,\"not_checked\":0},\"observed_at\":\"2026-11-18T09:16:59Z\",\"tree\":{\"home\":\"/Users/me/.layerfs\",\"status\":\"ok\",\"coverage\":\"shallow\",\"checks\":[{\"check\":\"home.build\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"home.prerequisites\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"home.layout\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"home.records\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"home.bundle\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"home.host_daemon\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"home.capacity\",\"outcome\":\"pass\",\"from\":null}],\"blocked_by\":null,\"reason\":null,\"machines\":[{\"machine\":\"native\",\"status\":\"ok\",\"coverage\":\"shallow\",\"checks\":[{\"check\":\"machine.record\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"machine.state\",\"outcome\":\"pass\",\"from\":null}],\"blocked_by\":null,\"reason\":null},{\"machine\":\"docker\",\"status\":\"ok\",\"coverage\":\"shallow\",\"checks\":[{\"check\":\"machine.record\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"machine.state\",\"outcome\":\"pass\",\"from\":null}],\"blocked_by\":null,\"reason\":null}],\"stores\":[{\"store\":\"demo-experiments\",\"status\":\"ok\",\"coverage\":\"shallow\",\"checks\":[{\"check\":\"store.record\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"store.schema\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"store.connection\",\"outcome\":\"pass\",\"from\":null}],\"blocked_by\":null,\"reason\":null}],\"buckets\":[{\"bucket\":\"r2-main\",\"status\":\"ok\",\"coverage\":\"shallow\",\"checks\":[{\"check\":\"bucket.configuration\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"bucket.credentials\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"bucket.transport\",\"outcome\":\"pass\",\"from\":null},{\"check\":\"bucket.list\",\"outcome\":\"pass\",\"from\":null}],\"blocked_by\":null,\"reason\":null}]}}"
      },
      "dropped": [
       {
@@ -5974,7 +5979,7 @@
         "full_only": false
        },
        {
-        "check": "home.native_daemon",
+        "check": "home.host_daemon",
         "what": "the daemon for this computer is present and from this build",
         "full_only": false
        },
@@ -6120,9 +6125,10 @@
        "keys": [
         "disk_free_bytes",
         "tool_version",
+        "machine_state",
         "worker"
        ],
-       "help": "one probe of the provider and one hello to the worker, within 10 s, starting nothing. state, its companion, message and observed_at at the top level then come from the probe; the record is written only when the state word or its reason changed. disk_free_bytes: free bytes of its data disk; tool_version: the provider tool's version; worker: {protocol, bundle} as the worker answered. A value that was not read is null"
+       "help": "a live observation, starting nothing. On the macOS or Linux host, machine_state is the host machine's state and worker.health describes the endpoint after a bounded authenticated probe. For a guest, the provider and worker hello give the top-level state and worker protocol and bundle. disk_free_bytes is available space on the machine's data disk, tool_version is the provider tool's version. A value that was not read is null"
       }
      },
      "paging": null,
@@ -6897,7 +6903,11 @@
        "stopped_sandboxes",
        "stopped_sandboxes_count",
        "unknown_workspaces",
-       "unknown_workspaces_count"
+       "unknown_workspaces_count",
+       "unrecorded_writes",
+       "unrecorded_writes_count",
+       "running_writes",
+       "running_writes_note"
       ]
      },
      "long": [
@@ -6907,6 +6917,10 @@
       "stopped_sandboxes_count",
       "unknown_workspaces",
       "unknown_workspaces_count",
+      "unrecorded_writes",
+      "unrecorded_writes_count",
+      "running_writes",
+      "running_writes_note",
       "outcome",
       "machine",
       "forced"
@@ -7257,6 +7271,11 @@
        {
         "check": "machine.worker.ping",
         "what": "the worker answers a request",
+        "full_only": false
+       },
+       {
+        "check": "machine.worker.retained",
+        "what": "the host worker keeps no write outcome its caller may not know",
         "full_only": false
        },
        {

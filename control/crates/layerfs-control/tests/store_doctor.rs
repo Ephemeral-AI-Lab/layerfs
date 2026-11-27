@@ -42,7 +42,7 @@ fn fields(name: &str) -> SdkValue {
     SdkValue::map([
         ("name", SdkValue::text(name)),
         ("kind", SdkValue::text("sqlite")),
-        ("machine", SdkValue::text("native")),
+        ("machine", SdkValue::text(layerfs_home::names::HOST_MACHINE)),
         ("binding", SdkValue::Bytes(BINDING.to_vec())),
         ("cursor", SdkValue::Bytes(vec![9; 32])),
     ])
@@ -210,7 +210,13 @@ fn records_checks_come_first_and_a_missing_file_stops_at_the_connection() {
     );
     assert_eq!(
         findings[1].get_text("message"),
-        Some("machine native has no file where its record says; `layerfs store remove` deletes its record and every project record in it - check the machine's mounts first if the file may come back")
+        Some(
+            format!(
+                "machine {} has no file where its record says; `layerfs store remove` deletes its record and every project record in it - check the machine's mounts first if the file may come back",
+                layerfs_home::names::HOST_MACHINE
+            )
+            .as_str()
+        )
     );
 }
 

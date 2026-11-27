@@ -57,7 +57,7 @@ const ARGS: &[(&str, &str, &str)] = &[
     (
         "*",
         "machine",
-        "a machine: native, docker, or one `machine create` made",
+        "a machine: macos-host or linux-host, docker, or one `machine create` made",
     ),
     ("*", "store", "a Store, by its name in this home"),
     ("*", "sandbox", "a Sandbox, by name"),
@@ -470,7 +470,7 @@ const ARGS: &[(&str, &str, &str)] = &[
     (
         "store.create",
         "machine",
-        "make it on this machine; native when left out",
+        "make it on this machine; the host machine when left out",
     ),
     (
         "store.connect",
@@ -510,7 +510,7 @@ const ARGS: &[(&str, &str, &str)] = &[
     (
         "store.move",
         "machine",
-        "the machine it moves to; native moves it to this computer",
+        "the machine it moves to; the host machine moves it to this computer",
     ),
     (
         "store.doctor",

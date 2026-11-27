@@ -138,7 +138,7 @@ fn a_create_of_the_same_name_forgets_a_retired_docker_record() {
     )
     .unwrap();
     let backend = if cfg!(target_os = "macos") {
-        "native"
+        layerfs_home::names::HOST_MACHINE
     } else {
         "namespaces"
     };

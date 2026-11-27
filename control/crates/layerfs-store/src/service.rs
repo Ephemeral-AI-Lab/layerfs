@@ -22,27 +22,103 @@ use layerfs_home::outcome::{failed, refused, with_fix, Outcome};
 use layerfs_store_service::{OpenRefusal, StoreService};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, LazyLock, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
+
+/// The entry points allowed to borrow the service. A host call's outer
+/// cache slot accounts for every host borrower until its reply is ready.
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub(crate) enum Owner {
+    Direct,
+    Host,
+}
+
+impl Owner {
+    fn check(self, opened: &Opened) -> Result<(), SdkRefusal> {
+        if self == opened.owner {
+            Ok(())
+        } else {
+            Err(refused(
+                "InUse",
+                "the Store service belongs to another route",
+            ))
+        }
+    }
+}
 
 /// One opened Store and the clients that hold it.
 struct Opened {
+    owner: Owner,
     service: Arc<StoreService>,
     clients: usize,
     /// This service's private overlay directory.
     directory: PathBuf,
 }
 
-static STORES: LazyLock<Mutex<BTreeMap<PathBuf, Opened>>> = LazyLock::new(Default::default);
+/// A Store occupies its slot from reservation through physical release.
+pub(crate) enum Slot<T, C> {
+    Opening(Arc<Completion<()>>),
+    Ready(T),
+    Closing(Arc<Completion<C>>),
+}
+
+type ServiceSlot = Slot<Opened, ()>;
+static STORES: Mutex<BTreeMap<PathBuf, ServiceSlot>> = Mutex::new(BTreeMap::new());
+
+/// Shares the result of one transition with callers already waiting for it.
+pub(crate) struct Completion<T> {
+    result: Mutex<Option<Result<T, SdkRefusal>>>,
+    done: Condvar,
+}
+
+impl<T: Clone> Completion<T> {
+    pub(crate) fn new() -> Self {
+        Self {
+            result: Mutex::new(None),
+            done: Condvar::new(),
+        }
+    }
+
+    pub(crate) fn finish(&self, result: Result<T, SdkRefusal>) -> Result<T, SdkRefusal> {
+        *self
+            .result
+            .lock()
+            .unwrap_or_else(|error| error.into_inner()) = Some(result.clone());
+        self.done.notify_all();
+        result
+    }
+
+    pub(crate) fn wait(&self) -> Result<T, SdkRefusal> {
+        let result = self
+            .result
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        let result = self
+            .done
+            .wait_while(result, |result| result.is_none())
+            .unwrap_or_else(|error| error.into_inner());
+        result.as_ref().expect("transition finished").clone()
+    }
+}
+
+/// Lets the owner repair its cache slot and wake waiters even when open or
+/// close unwinds. The initiating caller still observes its original panic.
+pub(crate) fn transition<T, R>(
+    work: impl FnOnce() -> Result<T, SdkRefusal>,
+    publish: impl FnOnce(Result<T, SdkRefusal>) -> R,
+) -> R {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(work)) {
+        Ok(result) => publish(result),
+        Err(panic) => {
+            publish(Err(refused("Failed", "Store cache transition panicked")));
+            std::panic::resume_unwind(panic)
+        }
+    }
+}
 
 /// Opens the Store at `store` for this process, or refuses.
-fn open(store: &Path, args: &OpenArgs) -> Result<Opened, SdkRefusal> {
+fn open(store: &Path, args: &OpenArgs, owner: Owner) -> Result<Opened, SdkRefusal> {
     let identity = crate::identity::identity(args)?;
-    let directory = std::env::temp_dir().join(format!(
-        "layerfs-store-{}-{}",
-        std::process::id(),
-        layerfs_bridge::sdk_values::hex(&layerfs_home::helpers::random()?[..12])
-    ));
-    std::fs::create_dir(&directory).map_err(failed)?;
+    let directory = overlay_directory()?;
     let template = directory.join("overlay.sqlite");
     let opened = match identity.kind {
         crate::identity::Kind::Sqlite => {
@@ -60,16 +136,10 @@ fn open(store: &Path, args: &OpenArgs) -> Result<Opened, SdkRefusal> {
         }
     };
     // an older-format Store names the call that clears it (`state::outdated_fix`)
-    let opened = opened.map_err(|refusal| match (&args.store, refusal.code.as_str()) {
-        (Some(store), crate::state::OLD_STORE) => {
-            let postgresql = matches!(identity.kind, crate::identity::Kind::Postgresql { .. });
-            let fix = crate::state::outdated_fix(store, postgresql, &refusal.message);
-            with_fix(refusal, fix)
-        }
-        _ => refusal,
-    });
+    let opened = opened.map_err(|refusal| with_upgrade_fix(args, &identity, refusal));
     match opened {
         Ok(service) => Ok(Opened {
+            owner,
             service: Arc::new(service),
             clients: 0,
             directory,
@@ -81,17 +151,120 @@ fn open(store: &Path, args: &OpenArgs) -> Result<Opened, SdkRefusal> {
     }
 }
 
-/// One more client of the Store a call names, opening it first.
-pub(crate) fn acquire(args: &OpenArgs) -> Result<(), SdkRefusal> {
-    let store = args.store_path()?;
-    let mut stores = lock(&STORES)?;
-    if !stores.contains_key(&store) {
-        let opened = open(&store, args)?;
-        stores.insert(store.clone(), opened);
+/// A new private overlay directory in this process's temporary directory,
+/// under a random name (#436), readable only by its owner.
+fn overlay_directory() -> Result<PathBuf, SdkRefusal> {
+    let directory = std::env::temp_dir().join(format!(
+        "layerfs-store-{}-{}",
+        std::process::id(),
+        layerfs_bridge::sdk_values::hex(&layerfs_home::helpers::random()?[..12])
+    ));
+    let mut builder = std::fs::DirBuilder::new();
+    #[cfg(unix)]
+    std::os::unix::fs::DirBuilderExt::mode(&mut builder, 0o700);
+    builder.create(&directory).map_err(failed)?;
+    Ok(directory)
+}
+
+fn with_upgrade_fix(
+    args: &OpenArgs,
+    identity: &crate::identity::Identity,
+    refusal: SdkRefusal,
+) -> SdkRefusal {
+    match (&args.store, refusal.code.as_str()) {
+        (Some(store), crate::state::OLD_STORE) => {
+            let postgresql = matches!(identity.kind, crate::identity::Kind::Postgresql { .. });
+            let fix = crate::state::outdated_fix(store, postgresql, &refusal.message);
+            with_fix(refusal, fix)
+        }
+        _ => refusal,
     }
-    let opened = stores.get_mut(&store).expect("opened above");
-    opened.clients += 1;
-    Ok(())
+}
+
+/// Direct calls that use only published data, with no writer or Workspace.
+pub(crate) fn is_one_shot_read(method: &str) -> bool {
+    matches!(method, "fs.read" | "fs.stat" | "fs.list")
+}
+
+/// Checks the authoritative record's binding on the only session this read uses.
+pub(crate) fn postgres_read(method: &str, args: &OpenArgs, fields: SdkValue) -> Outcome {
+    let service = open_postgres_read(args)?;
+    layerfs_home::trace::step("store_open");
+    let outcome = dispatch(&service, method, fields);
+    layerfs_home::trace::step("call");
+    drop(service);
+    layerfs_home::trace::step("store_close");
+    outcome
+}
+
+/// A PostgreSQL read service over one new session, Full-checked against
+/// the authoritative record's binding: one call's (P-A), or a host
+/// worker's held session (#819 P-B, [`crate::postgresql::pool`]).
+pub(crate) fn open_postgres_read(args: &OpenArgs) -> Result<StoreService, SdkRefusal> {
+    let identity = crate::identity::identity(args)?;
+    crate::postgresql::open::open_read_only(args.postgresql.as_ref(), &identity)
+        .map_err(|refusal| with_upgrade_fix(args, &identity, refusal))
+}
+
+/// A writable PostgreSQL service over new sessions, held by a host worker
+/// between CLI writes (#819 P-B, [`crate::postgresql::pool`]), with its own
+/// private overlay directory, which the caller removes after closing it.
+pub(crate) fn open_postgres_write(args: &OpenArgs) -> Result<(StoreService, PathBuf), SdkRefusal> {
+    let identity = crate::identity::identity(args)?;
+    let directory = overlay_directory()?;
+    let template = directory.join("overlay.sqlite");
+    let opened =
+        crate::postgresql::open::open_postgres_held(args.postgresql.as_ref(), &identity, &template)
+            .map_err(|refusal| with_upgrade_fix(args, &identity, refusal));
+    match opened {
+        Ok(service) => Ok((service, directory)),
+        Err(refusal) => {
+            let _ = std::fs::remove_dir_all(&directory);
+            Err(refusal)
+        }
+    }
+}
+
+/// One more client of the Store a call names, opening it first.
+pub(crate) fn acquire(args: &OpenArgs, owner: Owner) -> Result<(), SdkRefusal> {
+    let store = args.store_path()?;
+    let pending = loop {
+        let mut stores = lock(&STORES)?;
+        match stores.get_mut(&store) {
+            Some(Slot::Ready(opened)) => {
+                owner.check(opened)?;
+                opened.clients += 1;
+                return Ok(());
+            }
+            Some(Slot::Opening(pending) | Slot::Closing(pending)) => {
+                let pending = pending.clone();
+                drop(stores);
+                pending.wait()?;
+            }
+            None => {
+                let pending = Arc::new(Completion::new());
+                stores.insert(store.clone(), Slot::Opening(pending.clone()));
+                break pending;
+            }
+        }
+    };
+    transition(
+        || open(&store, args, owner),
+        |result| {
+            let mut stores = lock(&STORES)?;
+            pending.finish(match result {
+                Ok(mut opened) => {
+                    opened.clients = 1;
+                    *stores.get_mut(&store).expect("open reserved") = Slot::Ready(opened);
+                    Ok(())
+                }
+                Err(refusal) => {
+                    stores.remove(&store);
+                    Err(refusal)
+                }
+            })
+        },
+    )
 }
 
 /// One client less; the last one closes the Store and removes its overlay
@@ -99,39 +272,66 @@ pub(crate) fn acquire(args: &OpenArgs) -> Result<(), SdkRefusal> {
 /// returns, and the service closes when it is dropped then: its idle
 /// producer handle's kept ordinals are returned here, and only a handle
 /// that running call gives back later is dropped without that release.
-pub(crate) fn release(args: &OpenArgs) -> Result<(), SdkRefusal> {
+pub(crate) fn release(args: &OpenArgs, owner: Owner) -> Result<(), SdkRefusal> {
     let store = args.store_path()?;
-    let mut stores = lock(&STORES)?;
-    let Some(opened) = stores.get_mut(&store) else {
-        return Err(refused("InvalidInput", "this process holds no such Store"));
+    let pending = Arc::new(Completion::new());
+    let opened = {
+        let mut stores = lock(&STORES)?;
+        let Some(Slot::Ready(opened)) = stores.get_mut(&store) else {
+            return Err(refused("InvalidInput", "this process holds no such Store"));
+        };
+        owner.check(opened)?;
+        opened.clients -= 1;
+        if opened.clients > 0 {
+            return Ok(());
+        }
+        let Some(Slot::Ready(opened)) =
+            stores.insert(store.clone(), Slot::Closing(pending.clone()))
+        else {
+            unreachable!("ready while locked");
+        };
+        opened
     };
-    opened.clients = opened.clients.saturating_sub(1);
-    if opened.clients > 0 {
-        return Ok(());
-    }
-    let opened = stores.remove(&store).expect("present above");
-    drop(stores);
+    transition(
+        || close_service(opened),
+        |result| {
+            lock(&STORES)?.remove(&store);
+            pending.finish(result)
+        },
+    )
+}
+
+fn close_service(opened: Opened) -> Result<(), SdkRefusal> {
     let closed = match Arc::try_unwrap(opened.service) {
         Ok(service) => service.close().map_err(failed),
         // A call still running holds the service; its idle producer handle
         // returns its kept ordinals now (#768). A handle that call hands
         // back after this is dropped with the service, unreleased.
-        Err(service) => {
+        Err(service) if opened.owner == Owner::Direct => {
             service.store.release_producer();
             Ok(())
         }
+        Err(_) => Err(refused(
+            "InUse",
+            "a host call still holds the Store service",
+        )),
     };
     let removed = std::fs::remove_dir_all(&opened.directory).map_err(failed);
     closed.and(removed)
 }
 
 /// The open service of the Store a call names.
-fn service(args: &OpenArgs) -> Result<Arc<StoreService>, SdkRefusal> {
+fn service(args: &OpenArgs, owner: Owner) -> Result<Arc<StoreService>, SdkRefusal> {
     let store = args.store_path()?;
-    lock(&STORES)?
-        .get(&store)
-        .map(|opened| opened.service.clone())
-        .ok_or_else(|| refused("InvalidInput", "the client has not opened its Store"))
+    let stores = lock(&STORES)?;
+    let Some(Slot::Ready(opened)) = stores.get(&store) else {
+        return Err(refused(
+            "InvalidInput",
+            "the client has not opened its Store",
+        ));
+    };
+    owner.check(opened)?;
+    Ok(opened.service.clone())
 }
 
 /// Runs `work` on the Store a call names, opened for it when this process
@@ -141,19 +341,58 @@ pub fn with_service<T>(
     args: &OpenArgs,
     work: impl FnOnce(&Arc<StoreService>) -> Result<T, SdkRefusal>,
 ) -> Result<T, SdkRefusal> {
-    acquire(args)?;
-    let result = service(args).and_then(|service| work(&service));
-    let released = release(args);
-    let value = result?;
-    released?;
-    Ok(value)
+    acquire(args, Owner::Direct)?;
+    transition(
+        || service(args, Owner::Direct).and_then(|service| work(&service)),
+        |result| {
+            let released = release(args, Owner::Direct);
+            let value = result?;
+            released?;
+            Ok(value)
+        },
+    )
 }
 
 /// Runs one Store call in this process on the Store `open` names, with
 /// the call's own arguments `args` (any routing key in them is dropped).
 pub fn call(method: &str, open: &OpenArgs, args: SdkValue) -> Outcome {
-    let service = service(open)?;
-    let args = match args {
+    call_owned(method, open, args, Owner::Direct)
+}
+
+pub(crate) fn call_owned(method: &str, open: &OpenArgs, args: SdkValue, owner: Owner) -> Outcome {
+    let service = service(open, owner)?;
+    dispatch(&service, method, args)
+}
+
+/// [`call_owned`] with the write's content or changes pulled from `source`.
+pub(crate) fn call_streamed(
+    method: &str,
+    open: &OpenArgs,
+    args: SdkValue,
+    owner: Owner,
+    source: &mut dyn layerfs_store_service::methods::Source,
+) -> Outcome {
+    let service = service(open, owner)?;
+    dispatch_streamed(&service, method, args, source)
+}
+
+/// Runs write `method` once on `service`, its content or changes pulled
+/// from `source` (a host worker's held PostgreSQL write session).
+pub(crate) fn dispatch_streamed(
+    service: &StoreService,
+    method: &str,
+    args: SdkValue,
+    source: &mut dyn layerfs_store_service::methods::Source,
+) -> Outcome {
+    let call = SdkCall {
+        method: method.to_owned(),
+        args: routed_out(args),
+    };
+    layerfs_store_service::methods::call_streamed(service, &call, source)
+}
+
+fn routed_out(args: SdkValue) -> SdkValue {
+    match args {
         SdkValue::Map(fields) => SdkValue::Map(
             fields
                 .into_iter()
@@ -161,12 +400,15 @@ pub fn call(method: &str, open: &OpenArgs, args: SdkValue) -> Outcome {
                 .collect(),
         ),
         other => other,
-    };
+    }
+}
+
+pub(crate) fn dispatch(service: &StoreService, method: &str, args: SdkValue) -> Outcome {
     let call = SdkCall {
         method: method.to_owned(),
-        args,
+        args: routed_out(args),
     };
-    layerfs_store_service::methods::call(&service, &call)
+    layerfs_store_service::methods::call(service, &call)
 }
 
 /// The newest Commit of `branch`, read in this process; `None` when it has none.
@@ -177,7 +419,7 @@ pub fn head(
     if args.postgresql.is_some() {
         return crate::postgresql::reader::head(args, branch);
     }
-    let service = service(args)?;
+    let service = service(args, Owner::Direct)?;
     let page = service
         .store
         .published(|history| {

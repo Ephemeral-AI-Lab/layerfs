@@ -157,7 +157,7 @@ fn exec_ids_records_and_cancel_on_native() {
         Some(&home),
         "machine.update",
         SdkValue::map([
-            ("machine", SdkValue::text("native")),
+            ("machine", SdkValue::text(layerfs_api::names::HOST_MACHINE)),
             ("daemon", SdkValue::text(daemon.as_str())),
         ]),
         &mut |_| {},
@@ -184,7 +184,7 @@ fn exec_ids_records_and_cancel_on_native() {
     let sandbox = [
         ("project", t("shop/api")),
         ("name", t("s1")),
-        ("machine", t("native")),
+        ("machine", t(layerfs_api::names::HOST_MACHINE)),
     ];
     ok(&home, "sandbox.create", &sandbox);
     let mount = [("sandbox", t("s1")), ("branch", t("dev")), ("name", t("w"))];
@@ -248,7 +248,7 @@ fn exec_ids_records_and_cancel_on_native() {
     assert!(record.get_int("started").is_some(), "{record:?}");
     let running = SdkValue::List(vec![t(&long_1)]);
     assert_eq!(workspace.get("running"), Some(&running), "{got:?}");
-    let run = std::fs::read_dir(home.join("machine/native/run"))
+    let run = std::fs::read_dir(home::paths::run_root(&home))
         .unwrap()
         .map(|entry| entry.unwrap().path())
         .find(|path| path.join("overlay").is_dir())
@@ -442,7 +442,7 @@ fn two_commands_run_at_once_in_one_workspace_on_native() {
         Some(&home),
         "machine.update",
         SdkValue::map([
-            ("machine", SdkValue::text("native")),
+            ("machine", SdkValue::text(layerfs_api::names::HOST_MACHINE)),
             ("daemon", SdkValue::text(daemon.as_str())),
         ]),
         &mut |_| {},
@@ -469,7 +469,7 @@ fn two_commands_run_at_once_in_one_workspace_on_native() {
     let sandbox = [
         ("project", t("shop/api")),
         ("name", t("s1")),
-        ("machine", t("native")),
+        ("machine", t(layerfs_api::names::HOST_MACHINE)),
     ];
     ok(&home, "sandbox.create", &sandbox);
     let mount = [("sandbox", t("s1")), ("branch", t("dev")), ("name", t("w"))];
@@ -552,7 +552,7 @@ fn forced_native_machine_stop_cancels_running_commands() {
         Some(&home),
         "machine.update",
         SdkValue::map([
-            ("machine", SdkValue::text("native")),
+            ("machine", SdkValue::text(layerfs_api::names::HOST_MACHINE)),
             ("daemon", SdkValue::text(daemon.as_str())),
         ]),
         &mut |_| {},
@@ -581,7 +581,7 @@ fn forced_native_machine_stop_cancels_running_commands() {
     let sandbox = [
         ("project", t("shop/api")),
         ("name", t("s1")),
-        ("machine", t("native")),
+        ("machine", t(layerfs_api::names::HOST_MACHINE)),
     ];
     ok(&home, "sandbox.create", &sandbox);
     let mount = [("sandbox", t("s1")), ("branch", t("dev")), ("name", t("w"))];
@@ -603,7 +603,10 @@ fn forced_native_machine_stop_cancels_running_commands() {
         .unwrap()
         .get_int("pgid")
         .unwrap();
-    let force = [("machine", t("native")), ("force", SdkValue::Bool(true))];
+    let force = [
+        ("machine", t(layerfs_api::names::HOST_MACHINE)),
+        ("force", SdkValue::Bool(true)),
+    ];
     let stopped = ok(&home, "machine.stop", &force);
     assert_eq!(
         stopped.get("stopped_sandboxes"),

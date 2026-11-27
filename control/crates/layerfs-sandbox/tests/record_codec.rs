@@ -24,7 +24,7 @@ fn scratch_home(tag: &str) -> std::path::PathBuf {
 fn a_sandbox_record_reads_and_writes_back_the_same_json() {
     for text in [
         // a native record: `daemon` came mid-create, before `id`
-        r#"{"v":1,"name":"t1","project":"shop/api","machine":"native","created":3,"backend":"native","route":"nfs","runtime_id":"c0","daemon":{"platform":"mac","name":"lfs-0-t1","container":"c0","runtime":"native","uid":501,"gid":20,"directory":"/r/lfs-0-t1","pid":7,"start":"9","boot":"00000000000000000000000000000001","port":5,"image":"local","labels":[{"key":"layerfs.role","value":"sandbox"}]},"id":"t1","platform":"mac","runtime":"native","image":"local"}"#,
+        r#"{"v":1,"name":"t1","project":"shop/api","machine":"macos-host","created":3,"backend":"process","route":"nfs","runtime_id":"c0","daemon":{"platform":"mac","name":"lfs-0-t1","container":"c0","runtime":"process","uid":501,"gid":20,"directory":"/r/lfs-0-t1","pid":7,"start":"9","boot":"00000000000000000000000000000001","port":5,"image":"local","labels":[{"key":"layerfs.role","value":"sandbox"}]},"id":"t1","platform":"mac","runtime":"process","image":"local"}"#,
         // nulls, a mistyped field, an unknown one and a forward
         r#"{"name":"b","id":null,"created":"soon","left":"ended","extra":[1,{"a":null}],"daemon":{"forward":{"address":"127.0.0.1:9","machine":"lima","pid":3,"pid_start":"4","pid_boot":"ff"},"name":null,"runtime":"namespaces","platform":"lima","image":null,"docker":"/var/run/docker.sock"}}"#,
         // labels of another shape and a daemon that is not a map
@@ -76,15 +76,15 @@ fn typed_fields_read_as_the_untyped_record_read_them() {
 
 #[test]
 fn a_started_record_keeps_its_fields_in_place_and_adds_the_rest_last() {
-    let native = r#"{"v":1,"name":"t1","project":"p","machine":"native","created":3,"op":{"id":"op-1"},"backend":"native","route":"nfs","runtime_id":"c0","daemon":{"pid":7}}"#;
+    let native = r#"{"v":1,"name":"t1","project":"p","machine":"macos-host","created":3,"op":{"id":"op-1"},"backend":"process","route":"nfs","runtime_id":"c0","daemon":{"pid":7}}"#;
     let started = Started::read(&value(
-        r#"{"sandbox":"t1","name":"lfs-0-t1","platform":"mac","runtime":"native","route":"nfs","runtime_id":"c0"}"#,
+        r#"{"sandbox":"t1","name":"lfs-0-t1","platform":"mac","runtime":"process","route":"nfs","runtime_id":"c0"}"#,
     ));
     let record = SandboxRecord::from_record("t1", value(native)).started(&started);
     // the intent is dropped; `image` was not answered and is null
     assert_eq!(
         print(&record.to_record()),
-        r#"{"v":1,"name":"t1","project":"p","machine":"native","created":3,"backend":"native","route":"nfs","runtime_id":"c0","daemon":{"pid":7},"id":"t1","platform":"mac","runtime":"native","image":null}"#
+        r#"{"v":1,"name":"t1","project":"p","machine":"macos-host","created":3,"backend":"process","route":"nfs","runtime_id":"c0","daemon":{"pid":7},"id":"t1","platform":"mac","runtime":"process","image":null}"#
     );
 }
 
@@ -233,7 +233,14 @@ fn unmount_guard_forceable_rejects_crashed_and_already_forced_records() {
 fn a_created_sandbox_records_one_generation_that_round_trips() {
     let home = scratch_home("codec");
     let op = Op::begin("sandbox.create", "create", SdkValue::Null).expect("intent");
-    let record = SandboxRecord::creating(&home, "t1", "shop/api", "native", &op).expect("record");
+    let record = SandboxRecord::creating(
+        &home,
+        "t1",
+        "shop/api",
+        layerfs_home::names::HOST_MACHINE,
+        &op,
+    )
+    .expect("record");
     let generation = record.generation().expect("a generation").to_owned();
     assert!(!generation.is_empty());
     let id = layerfs_home::home::opened(&home).expect("home").id;
@@ -247,11 +254,11 @@ fn a_created_sandbox_records_one_generation_that_round_trips() {
     assert_eq!(read.generation(), Some(generation.as_str()));
 
     // a Sandbox recorded before generations has none, and a write keeps it so
-    let old = SandboxRecord::from_record("t1", value(r#"{"name":"t1","machine":"native"}"#));
+    let old = SandboxRecord::from_record("t1", value(r#"{"name":"t1","machine":"macos-host"}"#));
     assert_eq!(old.generation(), None);
     assert_eq!(
         print(&old.to_record()),
-        r#"{"name":"t1","machine":"native"}"#
+        r#"{"name":"t1","machine":"macos-host"}"#
     );
 }
 
@@ -266,14 +273,21 @@ fn a_generation_is_minted_past_the_retired_one_after_a_backwards_clock() {
     let future = format!("p1:{id}.sandbox:{:016}:aa", u64::MAX / 4);
     SandboxTombstone {
         name: "t1".to_owned(),
-        machine: "native".to_owned(),
+        machine: layerfs_home::names::HOST_MACHINE.to_owned(),
         generation: future.clone(),
         retired_ms: 0,
     }
     .write(&home)
     .expect("tombstone");
     let op = Op::begin("sandbox.create", "create", SdkValue::Null).expect("intent");
-    let record = SandboxRecord::creating(&home, "t1", "shop/api", "native", &op).expect("record");
+    let record = SandboxRecord::creating(
+        &home,
+        "t1",
+        "shop/api",
+        layerfs_home::names::HOST_MACHINE,
+        &op,
+    )
+    .expect("record");
     let generation = record.generation().expect("a generation");
     assert_eq!(
         layerfs_history::compare_place(&future, generation),

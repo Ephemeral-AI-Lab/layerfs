@@ -36,7 +36,7 @@ fn urls() -> Vec<String> {
 fn native_and_docker_dial_every_url_as_given() {
     let scratch = Scratch::new("reach-localhost");
     let mut changed = Vec::new();
-    for kind in [Platform::Native, Platform::Docker] {
+    for kind in [Platform::Host, Platform::Docker] {
         let spec = scratch.spec(kind);
         for url in urls() {
             let outcome = machine::reach(&spec, "pg", &url);

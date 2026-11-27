@@ -37,7 +37,12 @@
 mod connection;
 #[cfg(feature = "worker-fault")]
 pub mod fault;
+#[cfg(all(feature = "machine", any(target_os = "macos", target_os = "linux")))]
+mod host;
 mod ops;
+
+#[cfg(all(feature = "machine", any(target_os = "macos", target_os = "linux")))]
+pub use host::serve_host;
 
 pub use connection::REQUEST_WAIT;
 use layerfs_bridge::control::SdkValue;

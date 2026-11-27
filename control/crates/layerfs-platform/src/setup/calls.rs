@@ -51,7 +51,7 @@ pub struct Status {
     /// Whether the worker at the spec's endpoint answered its hello, asked
     /// only when the kernel runs: `Some(false)` when no endpoint was given.
     /// `None` when not asked, and on a machine whose calls run in the
-    /// caller's process (it has no worker).
+    /// caller's process (it has no machine worker).
     pub worker: Option<bool>,
     /// Free bytes of the data disk at `/layerfs/data`, as the guest sees them.
     pub free_disk: Option<u64>,
@@ -93,7 +93,7 @@ pub fn name_limit(platform: Platform) -> Option<NameLimit> {
 
 /// The provider's name of the volume or disk that holds the data of the
 /// machine `spec` describes: a docker or Apple Container volume
-/// (`<vm_name>-data`), a Lima disk; `None` on `native`, whose data is the
+/// (`<vm_name>-data`), a Lima disk; `None` on `host`, whose data is the
 /// home's. From the spec alone: the provider is asked nothing.
 pub fn data_volume(spec: &Spec) -> Option<String> {
     adapter(spec.kind).data_volume(spec)
@@ -130,7 +130,7 @@ pub fn start(spec: &Spec, bundle: &Bundle) -> Result<Option<Running>, MachineErr
 }
 
 /// Stops the machine's worker and, where it has one, its VM; disks stay.
-/// `docker` stops only its worker; `native` has nothing to stop.
+/// `docker` stops only its worker; `host` has nothing to stop.
 pub fn stop(spec: &Spec) -> Result<(), MachineError> {
     spec.validate()?;
     adapter(spec.kind).stop(spec, false)
@@ -232,7 +232,7 @@ pub fn load_image(spec: &Spec, archive: &Path) -> Result<String, MachineError> {
 /// `apple-container`) refuses a loopback host `Unsupported`, naming what it
 /// calls this host (`host.docker.internal`, `host.lima.internal`, the
 /// network's gateway), with which `layerfs store connect <store> <url>`
-/// connects the Store again; `native` and `docker` on a Linux Engine share
+/// connects the Store again; `host` and `docker` on a Linux Engine share
 /// it. Starts
 /// nothing; no message holds any part of the URL but a loopback host.
 pub fn reach(spec: &Spec, store: &str, url: &str) -> Result<String, MachineError> {
@@ -267,7 +267,7 @@ pub fn loopback_hint(spec: &Spec, store: &str, url: &str) -> Option<String> {
 
 /// The host loopback address at which this process reaches a Sandbox
 /// daemon listening on `127.0.0.1:<guest_port>` in `spec`'s machine (#535
-/// G4, §7.2): Workspace calls dial it, not the worker. `native` answers
+/// G4, §7.2): Workspace calls dial it, not the worker. `host` answers
 /// `127.0.0.1:<guest_port>` with nothing to close; `lima` starts a
 /// detached `ssh -N -L 127.0.0.1:<free port>:127.0.0.1:<guest_port>` (lima
 /// through its own `ssh.config`, as its template forwards no other guest

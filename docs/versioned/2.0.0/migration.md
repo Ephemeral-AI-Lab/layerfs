@@ -118,7 +118,7 @@ short form; `detail: true` asks the long form
 | `branch.diff_branches(from, to, ...)` | `commit.diff(project, ref, { from })` | **Replaced.** A ref is a Branch name first, then a Commit |
 | `branch.merge(a, b, name, message?, units?)` | `branch.merge(project, branch, from, { into, units, expected, message })` | **Changed.** Merges `from` into `branch`, or with `into` into a new Branch (1.1.0's form) |
 | `branch.publish(branch, commit?)` | `branch.publish(project, branch, { at, expected, force })` | **Replaced.** |
-| `sandbox.create({ image })` answering a numbered Sandbox | `sandbox.create(project, name, { machine, image, mount })` | **Changed.** A Sandbox is named, bound to one project and runs on a machine: with no `machine`, on its sqlite Store's machine, else `native`. [`sandbox`](../../architecture/api/sdk/sandbox.md) |
+| `sandbox.create({ image })` answering a numbered Sandbox | `sandbox.create(project, name, { machine, image, mount })` | **Changed.** A Sandbox is named, bound to one project and runs on a machine: with no `machine`, on its sqlite Store's machine, else the host machine. [`sandbox`](../../architecture/api/sdk/sandbox.md) |
 | `sandbox.list_workspaces(sandbox, ...)` | `sandbox.get(sandbox)` (its `workspaces`), `workspace.list({ sandbox, limit, cursor })` | **Replaced.** |
 | `sandbox.close(sandbox)` | `sandbox.remove(sandbox, { force })` | **Changed.** `InUse` while a Workspace is mounted, `Busy` while a command runs, unless `force` |
 | `workspace.mount(sandbox, branch)` answering `{ sandbox, path }` | `workspace.mount(sandbox, branch, { name })` answering `{ workspace, path }` | **Changed.** `workspace` is `<sandbox>:<name>`, the name the Branch's unless given; `main` is refused, mount a forked Branch |
@@ -449,7 +449,7 @@ and the public code each now leaves under, is in
 | `events.subscribe` / `poll` / `unsubscribe`, SSE and NDJSON streams (#521); the trace subscription of `@layerfs/backend` (1.1.0) | none | **Removed** (O26). Trace files are the feed: `<home>/trace/calls.jsonl` holds one line per call, read with `home.log` (#659); `LAYERFS_TRACE` records worker connections and step times ([home and records](../../architecture/control/home/README.md#traces-and-the-call-log)) |
 | job registry: `start_init` / `get_init` / `subscribe_init` | one `on_progress` stream on the call itself | **Removed** (O22). Another process cannot watch a call it did not start; a running operation is the `busy` state with its `op` (`store get`, `machine get`, `sandbox get`) |
 | progress of any call | `on_progress` on the 19 calls whose row says progress (the long-running calls and the five doctors that check children); the shell form is `--progress` (JSON lines on stderr) | **Changed.** One event shape, `{ phase, done, total }`; a doctor adds `node`, `workspace.exec` adds `exec`. [Shell switches](calls.md#shell-switches), [Events](../../architecture/api/calls/errors-and-events.md#progress-events) |
-| `exec` output | `{ exit_code, stdout, stderr }` in the answer; `stdout` / `stderr` functions, `stream: true`, `--stream` | **Changed.** Output is delivered after the command ends, never live. A stream of at most 1 MiB is answered whole; a longer one answers its last 1 MiB and names the file that holds all of it (`stdout_file`, read with `sandbox files`). Run for this page on macOS `native` ([quickstart](quickstart.md#4-a-sandbox-a-workspace-and-a-commit)) |
+| `exec` output | `{ exit_code, stdout, stderr }` in the answer; `stdout` / `stderr` functions, `stream: true`, `--stream` | **Changed.** Output is delivered after the command ends, never live. A stream of at most 1 MiB is answered whole; a longer one answers its last 1 MiB and names the file that holds all of it (`stdout_file`, read with `sandbox files`). Run for this page on macOS `macos-host` ([quickstart](quickstart.md#4-a-sandbox-a-workspace-and-a-commit)) |
 | exit code | `layerfs workspace exec` exits with the command's own code in every form; 125 still means refused, with nothing on stdout | A command that exits 2 or 125 looks like a usage error or a refusal; stderr tells them apart ([CLI: Streams](../../architecture/api/front-ends/README.md#the-layerfs-command)) |
 
 Seven decisions about this contract are open
@@ -473,7 +473,7 @@ A doctor **exits 0 once its report is made**, whatever it found; the short
 form is `{"ok": true}` alone when nothing was found and every check was
 made. It is 125 when the thing is not in the home (`NotFound`), and 2 for a
 wrong command line. Run for this page: `layerfs home doctor`, `machine
-doctor native`, `store doctor shop` and `project doctor shop/api --full` on a
+doctor macos-host`, `store doctor shop` and `project doctor shop/api --full` on a
 scratch home ([the calls](calls.md#project-8)).
 
 ## 9. The Workspace flow
@@ -489,10 +489,10 @@ A Workspace is a mounted side Branch where ordinary commands run. The route is
 | a single-project MCP session that unmounted at end of input or on a signal (#521) | nothing commits or unmounts for you | **Removed.** `workspace.unmount` is `Dirty` while changes are uncommitted, unless `discard`; `sandbox.remove` is `InUse` while a Workspace is mounted, unless `force` |
 | `mount` of `main` | refused `InvalidInput`: fork a Branch from it | **Changed** |
 | `commit` | one Commit; merges first when the Branch moved since the mount, `force` publishes over a moved head; a conflict writes markers and commits nothing (`Conflict`) | unchanged in meaning |
-| a Sandbox's commands on its machine's network (a server another Sandbox ran was reachable on `127.0.0.1`, two Sandboxes could not use one port) | every namespaces Sandbox's commands have a network of their own: their own `127.0.0.1`, out to anything, siblings, the daemon's and the worker's port at the machine's addresses closed (forwards on the host stay, guarded by their secrets) | **Changed** (2026-11-24, no backward compatibility): reach a machine service at the machine's address, not `127.0.0.1`; a Sandbox started by an earlier build is broken after the upgrade (`layerfs sandbox remove` and create it again); on a Linux host forwarding off, a dropping forward chain or a resolver with no IPv4 server a Sandbox reaches refuses `sandbox.create` `Unavailable` with the fix; IPv6 other than `::1` fails at once. macOS `native` unchanged. [Backends](../../architecture/control/sandboxes/backends.md#every-namespaces-sandboxs-own-network) |
+| a Sandbox's commands on its machine's network (a server another Sandbox ran was reachable on `127.0.0.1`, two Sandboxes could not use one port) | every namespaces Sandbox's commands have a network of their own: their own `127.0.0.1`, out to anything, siblings, the daemon's and the worker's port at the machine's addresses closed (forwards on the host stay, guarded by their secrets) | **Changed** (2026-11-24, no backward compatibility): reach a machine service at the machine's address, not `127.0.0.1`; a Sandbox started by an earlier build is broken after the upgrade (`layerfs sandbox remove` and create it again); on a Linux host forwarding off, a dropping forward chain or a resolver with no IPv4 server a Sandbox reaches refuses `sandbox.create` `Unavailable` with the fix; IPv6 other than `::1` fails at once. macOS `macos-host` unchanged. [Backends](../../architecture/control/sandboxes/backends.md#every-namespaces-sandboxs-own-network) |
 | the Store profile | WAL with `synchronous=NORMAL`, the only SQLite profile (record label `normal`; a record that says `disposable` reads as `normal` and is never rewritten); Durable is disabled by the owner | **Changed** from 1.1.0's `synchronous=OFF` (owner, 2026-11-17; OFF removed 2026-11-23); no power-loss guarantee is claimed yet |
 
-Run for this page on macOS `native` with a daemon of the same build, in the
+Run for this page on macOS `macos-host` with a daemon of the same build, in the
 shell, Node and Python ([quickstart](quickstart.md#4-a-sandbox-a-workspace-and-a-commit),
 [examples](examples/README.md#the-workspace-route)).
 
@@ -528,7 +528,7 @@ For this version of the page (the 2.0 call table, branch `cs20-pkg-z` from
 the command, the Node addon, the Python module and the daemon, against
 scratch homes: the four [examples](examples/README.md) and the
 [quickstart](quickstart.md) (shell, Node and Python, a Sandbox and a
-Workspace on `native` included), `layerfs sandbox close x` and `layerfs
+Workspace on the host machine included), `layerfs sandbox close x` and `layerfs
 doctor` (both exit 2, no such call), Node `layerfs.sandbox.close` (not a
 function), the doctors of section 8, and the folder scope refusals in
 [the calls](calls.md#folder-scope). The install steps of section 1 were

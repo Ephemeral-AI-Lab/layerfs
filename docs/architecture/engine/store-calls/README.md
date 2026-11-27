@@ -34,12 +34,12 @@ Commits use; those are described under [Commit](../commit/README.md) and
    saved pages       one Commit
         |                 |                     |
         v                 v                     v
- StoreService { store: Arc<Store>, owner: OwnerClient, bound <= 64 }
-   kernel_guard::check -> open (Normal)     -> overlay template
+ StoreService { store: Arc<Store>, overlay: Later | Started, bound <= 64 }
+   kernel_guard::check -> SQLite read open  -> overlay template (first file change)
         |                                     |
         v                                     v
    Store (SQLite file or PostgreSQL)     overlay owner: one private
-   one writer + read-only sessions       overlay per file call
+   SQLite writer at first mutation      overlay per file call
 ```
 
 ## What it does
@@ -50,29 +50,82 @@ Commits use; those are described under [Commit](../commit/README.md) and
 | --- | --- | --- |
 | One route, in the caller's process | `fs.*`, `branch.*`, `project.*` and `store.stats` run on this engine in the process that opened the Store. There is no daemon route for them and no fallback. | [`lib.rs`](../../../../engine/crates/layerfs-store-service/src/lib.rs), [`service.rs`](../../../../control/crates/layerfs-store/src/service.rs) |
 | Daemon serves only Workspace calls | Mount, exec, Workspace Commit, status and unmount go to a Sandbox daemon; the daemon reuses this crate's `store` and `overlay` modules, not `StoreService`. | [`store_service.rs`](../../../../engine/crates/layerfs-store-service/src/store_service.rs), [Daemon](../daemon/README.md) |
-| Kernel guard first | Before any file opens or is created, `kernel_guard::check` verifies without modifying permissions that the Store's own directory (`store.parent()`, or `.` when empty) exists as a real `0700` directory owned by the current effective user (refusing a missing path, a symlink, wrong owner or `mode & 0o077 != 0` with a `chmod 700` hint) and checks the filesystem type. Linux: ext4, xfs, btrfs. macOS: apfs or hfs (native Sandbox, one shared macOS kernel). Anything else: `OpenRefusal::Unsupported` with its reason. | [`kernel_guard.rs`](../../../../engine/crates/layerfs-store-service/src/kernel_guard.rs) |
+| Kernel guard first | Before any file opens or is created, `kernel_guard::check` verifies without modifying permissions that the Store's own directory (`store.parent()`, or `.` when empty) exists as a real `0700` directory owned by the current effective user (refusing a missing path, a symlink, wrong owner or `mode & 0o077 != 0` with a `chmod 700` hint) and checks the filesystem type. Linux: ext4, xfs, btrfs. macOS: apfs or hfs (`process` Sandbox, one shared macOS kernel). Anything else: `OpenRefusal::Unsupported` with its reason. | [`kernel_guard.rs`](../../../../engine/crates/layerfs-store-service/src/kernel_guard.rs) |
 | macOS and Windows hosts | A process that cannot open the Store under the guard sends its Store calls to a loopback worker: a Linux process (a container on macOS, a WSL2 distribution on Windows) that runs this same engine and opens the Store directly. The engine knows no worker. | [Control: Workers and reach](../../control/machines/workers-and-reach.md) |
 | PostgreSQL | `open_postgres` runs no kernel guard: the Store is a server reached over a connection. | [`store_service.rs`](../../../../engine/crates/layerfs-store-service/src/store_service.rs), [`bootstrap.rs`](../../../../engine/crates/layerfs-store-service/src/bootstrap.rs) |
 
 ### Opening the service
 
+Each process has one open owner per Store path. The owner reserves a cache
+entry, releases the shared cache locks, then opens the provider. Calls on
+other Stores can progress during that open or close. Same-Store callers
+waiting on an open receive its outcome.
+
+The host worker keeps at most 16 SQLite Store entries per home, including
+entries still opening or closing. At capacity it closes the least recently
+used idle Store or waits for a slot. Each admission checks the authoritative
+Store operation and identity under the Store record lock, even when it
+reuses an open entry. The worker holds its own real-home lease until physical
+release. The host worker schedules no idle checkpoint for a WAL owned by
+another opener; its own writes keep the log bounded through the writing
+session's background checkpoint thread. A fenced close releases an idle Store and acknowledges
+only after its lease is removed. An opening, active, checkpointing or
+closing Store answers `InUse` immediately. Close reports record the
+checkpoint outcome and whether WAL content was observed after release,
+since another opener can retain WAL frames.
+
+A PostgreSQL read service (`StoreService::open_postgres_read_only`) holds
+one Full-checked read-only session and no writer. The host worker may keep
+it open between CLI reads (#819 P-B); `OpenedStore::postgres_session_current`
+runs the Light check in one round trip and answers whether the session
+still serves the Store it opened (binding, catalog id, schema version,
+generation and policy) before it serves another call. The host worker also
+keeps writable PostgreSQL services (`StoreService::open_postgres`) open
+between CLI writes (#819 P-B writes); for one of those the same check runs
+on its writer session, and its readers check themselves when used.
+The writable open prepares the writer's create statements in one flight
+(`prepare_sdk_writes`, #818 W4), once per held service; the read service
+sends no writes and prepares none. The read service's Store has no writer,
+but its session pays a round trip per demand, so its reads plan as a
+PostgreSQL writer's Store plans them (`Store::batched_reads`, #818 R/H).
+
 ```text
 StoreService::open_direct(store, binding, cursor_key, template)
   1 kernel_guard::check(store)              -> Unsupported (nothing opened)
   2 store.is_file()                         -> Missing
-  3 open_store_observed(sqlite, Normal, CALLS=64, cache 64 KiB)
-       writer session + read-only control reader
-                                            -> Busy("Store open: ..") /
-                                               Failed("Store open: ..")
-  4 Owner::start(template, pager 4096 KiB, namespaces 64)
-                                            -> Failed("overlay template: ..")
+  3 open_sqlite_for_calls(Normal, CALLS=64, cache 64 KiB)
+       validated read-only control reader
+       writer opens on the first mutation or explicit writer maintenance
+       overlay owner starts at the first file-changing call
+StoreService::bind / bind_named (the first file-changing call only)
+  Owner::start(template, pager 4096 KiB, namespaces 64)
+                                            -> that call fails "overlay template: .."
+StoreService::open_postgres(selection, binding, cursor_key, template)
+  1 open_store_observed(PostgreSQL)         writer, shared readers
+  2 OpenedStore::prepare_sdk_writes          one flight (#818 W4)
+       overlay owner starts at the first file-changing call
 ```
 
-A writable `Session::connect` takes the Store directory's writer lane, so two
-openers queue instead of meeting SQLite's `Busy`; a `Busy` open therefore
-means a writer that bypasses the lane (an uncoordinated raw SQLite process)
-held the lock, and it is a definite refusal that changed nothing: the caller
-may repeat the call. Any other open failure stays `Failed`.
+The overlay owner and its template file start at the first file-changing call
+and serve every later one (#819). A process that only reads (`fs.read`,
+`fs.list`, `fs.stat`, ...) never creates the template, so a one-call process
+such as the `layerfs` command does not pay for creating and deleting it. A
+start that fails fails that call alone; the next file-changing call makes its
+own attempt. `StoreService::new(opened, &owner)` serves through an owner its
+caller started.
+
+SQLite validates the Store and opens its control reader first. The first
+mutation opens the writer for the same file identity. One initializer per
+Store publishes the session, committer and merge scratch together. If
+initialization fails, the call receives that failure and the next mutation
+can make its own attempt. The directory lane coordinates writable opens. A
+raw SQLite writer can still cause a definite pre-effect `Busy`. Ordinary
+close and idle checkpoints use the writer only if it started. An explicit
+Sandbox release can start it for its checkpoint. At service close the local
+readers drop before the writer so the last writable handle can finish SQLite
+WAL and SHM cleanup.
+See [SQLite open](../store/sqlite.md) and
+[`open.rs`](../../../../engine/crates/layerfs-persistence/src/store/open.rs).
 
 | Field or constant | Meaning | Source |
 | --- | --- | --- |
@@ -101,8 +154,19 @@ The table is [`methods/dispatch.rs`](../../../../engine/crates/layerfs-store-ser
 A non-null `message` is checked first (`CommitMeta::check`); any other name
 is `UnknownMethod`. A single-change method builds one change and goes
 through the same `commit` as `fs.apply`; a change that declares `streamed`
-bytes is refused, since no bytes follow a call on this route
+byte lengths is refused, since no route sends them
 ([`methods/args.rs`](../../../../engine/crates/layerfs-store-service/src/methods/args.rs)).
+
+`methods::call_streamed(service, call, source)` runs `fs.write` or
+`fs.apply` with its content or changes pulled from a `methods::Source`
+(#819 S2.2, the host worker's streamed writes). `Source::next` returns the
+next change and `Source::piece` the next piece of a write marked
+`streamed: true`. The call holds one change and one piece at a time. The
+source returns `None` only after its whole input was received, so an input
+that stops early is a refusal at that point, the private Workspace is closed
+and nothing commits. A refused change stops pulling: the rest of the input
+is never read. Without a source a `streamed: true` write is `InvalidInput`.
+Other methods ignore the source and run as `methods::call`.
 
 **Refusal order.** A method reads each argument just before the engine step
 that first uses it; an argument needed only after a lookup travels as
@@ -120,8 +184,9 @@ files::commit(service, project, branch, changes, message)
   resolve  only when the bind cannot run by name or refused before reading:
            project, branch argument, "main" -> ReadOnly, Branch by name
   hidden   bound node's serial + markers kept by the bind; else read them
-  plan     PostgreSQL: before each 1,024 changes (PLAN_PATHS), their paths'
-           base reads level by level, one page demand + one inode wave
+  plan     PostgreSQL, listed changes: before each 1,024 (PLAN_PATHS),
+           their paths' base reads level by level, one page demand + one
+           inode wave; streamed changes are not planned
   change   Mutation per change, in order; first refusal stops, {index}
   commit   commit_captured_via(message, CommitVia::Files)
            head moved -> merged in the same Save; conflict -> Conflict
@@ -132,6 +197,7 @@ files::commit(service, project, branch, changes, message)
 | Change | Fields | Effect | Source |
 | --- | --- | --- | --- |
 | `write` | `path`, `content` or `bytes`, `mode?` | Replace bytes; a new file is 0o644, an existing one keeps its mode. Applied in pieces of `MAX_PLAINTEXT_BYTES` (65,519); an equal piece is not rewritten. | [`write/mutation.rs`](../../../../engine/crates/layerfs-store-service/src/write/mutation.rs) |
+| `write`, streamed | `path`, `streamed: true`, `mode?` | The same, its bytes from the source (`Mutation::write_stream`). Its length is known only at the end: a piece within the old length is compared while every byte before it was equal; after the first difference the rest is written; the file is truncated to the streamed length when anything differed. | same |
 | `edit` | `path`, `oldText`, `newText` | Replace the one occurrence; scans and shifts in 32 KiB windows. `NoMatch`, `AmbiguousMatch`, `Binary`, `NotFile`. | [`write/edit.rs`](../../../../engine/crates/layerfs-store-service/src/write/edit.rs) |
 | `mkdir` | `path`, `mode?` | Create with missing parents; `mode` default 0o755, parents 0o755. | [`write/mutation.rs`](../../../../engine/crates/layerfs-store-service/src/write/mutation.rs) |
 | `chmod` | `path`, `mode` | Set permission bits. | same |
@@ -180,7 +246,11 @@ read first, but it might have read only paths that answer, and then
 refused or applied itself. A fault can therefore move a failure to an
 earlier change, or replace a change's later refusal; the plan is read once
 and never retried (an order change approved by the owner, 2026-11-27).
-SQLite plans nothing.
+SQLite plans nothing. Nor does a streamed call (`Changes::Streamed`, the
+host worker's streamed writes): a plan needs the window's paths ahead, and
+a stream gives one change at a time, so each streamed change walks its own
+paths with per-level reads. Answers are the same; only its round trips on
+PostgreSQL differ.
 
 **Binding by name.** A call on a named Branch other than `main` without
 `expected` binds through `Store::bind_named_private`: on PostgreSQL the
@@ -189,9 +259,9 @@ the Workspace reader's named snapshot, with no control-reader read (#818
 W2). The refusal order stays the lookups': a refused `branch` argument,
 `main` (`ReadOnly`) and an `expected` Commit (which needs the project
 record) take the lookups on the control reader first, as do a missing
-Workspace key and a Store that refuses the bind before reading (overlay
-maintenance stopped, call capacity full, a Workspace reader that does not
-open), so `NoSuchProject` and `NoSuchBranch` still come first and such a
+Workspace key and a Store that refuses the bind before reading (SQLite's
+deferred writer refused at its start, overlay maintenance stopped or its
+start failed, call capacity full, a Workspace reader that does not open), so `NoSuchProject` and `NoSuchBranch` still come first and such a
 refusal is `Failed` with the bind's text. The bind reports whether it read
 the project and Branch; only then do its `NoSuchProject` /
 `NoSuchBranch` answer with the lookups' texts, and its snapshot read
@@ -265,7 +335,7 @@ not in `methods::call`, and in this repository only tests call it.
 | Reads never take the publication lane. | [`store/open.rs`](../../../../engine/crates/layerfs-store-service/src/store/open.rs) |
 | Merge work runs before the lane; only `merge_branch` publishes. | [`history/branch.rs`](../../../../engine/crates/layerfs-store-service/src/history/branch.rs) |
 | `main` changes only through `branch.publish`. | `ReadOnly` in [`write/files.rs`](../../../../engine/crates/layerfs-store-service/src/write/files.rs) |
-| An uncertain file-call Commit keeps its Workspace and answers `Unknown` with Workspace id and namespace. | `StoreService::retain` in [`store_service.rs`](../../../../engine/crates/layerfs-store-service/src/store_service.rs) |
+| An uncertain file-call Commit keeps its Workspace and answers `Unknown` with Workspace id and namespace, plus the evidence a caller needs to settle it: `phase` (a stable name from `CommitPhase::as_str`, not its `Debug` text), whether it `published`, its `attempt` (hex), `expected_head` and `candidate_root`. | `StoreService::retain` in [`store_service.rs`](../../../../engine/crates/layerfs-store-service/src/store_service.rs) |
 | Saved lookups never cross projects: an id from another LayerStack is `InvalidInput`. | [`history/saved.rs`](../../../../engine/crates/layerfs-store-service/src/history/saved.rs) |
 
 ## Limits and failures
@@ -293,6 +363,7 @@ not in `methods::call`, and in this repository only tests call it.
 | [`sdk_method_golden.rs`](../../../../engine/crates/layerfs-store-service/tests/sdk_method_golden.rs) | `cargo +1.85.1 test --locked -p layerfs-store-service --test sdk_method_golden` | macOS or Linux | Every public method's answer and main refusals against [`sdk_methods.txt`](../../../../engine/crates/layerfs-store-service/tests/golden/sdk_methods.txt); `LAYERFS_GOLDEN_PRINT=1` prints instead. |
 | [`method_refusal_order.rs`](../../../../engine/crates/layerfs-store-service/tests/method_refusal_order.rs) | `cargo +1.85.1 test --locked -p layerfs-store-service --test method_refusal_order` | macOS or Linux | Two-fault calls are refused by the fault the engine meets first. |
 | [`kernel_guard.rs`](../../../../engine/crates/layerfs-store-service/tests/kernel_guard.rs) | `cargo +1.85.1 test --locked -p layerfs-store-service --test kernel_guard` | Linux (tmpfs refused); macOS (apfs allowed) | `Unsupported` before any file opens: Store bytes unchanged, no template. |
+| [`overlay_template.rs`](../../../../engine/crates/layerfs-store-service/tests/overlay_template.rs) | `cargo +1.85.1 test --locked -p layerfs-store-service --test overlay_template` | macOS or Linux | Open and a read create no overlay template; the first write starts the owner and later writes reuse it. |
 | [`sdk_reads_during_publish.rs`](../../../../engine/crates/layerfs-store-service/tests/sdk_reads_during_publish.rs) | `cargo +1.85.1 test --locked -p layerfs-store-service --test sdk_reads_during_publish` | macOS or Linux | With the lane held 3 s, `fs.read`, `fs.stat` and `fs.list` each finish within 750 ms. |
 | [`merge_units.rs`](../../../../engine/crates/layerfs-store-service/tests/merge_units.rs) | `cargo +1.85.1 test --locked -p layerfs-store-service --test merge_units` | macOS or Linux | A unit both sides changed comes whole from the later write. |
 | [`write_refusals.rs`](../../../../engine/crates/layerfs-store-service/tests/write_refusals.rs) | `cargo +1.85.1 test --locked -p layerfs-store-service --test write_refusals` | macOS or Linux | A write onto a directory is `IsDirectory`, onto another non-file `NotFile`, a bad name `InvalidInput`; nothing is committed. |

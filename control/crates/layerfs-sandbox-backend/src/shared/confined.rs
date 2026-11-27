@@ -4,7 +4,7 @@
 //! follows nothing ([`Opened::stat_of`]) and a mount table ([`mounts`],
 //! [`parse_mounts`]). An inspection read uses nothing else of the
 //! filesystem, so what a platform must supply is exactly these three, in
-//! `backend/namespaces/linux/` and `backend/native/macos/` (`confined.rs`
+//! `backend/namespaces/linux/` and `backend/process/macos/` (`confined.rs`
 //! and `mounts.rs` in each).
 //!
 //! A [`View`] says how far an open goes: [`View::Beneath`] follows no link

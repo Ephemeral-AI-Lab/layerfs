@@ -136,9 +136,10 @@
           "keys": [
             "disk_free_bytes",
             "tool_version",
+            "machine_state",
             "worker"
           ],
-          "help": "one probe of the provider and one hello to the worker, within 10 s, starting nothing. state, its companion, message and observed_at at the top level then come from the probe; the record is written only when the state word or its reason changed. disk_free_bytes: free bytes of its data disk; tool_version: the provider tool's version; worker: {protocol, bundle} as the worker answered. A value that was not read is null"
+          "help": "a live observation, starting nothing. On the macOS or Linux host, machine_state is the host machine's state and worker.health describes the endpoint after a bounded authenticated probe. For a guest, the provider and worker hello give the top-level state and worker protocol and bundle. disk_free_bytes is available space on the machine's data disk, tool_version is the provider tool's version. A value that was not read is null"
         }
       },
       "paging": null,
@@ -919,7 +920,11 @@
           "stopped_sandboxes",
           "stopped_sandboxes_count",
           "unknown_workspaces",
-          "unknown_workspaces_count"
+          "unknown_workspaces_count",
+          "unrecorded_writes",
+          "unrecorded_writes_count",
+          "running_writes",
+          "running_writes_note"
         ]
       },
       "long": [
@@ -929,6 +934,10 @@
         "stopped_sandboxes_count",
         "unknown_workspaces",
         "unknown_workspaces_count",
+        "unrecorded_writes",
+        "unrecorded_writes_count",
+        "running_writes",
+        "running_writes_note",
         "outcome",
         "machine",
         "forced"
@@ -1283,6 +1292,11 @@
           {
             "check": "machine.worker.ping",
             "what": "the worker answers a request",
+            "full_only": false
+          },
+          {
+            "check": "machine.worker.retained",
+            "what": "the host worker keeps no write outcome its caller may not know",
             "full_only": false
           },
           {

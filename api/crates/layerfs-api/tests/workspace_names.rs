@@ -43,11 +43,14 @@ fn home_with_a_named_workspace(tag: &str) -> PathBuf {
     )
     .unwrap();
     // the native daemon a call would launch: never started here
-    let native = paths::machine_record(&home, "native");
+    let native = paths::machine_record(&home, layerfs_home::names::HOST_MACHINE);
     // (a home made without the machine calls has no native record yet)
-    let record = read_record(&native)
-        .unwrap()
-        .unwrap_or_else(|| SdkValue::map([("name", t("native")), ("platform", t("native"))]));
+    let record = read_record(&native).unwrap().unwrap_or_else(|| {
+        SdkValue::map([
+            ("name", t(layerfs_home::names::HOST_MACHINE)),
+            ("platform", t("host")),
+        ])
+    });
     // a recorded daemon must be a file (6deb7f6995); this one never runs
     let daemon = home.join("daemon-never-run");
     std::fs::write(&daemon, b"").unwrap();
@@ -61,9 +64,9 @@ fn home_with_a_named_workspace(tag: &str) -> PathBuf {
         &SdkValue::map([
             ("name", t("one")),
             ("project", t("shop/app")),
-            ("machine", t("native")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
             ("id", t("one")),
-            ("daemon", SdkValue::map([("runtime", t("native"))])),
+            ("daemon", SdkValue::map([("runtime", t("process"))])),
         ]),
     )
     .unwrap();
@@ -246,9 +249,9 @@ fn a_mount_of_main_forks_an_unused_branch_name() {
         &SdkValue::map([
             ("name", t("one")),
             ("project", t("shop/app")),
-            ("machine", t("native")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
             ("id", t("one")),
-            ("daemon", SdkValue::map([("runtime", t("native"))])),
+            ("daemon", SdkValue::map([("runtime", t("process"))])),
         ]),
     )
     .unwrap();

@@ -64,7 +64,7 @@ fn loopback_urls() -> [String; 3] {
 /// `None` where the loopback is shared.
 fn this_host(kind: Platform) -> Option<&'static str> {
     match kind {
-        Platform::Native => None,
+        Platform::Host => None,
         // a Linux Engine's worker shares the host's network (D-8)
         Platform::Docker if cfg!(target_os = "linux") => None,
         Platform::Docker => Some("host.docker.internal"),
@@ -322,7 +322,7 @@ fn a_url_reach_cannot_read_is_refused_off_a_shared_loopback() {
     let scratch = Scratch::new("reach-unread");
     // lima does not share the loopback on any host OS
     let lima = spec(&scratch, Platform::Lima);
-    let native = spec(&scratch, Platform::Native);
+    let native = spec(&scratch, Platform::Host);
     for url in [
         // not a postgres:// URL: libpq's key=value words are never a
         // Store's URL (layerfs-store's `postgresql::address::refuse_login`

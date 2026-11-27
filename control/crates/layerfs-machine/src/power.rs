@@ -82,7 +82,7 @@ fn stopped(home: &Path, machine: &MachineRecord) -> bool {
 pub fn stop(home: &Path, name: &MachineName, related: Related, events: &mut Events<'_>) -> Outcome {
     let home = home.to_path_buf();
     let machine = machine_of(&home, name)?;
-    if machine.platform()? == Platform::Native || stopped(&home, &machine) {
+    if machine.platform()? == Platform::Host || stopped(&home, &machine) {
         return Ok(done(name, None));
     }
     let mut phases = Phases::new(events, &STOP_PHASES);

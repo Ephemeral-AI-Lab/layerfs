@@ -2,8 +2,9 @@
 //! v20, owner 2026-11-19: `home leftovers` and `home prune` are gone). This
 //! module is the run root's part: a Sandbox run folder no record names, and
 //! an empty private root `<name>.root` whose run folder is gone. One side
-//! sweeps its own run root (`machine/native/run` under the home on
-//! `native`, under the worker's root on a machine):
+//! sweeps its own run root (`paths::run_root`: `machine/<host machine>/run`
+//! under the home on `native`, `machine/linux-guest/run` under the worker's
+//! root on a machine):
 //!
 //! - a worker when it starts serving (`machine start`), and before each
 //!   `sandbox create` it runs;

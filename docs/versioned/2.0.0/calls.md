@@ -63,6 +63,11 @@ and Python; an MCP tool is named `<family>_<call>` (`workspace_exec`). Eight `qu
 `home.get`, `home.log`, `home.clear_log`, `sandbox.files`, `sandbox.log`,
 `machine.stats`, `machine.files` and `machine.log`.
 
+A process that only reads a directly opened SQLite Store uses a read-only
+session. The first mutation opens the writer. If that open fails, the call
+returns the refusal and a later mutation can make its own attempt. On close,
+the process releases its readers before closing its writer if one started.
+
 ### Names
 
 | Thing | Form | Unique in |
@@ -79,7 +84,7 @@ and Python; an MCP tool is named `<family>_<call>` (`workspace_exec`). Eight `qu
 Machine, Store, bucket, project and Sandbox names are 1 to 63 lowercase
 letters, digits, `_`, `.` and `-`, starting and ending with a letter or
 digit. Windows device names (`con`, `nul`, `aux`, `prn`, `com1`–`com9`,
-`lpt1`–`lpt9`) are refused. `native` and `docker` name the built-in
+`lpt1`–`lpt9`) are refused. The host machine (`macos-host` on macOS, `linux-host` on Linux) and `docker` name the built-in
 machines and are refused (`InvalidInput`) as new machine names and as
 Sandbox names (H §7.6).
 
@@ -161,7 +166,7 @@ $ layerfs home get
 $ layerfs store create shop
 {"ok":true}
 $ layerfs home get --with tree
-{"home":"/tmp/demo/home","state":"ready","version":"2.0.0","generation":43,"tree":{"machines":[{"machine":"docker","platform":"docker","state":"stopped"},{"machine":"native","platform":"native","stores":[{"store":"shop","engine":"sqlite","projects":["api"]}]}],"stores":[],"buckets":[]}}
+{"home":"/tmp/demo/home","state":"ready","version":"2.0.0","generation":43,"tree":{"machines":[{"machine":"docker","platform":"docker","state":"stopped"},{"machine":"macos-host","platform":"host","stores":[{"store":"shop","engine":"sqlite","projects":["api"]}]}],"stores":[],"buckets":[]}}
 $ layerfs home get --with live
 layerfs: home.get: --with names `live`; this call takes platforms, tree
 $ echo $?
@@ -207,12 +212,12 @@ $ echo $?
   bundle, daemon, cache`. `mode` is the folder's permission bits as text
   (`"0700"`); `bundle` and `daemon` are
   `{ path, source, present, commit, dirty, matches }` for the Linux bundle
-  and the native daemon this build would use (`matches` is null when either
+  and the host machine's daemon this build would use (`matches` is null when either
   side cannot tell); the bundle's `source` is `env:LAYERFS_BUNDLE`,
   `runtime` (an installed runtime's own, `<runtime>/bundle/linux-<arch>/`
   beside `<runtime>/bin/layerfs`, chosen after `LAYERFS_BUNDLE` and before
   the cache) or `cache`; `cache` is `{ path }`. It reads `layerfs.json`, the
-  folder's mode, `bundle.json`, the native daemon's record and the daemon
+  folder's mode, `bundle.json`, the host machine's record and the daemon
   file, and changes nothing. The answer has no `warnings` list any more:
   what is wrong with a bundle, a daemon or the folder's mode is the home
   doctor's to say.
@@ -244,11 +249,11 @@ $ echo $?
   workspaces_not_listed, state, op, blocked_by, reason, fix`; bucket
   `bucket, provider`. A PostgreSQL Store's `machines` are the names of
   the machines attached to it (below); a sqlite Store's are null. A Workspace is in the home's
-  records only on `native` and for a Sandbox reached directly: any other
+  records only on the host machine and for a Sandbox reached directly: any other
   Sandbox answers `workspaces` null and `workspaces_not_listed: true`. A Store or Sandbox whose machine is stopped, busy or
   broken is `blocked`, and `blocked_by` names that machine. A machine that
   only a Store or Sandbox names, with no record of its own, is listed too
-  (`broken`, `missing`, unless it is `native` or `docker`), so nothing in the
+  (`broken`, `missing`, unless it is the host machine or `docker`), so nothing in the
   home is left out. A record that cannot be read does not fail the tree:
   an unreadable machine record is a `broken` `failed` machine, a Store
   record whose machine is not known (unreadable, or of a kind this build
@@ -278,7 +283,7 @@ $ echo $?
   folder copy on a machine) LayerFS removes itself, at fixed points in
   later calls and only where it can prove nothing owns it: a machine's
   worker sweeps its run root when it starts and before each `sandbox
-  create`, and `native` before each `sandbox create`; the next image copy
+  create`, and the host machine before each `sandbox create`; the next image copy
   to a machine sweeps the temporaries and export containers of every image
   no copy holds; the next `backup create` of a Store, or a `backup restore`
   that replaces it, removes its staged snapshots; and the call that settles
@@ -335,7 +340,7 @@ before (`project doctor` reports it as a notice). An export is a read and
 records no `op`.
 
 - **`init`** never creates a Store; a missing one is `NotFound`. `folder`
-  is an absolute path on this computer. Into a sqlite Store on `native` or
+  is an absolute path on this computer. Into a sqlite Store on the host machine or
   a PostgreSQL Store, Init runs in the caller's process. Into a sqlite
   Store on another machine (which must be running), the caller copies the
   folder to that machine's worker, which runs Init on the copy and then
@@ -418,7 +423,7 @@ Short: `{ file_count, size }` (`size` the bytes written); long adds
 `total` null; `finalize` is the last event and comes only once the folder
 is in place. Events arrive at most every 200 ms.
 
-Run for this manual (macOS `native`, a debug build of `61960e3f5f`, a scratch
+Run for this manual (macOS `macos-host`, a debug build of `61960e3f5f`, a scratch
 home; ids shortened to 8 characters and `…`):
 
 ```console
@@ -430,7 +435,7 @@ $ layerfs project init shop/api /tmp/demo/src --progress
 $ layerfs project list
 {"items":[{"project":"shop/api"}]}
 $ layerfs project list --with stats --detail
-{"items":[{"project":"shop/api","state":"ready","op":null,"blocked_by":null,"reason":null,"fix":null,"store":"shop","engine":"sqlite","machine":"native","commit":"32919f55…","created_at":"2026-11-18T22:04:02Z","size":19}],"next_cursor":null}
+{"items":[{"project":"shop/api","state":"ready","op":null,"blocked_by":null,"reason":null,"fix":null,"store":"shop","engine":"sqlite","machine":"macos-host","commit":"32919f55…","created_at":"2026-11-18T22:04:02Z","size":19}],"next_cursor":null}
 $ layerfs project get shop/api
 {"store":"shop","state":"ready","commit":"32919f55…"}
 $ layerfs project stats shop/api
@@ -523,7 +528,7 @@ publication answers as a Commit. Every id in an answer is the full id.
   `--expected` (the Branch's head is no longer checked); `list`'s
   `page_size` and `page_pos` became `limit` and `cursor`.
 
-Run for this manual (macOS `native`, a debug build of `61960e3f5f`, a scratch
+Run for this manual (macOS `macos-host`, a debug build of `61960e3f5f`, a scratch
 home; ids shortened to 8 characters and `…`):
 
 ```console
@@ -591,7 +596,7 @@ $ layerfs branch remove shop/api merged
   `paths_only`, `page_size` and `page_pos` became `ref`, `--from`, `--with
   patch`, `limit` and `cursor`).
 
-Run for this manual (macOS `native`, a debug build of `61960e3f5f`, a scratch
+Run for this manual (macOS `macos-host`, a debug build of `61960e3f5f`, a scratch
 home; ids shortened to 8 characters and `…`):
 
 ```console
@@ -608,10 +613,92 @@ $ layerfs commit diff shop/api agent --with patch --path /docs/a.txt
 ### `file` (14)
 
 1.1.0's `fs` family, renamed (O13). Paths are absolute, starting with `/`.
-A sqlite Store on `native` and a PostgreSQL Store are read and written in
-the caller's process (the runs on this page were on macOS); a sqlite Store
-on another machine through that machine's worker (see
-[routes](machines-and-stores.md#routes)).
+On macOS and Linux, the CLI uses the host worker for `file read`,
+`file stat`, and one bounded `file list` page on local SQLite when the
+socket path and request fit. It selects the direct route before dialing
+when they do not fit. An error identifying the worker's home refuses the
+call before any send. The CLI reports an uncertain exchange as `Unknown`
+with a request ID, including when the success payload has an invalid
+shape. If writing stdout fails after a valid result, the CLI reports the
+known successful call on stderr and exits 125. The same three reads on a
+PostgreSQL Store go to the same worker, which keeps their connections open
+between calls ([PostgreSQL Stores](machines-and-stores.md#postgresql-stores));
+a Store connected before this release stays direct until `store connect` is
+run again. So do the CLI's file writes on such a PostgreSQL Store (below).
+SDK local calls and other CLI PostgreSQL calls run in the caller, and a SQLite Store on another machine runs through that machine's
+worker. See [routes](machines-and-stores.md#routes).
+
+The CLI's writes on the same local SQLite Stores (`write`, `edit`, `mkdir`,
+`rm`, `cp`, `mv`, `apply`) also run in the host worker, each one call
+with one Commit (or none when nothing changed). `file write`'s content and
+an unscoped `file apply`'s changes stream from stdin or `--from` in bounded
+frames, so neither the CLI nor the worker holds the whole input; there is
+no new size limit. Input that is not a regular file (a pipe, FIFO or
+terminal) is first copied into a private unnamed file under the home
+(`machine/<host>/spool/`, removed on any exit), which takes disk equal to
+the input on the home's filesystem until it is sent (or, on the direct
+route, read); so the worker reads at disk speed, and a slow producer is
+never timed out. The copy is made without checking free space first: on a
+nearly full disk it fails and the call runs in the caller, but a copy that
+fits can leave too little room for the Commit itself, which is then
+refused `Capacity`, nothing committed. One `file
+apply` change is still built whole by the CLI (the engine needs an edit's
+text whole), a write's content included; its content then streams. A list
+with any other change past the worker's budget for one change (4 MiB
+decoded) runs in the caller instead, decided before anything is sent. A
+scoped `file apply --scope` runs in the caller. A write that streams
+input (`write`, an unscoped `apply`) goes to the worker's own write
+socket, `writes.sock`, and runs on 4 write threads of their own; the
+single-change writes (`edit`, `mkdir`, `rm`, `cp`, `mv`) go to the
+ordinary socket and run as reads do. So held writes never take a place or
+thread of reads. Calls wait: a write queued behind busy write threads
+sends nothing until the worker asks for its input, and is never timed out
+for waiting; past 32 held writes further writers wait to connect, and only
+past their connect bound (30 s) are refused `Unavailable`, naming the
+load, before sending anything. A held writer that is killed gives its
+place back within seconds. A worker that is stuck leaves the CLI waiting
+with nothing effective sent: until the input's end is sent nothing can
+commit, so Ctrl-C is safe.
+While the worker drains, a write not yet running is refused `Unavailable`
+before any effect; a running one finishes. Input that delivers less than
+262,076 bytes (four engine records) in 30 s of the worker reading it is
+refused `Unavailable`, nothing committed; keepalives do not count as
+input. The CLI copies only pipes, FIFOs and terminals, never a regular
+file, so a regular file on a stalled filesystem (a hung network mount, for
+one) can still meet this rule.
+A call whose Store or socket path does not qualify reads its input whole
+and runs in the caller, as before; so does a single-change write whose
+arguments pass 64 KiB. Input that stops before its end (a killed CLI, a
+broken pipe, JSON that does not parse) commits nothing: the CLI refuses
+the call, with the worker's refusal when it refused a change early. Once
+the whole input was sent, a lost answer is `Unknown` with a request ID;
+check the Branch before writing again, since nothing is resent. The worker
+keeps the outcome of a call it could not answer, and an outcome its Store
+could not settle, in `machine/<host>/retained/<request id>.json`;
+`machine doctor` reports them as a `machine.worker.retained` notice, whose
+fix is `rm` of the records once their Branches were checked. At most 256
+are kept: the oldest `undelivered` records make room, `uncertain` ones are
+never removed by the worker. A record the worker cannot write is not
+retried: the `Unknown` answer says `recorded: false`, and the `machine
+stop` that ends the worker lists those up to its drain
+(`unrecorded_writes`). `machine stop` never stops a running write: it
+reports `running_writes` and "N writes still running; see worker.log"
+(`running_writes_note`), and `InUse` while such a write holds its Store;
+the write finishes, and the worker exits after it. A definite refusal is
+never recorded. CLI writes on a PostgreSQL Store run in the same worker,
+on writable connections it keeps open between calls, with the same
+streaming, waiting, outcome records and `Unknown` boundary; a Store
+connected before this release, or with the host machine stopped, keeps
+them in the caller
+([PostgreSQL Stores](machines-and-stores.md#postgresql-stores)).
+
+The host worker's SQLite cache keeps up to 16 Stores open per home.
+It checks the Store's current record before serving a call, including a
+call on a warm Store. A maintenance operation can ask the worker to close
+an idle Store and release its lease. The worker acknowledges the close
+after it removes its lease. A Store that is opening, serving a call,
+checkpointing or closing reports `InUse` without waiting. The worker
+leaves WAL frames from other openers in place.
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
@@ -698,7 +785,7 @@ on another machine through that machine's worker (see
   `end_line`, `from_line` and `line_count` became `--line` and `--limit`,
   and `page_size`/`page_pos` became `--limit` and `--cursor`.
 
-Also run for this manual (macOS `native`, a debug build of `61960e3f5f`, a scratch
+Also run for this manual (macOS `macos-host`, a debug build of `61960e3f5f`, a scratch
 home; ids shortened to 8 characters and `…`):
 
 ```console
@@ -790,7 +877,7 @@ alias: `sandbox.close` (now `remove`) and `logs.sandbox` (now `log`); the
   form adds `sandbox, project, machine, platform, image, backend, route,
   created_at`, `workspace_capacity` (16, whatever its state) and `network`
   (a namespaces Sandbox's host end and its commands' address,
-  `lfs<id12> <address>/31`; null for a native one).
+  `lfs<id12> <address>/31`; null for a `process` one).
   ```text
   $ layerfs sandbox get s1
   {"workspaces":[{"workspace":"s1:w","branch":"dev","running":["exec-9c0f6f0d2a1b4e77"]}]}
@@ -831,7 +918,7 @@ alias: `sandbox.close` (now `remove`) and `logs.sandbox` (now `log`); the
   container (D-8). Its root is the sealed bundle's `sandbox-image.tar`
   unless `image` names another. `image` (call-table kind `image`) is a
   `sha256:` digest, a Docker image Id or a Docker reference
-  (`postgres:17-bookworm`), on every machine but macOS `native`, which
+  (`postgres:17-bookworm`), on every machine but macOS `macos-host`, which
   refuses it `Unsupported` `{reason: "host"}`. An image the machine holds
   (unpacked, or in its archive) starts at once; any other is resolved with
   `docker image inspect` through the `docker` machine's recorded socket
@@ -849,7 +936,7 @@ alias: `sandbox.close` (now `remove`) and `logs.sandbox` (now `log`); the
   completion or error; one a `SIGKILL`ed copy left is swept by the next copy
   of the same image to the same machine, and any other by the next copy of
   an image no copy holds), sent in 1 MiB frames and unpacked on the
-  machine under `machines/native/run/images/<hex>.2/` with a sidecar
+  machine under `machine/linux-guest/run/images/<hex>.2/` with a sidecar
   `<hex>.2.json`; the staged tar is deleted. Docker unreachable is
   `Unavailable` `{what: "docker"}`, the machine stopped `Unavailable`
   `{what: "machine"}`. One copy of an image on one machine at a time: a
@@ -893,7 +980,7 @@ alias: `sandbox.close` (now `remove`) and `logs.sandbox` (now `log`); the
   its Branch and `store compact` are refused while it remains, and only the
   Store's admission ends it later, once it can prove the owner gone (for a
   sqlite Store on a machine, after that machine's kernel restarts; never on
-  macOS `native` or a PostgreSQL Store). `outcome` (long form) is
+  macOS `macos-host` or a PostgreSQL Store). `outcome` (long form) is
   `removed`, `already_gone` (its runtime was gone, or it never recorded
   one, or it was a Sandbox of the retired docker backend; `left` says what
   may remain). A lost answer keeps the record with the `op` uncertain
@@ -903,7 +990,7 @@ alias: `sandbox.close` (now `remove`) and `logs.sandbox` (now `log`); the
   `role` (long form): one `workspace` per mounted Workspace (`not_read:
   mount`, its handle in `workspace`), `home` (the folder that is `HOME`
   for its commands), `log` (its daemon's log, read with `sandbox log`)
-  and, for a Sandbox with a root of its own (every one but a native macOS
+  and, for a Sandbox with a root of its own (every one but a `process` macOS
   Sandbox), `/` with role `root`. With the path of a folder it answers
   `items` (`path`, `type` `file`, `dir`, `symlink` or `other`, `size` and,
   for an entry listed and not read, `not_read`: `system`, `mount`,
@@ -935,7 +1022,7 @@ alias: `sandbox.close` (now `remove`) and `logs.sandbox` (now `log`); the
   calls: the MCP server lists them in its `admin` profile.
 
 
-Run for this manual (macOS `native`, a debug build of `61960e3f5f`, a scratch
+Run for this manual (macOS `macos-host`, a debug build of `61960e3f5f`, a scratch
 home; ids shortened to 8 characters and `…`):
 
 ```console
@@ -964,7 +1051,7 @@ $ layerfs sandbox remove tests --progress
 {"ok":true}
 ```
 
-The native daemon was this build's (`layerfs machine update native --daemon
+The host machine's daemon was this build's (`layerfs machine update macos-host --daemon
 target/debug/layerfs-daemon` on the scratch home).
 
 ### `workspace` (7)
@@ -984,7 +1071,7 @@ handle is gone: `<sandbox>:/path` is refused `InvalidInput`.
 | `status` | `workspace` | `path` | a Workspace's uncommitted changes, and whether its Branch moved |
 
 - `list` reads Workspace records and asks no daemon: the home's own for a
-  Sandbox on `native` or one reached directly, and one `workspace.list`
+  Sandbox on the host machine or one reached directly, and one `workspace.list`
   request to each other ready machine's worker. A Sandbox whose machine,
   or which itself, is not ready is named in `not_listed` with
   `blocked_by`; one whose worker did not answer with `reason` (`timeout`,
@@ -1003,7 +1090,7 @@ handle is gone: `<sandbox>:/path` is refused `InvalidInput`.
   seventeenth Workspace is `Capacity`.
 - `exec` answers `{exit_code}` and `stdout`, `stderr` when not empty; long:
   `stdout_file`, `stderr_file`, `cancelled`, `exec`, `stop` (`cgroup` on
-  Linux kernels, `group` on macOS `native`), `stdout_bytes`,
+  Linux kernels, `group` on macOS `macos-host`), `stdout_bytes`,
   `stderr_bytes`, `duration_ms`. A stream of at most 1 MiB is answered
   whole; a longer one answers its last 1 MiB and names the file that holds
   all of it, `<run folder>/exec/<workspace id>/<exec id>.stdout`, which
@@ -1063,12 +1150,12 @@ handle is gone: `<sandbox>:/path` is refused `InvalidInput`.
   through the machine's worker. On `docker` every call goes through its
   worker (D-8).
 
-Run for this manual (macOS `native`, a debug build of `61960e3f5f`, a scratch
+Run for this manual (macOS `macos-host`, a debug build of `61960e3f5f`, a scratch
 home; ids shortened to 8 characters and `…`):
 
 ```console
 $ layerfs workspace mount tests agent
-{"workspace":"tests:agent","path":"/tmp/demo/home/machine/native/run/layerfs-8a7387b2-tests/workspaces/1"}
+{"workspace":"tests:agent","path":"/tmp/demo/home/machine/macos-host/run/layerfs-8a7387b2-tests/workspaces/1"}
 $ layerfs workspace list
 {"items":[{"workspace":"tests:agent","branch":"agent"}]}
 $ layerfs workspace exec tests:agent 'echo hello > out.txt && uname -s'
@@ -1209,7 +1296,7 @@ positional `machine`, except `create`, which takes `name` and `platform`.
   with `fix: layerfs machine load-image <m> sha256:<hex>`, which resumes
   or rebuilds it, and `size` null. `staged_bytes` is how much of a part is
   staged; a stale part beside a published image is in that image's row,
-  which stays `ready`. macOS `native` answers `mode: "host"` with
+  which stays `ready`. macOS `macos-host` answers `mode: "host"` with
   none. `--with docker` reads the host's Docker: `images` it could copy
   (an image the machine holds `ready` is not offered),
   each `{image, refs, size, os, architecture, usable, needed_bytes, fits,
@@ -1250,8 +1337,9 @@ positional `machine`, except `create`, which takes `name` and `platform`.
 - **`log`** answers `items: [{text, continued?}]`, newest page first, and
   `next_cursor` for the lines before it (left out at the start of the log).
   A cursor from before the worker's log rotated is stale (`InvalidInput`).
-  A machine whose calls run in this process (`native` on macOS and Linux)
-  has no worker: `Unsupported`.
+  A machine whose calls run in this process (`macos-host` on macOS and `linux-host` on Linux)
+  keeps no machine worker log: `Unsupported`. Its host worker, which serves
+  the CLI's Store calls, writes the home's `log/worker.log`.
 - `stats`, `files` and `log` write no call-log line (`quiet`); like every
   `machine` call they are `full` profile calls, in the MCP `admin` profile.
   None of the reads starts a machine.
@@ -1260,16 +1348,16 @@ Run on a scratch home (macOS, a debug build; paths shortened):
 
 ```console
 $ layerfs machine list
-{"items":[{"machine":"docker","platform":"docker","state":"stopped"},{"machine":"native","platform":"native"}]}
+{"items":[{"machine":"docker","platform":"docker","state":"stopped"},{"machine":"macos-host","platform":"host"}]}
 $ layerfs machine get docker --with live
 {"platform":"docker","state":"stopped","observed_at":"2026-11-18T15:34:11Z","live":{"tool_version":"29.5.2"}}
-$ layerfs machine get native --detail --with live
-{"platform":"native","state":"ready","op":null,"reason":null,"fix":null,"observed_at":null,"machine":"native","backend":"native","supports":["sqlite","postgresql_sandbox"],"loopback":"shared","cpus":null,"memory_bytes":null,"disk_bytes":null,"image":null,"os_image":null,"docker":null,"wsl":null,"daemon":null,"message":null,"stores":["shop"],"stores_count":null,"sandboxes":[],"sandboxes_count":null,"created_at":"2026-11-18T15:34:11Z","live":{"disk_free_bytes":null,"tool_version":null,"worker":null}}
-$ layerfs machine start native
+$ layerfs machine get macos-host --detail --with live
+{"platform":"host","state":"ready","op":null,"reason":null,"fix":null,"observed_at":null,"machine":"macos-host","backend":"process","supports":["sqlite","postgresql_sandbox"],"loopback":"shared","cpus":null,"memory_bytes":null,"disk_bytes":null,"image":null,"os_image":null,"docker":null,"wsl":null,"daemon":null,"message":null,"stores":["shop"],"stores_count":null,"sandboxes":[],"sandboxes_count":null,"created_at":"2026-11-18T15:34:11Z","live":{"disk_free_bytes":null,"tool_version":null,"worker":null}}
+$ layerfs machine start macos-host
 {"unchanged":true}
-$ layerfs machine stats native
+$ layerfs machine stats macos-host
 {"cpus":14,"memory_used_bytes":25457885184,"memory_total_bytes":38654705664,"disk_free_bytes":213131337728,"disk_total_bytes":994662584320}
-$ layerfs machine files native /tmp/home1/store/shop --depth 1
+$ layerfs machine files macos-host /tmp/home1/store/shop --depth 1
 {"items":[{"path":"/tmp/home1/store/shop/lock","type":"file","size":0,"not_read":"restricted"},{"path":"/tmp/home1/store/shop/record.json","type":"file","size":291},{"path":"/tmp/home1/store/shop/store.sqlite","type":"file","size":270336,"not_read":"restricted"}]}
 $ layerfs machine get old
 {"platform":"ssh","state":"broken","reason":"unsupported","fix":"layerfs machine remove old"}
@@ -1373,7 +1461,7 @@ attached to the Store and dial with both.
   and its reach. Short `{ ok, outcome }` with `latency_ms`; long `ok,
   outcome (attached, or checked for an attached machine checked again),
   store, machine, latency_ms, server_version`. A sqlite Store is refused
-  `InvalidInput` naming `store move`. Machine native is attached like any
+  `InvalidInput` naming `store move`. The host machine is attached like any
   other, its platform deciding whether a loopback URL is allowed, and its
   reach is its own, apart from this computer's; `connect` attaches
   nothing. A machine that reaches the server only
@@ -1426,7 +1514,7 @@ attached to the Store and dial with both.
   transfer that worked (`{ call, ended_at, size }`), `attempt` the last one
   that did not (`{ call, ended_at, error }`).
 - **`get --with live`** reads the Store where it lives, starting nothing: a
-  sqlite Store's file through its machine (in this process on `native`,
+  sqlite Store's file through its machine (in this process on the host machine,
   else its recorded worker), a PostgreSQL Store's server from this
   computer. The read gives `state` and `observed_at`: `blocked` first,
   with nothing asked, while a sqlite Store's machine is not ready; `broken` `missing`
@@ -1477,12 +1565,12 @@ attached to the Store and dial with both.
 - **`create`**, short `{"ok":true}`; long `ok, outcome: "created", store,
   engine, machine, profile, sqlite_version, created_at`. Without
   `--machine` the Store goes on the machine whose calls run in this process
-  (`native` on macOS and Linux; `Unsupported` on a host with none).
+  (`macos-host` on macOS and `linux-host` on Linux; `Unsupported` on a host with none).
   `--machine M` makes the Store on `M` directly through its worker (a
   running machine), recording a `create` operation while it runs.
 - **`move`** always has the machine whose calls run in this process
-  (`native` on macOS and Linux) as one end: a Store on another machine
-  moves on by `store move <store> native` first (refused `InvalidInput`
+  (`macos-host` on macOS and `linux-host` on Linux) as one end: a Store on another machine
+  moves on by `store move <store> macos-host` first (refused `InvalidInput`
   naming that call); on a host with no such machine it is `Unsupported`. Its progress phases are `check,
   snapshot, send, verify, install, record, retire`. Short
   `{ moved_bytes }`; long `moved_bytes, outcome: "moved", store, from, to,
@@ -1530,7 +1618,8 @@ attached to the Store and dial with both.
   is not changed); long `outcome, store, engine, format_before,
   format_after, steps, warnings` (`steps` the steps applied, in order, as
   `"2->3"`; `warnings` what failed after COMMIT, which never fails the
-  call). Phases: `check, convert, verify, commit` (SQLite), `check,
+  call; a `-shm` an earlier read-only call left beside the Store is not
+  one). Phases: `check, convert, verify, commit` (SQLite), `check,
   convert` (PostgreSQL); `commit` is the point of no return. Ctrl-C
   (SIGINT) or SIGTERM cancels it before COMMIT: `Failed` with `detail.code:
   "Cancelled"`, "cancelled before COMMIT; nothing changed"; a second signal
@@ -1548,27 +1637,27 @@ attached to the Store and dial with both.
   process) does not say whether the Store changed; its fix `layerfs store
   upgrade <store>` then answers `current` or does the work.
 
-Run (macOS, native; rerun at `61960e3f5f` on a fresh scratch home, all but
+Run (macOS, `macos-host`; rerun at `61960e3f5f` on a fresh scratch home, all but
 the `--detail` line, which is from an earlier run of the same calls):
 
 ```console
 $ layerfs store create shop
 {"ok":true}
 $ layerfs store list
-{"items":[{"store":"shop","engine":"sqlite","machine":"native"}]}
+{"items":[{"store":"shop","engine":"sqlite","machine":"macos-host"}]}
 $ layerfs store get shop
-{"engine":"sqlite","state":"ready","machine":"native"}
+{"engine":"sqlite","state":"ready","machine":"macos-host"}
 $ layerfs store get shop --with live --detail
-{"engine":"sqlite","state":"ready","machine":"native","url":null,"user":null,"password_saved":null,"password_changed_at":null,"binding":null,"reach":null,"machines":null,"projects":[],"projects_count":null,"backups":[],"op":null,"blocked_by":null,"reason":null,"fix":null,"observed_at":"2026-11-18T15:35:10Z","store":"shop","profile":"normal","synchronous_commit":null,"sqlite_version":"3.53.2","created_at":"2026-11-18T15:35:10Z","last_transfer":null,"live":{"holders":[],"phases":null,"behind":[],"server_version":null,"latency_ms":null}}
+{"engine":"sqlite","state":"ready","machine":"macos-host","url":null,"user":null,"password_saved":null,"password_changed_at":null,"binding":null,"reach":null,"machines":null,"projects":[],"projects_count":null,"backups":[],"op":null,"blocked_by":null,"reason":null,"fix":null,"observed_at":"2026-11-18T15:35:10Z","store":"shop","profile":"normal","synchronous_commit":null,"sqlite_version":"3.53.2","created_at":"2026-11-18T15:35:10Z","last_transfer":null,"live":{"holders":[],"phases":null,"behind":[],"server_version":null,"latency_ms":null}}
 $ layerfs store list --with stats
-{"items":[{"store":"shop","engine":"sqlite","machine":"native","size":270336}]}
+{"items":[{"store":"shop","engine":"sqlite","machine":"macos-host","size":270336}]}
 $ layerfs store compact shop
 {"freed_bytes":0}
-$ layerfs store move shop native
-{"error":"InvalidInput","message":"store move, check: Store shop is already on native"}
+$ layerfs store move shop macos-host
+{"error":"InvalidInput","message":"store move, check: Store shop is already on macos-host"}
 ```
 
-PostgreSQL, against a local `postgres:17` (macOS, native; this build's
+PostgreSQL, against a local `postgres:17` (macOS, `macos-host`; this build's
 outputs, run 2026-11-24 on a scratch home after the machine native correction):
 
 ```console
@@ -1582,24 +1671,24 @@ $ layerfs store get shop-pg
 {"engine":"postgresql","state":"ready","url":"postgresql://127.0.0.1:55437/shop?sslmode=disable","user":"postgres"}
 $ layerfs store connect shop-pg 'postgresql://127.0.0.1:55437/shop?sslmode=disable' --synchronous-commit off --detail
 {"ok":true,"projects":null,"projects_count":null,"outcome":"updated","store":"shop-pg","engine":"postgresql","url":"postgresql://127.0.0.1:55437/shop?sslmode=disable","user":"postgres","synchronous_commit":"off","machines":[]}
-$ layerfs store doctor shop-pg --machine native
-{"error":"InvalidInput","message":"machine native is not attached to PostgreSQL Store shop-pg","fix":"layerfs store attach shop-pg --machine native"}
-$ layerfs store attach shop-pg --machine native
+$ layerfs store doctor shop-pg --machine macos-host
+{"error":"InvalidInput","message":"machine macos-host is not attached to PostgreSQL Store shop-pg","fix":"layerfs store attach shop-pg --machine macos-host"}
+$ layerfs store attach shop-pg --machine macos-host
 {"outcome":"attached","latency_ms":1}
-$ layerfs store attach shop-pg --machine native --detail
-{"ok":true,"outcome":"checked","store":"shop-pg","machine":"native","latency_ms":1,"server_version":"17.11 (Debian 17.11-1.pgdg13+2)"}
+$ layerfs store attach shop-pg --machine macos-host --detail
+{"ok":true,"outcome":"checked","store":"shop-pg","machine":"macos-host","latency_ms":1,"server_version":"17.11 (Debian 17.11-1.pgdg13+2)"}
 $ layerfs store doctor shop-pg
 {"ok":true}
 $ layerfs store get shop-pg
-{"engine":"postgresql","state":"ready","url":"postgresql://127.0.0.1:55437/shop?sslmode=disable","user":"postgres","machines":[{"machine":"native","reached":"ok"}]}
-$ layerfs store detach shop-pg --machine native
+{"engine":"postgresql","state":"ready","url":"postgresql://127.0.0.1:55437/shop?sslmode=disable","user":"postgres","machines":[{"machine":"macos-host","reached":"ok"}]}
+$ layerfs store detach shop-pg --machine macos-host
 {"ok":true}
 $ layerfs store disconnect shop-pg --detail
 {"ok":true,"outcome":"disconnected","store":"shop-pg"}
 ```
 
 The URL above names `127.0.0.1`, which works only where the Sandbox's
-machine shares this computer's loopback: machine native on macOS and Linux
+machine shares this computer's loopback: the host machine on macOS and Linux
 and `docker` on a Linux Engine. On `docker` with Docker Desktop, `lima` or `apple-container`,
 `store attach --machine` refuses it, naming what that machine calls this
 computer: connect the Store again with a host every attached machine

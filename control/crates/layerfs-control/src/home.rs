@@ -12,6 +12,7 @@
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::layout::{detect, Layout};
 use layerfs_home::home::{generation, read_record, with_field};
+use layerfs_home::names::HOST_MACHINE;
 use layerfs_home::outcome::{refused, Outcome};
 use layerfs_home::state::{Reason, State};
 use std::path::Path;
@@ -235,10 +236,10 @@ fn bundle_value(build: Build<'_>) -> SdkValue {
     ])
 }
 
-/// The daemon the native machine runs, as its Sandbox launch chooses it: the
+/// The daemon the host machine runs, as its Sandbox launch chooses it: the
 /// one its record names (`recorded`), else the one beside this host's
 /// bundle (`default`), with the build it names; read from files only.
-pub struct NativeDaemon {
+pub struct HostDaemon {
     /// Where it is.
     pub path: std::path::PathBuf,
     /// `recorded` or `default`.
@@ -249,12 +250,12 @@ pub struct NativeDaemon {
     pub stamp: Option<(String, bool)>,
 }
 
-impl NativeDaemon {
-    /// The native machine's daemon in `home` (a record that cannot be read
+impl HostDaemon {
+    /// The host machine's daemon in `home` (a record that cannot be read
     /// leaves the default), or `None` when the user cache is unknown.
     pub fn of(home: &Path) -> Option<Self> {
         use layerfs_machine::record::MachineRecord;
-        let recorded = MachineRecord::read(home, "native")
+        let recorded = MachineRecord::read(home, layerfs_home::names::HOST_MACHINE)
             .ok()
             .flatten()
             .and_then(|r| r.daemon().map(std::path::PathBuf::from));
@@ -293,7 +294,7 @@ impl NativeDaemon {
     /// `DaemonMissing`'s message.
     pub fn missing(&self) -> String {
         format!(
-            "no native daemon at {}; the native machine needs this build's `layerfs-daemon`: `layerfs machine update native --daemon <path>`",
+            "no host machine daemon at {}; the host machine needs this build's `layerfs-daemon`: `layerfs machine update {HOST_MACHINE} --daemon <path>`",
             self.path.display()
         )
     }
@@ -304,7 +305,7 @@ impl NativeDaemon {
         let ours = build.commit?;
         (self.matches(build) == SdkValue::Bool(false)).then(|| {
             format!(
-                "the native daemon at {} was built from {}, this build from {}; record this build's daemon with `layerfs machine update native --daemon <path>`",
+                "the host machine's daemon at {} was built from {}, this build from {}; record this build's daemon with `layerfs machine update {HOST_MACHINE} --daemon <path>`",
                 self.path.display(),
                 short(theirs),
                 short(ours)
@@ -331,12 +332,12 @@ pub fn native_start(home: &Path, build: Build<'_>, refusal: SdkRefusal) -> SdkRe
     let Some(ours) = build.commit else {
         return refusal;
     };
-    let Some(daemon) = NativeDaemon::of(home).filter(|d| d.path == started) else {
+    let Some(daemon) = HostDaemon::of(home).filter(|d| d.path == started) else {
         return refusal;
     };
     let said = match &daemon.stamp {
         Some((theirs, _)) if daemon.matches(build) == SdkValue::Bool(false) => format!(
-            "The native machine's daemon {} was built from {}, this build from {}: \
+            "The host machine's daemon {} was built from {}, this build from {}: \
              it cannot be expected to read what this build writes",
             daemon.path.display(),
             short(theirs),
@@ -344,7 +345,7 @@ pub fn native_start(home: &Path, build: Build<'_>, refusal: SdkRefusal) -> SdkRe
         ),
         Some(_) => return refusal,
         None if daemon.present => format!(
-            "The native machine's daemon {} names no build: it is not this build ({}) \
+            "The host machine's daemon {} names no build: it is not this build ({}) \
              and may not read what this build writes",
             daemon.path.display(),
             short(ours)
@@ -353,7 +354,7 @@ pub fn native_start(home: &Path, build: Build<'_>, refusal: SdkRefusal) -> SdkRe
     };
     let fix = match own_daemon(build) {
         Some(path) => format!(
-            "layerfs machine update native --daemon {}",
+            "layerfs machine update {HOST_MACHINE} --daemon {}",
             crate::doctor::shell(&path)
         ),
         None => "layerfs home doctor".to_owned(),
@@ -382,11 +383,11 @@ pub fn own_daemon(build: Build<'_>) -> Option<std::path::PathBuf> {
     })
 }
 
-/// The native machine's daemon (macOS only; null elsewhere): the one its
+/// The host machine's daemon (macOS only; null elsewhere): the one its
 /// record names, else the default beside the macOS bundle.
 #[cfg(target_os = "macos")]
 fn daemon_value(home: &Path, build: Build<'_>) -> SdkValue {
-    let Some(daemon) = NativeDaemon::of(home) else {
+    let Some(daemon) = HostDaemon::of(home) else {
         return SdkValue::Null;
     };
     let (commit, dirty) = match &daemon.stamp {

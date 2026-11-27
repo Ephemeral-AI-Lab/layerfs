@@ -5,10 +5,10 @@
 #[cfg(target_os = "linux")]
 use crate::backend::namespaces::{self, NamespaceProvider};
 #[cfg(target_os = "macos")]
-use crate::backend::native;
+use crate::backend::process;
 use crate::backend::{adapter, Backend};
 #[cfg(target_os = "macos")]
-use crate::native::NativeProvider;
+use crate::process::ProcessProvider;
 use crate::{
     Bind, ExecExit, LaunchPhase, LaunchRequest, LocalRecord, ProviderCapabilities,
     SandboxInspection, SandboxRecord,
@@ -23,9 +23,9 @@ use std::{fmt, io::Write, net::SocketAddr, path::PathBuf};
 #[derive(Clone, Debug)]
 pub enum Runtime {
     /// A local daemon process serving loopback NFS as this user (macOS;
-    /// Linux has no native runtime, #533 O27).
+    /// Linux has no process runtime, #533 O27).
     #[cfg(target_os = "macos")]
-    Native(NativeProvider),
+    Process(ProcessProvider),
     /// A root daemon in its own mount, PID and IPC namespaces and cgroup,
     /// commands entering them as a nonroot identity (Linux).
     #[cfg(target_os = "linux")]
@@ -37,7 +37,7 @@ impl Runtime {
     pub fn backend(&self) -> Backend {
         match self {
             #[cfg(target_os = "macos")]
-            Self::Native(_) => Backend::Native,
+            Self::Process(_) => Backend::Process,
             #[cfg(target_os = "linux")]
             Self::Namespaces(_) => Backend::Namespaces,
         }
@@ -52,18 +52,18 @@ impl Runtime {
     pub fn local_directory(&self, name: &str) -> Result<Option<PathBuf>, RuntimeError> {
         match self {
             #[cfg(target_os = "macos")]
-            Self::Native(provider) => provider.paths(name).map(|paths| Some(paths.directory)),
+            Self::Process(provider) => provider.paths(name).map(|paths| Some(paths.directory)),
             #[cfg(target_os = "linux")]
             Self::Namespaces(provider) => provider.paths(name).map(|paths| Some(paths.directory)),
         }
     }
 
-    /// The named native Sandbox's paths, for its daemon setup.
+    /// The named process Sandbox's paths, for its daemon setup.
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     pub fn native_paths(&self, name: &str) -> Result<crate::shared::LocalPaths, RuntimeError> {
         match self {
             #[cfg(target_os = "macos")]
-            Self::Native(provider) => provider.paths(name),
+            Self::Process(provider) => provider.paths(name),
             #[cfg(target_os = "linux")]
             Self::Namespaces(provider) => provider.paths(name),
         }
@@ -86,7 +86,7 @@ impl Runtime {
     ) -> Result<Sandbox, Box<LaunchFailure>> {
         match self {
             #[cfg(target_os = "macos")]
-            Self::Native(_) if !binds.is_empty() => Err(Box::new(LaunchFailure {
+            Self::Process(_) if !binds.is_empty() => Err(Box::new(LaunchFailure {
                 phase: LaunchPhase::Validate,
                 instance: None,
                 cause: RuntimeError::Unsupported(
@@ -94,7 +94,7 @@ impl Runtime {
                 ),
             })),
             #[cfg(target_os = "macos")]
-            Self::Native(provider) => provider.launch(request).map(Sandbox::Native),
+            Self::Process(provider) => provider.launch(request).map(Sandbox::Process),
             #[cfg(target_os = "linux")]
             Self::Namespaces(provider) => provider
                 .launch_with_binds(request, binds)
@@ -110,7 +110,7 @@ impl Runtime {
     ) -> Result<Sandbox, Box<WireFailure>> {
         match self {
             #[cfg(target_os = "macos")]
-            Self::Native(provider) => provider.reopen(id, record).map(Sandbox::Native),
+            Self::Process(provider) => provider.reopen(id, record).map(Sandbox::Process),
             #[cfg(target_os = "linux")]
             Self::Namespaces(provider) => provider
                 .reopen(id, record)
@@ -126,7 +126,7 @@ impl Runtime {
     ) -> Result<Sandbox, Box<WireFailure>> {
         match self {
             #[cfg(target_os = "macos")]
-            Self::Native(provider) => provider.reopen_stopped(id, record).map(Sandbox::Native),
+            Self::Process(provider) => provider.reopen_stopped(id, record).map(Sandbox::Process),
             #[cfg(target_os = "linux")]
             Self::Namespaces(provider) => provider
                 .reopen_stopped(id, record)
@@ -139,7 +139,7 @@ impl Runtime {
 #[derive(Debug)]
 pub enum Sandbox {
     #[cfg(target_os = "macos")]
-    Native(native::Sandbox),
+    Process(process::Sandbox),
     #[cfg(target_os = "linux")]
     Namespaces(Box<namespaces::Sandbox>),
 }
@@ -149,7 +149,7 @@ impl Sandbox {
     pub fn backend(&self) -> Backend {
         match self {
             #[cfg(target_os = "macos")]
-            Self::Native(_) => Backend::Native,
+            Self::Process(_) => Backend::Process,
             #[cfg(target_os = "linux")]
             Self::Namespaces(_) => Backend::Namespaces,
         }
@@ -158,7 +158,7 @@ impl Sandbox {
     pub fn identity(&self) -> ContainerId {
         match self {
             #[cfg(target_os = "macos")]
-            Self::Native(sandbox) => sandbox.identity(),
+            Self::Process(sandbox) => sandbox.identity(),
             #[cfg(target_os = "linux")]
             Self::Namespaces(sandbox) => sandbox.identity(),
         }
@@ -167,7 +167,7 @@ impl Sandbox {
     pub fn endpoint(&self) -> Result<SocketAddr, Box<WireFailure>> {
         match self {
             #[cfg(target_os = "macos")]
-            Self::Native(sandbox) => sandbox.endpoint(),
+            Self::Process(sandbox) => sandbox.endpoint(),
             #[cfg(target_os = "linux")]
             Self::Namespaces(sandbox) => sandbox.endpoint(),
         }
@@ -182,7 +182,7 @@ impl Sandbox {
     ) -> Result<ExecExit, Box<WireFailure>> {
         match self {
             #[cfg(target_os = "macos")]
-            Self::Native(sandbox) => sandbox.run(request, stdout, stderr),
+            Self::Process(sandbox) => sandbox.run(request, stdout, stderr),
             #[cfg(target_os = "linux")]
             Self::Namespaces(sandbox) => sandbox.run(request, stdout, stderr),
         }
@@ -199,7 +199,7 @@ impl Sandbox {
     ) -> Result<ExecExit, Box<WireFailure>> {
         match self {
             #[cfg(target_os = "macos")]
-            Self::Native(sandbox) => sandbox.run_in(request, Some(slot), stdout, stderr),
+            Self::Process(sandbox) => sandbox.run_in(request, Some(slot), stdout, stderr),
             #[cfg(target_os = "linux")]
             Self::Namespaces(sandbox) => sandbox.run_in(request, Some(slot), stdout, stderr),
         }
@@ -211,7 +211,7 @@ impl Sandbox {
     pub fn exec_stop(&self, workspace: &str, exec: &str) -> Option<Stop> {
         match self {
             #[cfg(target_os = "macos")]
-            Self::Native(_) => {
+            Self::Process(_) => {
                 let _ = (workspace, exec);
                 None
             }
@@ -225,7 +225,7 @@ impl Sandbox {
     pub fn track(&self, pid: u32, start_time: u64) -> Result<(), Box<WireFailure>> {
         match self {
             #[cfg(target_os = "macos")]
-            Self::Native(sandbox) => sandbox.track(pid, start_time),
+            Self::Process(sandbox) => sandbox.track(pid, start_time),
             // its cgroup owns every process the Sandbox started, whatever
             // session it left, so nothing needs naming
             #[cfg(target_os = "linux")]
@@ -236,7 +236,7 @@ impl Sandbox {
     pub fn log_tail(&self, lines: u16, cap: usize) -> Result<Vec<u8>, Box<WireFailure>> {
         match self {
             #[cfg(target_os = "macos")]
-            Self::Native(sandbox) => sandbox.log_tail(lines, cap),
+            Self::Process(sandbox) => sandbox.log_tail(lines, cap),
             #[cfg(target_os = "linux")]
             Self::Namespaces(sandbox) => sandbox.log_tail(lines, cap),
         }
@@ -245,7 +245,7 @@ impl Sandbox {
     pub fn inspect(&self) -> Result<SandboxInspection, Box<WireFailure>> {
         match self {
             #[cfg(target_os = "macos")]
-            Self::Native(sandbox) => {
+            Self::Process(sandbox) => {
                 sandbox.reap();
                 Ok(SandboxInspection {
                     identity: sandbox.identity(),
@@ -272,7 +272,7 @@ impl Sandbox {
     pub fn stop(&mut self, timeout_seconds: u16) -> Result<(), Box<WireFailure>> {
         match self {
             #[cfg(target_os = "macos")]
-            Self::Native(sandbox) => sandbox.stop(timeout_seconds),
+            Self::Process(sandbox) => sandbox.stop(timeout_seconds),
             #[cfg(target_os = "linux")]
             Self::Namespaces(sandbox) => sandbox.stop(timeout_seconds),
         }
@@ -281,7 +281,7 @@ impl Sandbox {
     pub fn delete(&mut self) -> Result<(), Box<WireFailure>> {
         match self {
             #[cfg(target_os = "macos")]
-            Self::Native(sandbox) => sandbox.delete(),
+            Self::Process(sandbox) => sandbox.delete(),
             #[cfg(target_os = "linux")]
             Self::Namespaces(sandbox) => sandbox.delete(),
         }
@@ -292,17 +292,17 @@ impl Sandbox {
     pub fn scratch_directory(&self) -> String {
         match self {
             #[cfg(target_os = "macos")]
-            Self::Native(sandbox) => sandbox.tmp().display().to_string(),
+            Self::Process(sandbox) => sandbox.tmp().display().to_string(),
             #[cfg(target_os = "linux")]
             Self::Namespaces(sandbox) => sandbox.tmp().display().to_string(),
         }
     }
 
-    /// Physical facts for the binding's existing record format, when this is native.
+    /// Physical facts for the binding's existing record format, when this is process.
     pub fn local_record(&self) -> Option<LocalRecord> {
         match self {
             #[cfg(target_os = "macos")]
-            Self::Native(sandbox) => sandbox.local_record(),
+            Self::Process(sandbox) => sandbox.local_record(),
             #[cfg(target_os = "linux")]
             Self::Namespaces(_) => None,
         }
@@ -312,7 +312,7 @@ impl Sandbox {
     pub fn record(&self) -> Option<SandboxRecord> {
         match self {
             #[cfg(target_os = "macos")]
-            Self::Native(_) => self.local_record().map(SandboxRecord::Local),
+            Self::Process(_) => self.local_record().map(SandboxRecord::Local),
             #[cfg(target_os = "linux")]
             Self::Namespaces(sandbox) => sandbox.record(),
         }

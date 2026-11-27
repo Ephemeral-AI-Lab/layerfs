@@ -409,7 +409,10 @@ mod with_a_store {
         let row = &items(&list)[0];
         assert_eq!(row.get_text("state"), Some("ready"), "{row:?}");
         assert_eq!(row.get_text("commit"), Some(commit.as_str()));
-        assert_eq!(row.get_text("machine"), Some("native"));
+        assert_eq!(
+            row.get_text("machine"),
+            Some(layerfs_home::names::HOST_MACHINE)
+        );
         assert_eq!(row.get_int("size"), Some(6), "README.md's six bytes");
         assert!(row
             .get_text("created_at")

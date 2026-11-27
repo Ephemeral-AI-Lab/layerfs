@@ -137,7 +137,7 @@ fn a_docker_engine_that_does_not_answer_is_broken_engine_down() {
 #[test]
 fn built_in_machines_are_never_created_or_removed() {
     let scratch = Scratch::new("built-in");
-    for kind in [Platform::Native, Platform::Docker] {
+    for kind in [Platform::Host, Platform::Docker] {
         let spec = scratch.spec(kind);
         assert_eq!(
             machine::create(&spec, &scratch.bundle()).unwrap_err().code,
@@ -145,7 +145,7 @@ fn built_in_machines_are_never_created_or_removed() {
         );
         assert_eq!(machine::remove(&spec).unwrap_err().code, Code::InvalidInput);
     }
-    let native = scratch.spec(Platform::Native);
+    let native = scratch.spec(Platform::Host);
     assert!(machine::start(&native, &scratch.bundle())
         .unwrap()
         .is_none());

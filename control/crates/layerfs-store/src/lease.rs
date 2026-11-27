@@ -24,22 +24,39 @@ use std::sync::Mutex;
 
 /// This process's leases and how many holders use each.
 static HELD: Mutex<BTreeMap<PathBuf, usize>> = Mutex::new(BTreeMap::new());
+const HOST_WORKER: &str = "host-worker";
 
 /// One use of a Store's lease; the last drop in this process removes it.
 pub struct Lease {
-    path: PathBuf,
+    path: Option<PathBuf>,
+}
+
+impl Lease {
+    /// Releases this use and reports failure to remove the last lease file.
+    /// A file that is already absent is settled.
+    pub fn release(mut self) -> Result<(), SdkRefusal> {
+        self.release_file()
+    }
+
+    fn release_file(&mut self) -> Result<(), SdkRefusal> {
+        let Some(path) = self.path.take() else {
+            return Ok(());
+        };
+        let mut held = HELD.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(count) = held.get_mut(&path) {
+            *count -= 1;
+            if *count == 0 {
+                held.remove(&path);
+                remove_file(&path)?;
+            }
+        }
+        Ok(())
+    }
 }
 
 impl Drop for Lease {
     fn drop(&mut self) {
-        let mut held = HELD.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some(count) = held.get_mut(&self.path) {
-            *count -= 1;
-            if *count == 0 {
-                held.remove(&self.path);
-                let _ = std::fs::remove_file(&self.path);
-            }
-        }
+        let _ = self.release_file();
     }
 }
 
@@ -61,14 +78,29 @@ pub fn claim(home: &Path, store: &str) -> Result<(Lease, StoreRecord), SdkRefusa
     let _store = crate::record::lock(home, store)?;
     let record = StoreRecord::read(home, store)?.ok_or_else(none)?;
     record.unblocked()?;
+    record.admit_machine(home)?;
+    Ok((claim_unblocked_locked(home, store)?, record))
+}
+
+/// Claims a lease after the caller checked the record under the Store lock.
+pub(crate) fn claim_unblocked_locked(home: &Path, store: &str) -> Result<Lease, SdkRefusal> {
     // the leases of processes that ended go now; the live holders' stay
     holders(home, store)?;
-    Ok((hold_locked(home, store)?, record))
+    hold_locked(home, store)
 }
 
 /// Holds Store `store`'s lease under `root` with no record check: the
 /// caller holds the Store's lock, or is a worker under its own root.
 pub fn hold_locked(root: &Path, store: &str) -> Result<Lease, SdkRefusal> {
+    hold_role_locked(root, store, None)
+}
+
+/// Acquires a native worker cache lease while holding the Store record lock.
+pub(crate) fn hold_host_locked(root: &Path, store: &str) -> Result<Lease, SdkRefusal> {
+    hold_role_locked(root, store, Some(HOST_WORKER))
+}
+
+fn hold_role_locked(root: &Path, store: &str, role: Option<&str>) -> Result<Lease, SdkRefusal> {
     let dir = paths::lease_dir(root, store);
     let path = dir.join(std::process::id().to_string());
     let mut held = HELD.lock().unwrap_or_else(|e| e.into_inner());
@@ -79,6 +111,10 @@ pub fn hold_locked(root: &Path, store: &str) -> Result<Lease, SdkRefusal> {
         if let Some((start, boot)) = me() {
             text.push_str(&format!(" {start} {boot:032x}"));
         }
+        if let Some(role) = role {
+            text.push(' ');
+            text.push_str(role);
+        }
         text.push('\n');
         if let Err(error) = std::fs::write(&path, text) {
             held.remove(&path);
@@ -86,7 +122,7 @@ pub fn hold_locked(root: &Path, store: &str) -> Result<Lease, SdkRefusal> {
         }
     }
     *held.get_mut(&path).expect("counted above") += 1;
-    Ok(Lease { path })
+    Ok(Lease { path: Some(path) })
 }
 
 /// Whether this process holds Store `store`'s lease under `root` now.
@@ -97,18 +133,72 @@ pub fn held_here(root: &Path, store: &str) -> bool {
         .contains_key(&path)
 }
 
-/// Whether lease text `text` (`<at> [<start> <boot>]`) of `pid` names a
-/// live process.
-fn lease_alive(pid: u32, text: &str) -> bool {
-    let mut fields = text.split_ascii_whitespace().skip(1);
-    let start = fields.next().and_then(|s| s.parse().ok());
-    let boot = fields.next().and_then(|b| u128::from_str_radix(b, 16).ok());
-    alive_as(pid, start, boot)
+/// A process identity that can be matched to a lease without PID reuse.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Owner {
+    pid: u32,
+    start: u64,
+    boot: u128,
 }
 
-/// Store `store`'s leases other than this process's: each holder's id,
-/// its lease file and whether it is alive. Read only.
-fn leases(home: &Path, store: &str) -> Result<Vec<(u32, PathBuf, bool)>, SdkRefusal> {
+impl Owner {
+    /// Reads the three identity fields of an authenticated process.
+    pub fn decode(value: &SdkValue) -> Option<Self> {
+        Some(Self {
+            pid: u32::try_from(value.get_int("pid")?).ok()?,
+            start: value.get_text("pid_start")?.parse().ok()?,
+            boot: u128::from_str_radix(value.get_text("pid_boot")?, 16).ok()?,
+        })
+    }
+
+    /// Identity stored with a maintenance intent.
+    pub fn to_value(&self) -> SdkValue {
+        SdkValue::map([
+            ("pid", SdkValue::Int(i64::from(self.pid))),
+            ("pid_start", SdkValue::text(self.start.to_string())),
+            ("pid_boot", SdkValue::text(format!("{:032x}", self.boot))),
+        ])
+    }
+
+    /// The process number shown in holder refusals.
+    pub fn pid(&self) -> u32 {
+        self.pid
+    }
+
+    /// Whether this is the current process with its exact identity.
+    pub fn mine(&self) -> bool {
+        self.pid == std::process::id() && me() == Some((self.start, self.boot))
+    }
+
+    /// Read-only observation of this exact live lease. A caller making an
+    /// admission decision must already hold the Store lock.
+    pub fn holds(&self, home: &Path, store: &str) -> Result<bool, SdkRefusal> {
+        Ok(leases(home, store)?
+            .iter()
+            .any(|lease| lease.alive && lease.owner.as_ref() == Some(self)))
+    }
+
+    /// Whether the exact previous owner released its lease or is proved dead.
+    /// A live PID with an incomplete identity still blocks settlement.
+    pub fn released(&self, home: &Path, store: &str) -> Result<bool, SdkRefusal> {
+        Ok(!leases(home, store)?.iter().any(|lease| {
+            lease.alive
+                && lease.pid == self.pid
+                && lease.owner.as_ref().is_none_or(|owner| owner == self)
+        }))
+    }
+}
+
+struct LeaseFile {
+    pid: u32,
+    path: PathBuf,
+    alive: bool,
+    owner: Option<Owner>,
+    host_worker: bool,
+}
+
+/// Store `store`'s leases other than this process's. Read only.
+fn leases(home: &Path, store: &str) -> Result<Vec<LeaseFile>, SdkRefusal> {
     let dir = paths::lease_dir(home, store);
     let mut found = Vec::new();
     let entries = match std::fs::read_dir(&dir) {
@@ -128,23 +218,54 @@ fn leases(home: &Path, store: &str) -> Result<Vec<(u32, PathBuf, bool)>, SdkRefu
         if pid == std::process::id() {
             continue;
         }
-        let text = match std::fs::read_to_string(entry.path()) {
+        let path = entry.path();
+        let text = match std::fs::read_to_string(&path) {
             Ok(text) => text,
             // its holder dropped it meanwhile
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
             Err(e) => return Err(failed(e)),
         };
-        found.push((pid, entry.path(), lease_alive(pid, &text)));
+        let mut fields = text.split_ascii_whitespace().skip(1);
+        let start = fields.next().and_then(|s| s.parse().ok());
+        let boot = fields.next().and_then(|b| u128::from_str_radix(b, 16).ok());
+        let owner = start
+            .zip(boot)
+            .map(|(start, boot)| Owner { pid, start, boot });
+        found.push(LeaseFile {
+            pid,
+            path,
+            alive: alive_as(pid, start, boot),
+            owner,
+            host_worker: text.split_ascii_whitespace().next_back() == Some(HOST_WORKER),
+        });
     }
-    found.sort_unstable();
+    found.sort_unstable_by_key(|lease| lease.pid);
     Ok(found)
 }
 
-/// Removes the stale lease at `path`: `false` when it is gone already. A
+/// Live host worker leases whose exact owner was not authenticated. Caller
+/// holds the Store lock, so a freshly acquired host lease is visible here.
+pub(crate) fn unmatched_host_workers(
+    home: &Path,
+    store: &str,
+    verified: Option<&Owner>,
+) -> Result<Vec<u32>, SdkRefusal> {
+    Ok(leases(home, store)?
+        .into_iter()
+        .filter(|lease| {
+            lease.alive
+                && lease.host_worker
+                && !verified.is_some_and(|owner| lease.owner.as_ref() == Some(owner))
+        })
+        .map(|lease| lease.pid)
+        .collect())
+}
+
+/// Removes the lease file at `path`: `false` when it is gone already. A
 /// holder drops its own lease without the Store's lock ([`Lease`]'s drop),
 /// so a lease read here can be gone by the time its holder is found ended:
 /// the holder dropped it and then ended, and nothing stale is left.
-fn remove_stale(path: &Path) -> Result<bool, SdkRefusal> {
+fn remove_file(path: &Path) -> Result<bool, SdkRefusal> {
     match std::fs::remove_file(path) {
         Ok(()) => Ok(true),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
@@ -155,13 +276,24 @@ fn remove_stale(path: &Path) -> Result<bool, SdkRefusal> {
 /// The processes holding Store `store`, other than this one; stale leases
 /// are removed and logged (O35). The caller holds the Store's lock.
 pub fn holders(home: &Path, store: &str) -> Result<Vec<u32>, SdkRefusal> {
+    holders_except(home, store, None)
+}
+
+/// Like `holders`, excluding only an exact authenticated worker lease.
+pub fn holders_except(
+    home: &Path,
+    store: &str,
+    except: Option<&Owner>,
+) -> Result<Vec<u32>, SdkRefusal> {
     let mut live = Vec::new();
-    for (pid, path, alive) in leases(home, store)? {
-        if alive {
-            live.push(pid);
+    for lease in leases(home, store)? {
+        if lease.alive {
+            if !except.is_some_and(|except| lease.owner.as_ref() == Some(except)) {
+                live.push(lease.pid);
+            }
             continue;
         }
-        if !remove_stale(&path)? {
+        if !remove_file(&lease.path)? {
             continue;
         }
         home::log_line(
@@ -170,7 +302,10 @@ pub fn holders(home: &Path, store: &str) -> Result<Vec<u32>, SdkRefusal> {
             &SdkValue::map([
                 ("at", SdkValue::Int(home::now_ms())),
                 ("store", SdkValue::text(store)),
-                ("removed_stale_lease_of", SdkValue::Int(i64::from(pid))),
+                (
+                    "removed_stale_lease_of",
+                    SdkValue::Int(i64::from(lease.pid)),
+                ),
             ]),
         )?;
     }
@@ -182,11 +317,11 @@ pub fn holders(home: &Path, store: &str) -> Result<Vec<u32>, SdkRefusal> {
 /// removed and no lock is taken.
 pub fn read_holders(home: &Path, store: &str) -> Result<(Vec<u32>, Vec<u32>), SdkRefusal> {
     let (mut live, mut stale) = (Vec::new(), Vec::new());
-    for (pid, _, alive) in leases(home, store)? {
-        if alive {
-            live.push(pid)
+    for lease in leases(home, store)? {
+        if lease.alive {
+            live.push(lease.pid)
         } else {
-            stale.push(pid)
+            stale.push(lease.pid)
         }
     }
     Ok((live, stale))

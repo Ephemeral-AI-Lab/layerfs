@@ -1,6 +1,6 @@
 //! The home's own checks (call surface 2.0, `calls.json` `doctor.checks.home`),
 //! in the order they run: `home.build`, `home.prerequisites`, `home.layout`,
-//! `home.records`, `home.bundle`, `home.native_daemon`, `home.artifacts`,
+//! `home.records`, `home.bundle`, `home.host_daemon`, `home.artifacts`,
 //! `home.capacity`. Each observes; none opens or changes the
 //! home. A check that does not apply is left out: a home not made yet has
 //! no layout or records; the bundle is checked only where a recorded
@@ -35,7 +35,7 @@ pub(super) fn diagnose(
     if let Some(records) = &scanned {
         install::bundle(home, records, checks);
     }
-    install::native_daemon(home, build, checks);
+    install::host_daemon(home, build, checks);
     if let Some(records) = &scanned {
         install::artifacts(records, budget, checks);
     }
@@ -60,6 +60,13 @@ fn layout(
         Ok(layout) => layout,
         Err(refusal) => {
             checks.fail(LAYOUT, refusal.message);
+            if let Some(records) = refusal.detail.get("legacy_host_records") {
+                if let Some(fix) = refusal.detail.get_text("fix") {
+                    checks.fix(LAYOUT, fix);
+                }
+                checks.evidence(LAYOUT, SdkValue::map([("records", records.clone())]));
+                return None;
+            }
             // no fix: the OS error is the finding, and the cause is the
             // home folder's permissions or mount
             checks.evidence(
@@ -92,7 +99,10 @@ fn layout(
         }
         Layout::Current(_) => {
             checks.pass(LAYOUT, "a current-layout home this build reads");
-            observed(home, build, budget, checks)
+            let scanned = observed(home, build, budget, checks);
+            #[cfg(all(feature = "machine", any(target_os = "macos", target_os = "linux")))]
+            super::host_worker::directory(home, checks);
+            scanned
         }
     }
 }

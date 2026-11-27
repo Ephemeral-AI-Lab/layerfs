@@ -16,7 +16,7 @@ writes every record itself.
 | Setting | Meaning |
 | --- | --- |
 | `LAYERFS_HOME` | the home folder. Unset, it is `~/.layerfs` (O28) |
-| `LAYERFS_TRACE`, `LAYERFS_TRACE_STEP`, `LAYERFS_TRACE_START` | tracing. `LAYERFS_TRACE` names a file: each connection to a machine's worker appends `{at, event: "worker.connection", op, worker, sent, ms}` to it. With `LAYERFS_TRACE_STEP` also set (any non-empty value), each call appends one `{at, event: "step", op, step, us, ms}` line per step it timed: the caller's (`dispatch`, `route`, `connect`, `ready`, `request`, `answer`) and, for a worker-routed call, the worker's as `worker.<step>`, which the worker sends back in its answer (a namespaces `workspace.exec` adds `worker.exec.*` and its helper's `worker.helper.*` stages). `LAYERFS_TRACE_START` is still not read |
+| `LAYERFS_TRACE`, `LAYERFS_TRACE_STEP`, `LAYERFS_TRACE_START` | tracing. `LAYERFS_TRACE` names a file: each connection to a machine's worker appends `{at, event: "worker.connection", op, worker, sent, ms}` to it. With `LAYERFS_TRACE_STEP` also set (any non-empty value), each call appends one `{at, event: "step", op, step, us, ms}` line per step it timed: the caller's (`dispatch`, then for a Store call in this process `lease`, `store_open` and `call`, or for a worker-routed call `route`, `connect`, `ready`, `request`, `answer`) and, for a worker-routed call, the worker's as `worker.<step>`, which the worker sends back in its answer (a namespaces `workspace.exec` adds `worker.exec.*` and its helper's `worker.helper.*` stages). A process that closes its Stores before it exits (the `layerfs` command after its call, `layerfs.close()`) appends op `close` with steps `stores` and `sessions`. `LAYERFS_TRACE_START` is still not read |
 
 LayerFS reads no other user setting. A Node or Python client can name
 another home: `layerfs.client({ home })`, `layerfs.client(home=...)`.
@@ -24,6 +24,28 @@ another home: `layerfs.client({ home })`, `layerfs.client(home=...)`.
 A PostgreSQL login and a bucket's secret key are not settings either: they
 are kept in the home's secret folder; see
 [machines, Stores and backups](machines-and-stores.md#secrets).
+
+### Host worker lifecycle
+
+A host worker on macOS or Linux can create `worker.sock` (calls),
+`writes.sock` (streamed file writes) and `worker.ctl` (management) in the
+private `machine/macos-host/` (macOS) or `machine/linux-host/` (Linux) directory. These sockets
+accept the UID that owns the home. The worker keeps `worker.lock` through
+shutdown, releases its sockets after draining its connections, and becomes
+eligible to exit after one minute with no calls and no waiting connections.
+Status checks (`machine doctor`, `machine get --with live`) do not keep it
+running. A call made while the worker is busy waits up to 30 seconds for a
+free call thread; past that it is refused `Unavailable` before anything is
+sent, naming the load, and can be made again. The worker starts with only `LAYERFS_HOME`, `PATH`,
+`HOME`, `TMPDIR`, the locale and the OpenSSL certificate settings from the
+command that started it, in `/`. The home itself keeps its permissions.
+The CLI checks the worker's build before it sends a request. If they differ,
+wait for the current worker's idle exit before making another call.
+If the connection ends after a request starts sending and before a complete
+answer arrives, the CLI reports `Unknown` with the request ID.
+The internal `worker --host` entry serves that home when a launcher starts it.
+Host Store routing and maintenance coordination are separate implementation
+steps.
 
 ## Layout
 
@@ -36,23 +58,29 @@ are kept in the home's secret folder; see
     worker.json                endpoint, secret, live forward (0600)
     start.lock                 taken while a process starts, makes or removes the machine
     forward.log, forward.1.log what a lima machine's ssh forwards said, and its one rotated file
-  machine/native/run/          native Sandboxes' run folders, and their image cache
+  machine/<host>/run/          the host machine's Sandboxes' run folders and image cache
+                               (<host> is macos-host or linux-host)
     layerfs-<id8>-<sandbox>/   one run folder per Sandbox
     layerfs-<id8>-<sandbox>.root/  its private root (Linux; empty from outside)
     images/<64 hex>.2/         an unpacked image, with <64 hex>.2.lock and <64 hex>.2.json
+  machine/<host>/spool/        0700: a piped CLI write's input until it is sent to the
+                               host worker, in unnamed files (unlinked at once); disk
+                               equal to the input, on the home's filesystem
+  machine/<host>/retained/     host worker write outcomes a caller may not know,
+                               <request id>.json each; at most 256; removed with `rm`
   sandbox/<name>/
     record.json                v, name, project, machine, backend, route, ..., op?
-    control.json               the Sandbox daemon's keys (0600; native, and machines reached directly)
+    control.json               the Sandbox daemon's keys (0600; the host machine, and machines reached directly)
     lock                       the Sandbox lock: its record and Workspace record changes
-    serve.lock                 held by the call that runs the Sandbox (native, and machines reached directly)
+    serve.lock                 held by the call that runs the Sandbox (the host machine, and machines reached directly)
     workspace/<id>.json        one per mounted Workspace: v, id, name?, branch, path, namespace, created
     workspace/<id>.unmount     who owns an unmount of it, with <id>.unmount-lock; kept until the Sandbox is removed
     workspace/<id>/exec/<x>.json  one per running command (exec id <x>): owner, route, stop handle
   store/<name>/
     record.json                kind, machine, profile, backup links
     lock                       the Store lock
-    store.sqlite               a sqlite Store's file while it is on native
-    store.sqlite.incoming      the partial copy of a store move to native, renamed to store.sqlite when verified
+    store.sqlite               a sqlite Store's file while it is on the host machine
+    store.sqlite.incoming      the partial copy of a store move to the host machine, renamed to store.sqlite when verified
     backup.lock                held by a backup create of this Store
     backup.staging             a backup create's snapshot fetched from a machine, removed when it ends
     store.sqlite.backup        a backup create's snapshot staged beside the file, removed when it ends
@@ -70,11 +98,10 @@ worker's root:
 
 ```
 /layerfs/data/
-  .layout-3                    what an earlier bundle left here was cleared
   store/<name>/                record.json (v, name, kind), store.sqlite, store.sqlite.incoming
                                (a store move's partial copy), store.sqlite.backup
   sandbox/<name>/              record.json, control.json, lock, workspace/ as above
-  machine/native/run/          the machine's Sandboxes' run folders and image cache, as above
+  machine/linux-guest/run/     the machine's Sandboxes' run folders and image cache, as above
   incoming/init-<16 hex>/      the folder copy of a project init, while it runs
   log/                         worker.log, worker.1.log (private to root), exec.jsonl,
                                exec.1.jsonl, rotate.lock
@@ -89,16 +116,16 @@ worker's root:
   and the entity's own lock (`store/<s>/lock`, `sandbox/<name>/lock`) for
   its record's other changes. Locks are taken home first, then a machine's
   `start.lock`, then a Store's, then a Sandbox's (#536 §8).
-  Files are 0600 and folders 0700. The run root `machine/native/run/` is
+  Files are 0600 and folders 0700. The run root `machine/<host>/run/` is
   0755. On Linux, where a Sandbox's commands run as another user, the
-  folders above the run root (`machine/native/`, `machine/` and the home)
+  folders above the run root (`machine/linux-host/`, `machine/` and the home)
   also let others pass through, never list: 0701. `layerfs home doctor` accepts
   0700 and 0701 for the home's folders, reports any group bit or any read
   or write bit for others, and wants exactly 0700 for a Store's own folder
   and 0600 for a record. Bytes are stored as `{"hex": "…"}`.
   Every machine, Store, project, bucket, Sandbox and Workspace record
   carries `"v": 1` as its first field; call results never show it.
-- **`layerfs.json`** holds `{"layout": 3, "id": "<32 hex digits>"}`. The id
+- **`layerfs.json`** holds `{"layout": 4, "id": "<32 hex digits>"}`. The id
   is written once. The `docker` machine names its worker container with it (O33),
   VM, container and volume names and Sandbox run folders carry its first 8
   digits (`layerfs-<id8>-<name>`), and backups record it as where they
@@ -110,7 +137,7 @@ worker's root:
   nothing changes. A thread that already holds it takes it again at once.
   It is held only for checks and record writes, never across a machine
   start, a Store step, a download or a VM's deletion.
-- **`machine/native/` and `machine/docker/`** exist from the first call and
+- **`machine/macos-host/` (or `machine/linux-host/`) and `machine/docker/`** exist from the first call and
   are never removed.
 - **`store/<name>/open/<pid>`** is a lease. Every process that uses a sqlite
   Store holds one: the process that opens it, or, for a Store behind a
@@ -128,14 +155,14 @@ worker's root:
   machine: listing Sandboxes reads `sandbox/*` and nothing else, and one
   Sandbox is one folder read. Its `record.json` holds facts: its name,
   project and machine and, once started, its id, `backend`, kernel `route`
-  (`fuse`, or `nfs` on a macOS native Sandbox) and `runtime_id`; and,
+  (`fuse`, or `nfs` on a macOS `process` Sandbox) and `runtime_id`; and,
   while a `sandbox.create` or `sandbox.remove` runs or after one lost its
   answer, one `op` intent (`{id, name, phase, args, owner: {pid,
   pid_start, pid_boot}, started, updated, uncertain}`, #536 §7.1). Its
   state is derived, never stored. Its `lock` is taken after the home lock
   for each change of the record and of its Workspace records, and never
-  held across a machine or daemon call; the call that runs a native
-  Sandbox takes turns on `serve.lock`, a different file. On `native` the side
+  held across a machine or daemon call; the call that runs a host-machine
+  Sandbox takes turns on `serve.lock`, a different file. On the host machine the side
   that runs the Sandbox adds what reopens its runtime (`daemon`) to the
   same file, and its daemon keys to `control.json`. A Sandbox on
   `lima` whose daemon the caller reaches directly (#535 G4)
@@ -146,7 +173,7 @@ worker's root:
   and boot. Its Workspace records are then in the home's `workspace/`,
   not the machine's. `runtime_id` and `daemon` are never shown. The
   Sandbox's `id` is its name.
-- **`machine/native/run/`** holds each native Sandbox's run folder
+- **`machine/<host>/run/`**, the run root, holds each host Sandbox's run folder
   (`layerfs-<id8>-<name>`) and the image cache the namespaces backend
   unpacks once (`images/<64 hex>.2`; `.2` is the cache's layout version).
   A Sandbox's run folder is created by its create and deleted by its
@@ -155,10 +182,17 @@ worker's root:
   is the number in the Workspace's record `workspace/<id>.json`), and
   `tmp/`, the `HOME` of the Sandbox's commands. Nothing limits what a
   Sandbox writes there: it shares the disk of the home, or of the
-  machine's data disk, with the Stores.
+  machine's data disk, with the Stores. The run root is named for its
+  side: `machine/macos-host/run/` in a home on a Mac,
+  `machine/linux-host/run/` in a home on Linux and
+  `machine/linux-guest/run/` on a machine's data disk. A
+  `machine/native/` that an earlier development build left is not read.
+  In a home, `layerfs home doctor` names it with the command that removes
+  it, or that first unmounts what is still mounted under it; doctor does
+  not check a machine's data disk.
 - **Command records** (`sandbox/<name>/workspace/<id>/exec/<x>.json`)
   are written new when a command starts and removed when it ends, on the
-  side that keeps the Workspace's record: here on `native` and for a
+  side that keeps the Workspace's record: here on the host machine and for a
   Sandbox reached directly; in the machine's worker otherwise. Each names
   its owning process, its route (`local` or `machine:<name>`), how it
   is stopped, the log tag of the call that started it and the program its
@@ -226,7 +260,7 @@ worker's root:
 
 | Sandbox on | Its record | Daemon keys (`control.json`) | Workspace and command records | Run folder |
 | --- | --- | --- | --- | --- |
-| `native` | the home | the home | the home | the home's `machine/native/run/` |
+| the host machine (`macos-host` or `linux-host`) | the home | the home | the home | the home's `machine/<host>/run/` |
 | `lima`, daemon reached directly (its port forwarded to the host) | the home, and the machine | both | the home | the machine |
 | any other machine | the home (without `daemon`), and the machine | the machine | the machine | the machine |
 
@@ -238,22 +272,16 @@ with a thin `store/<name>/record.json` (`{"v":1,"name","kind"}`, written
 only when it changed), and `sandbox/<name>/` for the Sandboxes on that
 machine (`record.json`: `v`, `name`, `project`, `backend`, `runtime_id`
 and `daemon`; `control.json`; `workspace/`), with their local directories
-under `machine/native/run/`. The worker's own output is in
+under `machine/linux-guest/run/`. The worker's own output is in
 `/layerfs/data/log/worker.log` on every machine kind, docker included
 (private to root; a start that finds it past 16 MiB renames it to
-`worker.1.log` first). On its first start from a layout 3 bundle the
-worker deletes what an earlier bundle left there, once, and logs each
-deletion: numbered Sandbox folders (`store/*/project/*/sandboxes/`),
-`machine/*/sandbox/`, old local directories in
-`machine/native/sandbox-root/` (renamed `machine/native/run/`, its
-`images/` kept) and full Store records (rewritten thin). The marker
-`/layerfs/data/.layout-3` keeps it from running again.
+`worker.1.log` first).
 
 ## Secrets, and moving or copying a home
 
 - **Secrets in the home.** `machine/<name>/worker.json` holds a worker's
   secret and `sandbox/<name>/control.json` a Sandbox daemon's keys (both
-  0600). A started native Sandbox's run folder holds its daemon's setup
+  0600). A started host-machine Sandbox's run folder holds its daemon's setup
   (`config/daemon.setup`, 0600), with the daemon's private key and, for a
   PostgreSQL Store, the URL with its password. A PostgreSQL password or a
   bucket key is otherwise kept only in the secret folder, `secret/`
@@ -261,10 +289,10 @@ deletion: numbered Sandbox folders (`store/*/project/*/sandboxes/`),
   integration keeps its own secrets under `secret/`. A copy of a home
   carries all of these.
 - **Moving.** No call moves a home, and nothing rewrites a path in a
-  record. A started native Sandbox's record names its run folder by
+  record. A started host-machine Sandbox's record names its run folder by
   absolute path, and the run folder names its record's folder: after a
   move every call on it is refused `InvalidInput`, and it is neither used
-  nor deleted. Close every native Sandbox first and move the home only
+  nor deleted. Close every host-machine Sandbox first and move the home only
   while nothing in it runs; then name the new path (`LAYERFS_HOME`).
   Machines, and the Stores and Sandboxes on them, are named by `vm_name`
   and a loopback address, not by a path in the home, and are unchanged.
@@ -286,7 +314,7 @@ The first call on an empty or missing folder creates it with
 ```console
 $ export LAYERFS_HOME=/tmp/lfs-new
 $ layerfs store create shop
-{"name":"shop","kind":"sqlite","machine":"native","profile":"normal",…}
+{"name":"shop","kind":"sqlite","machine":"macos-host","profile":"normal",…}
 $ cat /tmp/lfs-new/layerfs.json
 {"layout":3,"id":"2f51a567b6f153b6e914393cab0904b6"}
 ```
@@ -312,3 +340,5 @@ $ mv <home> <home>.old && layerfs home init
 
 which keeps the old folder and makes a new, empty home. Nothing in the old
 folder is carried over.
+
+A layout 3 development home with old host names or a custom machine named `macos-host` or `linux-host` is refused before the first record write. Run `layerfs home doctor` to see the affected paths together. Use the old build to stop its workers and Sandboxes and export the data you need, then park the home and initialize a new one. The first ordinary open of a compatible layout 3 home records layout 4 and keeps its original home id. Doctor leaves the layout untouched.

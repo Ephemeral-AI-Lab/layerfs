@@ -91,7 +91,7 @@ fn opened(forward: &Forward, guest_port: u16) -> (u16, u32) {
 #[test]
 fn native_answers_the_daemons_port_and_has_nothing_to_close() {
     let scratch = Scratch::new("forward-native");
-    let spec = scratch.spec(Platform::Native);
+    let spec = scratch.spec(Platform::Host);
     let forward = machine::forward(&spec, 43210).unwrap();
     let expected: SocketAddr = "127.0.0.1:43210".parse().unwrap();
     assert_eq!(
@@ -266,7 +266,7 @@ fn a_forward_start_rotates_the_shared_log_in_place_under_a_running_forward() {
 fn port_zero_is_refused_before_any_tool_runs() {
     let scratch = Scratch::new("forward-zero");
     scratch.tool("ssh", FORWARDING);
-    for kind in [Platform::Native, Platform::Lima] {
+    for kind in [Platform::Host, Platform::Lima] {
         let error = machine::forward(&scratch.spec(kind), 0).unwrap_err();
         assert_eq!(error.code, Code::InvalidInput, "{kind:?}");
     }

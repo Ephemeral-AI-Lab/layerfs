@@ -21,7 +21,7 @@ fn records(root: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
     let mut result = BTreeMap::new();
     let mut pending = vec![root.to_owned()];
     while let Some(path) = pending.pop() {
-        if path == root.join("machine/native/run") {
+        if path == paths::run_root(root) {
             continue;
         }
         for entry in std::fs::read_dir(&path).unwrap() {
@@ -174,7 +174,13 @@ fn actual_runtime_negative_observations_preserve_records_and_ownership() {
     // without killing or altering the primary qualification daemon.
     let cli = std::env::var_os("LAYERFS_DOCTOR_FIXTURE_CLI").expect("absolute fixture CLI");
     let result = std::process::Command::new(&cli)
-        .args(["sandbox", "create", "b6-store/demo", "b6-gone", "native"])
+        .args([
+            "sandbox",
+            "create",
+            "b6-store/demo",
+            "b6-gone",
+            layerfs_home::names::HOST_MACHINE,
+        ])
         .env("LAYERFS_HOME", &source)
         .output()
         .unwrap();

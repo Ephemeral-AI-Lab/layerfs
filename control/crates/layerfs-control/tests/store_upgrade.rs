@@ -137,7 +137,7 @@ fn a_sandbox_of_its_projects_refuses_in_use() {
         ("v", SdkValue::Int(1)),
         ("name", t("s1")),
         ("project", t("shop/web")),
-        ("machine", t("native")),
+        ("machine", t(layerfs_home::names::HOST_MACHINE)),
     ]);
     write_record(&paths::sandbox_record(&home, "s1"), &sandbox).unwrap();
     let (outcome, _) = upgrade(&home);

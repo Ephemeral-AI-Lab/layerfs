@@ -53,7 +53,7 @@ fn store_home() -> PathBuf {
     let record = SdkValue::map([
         ("name", SdkValue::text("s")),
         ("kind", SdkValue::text("sqlite")),
-        ("machine", SdkValue::text("native")),
+        ("machine", SdkValue::text(layerfs_home::names::HOST_MACHINE)),
     ]);
     write_entity(&paths::store_record(&home, "s"), &record).unwrap();
     private_dir(&paths::store_dir(&home, "s")).unwrap();

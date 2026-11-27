@@ -33,7 +33,7 @@ const ARCH: u32 = 4;
 const ARG0_LOW: u32 = 16;
 /// `CLONE_NEWUSER`, which fits in the first argument's low word.
 const NEWUSER: u32 = libc::CLONE_NEWUSER as u32;
-/// x86_64's x32 ABI: the native numbers with this bit set.
+/// x86_64's x32 ABI: the process numbers with this bit set.
 #[cfg(target_arch = "x86_64")]
 const X32: u32 = 0x4000_0000;
 
@@ -105,15 +105,15 @@ const RETURN: u32 = libc::BPF_RET | libc::BPF_K;
 
 /// The checks for one ABI, entered with its number loaded; every path ends
 /// in a return.
-fn checks(abi: &Abi, native: bool) -> Vec<sock_filter> {
+fn checks(abi: &Abi, process: bool) -> Vec<sock_filter> {
     let mut block = vec![statement(LOAD, NR)];
     #[cfg(target_arch = "x86_64")]
-    if native {
-        // x32 calls carry the native numbers with the x32 bit set
+    if process {
+        // x32 calls carry the process numbers with the x32 bit set
         block.push(statement(libc::BPF_ALU | libc::BPF_AND | libc::BPF_K, !X32));
     }
     #[cfg(not(target_arch = "x86_64"))]
-    let _ = native;
+    let _ = process;
     block.extend([
         jump(EQUALS, abi.clone3, 0, 1),
         statement(RETURN, libc::SECCOMP_RET_ERRNO | libc::ENOSYS as u32),

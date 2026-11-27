@@ -104,7 +104,7 @@ fn home_records(home: &Path, machine: &str, platform: &str, worker: Option<(Sock
         ("platform", t(platform)),
         ("daemon", t(&daemon)),
     ];
-    if machine != "native" {
+    if machine != layerfs_home::names::HOST_MACHINE {
         fields.push(("vm_name", t(&vm_name)));
     }
     write_record(&paths::machine_record(home, machine), &map(&fields)).unwrap();
@@ -147,7 +147,7 @@ fn local_sandbox(root: &Path, log: &str) -> PathBuf {
         platform: "macos".to_owned(),
         name: name.to_owned(),
         container: "ab".repeat(32),
-        runtime: "native",
+        runtime: "process",
         uid: home::flock::euid(),
         gid: home::flock::egid(),
         directory: folder.display().to_string(),
@@ -162,9 +162,9 @@ fn local_sandbox(root: &Path, log: &str) -> PathBuf {
         &map(&[
             ("name", t("s1")),
             ("project", t("shop/api")),
-            ("machine", t("native")),
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
             ("id", t("s1")),
-            ("runtime", t("native")),
+            ("runtime", t("process")),
             ("daemon", daemon.to_record()),
         ]),
     )
@@ -324,12 +324,12 @@ fn the_table_lists_both_calls_with_a_cursor_window() {
 #[test]
 fn a_native_sandbox_s_log_is_read_here_with_no_lock_and_nothing_written() {
     let _turn = serial();
-    let home = tempdir("native");
+    let home = tempdir(layerfs_home::names::HOST_MACHINE);
     home::open(&home).unwrap();
-    home_records(&home, "native", "native", None);
+    home_records(&home, layerfs_home::names::HOST_MACHINE, "host", None);
     let folder = local_sandbox(&home, &numbered(0, 300));
     settle(&home);
-    held(&home, "native");
+    held(&home, layerfs_home::names::HOST_MACHINE);
     let _push = pushing(&home);
     let before = files(&home);
     let at = Instant::now();
@@ -373,8 +373,13 @@ fn a_native_sandbox_s_log_is_read_here_with_no_lock_and_nothing_written() {
     .unwrap();
     assert_eq!(texts(&next), names(300, 303));
 
-    // refusals: a native machine has no worker log; unknown names
-    let (code, message) = call(&home, "machine.log", &[("machine", t("native"))]).unwrap_err();
+    // refusals: the host machine has no machine worker log; unknown names
+    let (code, message) = call(
+        &home,
+        "machine.log",
+        &[("machine", t(layerfs_home::names::HOST_MACHINE))],
+    )
+    .unwrap_err();
     assert_eq!(code, "Unsupported", "{message}");
     // a name no machine has: `NotFound` in a host build; a build without
     // the machine adapters knows only that no worker is recorded for it

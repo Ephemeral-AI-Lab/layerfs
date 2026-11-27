@@ -48,7 +48,7 @@ and setting in a `Spec` and writes every record
 | Behaviour | Detail | Source |
 | --- | --- | --- |
 | Keeps machine records | `machine/<name>/record.json`: platform, size, images, lasting guest state, recorded state, the `op` of a create or remove, built-in settings; read once and kept whole | [`record.rs`](../../../../control/crates/layerfs-machine/src/record.rs) |
-| Built-in machines | `machine/native/` and `machine/docker/` exist from the first call and are never removed | [`spec.rs`](../../../../control/crates/layerfs-machine/src/spec.rs) `ensure_built_ins` |
+| Built-in machines | `machine/macos-host/` (macOS) or `machine/linux-host/` (Linux) and `machine/docker/` exist from the first call and are never removed | [`spec.rs`](../../../../control/crates/layerfs-machine/src/spec.rs) `ensure_built_ins` |
 | `machine.create` | home lock only to claim and to record; the claimed record holds the `op` while the VM boots, and the worker host port its VM forwards (`lasting.port`) | [`create.rs`](../../../../control/crates/layerfs-machine/src/create.rs) |
 | `machine.start` | the only call that starts a machine: dials the recorded worker; if none is recorded, or it does not answer and the provider reports the machine not running, stops and confirms the old worker, records the new ordered `incarnation` before the worker serves, then starts machine and worker under `start.lock` and replaces `worker.json`. A recorded worker that does not answer on a running machine is never started over (that would end it and every Sandbox on it): the machine is recorded `broken` `not_answering` and the start refused `Unavailable`, fix a stop and a start ([Workers and reach](workers-and-reach.md#lifecycle)) | [`endpoint.rs`](../../../../control/crates/layerfs-machine/src/endpoint.rs), [`power.rs`](../../../../control/crates/layerfs-machine/src/power.rs) |
 | `machine.stop` | stops worker and VM (disks stay); refused `InUse` while Sandboxes are recorded on it | [`power.rs`](../../../../control/crates/layerfs-machine/src/power.rs), [`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs) |
@@ -64,7 +64,7 @@ and setting in a `Spec` and writes every record
 ### Platforms and profiles
 
 ```text
- Platform::ALL = [Native, Docker, AppleContainer, Lima]
+ Platform::ALL = [Host, Docker, AppleContainer, Lima]
    profile() -> &'static Profile     (platforms/<p>/profile.rs PROFILE)
    adapter() -> &'static dyn Adapter (platforms/<p>/adapter.rs ADAPTER)
 ```
@@ -126,7 +126,7 @@ through `with_worker`, where running with no worker hello is `broken`
 
 | Item | Value | Source |
 | --- | --- | --- |
-| `Spec` | `name`, `kind`, `vm_name` (the record's `vm_name` only, `layerfs-<id8>-<machine>`; empty for `native`, whose adapters do not read it; a record without one reads `broken` `outdated` and is refused `Failed` by `provider_spec`, fix `layerfs machine remove <machine>` (record only; the built-in `docker` is recorded again by the next call)), `cpus`, `memory`, `disk`, `image` (Sandbox image archive), `os_image` (the VM's own system), `state: Lasting {port, gateway}`, `worker`, `work_dir`, `tools` | [`spec.rs`](../../../../control/crates/layerfs-platform/src/spec.rs) |
+| `Spec` | `name`, `kind`, `vm_name` (the record's `vm_name` only, `layerfs-<id8>-<machine>`; empty for the host machine, whose adapters do not read it; a record without one reads `broken` `outdated` and is refused `Failed` by `provider_spec`, fix `layerfs machine remove <machine>` (record only; the built-in `docker` is recorded again by the next call)), `cpus`, `memory`, `disk`, `image` (Sandbox image archive), `os_image` (the VM's own system), `state: Lasting {port, gateway}`, `worker`, `work_dir`, `tools` | [`spec.rs`](../../../../control/crates/layerfs-platform/src/spec.rs) |
 | `WORKER_PORT` | 7070, the worker's port in the guest | same |
 | Guest paths | `/layerfs/data` (data disk), `/layerfs/bundle`, `/layerfs/state`, `/layerfs/image` | same |
 | `Tools::from_env` | `PATH`, then the fallback folders (macOS: Homebrew's, `/usr/local/bin`, Docker Desktop's; `LAYERFS_TOOL_FALLBACKS` replaces them), also every provider command's `PATH`; Docker socket `/var/run/docker.sock`, which the machine layer replaces with the docker machine's socket ([Tools and the docker socket](platforms.md#tools-and-the-docker-socket)) | same |
@@ -179,5 +179,5 @@ scripts on `Spec.tools.path` that log and refuse): no VM, Engine or root.
 
 | Page | What it covers |
 | --- | --- |
-| [Platforms](platforms.md) | `native`, `docker`, `apple-container`, `lima`; the support table, `SUPPORT.json`, removed platforms and adding a platform |
+| [Platforms](platforms.md) | `host`, `docker`, `apple-container`, `lima`; the support table, `SUPPORT.json`, removed platforms and adding a platform |
 | [Workers and reach](workers-and-reach.md) | Worker setup and protocol, the worker server, PostgreSQL `reach` and daemon forwards |

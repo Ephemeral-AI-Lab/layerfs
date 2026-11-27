@@ -57,7 +57,7 @@ fn machines_over_records() {
         .iter()
         .map(|m| m.get_text("machine").unwrap())
         .collect();
-    assert_eq!(names, ["docker", "native"]);
+    assert_eq!(names, ["docker", layerfs_home::names::HOST_MACHINE]);
     let supports = |machine: &SdkValue, word: &str| {
         let SdkValue::List(words) = machine.get("supports").unwrap() else {
             panic!("{machine:?}")
@@ -92,8 +92,13 @@ fn machines_over_records() {
         }
     }
 
-    let native = call(&home, "machine.get", &[("machine", t("native"))]).unwrap();
-    assert_eq!(native.get_text("platform"), Some("native"));
+    let native = call(
+        &home,
+        "machine.get",
+        &[("machine", t(layerfs_home::names::HOST_MACHINE))],
+    )
+    .unwrap();
+    assert_eq!(native.get_text("platform"), Some("host"));
     assert_eq!(native.get_text("state"), Some("ready"));
     assert!(!supports(&native, "log"), "{native:?}");
     let docker = call(&home, "machine.get", &[("machine", t("docker"))]).unwrap();
@@ -110,7 +115,10 @@ fn machines_over_records() {
     let made = call(
         &home,
         "machine.create",
-        &[("name", t("native")), ("platform", t("native"))],
+        &[
+            ("name", t(layerfs_home::names::HOST_MACHINE)),
+            ("platform", t("host")),
+        ],
     );
     assert_eq!(made.unwrap_err().0, "InvalidInput");
     assert_eq!(
@@ -122,7 +130,10 @@ fn machines_over_records() {
     let resized = call(
         &home,
         "machine.update",
-        &[("machine", t("native")), ("cpus", SdkValue::Int(4))],
+        &[
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
+            ("cpus", SdkValue::Int(4)),
+        ],
     );
     assert_eq!(resized.unwrap_err().0, "InvalidInput");
     let made = call(
@@ -160,7 +171,10 @@ fn machines_over_records() {
         let (code, message) = call(
             &home,
             "machine.update",
-            &[("machine", t("native")), ("daemon", t(bad))],
+            &[
+                ("machine", t(layerfs_home::names::HOST_MACHINE)),
+                ("daemon", t(bad)),
+            ],
         )
         .unwrap_err();
         assert_eq!(code, "InvalidInput", "{bad}: {message}");
@@ -171,14 +185,25 @@ fn machines_over_records() {
     call(
         &home,
         "machine.update",
-        &[("machine", t("native")), ("daemon", t(&daemon))],
+        &[
+            ("machine", t(layerfs_home::names::HOST_MACHINE)),
+            ("daemon", t(&daemon)),
+        ],
     )
     .unwrap();
-    let native = read_record(&paths::machine_record(&home, "native"))
-        .unwrap()
-        .unwrap();
+    let native = read_record(&paths::machine_record(
+        &home,
+        layerfs_home::names::HOST_MACHINE,
+    ))
+    .unwrap()
+    .unwrap();
     assert_eq!(native.get_text("daemon"), Some(daemon.as_str()));
-    let shown = call(&home, "machine.get", &[("machine", t("native"))]).unwrap();
+    let shown = call(
+        &home,
+        "machine.get",
+        &[("machine", t(layerfs_home::names::HOST_MACHINE))],
+    )
+    .unwrap();
     assert_eq!(shown.get_text("daemon"), Some(daemon.as_str()));
 
     // a machine with a Store is InUse
