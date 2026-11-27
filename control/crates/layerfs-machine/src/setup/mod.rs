@@ -1,6 +1,9 @@
 //! Machine setup: the public calls (`calls`), the guest plumbing (`guest`,
 //! `tool`, `worker`) and what the VM adapters share (`forward`, `vm`).
+pub mod bundle;
 pub(crate) mod bundle_install;
+#[cfg(feature = "machine")]
+pub(crate) mod default_image;
 pub(crate) mod facts;
 pub(crate) mod forward;
 pub(crate) mod guest;

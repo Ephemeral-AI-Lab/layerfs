@@ -5,11 +5,11 @@
 //! stop of the Sandboxes on the machine is the Sandbox crate's
 //! ([`MachineUsers::force_stop`]); this file takes the machine's lock and
 //! checks its record.
-use crate::record::MachineRecord;
+use crate::record::machine::MachineRecord;
 use crate::{MachineUsers, Phases, STOP_PHASES};
-use layerfs_home::events::Events;
 use layerfs_home::names::MachineName;
-use layerfs_home::outcome::Outcome;
+use layerfs_home::reply::events::Events;
+use layerfs_home::reply::outcome::Outcome;
 use layerfs_protocol::sdk::SdkRefusal;
 use std::path::Path;
 type Result<T> = std::result::Result<T, SdkRefusal>;

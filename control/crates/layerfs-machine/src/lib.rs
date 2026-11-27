@@ -10,81 +10,69 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
-pub mod bundle;
-#[cfg(feature = "machine")]
-mod create;
-#[cfg(feature = "machine")]
-mod endpoint;
-#[cfg(feature = "machine")]
-mod image;
 pub(crate) mod lifecycle;
-#[cfg(feature = "machine")]
-mod list;
-#[cfg(feature = "machine")]
-mod live;
-mod local;
 /// The platform driver: one adapter per machine kind, for the Sandbox and
 /// Store code that reaches a machine's adapters through its machine
 /// (layerfs-project#106).
 #[cfg(feature = "machine")]
 pub mod platform;
-#[cfg(feature = "machine")]
-mod platforms;
-#[cfg(feature = "machine")]
-mod power;
-#[cfg(feature = "machine")]
-mod progress;
-#[doc(hidden)]
 pub mod record;
-mod related;
-#[cfg(feature = "machine")]
-mod remove;
+pub mod route;
 #[cfg(all(feature = "machine", unix))]
 pub(crate) mod setup;
-#[cfg(feature = "machine")]
-mod spec;
-pub mod state;
 pub mod status;
 #[doc(hidden)]
 pub mod table;
 #[cfg(feature = "machine")]
 mod update;
+pub(crate) mod users;
 #[cfg(feature = "machine")]
 pub mod with_users;
-pub mod worker;
 
 #[cfg(feature = "machine")]
-pub use bundle::bundle;
-pub use bundle::{bundle_dir, bundle_place, IMAGE_ARCHIVE};
+pub use lifecycle::boot::{recorded as worker_endpoint, running};
 #[cfg(feature = "machine")]
-pub use create::{create, MachineCreate, STOCK};
+pub use lifecycle::create::{create, MachineCreate, STOCK};
 #[cfg(feature = "machine")]
-pub use endpoint::{recorded as worker_endpoint, running};
+pub use lifecycle::progress::Phases;
 #[cfg(feature = "machine")]
-pub use image::docker_default;
+pub use lifecycle::remove::remove;
 #[cfg(feature = "machine")]
-pub use list::{get, list};
-pub use local::{in_process, none_in_process, provided, runs_here};
+pub use lifecycle::start::{done, start, stop, with_stopped, STOP_PHASES};
 #[cfg(feature = "machine")]
-pub use platforms::platforms;
+pub use platform::available::platforms;
 #[cfg(feature = "machine")]
-pub use power::{done, start, stop, with_stopped, STOP_PHASES};
-#[cfg(feature = "machine")]
-pub use progress::Phases;
-pub use related::{MachineUsers, Related};
-#[cfg(feature = "machine")]
-pub use remove::remove;
-#[cfg(feature = "machine")]
-pub use spec::{docker_socket, ensure_built_ins, machine_of, tools as machine_tools, vm_name};
-#[cfg(feature = "machine")]
-pub use spec::{
-    provider_spec as machine_provider_spec, refusal as machine_refusal, spec as machine_spec,
+pub use record::adapter_spec::{
+    docker_socket, ensure_built_ins, machine_of, tools as machine_tools, vm_name,
 };
 #[cfg(feature = "machine")]
+pub use record::adapter_spec::{
+    provider_spec as machine_provider_spec, refusal as machine_refusal, spec as machine_spec,
+};
+pub use route::runs_here::{in_process, none_in_process, provided, runs_here};
+#[cfg(feature = "machine")]
+pub use setup::bundle::bundle;
+pub use setup::bundle::{bundle_dir, bundle_place, IMAGE_ARCHIVE};
+#[cfg(feature = "machine")]
+pub use setup::default_image::docker_default;
+#[cfg(feature = "machine")]
+pub use status::list::{get, list};
+#[cfg(feature = "machine")]
 pub use update::{update, MachineUpdate};
+pub use users::{MachineUsers, Related};
 
 /// The machine lifecycle lock, shared by the spanning forced-stop call.
 #[cfg(feature = "machine")]
-pub use endpoint::start_lock as force_stop_lock;
+pub use lifecycle::boot::start_lock as force_stop_lock;
 #[cfg(feature = "machine")]
 pub use lifecycle::force_stop::force_record;
+
+// #828 compat: old public module paths, removed in wave 3.
+#[doc(hidden)]
+pub use crate::record::machine as record; // #828 compat
+#[doc(hidden)]
+pub use crate::route as worker;
+#[doc(hidden)]
+pub use crate::setup::bundle; // #828 compat
+#[doc(hidden)]
+pub use crate::status::state; // #828 compat // #828 compat

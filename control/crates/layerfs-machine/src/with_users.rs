@@ -2,11 +2,11 @@
 //! Sandboxes (layerfs-project#104): each runs this crate's call with the
 //! reads and steps its caller passes in ([`MachineUsers`], which the Sandbox
 //! crate implements). The other machine calls are this crate's own.
-use crate::worker::Endpoint;
+use crate::route::Endpoint;
 use crate::{MachineCreate, MachineUpdate, MachineUsers};
-use layerfs_home::events::Events;
 use layerfs_home::names::MachineName;
-use layerfs_home::outcome::Outcome;
+use layerfs_home::reply::events::Events;
+use layerfs_home::reply::outcome::Outcome;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 use std::time::Duration;
@@ -18,7 +18,7 @@ use std::time::Duration;
 /// nameless machine's worker is dialled. The holders are read here, on the
 /// refusal path alone; any other refusal is kept.
 pub fn nameless_chain(home: &Path, refusal: SdkRefusal, users: &MachineUsers) -> SdkRefusal {
-    let named = (refusal.detail.get_text(layerfs_home::outcome::FIX))
+    let named = (refusal.detail.get_text(layerfs_home::reply::outcome::FIX))
         .and_then(|fix| fix.strip_prefix("layerfs machine remove "))
         .filter(|name| layerfs_home::names::MachineName::parse(name).is_ok())
         .map(str::to_owned);
@@ -32,7 +32,7 @@ pub fn nameless_chain(home: &Path, refusal: SdkRefusal, users: &MachineUsers) ->
 
 /// `machine.list`: from the records; with `live`, every machine probed.
 pub fn list(home: &Path, live: bool, users: &MachineUsers) -> Outcome {
-    crate::list(home, live, users.related)
+    crate::status::list(home, live, users.related)
 }
 
 /// `machine.get`: from its record; with `live`, one probe and the `live`
@@ -85,16 +85,16 @@ pub fn start(
 fn record_start(home: &Path, machine: &MachineName) -> Result<Option<String>, SdkRefusal> {
     if crate::runs_here(home, machine.as_str())? {
         let Some(incarnation) =
-            layerfs_home::process::me().map(|(_, boot)| format!("boot:{boot:032x}"))
+            layerfs_home::record::process::me().map(|(_, boot)| format!("boot:{boot:032x}"))
         else {
             return Ok(None);
         };
-        let _lock = layerfs_home::home::lock::take(home)?;
-        let record = crate::record::MachineRecord::of(home, machine.as_str())?;
+        let _lock = layerfs_home::lock::home::take(home)?;
+        let record = crate::record::machine::MachineRecord::of(home, machine.as_str())?;
         record.with_incarnation(&incarnation).write(home)?;
         return Ok(Some(incarnation));
     }
-    let record = crate::record::MachineRecord::of(home, machine.as_str())?;
+    let record = crate::record::machine::MachineRecord::of(home, machine.as_str())?;
     let Some(recorded) = record.incarnation().map(str::to_owned) else {
         return Ok(None);
     };
@@ -120,13 +120,13 @@ fn worker_incarnation(home: &Path, machine: &str) -> Result<Option<String>, SdkR
     };
     // A bounded read, not a retry: the machine is already up, so a worker
     // that does not answer now leaves the reconcile for the next start.
-    let budget = crate::worker::Budget {
+    let budget = crate::route::Budget {
         connect: Duration::from_millis(500),
         hello: Duration::from_millis(500),
         answer: Duration::from_secs(1),
     };
-    let request = crate::worker::request("worker.ping", SdkValue::Null)?;
-    let answer = match crate::worker::send_within(&endpoint, "worker.ping", &request, budget) {
+    let request = crate::route::request("worker.ping", SdkValue::Null)?;
+    let answer = match crate::route::send_within(&endpoint, "worker.ping", &request, budget) {
         Ok(Ok(answer)) => answer,
         _ => return Ok(None),
     };
@@ -169,7 +169,7 @@ pub fn create(
     request: &MachineCreate,
     users: &MachineUsers,
 ) -> Outcome {
-    crate::create(home, events, request, users.related)
+    crate::lifecycle::create(home, events, request, users.related)
 }
 
 /// `machine.remove`. A removed machine's attachment to each PostgreSQL
@@ -182,7 +182,7 @@ pub fn remove(
     name: &MachineName,
     users: &MachineUsers,
 ) -> Outcome {
-    let removed = crate::remove(home, name, users.related, events)?;
+    let removed = crate::lifecycle::remove(home, name, users.related, events)?;
     (users.forget)(home, name.as_str())?;
     Ok(removed)
 }

@@ -39,3 +39,31 @@ path = "tests/standalone/docker_socket.rs"
 [[test]]
 name = "setup_tool_deadline"
 path = "tests/standalone/setup_tool_deadline.rs"
+
+[[test]]
+name = "bundle_preflight"
+path = "tests/standalone/bundle_preflight.rs"
+
+[[test]]
+name = "create_kept_vm"
+path = "tests/standalone/create_kept_vm.rs"
+
+[[test]]
+name = "docker_socket_choice"
+path = "tests/standalone/docker_socket_choice.rs"
+
+[[test]]
+name = "docker_image_reuse"
+path = "tests/standalone/docker_image_reuse.rs"
+
+[[test]]
+name = "silent_worker_start"
+path = "tests/standalone/silent_worker_start.rs"
+
+[[test]]
+name = "start_compatibility"
+path = "tests/standalone/start_compatibility.rs"
+
+[[test]]
+name = "start_ordered"
+path = "tests/standalone/start_ordered.rs"
