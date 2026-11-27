@@ -39,7 +39,7 @@ class WorktreeTests(unittest.TestCase):
         for name in ("Cargo.toml", "Cargo.lock", ".cargo/config.toml", "api/package.json"):
             (self.repo / name).write_text("{}\n")
         (self.repo / "api/node/src/index.js").write_text("export const value = 1;\n")
-        (self.repo / "api/node/test/calls.mjs").write_text("// test\n")
+        (self.repo / "api/node/test/calls/every-call.test.mjs").write_text("// test\n")
         (self.repo / "api/node/package.json").write_text('{"name": "layerfs", "exports": {".": "./src/index.js"}}\n')
         git(self.repo, "init", "-q")
         git(self.repo, "config", "user.name", "Fixture")
@@ -181,7 +181,7 @@ class WorktreeTests(unittest.TestCase):
             "api/package.json",
             "api/node/package.json",
             "api/node/src/index.js",
-            "api/node/test/calls.mjs",
+            "api/node/test/calls/every-call.test.mjs",
         ):
             self.assertIn(name, manifest["files"])
         self.assertFalse(any(name.startswith("api/crates/layerfs-node/") for name in manifest["files"]))

@@ -9,7 +9,7 @@ record into them, and the optional platform sampler and diagnostic output.
 | --- | --- |
 | Layer | [Core](../README.md) |
 | Crates | `layerfs-telemetry` |
-| Source | [`timer/`](../../../../core/crates/layerfs-telemetry/src/timer), [`runtime/`](../../../../core/crates/layerfs-telemetry/src/runtime), [`output/`](../../../../core/crates/layerfs-telemetry/src/output), [`platform/`](../../../../core/crates/layerfs-telemetry/src/platform), [`Cargo.toml`](../../../../core/crates/layerfs-telemetry/Cargo.toml) |
+| Source | [`timer/`](../../../../core/crates/layerfs-telemetry/src/timer), [`runtime/`](../../../../core/crates/layerfs-telemetry/src/runtime), [`output/`](../../../../core/crates/layerfs-telemetry/src/output), [`runtime/`](../../../../core/crates/layerfs-telemetry/src/runtime), [`Cargo.toml`](../../../../core/crates/layerfs-telemetry/Cargo.toml) |
 | Uses | — (std only by default) |
 | Used by | [Files](../files/README.md), [Filesystem trees](../filesystem-trees/README.md), [Physical storage](../physical-storage/README.md), [Engine: Store](../../engine/store/README.md), [Engine: Store calls](../../engine/store-calls/README.md), [Engine: Project Init](../../engine/project-init/README.md), [Engine: Commit](../../engine/commit/README.md), [Engine: Daemon](../../engine/daemon/README.md), [Engine: Kernel routes](../../engine/kernel-routes/README.md), [Control: Stores and projects](../../control/stores-and-projects/README.md), [API: Calls](../../api/calls/README.md) |
 | Flows | [A call, end to end](../../flows/call.md) |
@@ -104,7 +104,7 @@ work and changes no result.
 | --- | --- | --- |
 | `Writer` | `wait.writer` | Store writer admission, [`admission.rs`](../../../../engine/crates/layerfs-persistence/src/backend/admission.rs); a SQLite Store's directory writer lane found held (a writer waiting for another Session's or process's lane, and a new Session's open), [`writer_admission.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/lane/writer_admission.rs) |
 | `Reader` | `wait.reader` | read-only Store connection admission, same file |
-| `ReadSession` | `wait.read_session` | daemon read-session lock, [`read_handle.rs`](../../../../engine/crates/layerfs-store-service/src/store/read_handle.rs) |
+| `ReadSession` | `wait.read_session` | daemon read-session lock, [`reader.rs`](../../../../engine/crates/layerfs-store-service/src/workspace/bind/reader.rs) |
 
 The crate keeps only saturating per-thread totals
 ([`waits.rs`](../../../../core/crates/layerfs-telemetry/src/timer/waits.rs)).
@@ -117,15 +117,15 @@ the remainder is at least 50 µs.
 | --- | --- | --- |
 | Store-call phases | a traced request turns recording on for its thread (`Recording` guard, off again on every exit); product roots call `timed`, which is `Timing::disabled` when untraced; at most 16 finished roots flattened to 256 pre-order nodes `[name, parent, µs, outcome, incomplete]`, plus SQL work per phase and delta counters | [`layerfs-store-service/src/telemetry.rs`](../../../../engine/crates/layerfs-store-service/src/telemetry.rs) |
 | Daemon reply | the daemon's half of a traced reply: Commit storage and construction receipts and kernel opcode counts, beside the Store-call `timing` | [`layerfs-daemon/src/telemetry.rs`](../../../../engine/crates/layerfs-daemon/src/telemetry.rs) |
-| Daemon diagnostics | per-control numeric observations of existing counters; starts `Recording` for a traced control and attaches SQL and delta work | [`application/diagnostics.rs`](../../../../engine/crates/layerfs-daemon/src/application/diagnostics.rs), [`diagnostics/`](../../../../engine/crates/layerfs-daemon/src/application/diagnostics) |
-| Kernel callback phases | steps inside a FUSE or NFS callback on its receive worker (owner visit jobs, base supply reads, release), as counters, not timing trees; off Linux charging does nothing | [`layerfs-mount-ports/src/phase.rs`](../../../../engine/crates/layerfs-mount-ports/src/phase.rs) |
-| Overlay statements | bounded aggregate observations of real overlay SQLite executions by statement family, startup batch included | [`layerfs-overlay/src/diagnostics/`](../../../../engine/crates/layerfs-overlay/src/diagnostics) |
+| Daemon diagnostics | per-control numeric observations of existing counters; starts `Recording` for a traced control and attaches SQL and delta work | [`observed/records.rs`](../../../../engine/crates/layerfs-daemon/src/application/observed/records.rs), [`observed/`](../../../../engine/crates/layerfs-daemon/src/application/observed) |
+| Kernel callback phases | steps inside a FUSE or NFS callback on its receive worker (owner visit jobs, base supply reads, release), as counters, not timing trees; off Linux charging does nothing | [`src/requests/phase.rs`](../../../../engine/crates/layerfs-vfs/src/requests/phase.rs) |
+| Overlay statements | bounded aggregate observations of real overlay SQLite executions by statement family, startup batch included | [`crates/layerfs-overlay/src/`](../../../../engine/crates/layerfs-overlay/src) |
 
 ### Formats
 
 | Writer | Output | Source |
 | --- | --- | --- |
-| `write_text` | two spaces per level, label, elapsed (`ns`, `us`, `ms`, `s` with three decimals); ` [error]`, ` [unknown]`, ` [incomplete]`; disabled: `disabled: no timing recorded` | [`format.rs`](../../../../core/crates/layerfs-telemetry/src/timer/format.rs) |
+| `write_text` | two spaces per level, label, elapsed (`ns`, `us`, `ms`, `s` with three decimals); ` [error]`, ` [unknown]`, ` [incomplete]`; disabled: `disabled: no timing recorded` | [`text.rs`](../../../../core/crates/layerfs-telemetry/src/timer/text.rs) |
 | `write_json` | `{"name", "elapsed_ns", "children"}`; `"outcome"` only when not ok, `"incomplete": true` only when set; disabled: `null` | [`json.rs`](../../../../core/crates/layerfs-telemetry/src/timer/json.rs) |
 | `encode_bounded(max)` | full JSON if it fits, else the root alone marked incomplete, else `None`; counts bytes first, never holds a partial encoding | [`bounded_json.rs`](../../../../core/crates/layerfs-telemetry/src/timer/bounded_json.rs) |
 
@@ -138,10 +138,10 @@ flush, and keep the save result separate from the product result.
 | Part | Behaviour | Source |
 | --- | --- | --- |
 | `Runtime::start` | `enabled: false` returns a disabled runtime with no allocation; otherwise validates output, monitor and an aggregate charge ≤ 8 MiB | [`session.rs`](../../../../core/crates/layerfs-telemetry/src/runtime/session.rs) |
-| `OperationRecorder` | ≤ 32 recording slots (≤ 4 MiB); no free slot gives `Diagnostic::Omitted`, never a changed result | [`operation.rs`](../../../../core/crates/layerfs-telemetry/src/runtime/operation.rs) |
-| `Window` | per-operation CPU/RSS summary; `cpu_delta` only with no gaps, no discontinuity and ≥ 2 samples; `sampled_max_rss` is not an exact peak; process samples include sibling work | [`observation.rs`](../../../../core/crates/layerfs-telemetry/src/runtime/observation.rs) |
+| `OperationRecorder` | ≤ 32 recording slots (≤ 4 MiB); no free slot gives `Diagnostic::Omitted`, never a changed result | [`operation.rs`](../../../../core/crates/layerfs-telemetry/src/operation.rs) |
+| `Window` | per-operation CPU/RSS summary; `cpu_delta` only with no gaps, no discontinuity and ≥ 2 samples; `sampled_max_rss` is not an exact peak; process samples include sibling work | [`observation.rs`](../../../../core/crates/layerfs-telemetry/src/observation.rs) |
 | Monitor | thread `layerfs-observe`, interval 10–1,000 ms, history 1–600, windows 1–32; never waits for a lock (a missed sample is a gap) | [`monitor.rs`](../../../../core/crates/layerfs-telemetry/src/runtime/monitor.rs) |
-| Readings | Linux `/proc/self/stat` and `sysconf`; macOS `getrusage` and libproc; other targets `compile_error!` | [`platform/`](../../../../core/crates/layerfs-telemetry/src/platform) |
+| Readings | Linux `/proc/self/stat` and `sysconf`; macOS `getrusage` and libproc; other targets `compile_error!` | [`runtime/`](../../../../core/crates/layerfs-telemetry/src/runtime) |
 | Output | one `LFT1 {json}\n` line per record (`operation`, `resource`, `resource-unavailable`, `run-summary`); bounded queue (≤ 256 records, ≤ 8 MiB) and token bucket; a writer thread to stderr and/or a ring of local segment files (mode 0600, `flock`, expiry); best effort, no `fsync` | [`queue.rs`](../../../../core/crates/layerfs-telemetry/src/output/queue.rs), [`encode.rs`](../../../../core/crates/layerfs-telemetry/src/output/encode.rs), [`retention.rs`](../../../../core/crates/layerfs-telemetry/src/output/retention.rs) |
 | Loss | `dropped`, `failed`, `overflow` counters; a failed destination is turned off for good | [`health.rs`](../../../../core/crates/layerfs-telemetry/src/output/health.rs) |
 
@@ -176,9 +176,9 @@ Each test command gets a wall timeout of at most 120 s.
 
 | Test or example | Command | Platform | Shows |
 | --- | --- | --- | --- |
-| [`timer.rs`](../../../../core/crates/layerfs-telemetry/tests/timer.rs) | `cargo +1.85.1 test --locked -p layerfs-telemetry --test timer` | any | Nesting, start order, early return, recovery, panics, clipping, attachment |
-| [`timer_json.rs`](../../../../core/crates/layerfs-telemetry/tests/timer_json.rs) | `cargo +1.85.1 test --locked -p layerfs-telemetry --test timer_json` | any, needs `python3` | JSON shape and escaping checked by an independent parser; no-clobber saving |
+| [`basic.rs`](../../../../core/crates/layerfs-telemetry/tests/timer/basic.rs) | `cargo +1.85.1 test --locked -p layerfs-telemetry --test timer` | any | Nesting, start order, early return, recovery, panics, clipping, attachment |
+| [`json.rs`](../../../../core/crates/layerfs-telemetry/tests/timer/json.rs) | `cargo +1.85.1 test --locked -p layerfs-telemetry --test timer json` | any, needs `python3` | JSON shape and escaping checked by an independent parser; no-clobber saving |
 | [`timer_nested.rs`](../../../../core/crates/layerfs-telemetry/examples/timer_nested.rs) | `cargo +1.85.1 run --locked -p layerfs-telemetry --example timer_nested` | any | Text and JSON trees, an error branch and a disabled run |
 | [`timer_composition.rs`](../../../../core/crates/layerfs-telemetry/examples/timer_composition.rs) | `cargo +1.85.1 run --locked -p layerfs-telemetry --example timer_composition` | any | Independent recordings composed by attachment, then saved outside the measured operation |
-| [`off_allocations.rs`](../../../../core/crates/layerfs-telemetry/tests/off_allocations.rs) | `cargo +1.85.1 test --locked -p layerfs-telemetry --features platform --test off_allocations` | Linux, macOS | A disabled runtime makes zero allocations |
-| [`stalled_output.rs`](../../../../core/crates/layerfs-telemetry/tests/stalled_output.rs) | `cargo +1.85.1 test --locked -p layerfs-telemetry --features platform --test stalled_output` | Linux, macOS | A blocked stderr changes no result and does not stop process exit |
+| [`off_allocations.rs`](../../../../core/crates/layerfs-telemetry/tests/standalone/off_allocations.rs) | `cargo +1.85.1 test --locked -p layerfs-telemetry --features platform --test off_allocations` | Linux, macOS | A disabled runtime makes zero allocations |
+| [`stalled_output.rs`](../../../../core/crates/layerfs-telemetry/tests/runtime/stalled_output.rs) | `cargo +1.85.1 test --locked -p layerfs-telemetry --features platform --test runtime stalled_output` | Linux, macOS | A blocked stderr changes no result and does not stop process exit |

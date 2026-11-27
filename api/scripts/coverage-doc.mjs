@@ -4,8 +4,8 @@
 //   Python  `layerfs.TABLE`, the sync functions and the `layerfs.aio` coroutines
 //   CLI     `layerfs help <family> <call>`, whose first line is the call's usage
 //   MCP     the generated tool list of api/mcp, and the profile that lists it
-//   node api/scripts/gen-coverage.mjs          rewrite the generated block
-//   node api/scripts/gen-coverage.mjs --check  exit 1 when the block is not what the front ends give,
+//   node api/scripts/coverage-doc.mjs          rewrite the generated block
+//   node api/scripts/coverage-doc.mjs --check  exit 1 when the block is not what the front ends give,
 //                                              or when a front end disagrees with the Node table
 // It needs the built addon, the Python module (`LAYERFS_PYTHON`, default `python3`, with
 // api/python/src on its path) and the built command (`LAYERFS_CLI`, default target/debug/layerfs,
@@ -19,7 +19,7 @@ import { toolFor, toolsOf } from "../mcp/src/tools.js";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 export const document = join(root, "docs/architecture/api/calls/coverage.md");
-const BEGIN = "<!-- BEGIN GENERATED: api/scripts/gen-coverage.mjs -->";
+const BEGIN = "<!-- BEGIN GENERATED: api/scripts/coverage-doc.mjs -->";
 const END = "<!-- END GENERATED -->";
 
 const FUNCTION = "function";
@@ -226,7 +226,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const next = splice(current, block);
   if (process.argv.includes("--check")) {
     if (next !== current) {
-      console.error("coverage.md differs from the front ends' call lists; run node api/scripts/gen-coverage.mjs");
+      console.error("coverage.md differs from the front ends' call lists; run node api/scripts/coverage-doc.mjs");
       process.exit(1);
     }
   } else {

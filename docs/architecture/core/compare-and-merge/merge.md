@@ -11,7 +11,7 @@ Merging two lines of history into one tree, within [Compare and merge](README.md
 ## Merge decisions
 
 `merge_roots` merges `ours` and `theirs` against their common `base`
-([`entry.rs`](../../../../core/crates/layerfs-content/src/merge/entry.rs)). Trivial cases return at once:
+([`roots.rs`](../../../../core/crates/layerfs-content/src/merge/roots.rs)). Trivial cases return at once:
 
 | Roots | Result |
 | --- | --- |
@@ -19,7 +19,7 @@ Merging two lines of history into one tree, within [Compare and merge](README.md
 | `theirs == base` | `ours`, nothing built |
 | ours and theirs in different inode scopes | `InvalidRecord("merge scope")` |
 
-Otherwise the merge works **by serial** ([`serial.rs`](../../../../core/crates/layerfs-content/src/merge/serial.rs)): it
+Otherwise the merge works **by serial** ([`walk.rs`](../../../../core/crates/layerfs-content/src/merge/serial/walk.rs)): it
 walks only the `from` side's changes from the base (`inode_changes(base,
 from)`) and reads each changed serial's value on the `into` side.
 `MergeInput::decide_from` picks `from`; the other side is `into`, the tree
@@ -40,7 +40,7 @@ the result is built on.
 When both sides changed one entry, `Decider::decide` picks the result. An
 entry is its kind plus, for a file or symlink, its content; two directories
 are the same entry and their children decide
-([`decide.rs`](../../../../core/crates/layerfs-content/src/merge/decide.rs)). Rules apply in this order:
+([`entries.rs`](../../../../core/crates/layerfs-content/src/merge/decide/entries.rs)). Rules apply in this order:
 
 | # | Case (b = base, o = ours, t = theirs) | Result | Conflict |
 | --- | --- | --- | --- |
@@ -59,7 +59,7 @@ does not grow with file size.
 
 ## Last writer wins
 
-`/.lww` holds gitignore-style patterns ([`lww.rs`](../../../../core/crates/layerfs-content/src/merge/lww.rs)). The rules
+`/.lww` holds gitignore-style patterns ([`lww.rs`](../../../../core/crates/layerfs-content/src/merge/rule/lww.rs)). The rules
 come from one side: `RulesFrom::Ours` for `branch.merge`,
 `RulesFrom::Theirs` (the Branch head) for merge-on-commit.
 
@@ -94,11 +94,11 @@ at the new path. Two record-driven parts handle structure.
 
 | Part | Rule | Source |
 | --- | --- | --- |
-| Name points | At each name `from`'s listing changed: `into` already binds what `from` binds, nothing; `into` binds what the base bound, take `from`'s binding; both rebound, decide by the entries. Two new directories at one name merge by name into `into`'s. | [`names.rs`](../../../../core/crates/layerfs-content/src/merge/names.rs) |
-| Survive | A serial `from` deleted that the merge keeps keeps its binding, and each parent `from` also deleted survives with only what it keeps. | [`places.rs`](../../../../core/crates/layerfs-content/src/merge/places.rs) |
-| Revive | A serial `into` lacks that the merge keeps is bound where `from` holds it; missing parents are revived from `from`. | [`places.rs`](../../../../core/crates/layerfs-content/src/merge/places.rs) |
-| Resurrect | A serial `from` bound that `into` deleted comes back with its whole subtree as `from` holds it. | [`names.rs`](../../../../core/crates/layerfs-content/src/merge/names.rs) |
-| Moved directory | A directory both sides moved to different places, or moved inside itself, is a `type` conflict and `from`'s move is cancelled. | [`places.rs`](../../../../core/crates/layerfs-content/src/merge/places.rs) `moved` |
+| Name points | At each name `from`'s listing changed: `into` already binds what `from` binds, nothing; `into` binds what the base bound, take `from`'s binding; both rebound, decide by the entries. Two new directories at one name merge by name into `into`'s. | [`names.rs`](../../../../core/crates/layerfs-content/src/merge/serial/names.rs) |
+| Survive | A serial `from` deleted that the merge keeps keeps its binding, and each parent `from` also deleted survives with only what it keeps. | [`places.rs`](../../../../core/crates/layerfs-content/src/merge/serial/places.rs) |
+| Revive | A serial `into` lacks that the merge keeps is bound where `from` holds it; missing parents are revived from `from`. | [`places.rs`](../../../../core/crates/layerfs-content/src/merge/serial/places.rs) |
+| Resurrect | A serial `from` bound that `into` deleted comes back with its whole subtree as `from` holds it. | [`names.rs`](../../../../core/crates/layerfs-content/src/merge/serial/names.rs) |
+| Moved directory | A directory both sides moved to different places, or moved inside itself, is a `type` conflict and `from`'s move is cancelled. | [`places.rs`](../../../../core/crates/layerfs-content/src/merge/serial/places.rs) `moved` |
 
 Paths are named only where a rule needs one, from `BindingHints` when given,
 else by breadth-first `locate` ([Compare and merge](README.md#naming-changed-inodes)).
@@ -106,7 +106,7 @@ else by breadth-first `locate` ([Compare and merge](README.md#naming-changed-ino
 ## Metadata
 
 A serial both sides changed merges mode and mtime field by field
-([`metadata.rs`](../../../../core/crates/layerfs-content/src/merge/metadata.rs)):
+([`metadata.rs`](../../../../core/crates/layerfs-content/src/merge/decide/metadata.rs)):
 
 | Field changed by | Result |
 | --- | --- |
@@ -121,7 +121,7 @@ is reused; otherwise a new form is written in the decided entry's form.
 
 ## Conflict markers
 
-`merge3` is a three-way line merge ([`text.rs`](../../../../core/crates/layerfs-content/src/merge/text.rs)). Base lines
+`merge3` is a three-way line merge ([`text.rs`](../../../../core/crates/layerfs-content/src/merge/decide/text.rs)). Base lines
 matched on both sides (`match_lines`) split the texts into chunks.
 
 ```text
@@ -144,9 +144,9 @@ matched on both sides (`match_lines`) split the texts into chunks.
 
 | Item | Value | Source |
 | --- | --- | --- |
-| Labels | `branch.merge`: `<left>@<commit>` and `<right>@<commit>`; merge-on-commit: `workspace` and `<branch>@<head>` | [`history/branch.rs`](../../../../engine/crates/layerfs-store-service/src/history/branch.rs), [`store/commit_merge.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit_merge.rs) |
-| `has_markers` | true when a text holds an opening line, a later `=======` line and a later closing line | [`text.rs`](../../../../core/crates/layerfs-content/src/merge/text.rs) |
-| `paths_with_markers` | named paths that are bounded text files with a complete block; merge-on-commit refuses a Commit while a conflicted path still has one | [`markers.rs`](../../../../core/crates/layerfs-content/src/merge/markers.rs) |
+| Labels | `branch.merge`: `<left>@<commit>` and `<right>@<commit>`; merge-on-commit: `workspace` and `<branch>@<head>` | [`history/branch.rs`](../../../../engine/crates/layerfs-store-service/src/history/branch.rs), [`commit/merge.rs`](../../../../engine/crates/layerfs-store-service/src/workspace/commit/merge.rs) |
+| `has_markers` | true when a text holds an opening line, a later `=======` line and a later closing line | [`text.rs`](../../../../core/crates/layerfs-content/src/merge/decide/text.rs) |
+| `paths_with_markers` | named paths that are bounded text files with a complete block; merge-on-commit refuses a Commit while a conflicted path still has one | [`markers.rs`](../../../../core/crates/layerfs-content/src/merge/decide/markers.rs) |
 
 A merged or marker file takes the kind and metadata of the side it came
 from (`like`) and is constructed with `construct_bytes` into the merge's
@@ -168,11 +168,11 @@ consumer.
 
 | Part | Rule | Source |
 | --- | --- | --- |
-| Plan | Values, fresh serials and changed names as point records keyed by serial and name. | [`build.rs`](../../../../core/crates/layerfs-content/src/merge/build.rs), [`rows.rs`](../../../../core/crates/layerfs-content/src/merge/rows.rs) |
-| Fresh serials | From the caller's `fresh` callback; a file value keeps its source serial only when that cannot give one serial two values. A mounted Workspace that installs the result may still have the old serial held by its kernel (a cwd, an open descriptor): each request that names it answers ESTALE and the mount keeps serving ([kernel routes](../../engine/kernel-routes/fuse.md#requests-and-replies-request-attributesrs)). | [`build.rs`](../../../../core/crates/layerfs-content/src/merge/build.rs), [`eval.rs`](../../../../engine/crates/layerfs-workspace/src/mutation/eval.rs) |
-| Spill | Runs of at most 60 KiB chunks; up to 8 MiB held in memory, then the caller's `IndexedConstructionBacking` records. Without records a `Resident` store is used. | [`spill.rs`](../../../../core/crates/layerfs-content/src/merge/spill.rs) |
-| Result | One backed update of `into`, the same canonical producer and route as a Workspace Commit. No plan rows: `into`'s root unchanged. | [`build.rs`](../../../../core/crates/layerfs-content/src/merge/build.rs) |
-| Outcome | Conflicts and `.lww` decisions sorted by path; `clean()` is true when there are no conflicts. | [`entry.rs`](../../../../core/crates/layerfs-content/src/merge/entry.rs), [`types.rs`](../../../../core/crates/layerfs-content/src/merge/types.rs) |
+| Plan | Values, fresh serials and changed names as point records keyed by serial and name. | [`build.rs`](../../../../core/crates/layerfs-content/src/merge/plan/build.rs), [`rows.rs`](../../../../core/crates/layerfs-content/src/merge/plan/rows.rs) |
+| Fresh serials | From the caller's `fresh` callback; a file value keeps its source serial only when that cannot give one serial two values. A mounted Workspace that installs the result may still have the old serial held by its kernel (a cwd, an open descriptor): each request that names it answers ESTALE and the mount keeps serving ([kernel routes](../../engine/kernel-routes/fuse.md#requests-and-replies-request-attributesrs)). | [`build.rs`](../../../../core/crates/layerfs-content/src/merge/plan/build.rs), [`eval.rs`](../../../../engine/crates/layerfs-vfs/src/job/eval.rs) |
+| Spill | Runs of at most 60 KiB chunks; up to 8 MiB held in memory, then the caller's `IndexedConstructionBacking` records. Without records a `Resident` store is used. | [`spill.rs`](../../../../core/crates/layerfs-content/src/merge/plan/spill.rs) |
+| Result | One backed update of `into`, the same canonical producer and route as a Workspace Commit. No plan rows: `into`'s root unchanged. | [`build.rs`](../../../../core/crates/layerfs-content/src/merge/plan/build.rs) |
+| Outcome | Conflicts and `.lww` decisions sorted by path; `clean()` is true when there are no conflicts. | [`roots.rs`](../../../../core/crates/layerfs-content/src/merge/roots.rs), [`outcome.rs`](../../../../core/crates/layerfs-content/src/merge/outcome.rs) |
 
 Callers in the engine:
 
@@ -185,7 +185,7 @@ Callers in the engine:
 ## Revert
 
 Merge units let `branch.merge` take a group of paths whole from one side
-([`units.rs`](../../../../core/crates/layerfs-content/src/merge/units.rs), [`revert.rs`](../../../../core/crates/layerfs-content/src/merge/revert.rs)).
+([`units.rs`](../../../../core/crates/layerfs-content/src/merge/rule/units.rs), [`revert.rs`](../../../../core/crates/layerfs-content/src/merge/rule/revert.rs)).
 
 ```text
  Units::new(patterns)        reject empty names, duplicates, comments,
@@ -203,12 +203,12 @@ Merge units let `branch.merge` take a group of paths whole from one side
 
 | Rule | Source |
 | --- | --- |
-| A unit covers every path one of its patterns matches and everything below; the first listed unit wins; the root is in none. | [`units.rs`](../../../../core/crates/layerfs-content/src/merge/units.rs) `unit_of` |
-| A path is changed when added, deleted, or its kind, bytes or metadata differ; a new serial with the same kind, bytes and metadata is not a change. | [`units.rs`](../../../../core/crates/layerfs-content/src/merge/units.rs) `changed` |
-| The revert binds, at every path of a lost unit, what the base binds there. A base directory the side moved elsewhere is rebuilt under a fresh serial; a restored file the side also binds elsewhere keeps one serial and counts as a cross link. | [`revert.rs`](../../../../core/crates/layerfs-content/src/merge/revert.rs) |
-| State per unit and side is a count and a time, never a path list. | [`units.rs`](../../../../core/crates/layerfs-content/src/merge/units.rs) |
+| A unit covers every path one of its patterns matches and everything below; the first listed unit wins; the root is in none. | [`units.rs`](../../../../core/crates/layerfs-content/src/merge/rule/units.rs) `unit_of` |
+| A path is changed when added, deleted, or its kind, bytes or metadata differ; a new serial with the same kind, bytes and metadata is not a change. | [`units.rs`](../../../../core/crates/layerfs-content/src/merge/rule/units.rs) `changed` |
+| The revert binds, at every path of a lost unit, what the base binds there. A base directory the side moved elsewhere is rebuilt under a fresh serial; a restored file the side also binds elsewhere keeps one serial and counts as a cross link. | [`revert.rs`](../../../../core/crates/layerfs-content/src/merge/rule/revert.rs) |
+| State per unit and side is a count and a time, never a path list. | [`units.rs`](../../../../core/crates/layerfs-content/src/merge/rule/units.rs) |
 
-The engine wires units in [`history/units.rs`](../../../../engine/crates/layerfs-store-service/src/history/units.rs).
+The engine wires units in [`history/merge_units.rs`](../../../../engine/crates/layerfs-store-service/src/history/merge_units.rs).
 
 ## Related
 

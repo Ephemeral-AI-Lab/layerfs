@@ -1,15 +1,15 @@
 // Generates the per-call profile table of docs/architecture/api/front-ends/mcp.md
 // from api/mcp/src/profiles.js and the Node package's `table` (it needs the
 // built addon):
-//   node api/mcp/scripts/gen-profiles.mjs          rewrite the generated block
-//   node api/mcp/scripts/gen-profiles.mjs --check  exit 1 when it is stale
+//   node api/scripts/mcp-profiles.mjs          rewrite the generated block
+//   node api/scripts/mcp-profiles.mjs --check  exit 1 when it is stale
 // A call without a profile bucket is an error, never a row with a blank cell.
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { bucketOf, check, renderRows } from "../src/profiles.js";
 
 export const document = fileURLToPath(new URL("../../../docs/architecture/api/front-ends/mcp.md", import.meta.url));
-const BEGIN = "<!-- BEGIN GENERATED: api/mcp/scripts/gen-profiles.mjs -->";
+const BEGIN = "<!-- BEGIN GENERATED: api/scripts/mcp-profiles.mjs -->";
 const END = "<!-- END GENERATED -->";
 
 
@@ -52,7 +52,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const next = splice(current, block);
   if (process.argv.includes("--check")) {
     if (next !== current) {
-      console.error(`${document} differs from the table and the profile buckets; run node api/mcp/scripts/gen-profiles.mjs`);
+      console.error(`${document} differs from the table and the profile buckets; run node api/scripts/mcp-profiles.mjs`);
       process.exit(1);
     }
   } else {

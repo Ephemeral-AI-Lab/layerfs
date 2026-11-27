@@ -14,7 +14,7 @@ version 1 migration was removed with schema version 1 support, #804.)
       (for example `psql -At -F $'\\t' -c "SELECT 'value',first_ordinal,last_ordinal,
       encode(body,'hex') FROM <schema>.inode_value_block"`).
 
-The block formats are documented in engine/crates/layerfs-persistence/src/blocks/.
+The block formats are documented in engine/crates/layerfs-persistence/src/storage/blocks/.
 """
 
 import json

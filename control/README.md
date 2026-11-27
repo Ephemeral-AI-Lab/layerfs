@@ -24,5 +24,5 @@ binding code rules are in [AGENTS.md](AGENTS.md).
 edit it by hand. After changing the table, write it and review the diff:
 
 ```
-LAYERFS_BLESS_SUPPORT=1 cargo +1.85.1 test --locked -p layerfs-platform --test support
+LAYERFS_BLESS_SUPPORT=1 cargo +1.85.1 test --locked -p layerfs-machine --features machine --test table support_table
 ```

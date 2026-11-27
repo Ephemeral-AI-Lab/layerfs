@@ -5,8 +5,8 @@
 > exercised live in issue #334 Phase A on 1.1.0, and a Branch-merge conflict
 > was reproduced on 2.0 on 2026-11-02. Calls and refusal fields are the
 > LayerFS 2.0 call surface's: the flat fields are from the spec rows and the
-> source (`control/crates/layerfs-sandbox/src/daemon/values.rs`,
-> `control/crates/layerfs-store/src/calls/op.rs`); no conflict was
+> source (`control/crates/layerfs-sandbox/src/route/daemon/refusal.rs`,
+> `control/crates/layerfs-store/src/admin/route/methods.rs`); no conflict was
 > reproduced on the 2.0 call surface build.
 
 ## Where a conflict comes from

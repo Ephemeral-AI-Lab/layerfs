@@ -1222,7 +1222,7 @@ const MATRIX: [Row; 60] = [
         note: "The op sidecar records mark/build/verify/install (runner); T10 projects it through store.status, and the named control test asserts the phase, state and phases list." },
     Row { id: "AC-52", backend: Backend::Both, tier: "E2", status: Status::Covered,
         evidence: &["engine/crates/layerfs-persistence/tests/sqlite_compact/fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript",
-                    "engine/crates/layerfs-persistence/tests/fixtures/sqlite_compact_golden.json",
+                    "engine/crates/layerfs-persistence/tests/support/fixtures/sqlite_compact_golden.json",
                     "control/crates/layerfs-store/tests/maintenance/compact_report_status.rs#the_report_is_flat_with_byte_totals_named_bytes"],
         note: "Every section 11 field pinned with units and sampling point (golden) and rendered by the T10 wire-shape test; markBytes is a metric, not a result field, and PostgreSQL records it as `compact.mark_bytes`; `deadBytesRefined` is the bound on every path, because the mark leaves no payload sweep to refine it (#42 A10)." },
     Row { id: "AC-53", backend: Backend::Both, tier: "E2", status: Status::Partial,
@@ -1240,17 +1240,17 @@ const MATRIX: [Row; 60] = [
     Row { id: "AC-56", backend: Backend::Both, tier: "E3", status: Status::Partial,
 
         evidence: &["engine/crates/layerfs-persistence/tests/sqlite_compact/fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript",
-                    "engine/crates/layerfs-persistence/tests/fixtures/sqlite_compact_golden.json"],
+                    "engine/crates/layerfs-persistence/tests/support/fixtures/sqlite_compact_golden.json"],
         note: "The literal SQLite vector is pinned (absent head 33 zero bytes); the shared PostgreSQL literal and the three-run E3 shape are deferred." },
     Row { id: "AC-57", backend: Backend::Both, tier: "E3", status: Status::Partial,
         evidence: &["runner#arm_measurement",
-                    "engine/crates/layerfs-persistence/tests/fixtures/sqlite_compact_measure.json",
+                    "engine/crates/layerfs-persistence/tests/support/fixtures/sqlite_compact_measure.json",
                     "engine/crates/layerfs-persistence/tests/sqlite_compact/capacity.rs#capacity_measure",
-                    "engine/crates/layerfs-persistence/tests/fixtures/sqlite_compact_capacity_measure.json",
-                    "engine/crates/layerfs-persistence/tests/fixtures/sqlite_compact_capacity_measure_whole_store.json",
-                    "engine/crates/layerfs-persistence/tests/fixtures/sqlite_compact_capacity_measure_50gb.json",
-                    "engine/crates/layerfs-persistence/tests/fixtures/sqlite_compact_capacity_measure_gc_bench.json"],
-        note: "The tiny three-run arm is median 32.1 ms. T-G61 measured a real 9.987 GB Store on the whole-Store `VACUUM INTO` build (3 runs per arm; medians kept in `tests/fixtures/sqlite_compact_capacity_measure_whole_store.json`): `none` at 8.88% dead median 149.318 s and `rebuild` at 10.00% dead median 246.371 s (mark 149.089 s / build 94.317 s / verify 0.312 s / install 1.916 s; the build phase's per-run samples were not retained, so it records a 94.317 s median only and no range -- a recorded missing-range deviation, see `tools/ci/gc-bench.md` section 13), plus a WAL/FULL control at 284.078 s. Measured on the pre-#49-round-4 fresh-copy build on the same 9.987 GB fixture: the committed receipt predates both the 256 MiB `src.mmap_size` source window and the `quick_check` removal, so it is the pre-head8 build/verify path, not a head8 re-measurement. `rebuild` median 118.439584 s (mark 74.462-75.704 s / build 18.190-19.209 s / verify 4.330-4.377 s (including the `quick_check` page scan #49 round 4 removed) / install 19.197-23.673 s), peak 9.144 GB; `none` median 88.439 s (82.0-149.9 s; this Sandbox shares the host); profile, host and toolchain are declared in the fixture, and the warm page cache is declared below. The §11 `markBytes` transfer is recorded per PostgreSQL run as `compact.mark_bytes`. The separate gc_bench medium fixture (9.789 GB live / 10.731 GB pack) measured `rebuild` median 133.076 s in three runs (receipt: `tests/fixtures/sqlite_compact_capacity_measure_gc_bench.json`), a different generated Store from the 9.987 GB capacity_measure fixture; the same-fixture comparison is 246.371 s -> 118.439584 s = 2.08x, and the earlier 1.85x (133.076 s against 246.371 s) mixed the two fixtures and is withdrawn. The gc-bench/1 receipt declares the Disposable profile (WAL/OFF, page_size 4096) and the cache, records bytes written as `processIo.writeBytes`, and does not record the SQLite version or WAL bytes (recorded deviation). T-G66 later measured the 50 GB arm once per path (#42 item 44; receipt `tests/fixtures/sqlite_compact_capacity_measure_50gb.json`, `none` 1,633.585 s and `rebuild` 5,131.835 s); the 30% arm, each removal type, the plain `VACUUM INTO` comparison and PostgreSQL timings remain deferred/[E]." },
+                    "engine/crates/layerfs-persistence/tests/support/fixtures/sqlite_compact_capacity_measure.json",
+                    "engine/crates/layerfs-persistence/tests/support/fixtures/sqlite_compact_capacity_measure_whole_store.json",
+                    "engine/crates/layerfs-persistence/tests/support/fixtures/sqlite_compact_capacity_measure_50gb.json",
+                    "engine/crates/layerfs-persistence/tests/support/fixtures/sqlite_compact_capacity_measure_gc_bench.json"],
+        note: "The tiny three-run arm is median 32.1 ms. T-G61 measured a real 9.987 GB Store on the whole-Store `VACUUM INTO` build (3 runs per arm; medians kept in `tests/support/fixtures/sqlite_compact_capacity_measure_whole_store.json`): `none` at 8.88% dead median 149.318 s and `rebuild` at 10.00% dead median 246.371 s (mark 149.089 s / build 94.317 s / verify 0.312 s / install 1.916 s; the build phase's per-run samples were not retained, so it records a 94.317 s median only and no range -- a recorded missing-range deviation, see `tools/ci/gc-bench.md` section 13), plus a WAL/FULL control at 284.078 s. Measured on the pre-#49-round-4 fresh-copy build on the same 9.987 GB fixture: the committed receipt predates both the 256 MiB `src.mmap_size` source window and the `quick_check` removal, so it is the pre-head8 build/verify path, not a head8 re-measurement. `rebuild` median 118.439584 s (mark 74.462-75.704 s / build 18.190-19.209 s / verify 4.330-4.377 s (including the `quick_check` page scan #49 round 4 removed) / install 19.197-23.673 s), peak 9.144 GB; `none` median 88.439 s (82.0-149.9 s; this Sandbox shares the host); profile, host and toolchain are declared in the fixture, and the warm page cache is declared below. The §11 `markBytes` transfer is recorded per PostgreSQL run as `compact.mark_bytes`. The separate gc_bench medium fixture (9.789 GB live / 10.731 GB pack) measured `rebuild` median 133.076 s in three runs (receipt: `tests/support/fixtures/sqlite_compact_capacity_measure_gc_bench.json`), a different generated Store from the 9.987 GB capacity_measure fixture; the same-fixture comparison is 246.371 s -> 118.439584 s = 2.08x, and the earlier 1.85x (133.076 s against 246.371 s) mixed the two fixtures and is withdrawn. The gc-bench/1 receipt declares the Disposable profile (WAL/OFF, page_size 4096) and the cache, records bytes written as `processIo.writeBytes`, and does not record the SQLite version or WAL bytes (recorded deviation). T-G66 later measured the 50 GB arm once per path (#42 item 44; receipt `tests/support/fixtures/sqlite_compact_capacity_measure_50gb.json`, `none` 1,633.585 s and `rebuild` 5,131.835 s); the 30% arm, each removal type, the plain `VACUUM INTO` comparison and PostgreSQL timings remain deferred/[E]." },
     Row { id: "AC-58", backend: Backend::Sqlite, tier: "E2", status: Status::Covered,
         evidence: &["engine/crates/layerfs-persistence/tests/sqlite_compact/fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript",
                     "engine/crates/layerfs-persistence/tests/sqlite_compact/crash.rs#crash_before_copy",
@@ -1484,7 +1484,7 @@ fn generate_report() -> String {
     writeln!(out, "  (its medians are kept in").unwrap();
     writeln!(
         out,
-        "  `tests/fixtures/sqlite_compact_capacity_measure_whole_store.json`, a"
+        "  `tests/support/fixtures/sqlite_compact_capacity_measure_whole_store.json`, a"
     )
     .unwrap();
     writeln!(
@@ -1573,12 +1573,12 @@ fn generate_report() -> String {
     writeln!(out, "  fresh-copy medians are in").unwrap();
     writeln!(
         out,
-        "  `tests/fixtures/sqlite_compact_capacity_measure.json` and the superseded"
+        "  `tests/support/fixtures/sqlite_compact_capacity_measure.json` and the superseded"
     )
     .unwrap();
     writeln!(
         out,
-        "  build's in `tests/fixtures/sqlite_compact_capacity_measure_whole_store.json`. Both\n  10 GB receipts predate #49 round 4, so every §13 number quoted here is the\n  pre-head8 build and verify path, not this branch's."
+        "  build's in `tests/support/fixtures/sqlite_compact_capacity_measure_whole_store.json`. Both\n  10 GB receipts predate #49 round 4, so every §13 number quoted here is the\n  pre-head8 build and verify path, not this branch's."
     )
     .unwrap();
     writeln!(
@@ -1599,7 +1599,7 @@ fn generate_report() -> String {
     writeln!(out, "  its receipt is committed as").unwrap();
     writeln!(
         out,
-        "  `tests/fixtures/sqlite_compact_capacity_measure_gc_bench.json`: `rebuild`"
+        "  `tests/support/fixtures/sqlite_compact_capacity_measure_gc_bench.json`: `rebuild`"
     )
     .unwrap();
     writeln!(
@@ -1679,7 +1679,7 @@ fn generate_report() -> String {
     .unwrap();
     writeln!(
         out,
-        "  `tests/fixtures/sqlite_compact_capacity_measure_50gb.json`; see the runbook"
+        "  `tests/support/fixtures/sqlite_compact_capacity_measure_50gb.json`; see the runbook"
     )
     .unwrap();
     writeln!(out, "  disk-headroom section. The 30% arm remains [E].").unwrap();
@@ -1843,7 +1843,7 @@ fn generate_report() -> String {
     .unwrap();
     writeln!(
         out,
-        "  range in `engine/crates/layerfs-persistence/tests/fixtures/"
+        "  range in `engine/crates/layerfs-persistence/tests/support/fixtures/"
     )
     .unwrap();
     writeln!(
@@ -1959,7 +1959,7 @@ fn generate_report() -> String {
     .unwrap();
     writeln!(
         out,
-        "  receipt `tests/fixtures/sqlite_compact_capacity_measure_whole_store.json`, so"
+        "  receipt `tests/support/fixtures/sqlite_compact_capacity_measure_whole_store.json`, so"
     )
     .unwrap();
     writeln!(
@@ -1974,7 +1974,7 @@ fn generate_report() -> String {
     .unwrap();
     writeln!(
         out,
-        "  `tests/fixtures/sqlite_compact_capacity_measure_gc_bench.json`). Both 10 GB\n  receipts predate #49 round 4's source mmap window and `quick_check` removal,\n  so these are the pre-head8 build/verify path, not a head8 re-measurement."
+        "  `tests/support/fixtures/sqlite_compact_capacity_measure_gc_bench.json`). Both 10 GB\n  receipts predate #49 round 4's source mmap window and `quick_check` removal,\n  so these are the pre-head8 build/verify path, not a head8 re-measurement."
     )
     .unwrap();
     writeln!(
@@ -2074,7 +2074,7 @@ fn generate_report() -> String {
     .unwrap();
     writeln!(
         out,
-        "  Receipt: `tests/fixtures/sqlite_compact_capacity_measure_gc_bench.json`."
+        "  Receipt: `tests/support/fixtures/sqlite_compact_capacity_measure_gc_bench.json`."
     )
     .unwrap();
     writeln!(out).unwrap();

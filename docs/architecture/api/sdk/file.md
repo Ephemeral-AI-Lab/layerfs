@@ -6,7 +6,7 @@ The `file` calls: read a Branch's files at its head or at a Commit without a mou
 
 | | |
 | --- | --- |
-| Source | [`api/crates/layerfs-api/src/file`](../../../../api/crates/layerfs-api/src/file) (one file per call), [`layerfs-store/src/calls/file`](../../../../control/crates/layerfs-store/src/calls/file), [`methods/file`](../../../../engine/crates/layerfs-store-service/src/methods/file), [`read/`](../../../../engine/crates/layerfs-store-service/src/read), [`write/`](../../../../engine/crates/layerfs-store-service/src/write) |
+| Source | [`crates/layerfs-api/src/families/file`](../../../../api/crates/layerfs-api/src/families/file) (one file per call), [`crates/layerfs-store/src/file`](../../../../control/crates/layerfs-store/src/file), [`families/file`](../../../../engine/crates/layerfs-store-service/src/families/file), [`filesystem/`](../../../../engine/crates/layerfs-store-service/src/filesystem), [`change/`](../../../../engine/crates/layerfs-store-service/src/filesystem/change) |
 | Runs by default | where the Store's calls run: the caller's process for PostgreSQL and for sqlite on a locally executing machine, else the Store machine's worker (`store.call`). No daemon serves them |
 | Design | [Store calls](../../engine/store-calls/README.md), [reads](../../engine/store-calls/reads.md) |
 
@@ -42,23 +42,23 @@ The `file` calls: read a Branch's files at its head or at a Commit without a mou
 | [`file.apply`](#fileapply) | write | `commit` | `admin` |
 
 Each call file builds one request and calls
-[`layerfs_store::calls::file`](../../../../control/crates/layerfs-store/src/calls/file)
+[`layerfs_store::calls::file`](../../../../control/crates/layerfs-store/src/file)
 (`read.rs` for the reads, `write.rs` for the writes), which sends one
 `StoreOp::File` operation on the project's Store and maps its answer to the
 call's long form. Shared rules:
 
 | Rule | Detail | Source |
 | --- | --- | --- |
-| Version | a read reads the Branch's head, or `--at C`: a full Commit id or a prefix of 8 or more characters (a prefix more than one Commit starts with is `InvalidInput` with `matches`; a Branch name or a shorter prefix is `InvalidInput`, never read as a Branch). Every long form names the Commit read as `commit` (its full id), its `root` and the `path`. Reads never see a live Workspace | [`read/snapshot.rs`](../../../../engine/crates/layerfs-store-service/src/read/snapshot.rs) |
-| Paths | absolute, starting with `/`, at most 4096 bytes, no NUL, no trailing `/`, no empty, `.` or `..` component | [`write/files.rs`](../../../../engine/crates/layerfs-store-service/src/write/files.rs) |
-| Pages | `list`, `glob`, `grep` and `history` answer `items` and `next_cursor`; `limit` is 1 to 1000 (100 by default), and a page also ends early at the reply budget, with a cursor. The cursor carries the call's filters and the Commit its first page read, so a later page reads the same tree while the Branch moves on. A cursor given with other filters or another pin, or to another call, is `InvalidInput`; one whose Commit is gone, `NotFound` | [`read.rs`](../../../../control/crates/layerfs-store/src/calls/file/read.rs), [`cursor.rs`](../../../../control/crates/layerfs-home/src/cursor.rs) |
-| Line windows | `read` and `blame` take `--line` (1-based, default 1) and `--limit` (1 to 2000, default 2000) and answer `next_line` while lines are left | [`read/window.rs`](../../../../engine/crates/layerfs-store-service/src/read/window.rs) |
-| Writes | through a private Workspace bound to the Branch's head, then one Commit through the Store's single writer. A write to `main` is `InvalidInput` (raised `ReadOnly`) with a `fix` that forks a Branch; `main` changes only through `branch.publish` | [`write/files.rs`](../../../../engine/crates/layerfs-store-service/src/write/files.rs) |
-| Write answer | `commit`, the new Commit's full id; `unchanged` when nothing changed (`commit` is then the head); `merged` when the Branch moved during the call and the change was merged; `overwritten` (the first 20, then `overwritten_count`) for the paths `.lww` rules took. The long form adds `outcome` (`committed`, `merged` or `unchanged`), `branch`, `parent`, `root`, `message` and `created_at` | [`write.rs`](../../../../control/crates/layerfs-store/src/calls/file/write.rs) |
+| Version | a read reads the Branch's head, or `--at C`: a full Commit id or a prefix of 8 or more characters (a prefix more than one Commit starts with is `InvalidInput` with `matches`; a Branch name or a shorter prefix is `InvalidInput`, never read as a Branch). Every long form names the Commit read as `commit` (its full id), its `root` and the `path`. Reads never see a live Workspace | [`filesystem/root.rs`](../../../../engine/crates/layerfs-store-service/src/filesystem/root.rs) |
+| Paths | absolute, starting with `/`, at most 4096 bytes, no NUL, no trailing `/`, no empty, `.` or `..` component | [`change/run.rs`](../../../../engine/crates/layerfs-store-service/src/filesystem/change/run.rs) |
+| Pages | `list`, `glob`, `grep` and `history` answer `items` and `next_cursor`; `limit` is 1 to 1000 (100 by default), and a page also ends early at the reply budget, with a cursor. The cursor carries the call's filters and the Commit its first page read, so a later page reads the same tree while the Branch moves on. A cursor given with other filters or another pin, or to another call, is `InvalidInput`; one whose Commit is gone, `NotFound` | [`read.rs`](../../../../control/crates/layerfs-store/src/data/file/read.rs), [`cursor.rs`](../../../../control/crates/layerfs-home/src/reply/cursor.rs) |
+| Line windows | `read` and `blame` take `--line` (1-based, default 1) and `--limit` (1 to 2000, default 2000) and answer `next_line` while lines are left | [`text/window.rs`](../../../../engine/crates/layerfs-store-service/src/filesystem/text/window.rs) |
+| Writes | through a private Workspace bound to the Branch's head, then one Commit through the Store's single writer. A write to `main` is `InvalidInput` (raised `ReadOnly`) with a `fix` that forks a Branch; `main` changes only through `branch.publish` | [`change/run.rs`](../../../../engine/crates/layerfs-store-service/src/filesystem/change/run.rs) |
+| Write answer | `commit`, the new Commit's full id; `unchanged` when nothing changed (`commit` is then the head); `merged` when the Branch moved during the call and the change was merged; `overwritten` (the first 20, then `overwritten_count`) for the paths `.lww` rules took. The long form adds `outcome` (`committed`, `merged` or `unchanged`), `branch`, `parent`, `root`, `message` and `created_at` | [`write.rs`](../../../../control/crates/layerfs-store/src/data/file/write.rs) |
 | Head guard | `--expected C`: the head the call's private Workspace bound to must be `C` (an id or prefix), else `Conflict` naming the head as `commit` | same |
 | Message | `-m` in the shell; without one the Commit message is `Apply filesystem changes` | same |
-| Mode | octal text, four digits `0000` to `7777` (`"0644"`), as `stat` answers it. A new file is `0644` and an existing one keeps its mode; a folder `mkdir` makes gets `--mode`, missing parents `0755` | [`write/mutation.rs`](../../../../engine/crates/layerfs-store-service/src/write/mutation.rs) |
-| Scope | every path must be the scope's folder or under it; Branch names are composed into the scope's namespace; `file.history` is refused (`out of scope: history`) | [`calls/scope.rs`](../../../../api/crates/layerfs-api/src/calls/scope.rs) |
+| Mode | octal text, four digits `0000` to `7777` (`"0644"`), as `stat` answers it. A new file is `0644` and an existing one keeps its mode; a folder `mkdir` makes gets `--mode`, missing parents `0755` | [`change/mutation.rs`](../../../../engine/crates/layerfs-store-service/src/filesystem/change/mutation.rs) |
+| Scope | every path must be the scope's folder or under it; Branch names are composed into the scope's namespace; `file.history` is refused (`out of scope: history`) | [`guard/scope.rs`](../../../../api/crates/layerfs-api/src/dispatch/guard/scope.rs) |
 
 ### file.read
 
@@ -281,7 +281,7 @@ The long row adds `parent`, `created_at`, the path's `type`, `size` and
 changed. A publication on `main` has no `message` or `created_at`.
 `--traversal provenance` (the default) follows a path through merges into
 the Branches it came from; `--traversal branch` stays on the Branch's own
-Commits ([`read/revision.rs`](../../../../engine/crates/layerfs-store-service/src/read/revision.rs)).
+Commits ([`paged/revision.rs`](../../../../engine/crates/layerfs-store-service/src/filesystem/paged/revision.rs)).
 It was `file.revision`, removed with no alias.
 
 ```console
@@ -323,7 +323,7 @@ without `commit` has none found); `commits` lists each owner once
 (`{commit, message}`; the long form adds `created_at`). `partial` says the
 history budget ran out or a line was cut. Blame runs at immutable roots,
 never at a live Workspace
-([`read/blame.rs`](../../../../engine/crates/layerfs-store-service/src/read/blame.rs)).
+([`text/blame.rs`](../../../../engine/crates/layerfs-store-service/src/filesystem/text/blame.rs)).
 
 ```console
 $ layerfs file blame shop/api agent /docs/a.txt
@@ -402,7 +402,7 @@ Without `--replace-all` the old text must occur exactly once; with it, every
 occurrence is replaced. The long form says how many as `replaced` (1 for a
 plain edit); the short form shows it only when more than one. The file is
 scanned and its tail shifted in 32 KiB windows, so memory does not grow with
-the file ([`write/edit.rs`](../../../../engine/crates/layerfs-store-service/src/write/edit.rs)).
+the file ([`change/edit.rs`](../../../../engine/crates/layerfs-store-service/src/filesystem/change/edit.rs)).
 
 | Refusal | When | Next |
 | --- | --- | --- |
@@ -444,7 +444,7 @@ Python  layerfs.file.rm(project, branch, path, *, recursive=None, expected=None,
 `/` is refused. A folder that is not empty needs `--recursive`
 (`InvalidInput` with a `fix` that adds it); it is then removed depth first,
 one page of entries per level at a time
-([`write/recursive.rs`](../../../../engine/crates/layerfs-store-service/src/write/recursive.rs)).
+([`change/recursive.rs`](../../../../engine/crates/layerfs-store-service/src/filesystem/change/recursive.rs)).
 
 ```console
 $ layerfs file rm shop/api agent /src --recursive
@@ -594,7 +594,7 @@ the JSON comes from stdin, or from `--from <file>`.
 | `mv` | `from`, `to` | move |
 
 Any other field is refused `InvalidInput`, so a folder scope sees every path
-([`file/apply.rs`](../../../../api/crates/layerfs-api/src/file/apply.rs)).
+([`file/apply.rs`](../../../../api/crates/layerfs-api/src/families/file/apply.rs)).
 
 Run (content shown as in the [2.0.0 manual](../../../versioned/2.0.0/calls.md#file-14); not run for this page):
 
@@ -607,13 +607,13 @@ printf '%s' '[{"op":"write","path":"/b.txt","content":"b\n"},{"op":"mkdir","path
 
 | Error | When | Source |
 | --- | --- | --- |
-| `InvalidInput` | a bad argument, change or cursor; a write to `main` (raised `ReadOnly`); a folder where a file is needed, a binary file read as text, a non-empty folder without `--recursive`; a path outside a folder scope (`out of scope: path`) | [`calls/scope.rs`](../../../../api/crates/layerfs-api/src/calls/scope.rs), [`methods/args.rs`](../../../../engine/crates/layerfs-store-service/src/methods/args.rs) |
-| `NotFound` | the Store, project, Branch, Commit or path is missing; a path the project hides | [`resolve.rs`](../../../../control/crates/layerfs-store/src/resolve.rs), [`history/lookup.rs`](../../../../engine/crates/layerfs-store-service/src/history/lookup.rs) |
-| `Exists` | `mv` or `cp` onto a path that exists | [`write/files.rs`](../../../../engine/crates/layerfs-store-service/src/write/files.rs) |
+| `InvalidInput` | a bad argument, change or cursor; a write to `main` (raised `ReadOnly`); a folder where a file is needed, a binary file read as text, a non-empty folder without `--recursive`; a path outside a folder scope (`out of scope: path`) | [`guard/scope.rs`](../../../../api/crates/layerfs-api/src/dispatch/guard/scope.rs), [`families/args.rs`](../../../../engine/crates/layerfs-store-service/src/families/args.rs) |
+| `NotFound` | the Store, project, Branch, Commit or path is missing; a path the project hides | [`resolve.rs`](../../../../control/crates/layerfs-store/src/admin/route/resolve.rs), [`src/lookup.rs`](../../../../engine/crates/layerfs-store-service/src/lookup.rs) |
+| `Exists` | `mv` or `cp` onto a path that exists | [`change/run.rs`](../../../../engine/crates/layerfs-store-service/src/filesystem/change/run.rs) |
 | `Conflict` | the head is not `--expected`, or the Branch moved during the write and a changed path conflicts; nothing is committed; `commit` names the head | same |
 | `Capacity` | the Commit had no room | same |
-| `Busy`, `Unresolved`, `Unavailable` | a move or remove holds the Store; the worker is not reached | [`op.rs`](../../../../control/crates/layerfs-home/src/op.rs), [`place.rs`](../../../../control/crates/layerfs-store/src/place.rs) |
-| `Unknown` | a read's worker answer was lost (call again); a write's Commit ended unknown or its answer was lost: the Commit may exist, so read `branch get` or `commit list` before writing again | [`write/files.rs`](../../../../engine/crates/layerfs-store-service/src/write/files.rs), [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) |
+| `Busy`, `Unresolved`, `Unavailable` | a move or remove holds the Store; the worker is not reached | [`intent.rs`](../../../../control/crates/layerfs-home/src/record/intent.rs), [`executor.rs`](../../../../control/crates/layerfs-store/src/admin/route/executor.rs) |
+| `Unknown` | a read's worker answer was lost (call again); a write's Commit ended unknown or its answer was lost: the Commit may exist, so read `branch get` or `commit list` before writing again | [`change/run.rs`](../../../../engine/crates/layerfs-store-service/src/filesystem/change/run.rs), [`guest/client.rs`](../../../../control/crates/layerfs-machine/src/route/guest/client.rs) |
 
 ## Related
 

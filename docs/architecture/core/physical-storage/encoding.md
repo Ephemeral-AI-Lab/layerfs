@@ -8,7 +8,7 @@ program pages and the pack cache, within [Physical storage](README.md).
 
 | | |
 | --- | --- |
-| Source | [`encoding/`](../../../../core/crates/layerfs-storage/src/encoding): [`codec.rs`](../../../../core/crates/layerfs-storage/src/encoding/codec.rs), [`full.rs`](../../../../core/crates/layerfs-storage/src/encoding/full.rs), [`decode.rs`](../../../../core/crates/layerfs-storage/src/encoding/decode.rs), [`delta/`](../../../../core/crates/layerfs-storage/src/encoding/delta), [`pool/`](../../../../core/crates/layerfs-storage/src/encoding/pool), [`pack_cache.rs`](../../../../core/crates/layerfs-storage/src/encoding/pack_cache.rs), [`pack_units.rs`](../../../../core/crates/layerfs-storage/src/encoding/pack_units.rs) |
+| Source | [`encoding/`](../../../../core/crates/layerfs-storage/src/encoding): [`codec.rs`](../../../../core/crates/layerfs-storage/src/encoding/codec.rs), [`full.rs`](../../../../core/crates/layerfs-storage/src/encoding/delta/full.rs), [`decode.rs`](../../../../core/crates/layerfs-storage/src/encoding/decode.rs), [`delta/`](../../../../core/crates/layerfs-storage/src/encoding/delta), [`pool/`](../../../../core/crates/layerfs-storage/src/encoding/pool), [`cache.rs`](../../../../core/crates/layerfs-storage/src/pack/cache.rs), [`units.rs`](../../../../core/crates/layerfs-storage/src/pack/units.rs) |
 
 ## codec.rs and full.rs
 
@@ -137,8 +137,8 @@ seal is forced ([`delta/record.rs`](../../../../core/crates/layerfs-storage/src/
 
 A ring proposal the Save itself stored FULL and has not published is never
 published early for its trial (#810,
-[`save/select.rs`](../../../../core/crates/layerfs-storage/src/save/select.rs),
-[`save/deferred.rs`](../../../../core/crates/layerfs-storage/src/save/deferred.rs)).
+[`select/representation.rs`](../../../../core/crates/layerfs-storage/src/save/select/representation.rs),
+[`prepare/deferred.rs`](../../../../core/crates/layerfs-storage/src/save/prepare/deferred.rs)).
 Selection may use a base only once its first-wins representation is
 acknowledged, so the Save used to publish the proposal at once: one
 transaction, reservation and pack per similar file (614 of them for an npm
@@ -210,11 +210,11 @@ Decoded ordinary group bodies are kept in a `GroupCache` of 512 KiB.
 | --- | --- | --- |
 | COPY/INSERT | 4,096-bucket table over 16-byte seeds, 128 KiB match budget (an exhausted budget yields no program); program ≤ 64 KiB | [`pool/delta.rs`](../../../../core/crates/layerfs-storage/src/encoding/pool/delta.rs) |
 | Leaf record | ≤ 8,192 bytes | [`pool/leaf.rs`](../../../../core/crates/layerfs-storage/src/encoding/pool/leaf.rs) |
-| Program pages | candidate is the first advisory predecessor (the replaced page, or for extent pages the stored page at the same level and position) with the same role; one trial; kept only when shorter, and for a directory page only when it saves at least a quarter | [`pool/branch.rs`](../../../../core/crates/layerfs-storage/src/encoding/pool/branch.rs), [`delta/branch.rs`](../../../../core/crates/layerfs-storage/src/encoding/delta/branch.rs) |
-| Re-base | a candidate chain at its depth cap or budgets restarts at the whole page at its root (depth one) instead of storing the page whole; that program is kept only when it is at most half the whole record, else the page is stored whole (#758 fix 4) | [`delta/branch.rs`](../../../../core/crates/layerfs-storage/src/encoding/delta/branch.rs) |
-| Metadata chain budgets | depth 8 by default; 65,536 canonical and 139,281 encoded bytes | [`store/policy.rs`](../../../../core/crates/layerfs-storage/src/store/policy.rs) |
+| Program pages | candidate is the first advisory predecessor (the replaced page, or for extent pages the stored page at the same level and position) with the same role; one trial; kept only when shorter, and for a directory page only when it saves at least a quarter | [`pool/program_page.rs`](../../../../core/crates/layerfs-storage/src/encoding/pool/program_page.rs), [`delta/program_page.rs`](../../../../core/crates/layerfs-storage/src/encoding/delta/program_page.rs) |
+| Re-base | a candidate chain at its depth cap or budgets restarts at the whole page at its root (depth one) instead of storing the page whole; that program is kept only when it is at most half the whole record, else the page is stored whole (#758 fix 4) | [`delta/program_page.rs`](../../../../core/crates/layerfs-storage/src/encoding/delta/program_page.rs) |
+| Metadata chain budgets | depth 8 by default; 65,536 canonical and 139,281 encoded bytes | [`src/policy.rs`](../../../../core/crates/layerfs-storage/src/policy.rs) |
 | Read | rebuild the body from the chain, look up all ordinals in one call, rebuild the leaf, check its id; a demand of several leaves prepares up to 128 leaves (1 MiB of bodies) ahead and looks up their ordinals together | [`pool/read.rs`](../../../../core/crates/layerfs-storage/src/encoding/pool/read.rs) |
-| Chain memo | off unless the reader's owner asks (`PoolReader::with_chain_memo(bytes)`). The reader then keeps each chain element it rebuilt and checked against its identity (a program page's canonical bytes, a pooled leaf's body) with the depth, canonical bytes, record bytes and highest pack of the chain below it, and a later chain stops at the first element held. The depth cap, the chain budgets and the visibility ceiling are applied to the kept figures, so every answer and refusal is that of a full walk. Two generations of half the byte limit each; the old one is dropped when the young one fills | [`pool/memo.rs`](../../../../core/crates/layerfs-storage/src/encoding/pool/memo.rs), [`pool/branch.rs`](../../../../core/crates/layerfs-storage/src/encoding/pool/branch.rs), [`pool/read.rs`](../../../../core/crates/layerfs-storage/src/encoding/pool/read.rs) |
+| Chain memo | off unless the reader's owner asks (`PoolReader::with_chain_memo(bytes)`). The reader then keeps each chain element it rebuilt and checked against its identity (a program page's canonical bytes, a pooled leaf's body) with the depth, canonical bytes, record bytes and highest pack of the chain below it, and a later chain stops at the first element held. The depth cap, the chain budgets and the visibility ceiling are applied to the kept figures, so every answer and refusal is that of a full walk. Two generations of half the byte limit each; the old one is dropped when the young one fills | [`pool/memo.rs`](../../../../core/crates/layerfs-storage/src/encoding/pool/memo.rs), [`pool/program_page.rs`](../../../../core/crates/layerfs-storage/src/encoding/pool/program_page.rs), [`pool/read.rs`](../../../../core/crates/layerfs-storage/src/encoding/pool/read.rs) |
 
 The locator's role decides how tags 0 and 1 are read, so a Store written
 before program pages reads unchanged. Ordinary packs that may hold a
@@ -242,7 +242,7 @@ refuses by version rather than inside a decode.
 Pack ids only grow and published packs never change, so a kept body cannot
 go stale; eviction costs a later read, never correctness.
 
-| Type ([`pack_units.rs`](../../../../core/crates/layerfs-storage/src/encoding/pack_units.rs)) | What it is |
+| Type ([`units.rs`](../../../../core/crates/layerfs-storage/src/pack/units.rs)) | What it is |
 | --- | --- |
 | `PackAcquisition::Whole` | a complete pack body, with its descriptor when it came from the Store |
 | `PackAcquisition::Units` | complete encoded groups cut from a ranged read; the directory is checked and each used record is authenticated by its id |
@@ -254,7 +254,7 @@ go stale; eviction costs a later read, never correctness.
 - [Physical storage](README.md): packs, Saves, reads and ports around these records.
 - [Objects](../objects/README.md): roles, canonical forms and advisory predecessors.
 - [Files](../files/README.md): where chunk hints and extent-page hints come from.
-- Tests: [`delta_base_budget.rs`](../../../../core/crates/layerfs-storage/tests/delta_base_budget.rs),
-  [`losing_chunk_bases.rs`](../../../../core/crates/layerfs-storage/tests/losing_chunk_bases.rs),
-  [`page_program_deltas.rs`](../../../../core/crates/layerfs-storage/tests/page_program_deltas.rs)
-  (`cargo +1.85.1 test --locked -p layerfs-storage --test page_program_deltas`, any platform).
+- Tests: [`base_budget.rs`](../../../../core/crates/layerfs-storage/tests/encoding/base_budget.rs),
+  [`losing_chunk_bases.rs`](../../../../core/crates/layerfs-storage/tests/encoding/losing_chunk_bases.rs),
+  [`program_pages.rs`](../../../../core/crates/layerfs-storage/tests/encoding/program_pages.rs)
+  (`cargo +1.85.1 test --locked -p layerfs-storage --test encoding program_pages`, any platform).

@@ -14,7 +14,7 @@ public surface:
   `layerfs-bridge` and re-exports
   what the front ends use (#536). The
   management library `layerfs-control` it calls is a control crate
-  (`control/crates/layerfs-control`; layerfs-project#101 D-2 supersedes
+  (`control/crates/layerfs-inspect`; layerfs-project#101 D-2 supersedes
   #536 C1, which placed it here); see the [control guide](../control/AGENTS.md).
 - `crates/layerfs-cli`: the `layerfs` command and the machine worker.
 - `crates/layerfs-node`: the Node binding, built as the package's addon at
@@ -36,7 +36,7 @@ control may depend on anything here. Layers are
 
 Tests that drive the call surface live in `crates/layerfs-api/tests`;
 SDK-facing daemon integration tests and tests of control internals live in
-`control/crates/layerfs-control/tests`, with
+`control/crates/layerfs-inspect/tests`, with
 cheap includes of daemon fixtures from `engine/crates` and Sandbox fixtures
 from `control/crates`. Build the
 ordinary daemon binary before running tests that launch it.

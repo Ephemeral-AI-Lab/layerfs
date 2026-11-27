@@ -77,7 +77,7 @@ test("the page's generated profile table is what the table and buckets give", ()
   const current = readFileSync(document, "utf8");
   const { block, problems } = render(table);
   assert.deepEqual(problems, []);
-  assert.equal(splice(current, block), current, "run node api/mcp/scripts/gen-profiles.mjs");
+  assert.equal(splice(current, block), current, "run node api/scripts/mcp-profiles.mjs");
 });
 
 test("a call with no bucket is a problem, not a silent admin tool", () => {

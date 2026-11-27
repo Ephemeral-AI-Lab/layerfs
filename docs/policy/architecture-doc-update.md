@@ -84,9 +84,9 @@ Demonstration row names. The commit message or pull request then says
   page per call family). A page that outgrows its budget is cut, or split into
   an extra page that meets the code-boundary threshold.
 - **Never hand-edit a generated block.** Regenerate it instead:
-  `node api/scripts/gen-coverage.mjs` for
+  `node api/scripts/coverage-doc.mjs` for
   [coverage](../architecture/api/calls/coverage.md) and
-  `node api/mcp/scripts/gen-profiles.mjs` for the
+  `node api/scripts/mcp-profiles.mjs` for the
   [MCP profiles](../architecture/api/front-ends/mcp.md).
 - **Persistence profile.** Pages state once, where relevant, that Durable
   execution is `NOT_RUN — disabled by owner until explicit reauthorization`,
@@ -103,9 +103,9 @@ report that a check was not run and why:
 | No link points into a removed folder such as `core/docs/` (except the GC design at `core/docs/issues/project-41/`, see the [documentation policy](../general/documentation-policy.md)) | removed material coming back by link |
 | Every Source link names a file or folder that exists | pages describing moved code |
 | Diagrams are `text` blocks of at most 80 columns | layout |
-| `node --test api/node/test/branch-file/inventory.mjs` | one SDK heading per call, the count line (needs the built Node addon) |
-| `node api/scripts/gen-coverage.mjs --check` | the coverage block (needs the built CLI and addon) |
-| `node api/mcp/scripts/gen-profiles.mjs --check` | the MCP profile block |
+| `node --test api/node/test/drift/inventory.test.mjs` | one SDK heading per call, the count line (needs the built Node addon) |
+| `node api/scripts/coverage-doc.mjs --check` | the coverage block (needs the built CLI and addon) |
+| `node api/scripts/mcp-profiles.mjs --check` | the MCP profile block |
 
 Each command runs with a wall timeout of at most 120 seconds. CI reports and
 never gates; a green run is not verification of a doc change.

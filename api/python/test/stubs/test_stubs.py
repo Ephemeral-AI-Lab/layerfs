@@ -45,7 +45,7 @@ class Stubs(unittest.TestCase):
             self.assertEqual(
                 (PACKAGE / name).read_text(),
                 text,
-                f"{name} drifted from the call table: run python api/python/tools/gen_stubs.py",
+                f"{name} drifted from the call table: run python api/scripts/python_stubs.py",
             )
 
     def test_every_call_of_the_table_is_in_the_sync_and_the_async_stub(self):

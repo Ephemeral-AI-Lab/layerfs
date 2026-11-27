@@ -576,7 +576,7 @@ restricts both the build and the run to the named integration-test binaries.
 `target/r7-iterate-all.sh <first-receipt-number> [cells]` samples the
 named cells from one build. All are in the git-ignored `target`
 directory and are lost if it is cleaned. The array positions they decode are pinned to the product's
-diagnostics source (`engine/crates/layerfs-overlay/src/diagnostics/metrics.rs`
+diagnostics source (`engine/crates/layerfs-overlay/src/backing/metrics.rs`
 and the request accounting in `engine/crates/layerfs-fuse`); a changed family or
 opcode list must be updated in the helper, which warns when the lengths
 differ.

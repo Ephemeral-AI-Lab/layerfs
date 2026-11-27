@@ -78,7 +78,7 @@ In the release tree, in WSL:
 
 ```bash
 export PATH="$HOME/.cargo/bin:$HOME/.npm-global/bin:$PATH"
-node api/scripts/build-native.mjs
+node api/scripts/native-addon.mjs
 ```
 
 This runs `cargo +1.85.1 build --release --locked --offline -p layerfs-node`

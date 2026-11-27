@@ -255,12 +255,12 @@ Two different generated fixtures carry the 10 GB evidence, and they are not
 interchangeable:
 
 - **Fixture A (9.987 GB pack), the `capacity_measure` test.**
-  `engine/crates/layerfs-persistence/tests/fixtures/sqlite_compact_capacity_measure.json`
+  `engine/crates/layerfs-persistence/tests/support/fixtures/sqlite_compact_capacity_measure.json`
   is written by the opt-in `sqlite_compact_capacity.rs#capacity_measure` test.
   On the superseded whole-Store `VACUUM INTO` build, `rebuild` was 246.371 s
   median (`none` 149.318 s, one `Durable` rebuild 284.078 s); that run's
   medians are kept in
-  `engine/crates/layerfs-persistence/tests/fixtures/sqlite_compact_capacity_measure_whole_store.json`
+  `engine/crates/layerfs-persistence/tests/support/fixtures/sqlite_compact_capacity_measure_whole_store.json`
   (a transcribed summary: the raw per-run samples were not retained). The
   fresh-copy build on the same fixture A is 118.439584 s median (`none`
   88.439 s). The same-fixture comparison is **2.08x**. The receipt predates #49
@@ -269,12 +269,12 @@ interchangeable:
   build/verify path, not this branch's (see
   [Section 13 measurement fields](#section-13-measurement-fields)). The owner-final 50 GB
   arm on that build is
-  `engine/crates/layerfs-persistence/tests/fixtures/sqlite_compact_capacity_measure_50gb.json`
+  `engine/crates/layerfs-persistence/tests/support/fixtures/sqlite_compact_capacity_measure_50gb.json`
   (`none` 1,633.585 s, `rebuild` 5,131.835 s, one run per path).
 - **Fixture B (9.789 GB live, 10.731 GB pack, 16 projects x 52 Layers), the
   `gc_bench` example.** `tools/ci/gc_capacity_final.sh medium` ran three times
   per arm on 2026-11-16 and the receipt is committed as
-  `engine/crates/layerfs-persistence/tests/fixtures/sqlite_compact_capacity_measure_gc_bench.json`:
+  `engine/crates/layerfs-persistence/tests/support/fixtures/sqlite_compact_capacity_measure_gc_bench.json`:
   `rebuild` median **133.076 s** (runs 132.274-134.601 s, 1.75% relative
   range; mark 82.050 s, build 23.469 s, verify 6.060 s, install 21.011 s;
   peak temp 9.836 GB, shrink 1.093 GB) and `none` median 82.683 s. It is a
@@ -324,7 +324,7 @@ only scan-free verify figure on record is the different whole-Store build's
 them.
 
 **Missing-range deviation.** The superseded whole-Store fixture-A receipt
-(`engine/crates/layerfs-persistence/tests/fixtures/sqlite_compact_capacity_measure_whole_store.json`)
+(`engine/crates/layerfs-persistence/tests/support/fixtures/sqlite_compact_capacity_measure_whole_store.json`)
 records only the build-phase median (94.317 s): the run's three per-run build
 samples were not retained, so no build-phase min/max range is available and
 none is claimed. The earlier `92-104 s` range is withdrawn; a receipt that

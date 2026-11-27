@@ -364,14 +364,14 @@ def today_table(repo):
     base = subprocess.run(["git", "-C", str(repo), "rev-parse", "--short=10", "HEAD"],
                           capture_output=True, text=True).stdout.strip()
     # the code's own count assert, as a cross-check
-    test = (repo / "api/crates/layerfs-api/tests/calls_table.rs").read_text()
+    test = (repo / "api/crates/layerfs-api/tests/calls/table.rs").read_text()
     asserted = re.search(r"assert_eq!\(counts, \[([\d, ]+)\]\)", test)
     if asserted:
         assert [c["calls"] for c in counts] == [int(n) for n in asserted.group(1).split(",")], counts
     assert len(calls) == 84 and len(counts) == 12, (len(calls), len(counts))
     assert len({(c["family"], c["call"]) for c in calls}) == 84
     # the shell commands outside the table (`layerfs doctor ...`), from the CLI's own list
-    cli = (repo / "api/crates/layerfs-cli/src/capabilities.rs").read_text()
+    cli = (repo / "api/crates/layerfs-cli/src/discovery.rs").read_text()
     off = []
     for m in re.finditer(r"command\(", cli[cli.index("let commands = vec!["):]):
         text = cli[cli.index("let commands = vec!["):]
@@ -381,7 +381,7 @@ def today_table(repo):
     assert any(c["command"] == "doctor" for c in off), off
     return {"base": base, "source": "api/crates/layerfs-api/src/<family>/<call>.rs",
             "families": counts, "calls": calls,
-            "off_table_source": "api/crates/layerfs-cli/src/capabilities.rs", "off_table": off}
+            "off_table_source": "api/crates/layerfs-cli/src/discovery.rs", "off_table": off}
 
 
 # --- checks ---------------------------------------------------------------------------------

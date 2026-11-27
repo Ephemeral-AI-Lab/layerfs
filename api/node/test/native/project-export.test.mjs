@@ -1,6 +1,6 @@
 // LP53b: the real JS shell over a synthetic native table, without an addon.
 // Requires Node >=22.15 (registerHooks); no production module is rewritten.
-// node --test api/node/test/project_export.mjs
+// node --test api/node/test/native/project-export.test.mjs
 // After LP53a: LP53_EXPORT_NATIVE=1 enables addon integration (fails if absent).
 // LAYERFS_EXPORT_CLI=/absolute/path/to/layerfs enables real CLI integration.
 // Run every invocation under an external wall timeout <=120s.

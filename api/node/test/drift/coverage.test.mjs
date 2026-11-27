@@ -1,5 +1,5 @@
 // docs/architecture/api/calls/coverage.md holds a matrix generated from the four front ends'
-// own call lists (api/scripts/gen-coverage.mjs): this fails when the committed block is not what
+// own call lists (api/scripts/coverage-doc.mjs): this fails when the committed block is not what
 // they give now, or when a front end lacks a call or disagrees with the Node table (#32). MCP's
 // column is derived from the generated tool list and the profile buckets of api/mcp.
 // Needs the built addon, LAYERFS_PYTHON (default python3) able to import layerfs, and the built
@@ -21,7 +21,7 @@ test("coverage.md is what the front ends' own call lists give", { skip }, () => 
   const { block, problems } = render(view);
   assert.deepEqual(problems, []);
   const current = readFileSync(document, "utf8");
-  assert.equal(splice(current, block), current, "run node api/scripts/gen-coverage.mjs");
+  assert.equal(splice(current, block), current, "run node api/scripts/coverage-doc.mjs");
 });
 
 test("a call missing from a front end, or one that differs, is a problem and changes the block", { skip }, () => {

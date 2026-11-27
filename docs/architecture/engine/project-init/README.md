@@ -43,15 +43,15 @@ is no Git-ignore filtering.
 
 | Entry (`ProjectApi`) | Reads | Writes | Product caller |
 | --- | --- | --- | --- |
-| `add_project` | the complete source | objects, hints, a LayerStack and first Branch, through the live Store's writer lane | `project.init`: [`project/add.rs`](../../../../control/crates/layerfs-store/src/project/add.rs), [`project/postgres_init.rs`](../../../../control/crates/layerfs-store/src/project/postgres_init.rs) |
-| `create_store` | nothing | a new empty SQLite Store with acquisition tables, sealed | `store.create`: [`identity.rs`](../../../../control/crates/layerfs-store/src/identity.rs) |
-| `create_postgresql_store` | nothing | a new PostgreSQL schema with acquisition tables, in one transaction | [`project/postgres_init.rs`](../../../../control/crates/layerfs-store/src/project/postgres_init.rs) |
+| `add_project` | the complete source | objects, hints, a LayerStack and first Branch, through the live Store's writer lane | `project.init`: [`init/sqlite.rs`](../../../../control/crates/layerfs-store/src/data/project/init/sqlite.rs), [`init/postgresql.rs`](../../../../control/crates/layerfs-store/src/data/project/init/postgresql.rs) |
+| `create_store` | nothing | a new empty SQLite Store with acquisition tables, sealed | `store.create`: [`identity.rs`](../../../../control/crates/layerfs-store/src/admin/record/identity.rs) |
+| `create_postgresql_store` | nothing | a new PostgreSQL schema with acquisition tables, in one transaction | [`init/postgresql.rs`](../../../../control/crates/layerfs-store/src/data/project/init/postgresql.rs) |
 | `init`, `init_observed` | the complete source | a new SQLite Store holding one project and its Init statistics, sealed | tests and examples |
-| `install`, `install_file` | a sealed Store file | the file, streamed to a daemon | [`daemon/channel.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/channel.rs) |
-| `projects` | the catalog | nothing | [`identity.rs`](../../../../control/crates/layerfs-store/src/identity.rs) |
+| `install`, `install_file` | a sealed Store file | the file, streamed to a daemon | [`channel/exchange.rs`](../../../../control/crates/layerfs-sandbox/src/route/daemon/channel/exchange.rs) |
+| `projects` | the catalog | nothing | [`identity.rs`](../../../../control/crates/layerfs-store/src/admin/record/identity.rs) |
 
 Every route runs the same namespace Init,
-[`init_observed`](../../../../engine/crates/layerfs-project/src/import/init.rs);
+[`init_observed`](../../../../engine/crates/layerfs-project/src/import/run.rs);
 only the opened handles differ ([`store/init.rs`](../../../../engine/crates/layerfs-project/src/store/init.rs),
 [`store/live.rs`](../../../../engine/crates/layerfs-project/src/store/live.rs)).
 
@@ -91,11 +91,11 @@ only the opened handles differ ([`store/init.rs`](../../../../engine/crates/laye
 | Step | Library call | Source |
 | --- | --- | --- |
 | Files | Content `construct_stream`, one job per host identity | [`import/files.rs`](../../../../engine/crates/layerfs-project/src/import/files.rs) |
-| Serials | `reserve_inodes`: one contiguous range, serial = start + position; scope from `scope_for_seed` | [`import/init.rs`](../../../../engine/crates/layerfs-project/src/import/init.rs) |
+| Serials | `reserve_inodes`: one contiguous range, serial = start + position; scope from `scope_for_seed` | [`import/run.rs`](../../../../engine/crates/layerfs-project/src/import/run.rs) |
 | Directories, table, root | Content `build_directory`, `empty_directory` (once), `build_table`, `FilesystemRoot::new` | [`import/namespace.rs`](../../../../engine/crates/layerfs-project/src/import/namespace.rs) |
 | Logical bytes | Each constructor sums its files' scanned lengths (`stamp.len`, which construction checked equal to the built length); `check_aliases` adds the identity's length for every later path. That is `logical_size` of the built root (length × namespace references, regular files only), with no read of the roots (#818 I1); tests keep `logical_size` as the oracle | [`import/files.rs`](../../../../engine/crates/layerfs-project/src/import/files.rs) |
 | Binding hints | Every binding of the new root, 4096 rows per write | [`import/hints.rs`](../../../../engine/crates/layerfs-project/src/import/hints.rs) |
-| Genesis and Branch | `initialize_layerstack`, then `fork` from the head Layer | [`import/init.rs`](../../../../engine/crates/layerfs-project/src/import/init.rs), [`store/init.rs`](../../../../engine/crates/layerfs-project/src/store/init.rs) |
+| Genesis and Branch | `initialize_layerstack`, then `fork` from the head Layer | [`import/run.rs`](../../../../engine/crates/layerfs-project/src/import/run.rs), [`store/init.rs`](../../../../engine/crates/layerfs-project/src/store/init.rs) |
 
 Three Saves keep each step reading only finished objects. Init adds no
 encoder: `layerfs-project` depends only on Content, Storage, History,
@@ -137,8 +137,8 @@ readiness wait, not a retry ([`import/batch.rs`](../../../../engine/crates/layer
 
 | Rule | Source |
 | --- | --- |
-| Seal consumes the sole session after `Save::finish` and publication; it is never called on a live daemon's shared Store. `initialize` then builds a `StoreManifest` and returns a `SealedProject`. The lane is held across the checkpoint, the close and the sidecar check, so an opener waiting for the lane cannot create a `-wal` in the gap and turn a sealed Store into `Refused`. | [`store/seal.rs`](../../../../engine/crates/layerfs-persistence/src/store/seal.rs), [`store/init.rs`](../../../../engine/crates/layerfs-project/src/store/init.rs) |
-| Install checks the Normal profile, file kind and length against the manifest, streams `MAX_PLAINTEXT_BYTES` records from one fixed buffer, then the finish marker; it never opens the file as a database. A reply manifest that differs from the sent one plus the daemon's SQLite version is a protocol mismatch. | [`store/install.rs`](../../../../engine/crates/layerfs-project/src/store/install.rs), [`control.rs`](../../../../engine/crates/layerfs-bridge/src/control.rs) |
+| Seal consumes the sole session after `Save::finish` and publication; it is never called on a live daemon's shared Store. `initialize` then builds a `StoreManifest` and returns a `SealedProject`. The lane is held across the checkpoint, the close and the sidecar check, so an opener waiting for the lane cannot create a `-wal` in the gap and turn a sealed Store into `Refused`. | [`config/sqlite.rs`](../../../../engine/crates/layerfs-persistence/src/config/sqlite.rs), [`store/init.rs`](../../../../engine/crates/layerfs-project/src/store/init.rs) |
+| Install checks the Normal profile, file kind and length against the manifest, streams `MAX_PLAINTEXT_BYTES` records from one fixed buffer, then the finish marker; it never opens the file as a database. A reply manifest that differs from the sent one plus the daemon's SQLite version is a protocol mismatch. | [`store/install.rs`](../../../../engine/crates/layerfs-project/src/store/install.rs), [`install.rs`](../../../../engine/crates/layerfs-protocol/src/provision/install.rs) |
 | On a failure after the request was attempted the caller closes its send side (the fence), unless the failure was a channel error. | [`store/install.rs`](../../../../engine/crates/layerfs-project/src/store/install.rs) |
 
 The receiving side is in [Daemon](../daemon/README.md); the wire records are
@@ -166,15 +166,15 @@ PostgreSQL the release of the last operation empties the acquisition tables
 
 | Rule | Enforced by |
 | --- | --- |
-| The source is the complete tree; nothing is filtered. | `InitRequest::source` in [`store/init.rs`](../../../../engine/crates/layerfs-project/src/store/init.rs); [`complete_root.rs`](../../../../engine/crates/layerfs-project/tests/complete_root.rs) |
+| The source is the complete tree; nothing is filtered. | `InitRequest::source` in [`store/init.rs`](../../../../engine/crates/layerfs-project/src/store/init.rs); [`complete_root.rs`](../../../../engine/crates/layerfs-project/tests/init/complete_root.rs) |
 | Full-root acquisition is explicit: only a `ProjectApi` call runs it; mount and Commit never do. | No production dependency on `layerfs-project` from Workspace, daemon, Store-call or NFS crates (dev-dependencies only); see each [`Cargo.toml`](../../../../engine/crates/layerfs-store-service/Cargo.toml) |
 | One encoder: objects come from Content and go through the Storage Save. | [`import/files.rs`](../../../../engine/crates/layerfs-project/src/import/files.rs), [`import/namespace.rs`](../../../../engine/crates/layerfs-project/src/import/namespace.rs) |
 | A SQLite Store must be Normal. | `explicit Normal Store profile required` in [`store/init.rs`](../../../../engine/crates/layerfs-project/src/store/init.rs), [`store/live.rs`](../../../../engine/crates/layerfs-project/src/store/live.rs), [`store/install.rs`](../../../../engine/crates/layerfs-project/src/store/install.rs) |
 | Symbolic links are stored, never followed. | [`import/source.rs`](../../../../engine/crates/layerfs-project/src/import/source.rs) |
 | Each host file identity is constructed once; hard links share its serial. | [`import/backing.rs`](../../../../engine/crates/layerfs-project/src/import/backing.rs), [`import/files.rs`](../../../../engine/crates/layerfs-project/src/import/files.rs) |
-| Working rows are removed before the tree Save finishes and before any history is published. | [`import/init.rs`](../../../../engine/crates/layerfs-project/src/import/init.rs) |
-| Input-sized state lives in the acquisition backing; resident buffers are fixed windows. No total file, entry or byte cap. | [`import/backing.rs`](../../../../engine/crates/layerfs-project/src/import/backing.rs); [`namespace_scaling.rs`](../../../../engine/crates/layerfs-project/tests/namespace_scaling.rs) |
-| Every backing call, Store write and install send is one attempt; an unknown outcome is kept, never replayed or deleted. | [`import/backing.rs`](../../../../engine/crates/layerfs-project/src/import/backing.rs), [`store/install_types.rs`](../../../../engine/crates/layerfs-project/src/store/install_types.rs) |
+| Working rows are removed before the tree Save finishes and before any history is published. | [`import/run.rs`](../../../../engine/crates/layerfs-project/src/import/run.rs) |
+| Input-sized state lives in the acquisition backing; resident buffers are fixed windows. No total file, entry or byte cap. | [`import/backing.rs`](../../../../engine/crates/layerfs-project/src/import/backing.rs); [`namespace_scaling.rs`](../../../../engine/crates/layerfs-project/tests/init/namespace_scaling.rs) |
+| Every backing call, Store write and install send is one attempt; an unknown outcome is kept, never replayed or deleted. | [`import/backing.rs`](../../../../engine/crates/layerfs-project/src/import/backing.rs), [`store/install_outcome.rs`](../../../../engine/crates/layerfs-project/src/store/install_outcome.rs) |
 
 Init opens the Store with the Normal profile (WAL, `synchronous=NORMAL`). Durable
 execution is `NOT_RUN — disabled by owner until explicit reauthorization`.
@@ -183,11 +183,11 @@ execution is `NOT_RUN — disabled by owner until explicit reauthorization`.
 
 | Limit or failure | Value or error | Source |
 | --- | --- | --- |
-| Platform | Unix; elsewhere `ProjectError::Unsupported` | [`import/init.rs`](../../../../engine/crates/layerfs-project/src/import/init.rs) |
+| Platform | Unix; elsewhere `ProjectError::Unsupported` | [`import/run.rs`](../../../../engine/crates/layerfs-project/src/import/run.rs) |
 | Child buffer, job queue | 512 rows (`WINDOW_ROWS`) | [`import/backing.rs`](../../../../engine/crates/layerfs-project/src/import/backing.rs) |
 | Backing read / write window | 512 rows, 256 KiB / 4096 rows, 1 MiB | [`contract.rs`](../../../../core/crates/layerfs-storage/src/port/acquisition/contract.rs) |
 | One object over `CANONICAL_LIMIT` | `ObjectLimitExceeded` | [`import/batch.rs`](../../../../engine/crates/layerfs-project/src/import/batch.rs) |
-| Deadline | `Deadline`; set by the caller | [`import/files.rs`](../../../../engine/crates/layerfs-project/src/import/files.rs), [`project/init.rs`](../../../../control/crates/layerfs-store/src/project/init.rs) |
+| Deadline | `Deadline`; set by the caller | [`import/files.rs`](../../../../engine/crates/layerfs-project/src/import/files.rs), [`init/worker.rs`](../../../../control/crates/layerfs-store/src/data/project/init/worker.rs) |
 | Device, FIFO or socket | `Unsupported` | [`import/scan.rs`](../../../../engine/crates/layerfs-project/src/import/scan.rs) |
 | Set-ID or sticky file; mtime nanoseconds out of range | `InvalidInput { Mode \| Mtime }` | [`import/error.rs`](../../../../engine/crates/layerfs-project/src/import/error.rs) |
 | Source changed while read (stamp, length or symlink re-stat) | `InvalidInput { Changed }`, no second read | [`import/files.rs`](../../../../engine/crates/layerfs-project/src/import/files.rs) |
@@ -197,9 +197,9 @@ execution is `NOT_RUN — disabled by owner until explicit reauthorization`.
 | Unknown Store, history or backing outcome | `Uncertain { cause, retained }`: record and rows left exactly | [`import/error.rs`](../../../../engine/crates/layerfs-project/src/import/error.rs) |
 | Removing working rows failed | `Cleanup { cause, error, retained }`; nothing published | same |
 | Add: name taken, no acquisition tables, another add's rows remain | `Exists`, `NoAcquisition`, `Busy` | [`store/live.rs`](../../../../engine/crates/layerfs-project/src/store/live.rs) |
-| Seal with the session still shared, or checkpoint busy | `Busy` | [`store/seal.rs`](../../../../engine/crates/layerfs-persistence/src/store/seal.rs), [`lifecycle/seal.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/lifecycle/seal.rs) |
+| Seal with the session still shared, or checkpoint busy | `Busy` | [`config/sqlite.rs`](../../../../engine/crates/layerfs-persistence/src/config/sqlite.rs), [`lifecycle/seal.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/lifecycle/seal.rs) |
 | PostgreSQL schema exists; feature off | `Refused { "schema exists" }`; `BackendUnavailable` | [`store/init.rs`](../../../../engine/crates/layerfs-project/src/store/init.rs) |
-| Init, add or install failed | `InitFailure`, `AddFailure`, `InstallFailure` (phase, attempted, accepted, acknowledged): the output file and anything acknowledged are kept | [`store/init.rs`](../../../../engine/crates/layerfs-project/src/store/init.rs), [`store/install_types.rs`](../../../../engine/crates/layerfs-project/src/store/install_types.rs) |
+| Init, add or install failed | `InitFailure`, `AddFailure`, `InstallFailure` (phase, attempted, accepted, acknowledged): the output file and anything acknowledged are kept | [`store/init.rs`](../../../../engine/crates/layerfs-project/src/store/init.rs), [`store/install_outcome.rs`](../../../../engine/crates/layerfs-project/src/store/install_outcome.rs) |
 
 While retained working rows remain, a later add into that Store is `Busy`.
 The acquisition port offers `abandoned` and `discard_abandoned` for rows of
@@ -209,9 +209,9 @@ a fenced owner; no product caller uses them.
 
 | Test or example | Command | Platform | Shows |
 | --- | --- | --- | --- |
-| [`init_sqlite.rs`](../../../../engine/crates/layerfs-project/tests/init_sqlite.rs) | `cargo +1.85.1 test --locked -p layerfs-project --test init_sqlite` | macOS or Linux (elsewhere only the refusal test) | Normal Init matches the in-memory root, passes the namespace oracle, leaves no working rows; refusals for missing acquisition tables and a Store inside the source. |
-| [`complete_root.rs`](../../../../engine/crates/layerfs-project/tests/complete_root.rs) | `cargo +1.85.1 test --locked -p layerfs-project --test complete_root` | Unix; the SQLite-backed case macOS only | `.git`, ignored files, `node_modules`, caches, outputs, hard links and symlink targets imported exactly. |
-| [`acquisition_custody.rs`](../../../../engine/crates/layerfs-project/tests/acquisition_custody.rs) | `cargo +1.85.1 test --locked -p layerfs-project --test acquisition_custody` | Unix | Backing placement refusal, cleanup before publish, and untouched rows on an unknown outcome. |
-| [`namespace_scaling.rs`](../../../../engine/crates/layerfs-project/tests/namespace_scaling.rs) | `cargo +1.85.1 test --locked -p layerfs-project --test namespace_scaling` | Unix | Backed counts grow with the tree while buffers and windows stay fixed. |
-| [`init_postgresql.rs`](../../../../engine/crates/layerfs-project/tests/init_postgresql.rs) | `cargo +1.85.1 test --locked -p layerfs-project --test init_postgresql` | Unix with `LAYERFS_TEST_POSTGRES_URL`; otherwise it reports NOT_RUN | The same folder in SQLite and PostgreSQL gives the same root and no leftover acquisition rows. |
+| [`sqlite.rs`](../../../../engine/crates/layerfs-project/tests/init/sqlite.rs) | `cargo +1.85.1 test --locked -p layerfs-project --test init sqlite` | macOS or Linux (elsewhere only the refusal test) | Normal Init matches the in-memory root, passes the namespace oracle, leaves no working rows; refusals for missing acquisition tables and a Store inside the source. |
+| [`complete_root.rs`](../../../../engine/crates/layerfs-project/tests/init/complete_root.rs) | `cargo +1.85.1 test --locked -p layerfs-project --test init complete_root` | Unix; the SQLite-backed case macOS only | `.git`, ignored files, `node_modules`, caches, outputs, hard links and symlink targets imported exactly. |
+| [`custody.rs`](../../../../engine/crates/layerfs-project/tests/acquisition/custody.rs) | `cargo +1.85.1 test --locked -p layerfs-project --test acquisition custody` | Unix | Backing placement refusal, cleanup before publish, and untouched rows on an unknown outcome. |
+| [`namespace_scaling.rs`](../../../../engine/crates/layerfs-project/tests/init/namespace_scaling.rs) | `cargo +1.85.1 test --locked -p layerfs-project --test init namespace_scaling` | Unix | Backed counts grow with the tree while buffers and windows stay fixed. |
+| [`postgresql.rs`](../../../../engine/crates/layerfs-project/tests/init/postgresql.rs) | `cargo +1.85.1 test --locked -p layerfs-project --test init postgresql` | Unix with `LAYERFS_TEST_POSTGRES_URL`; otherwise it reports NOT_RUN | The same folder in SQLite and PostgreSQL gives the same root and no leftover acquisition rows. |
 | [`verify_namespace.rs`](../../../../engine/crates/layerfs-project/examples/verify_namespace.rs) | `cargo +1.85.1 run --locked -p layerfs-project --example verify_namespace -- <store> <unused> <root-hex> <stack-hex> <manifest.tsv> <manifest-sha256> normal` | macOS or Linux; `LAYERFS_HISTORY_CURSOR_KEY` (hex) | Independent check of a Store's genesis root against a manifest; seals the Store at the end. Always pass `disposable`: an omitted profile selects Durable. |

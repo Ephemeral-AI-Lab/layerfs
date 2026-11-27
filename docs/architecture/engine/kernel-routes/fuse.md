@@ -34,16 +34,16 @@ fuse -> workspace, never back.
 
 | `AttachPhase` | On failure | Source |
 | --- | --- | --- |
-| `Filesystem`, `Directory`, `Device`, `Mount` | Remove the directory it made, stop the request owner | [`startup.rs`](../../../../engine/crates/layerfs-fuse/src/session/startup.rs) |
-| `Handshake`, `Spawn`, `Serving`, `Receipt` | One plain detach, then the normal drain: `Disposed(Some(Drained))` or `Retained(Undrained)` | [`startup.rs`](../../../../engine/crates/layerfs-fuse/src/session/startup.rs) |
+| `Filesystem`, `Directory`, `Device`, `Mount` | Remove the directory it made, stop the request owner | [`attach.rs`](../../../../engine/crates/layerfs-fuse/src/session/attach.rs) |
+| `Handshake`, `Spawn`, `Serving`, `Receipt` | One plain detach, then the normal drain: `Disposed(Some(Drained))` or `Retained(Undrained)` | [`attach.rs`](../../../../engine/crates/layerfs-fuse/src/session/attach.rs) |
 
 | Negotiated value | Value | Source |
 | --- | --- | --- |
-| Flags | `FUSE_ASYNC_READ`, `FUSE_BIG_WRITES`, plus `FUSE_MAX_PAGES` when offered; a kernel missing either required flag fails INIT `Unsupported`. Nothing else, writeback caching included | [`profile.rs`](../../../../engine/crates/layerfs-fuse/src/mount/profile.rs) |
-| `max_write`, `max_readahead` | `READ_WINDOW` (128 KiB) | [`profile.rs`](../../../../engine/crates/layerfs-fuse/src/mount/profile.rs) |
-| `max_background`, `congestion_threshold` | 1, 1 | [`profile.rs`](../../../../engine/crates/layerfs-fuse/src/mount/profile.rs) |
-| Time granularity; `page_size` | 1 ns; `sysconf(PAGE_SIZE)` for the symlink-target limit | [`profile.rs`](../../../../engine/crates/layerfs-fuse/src/mount/profile.rs) |
-| Receive loops | `RECEIVE_LOOPS` = `RECEIVE_SLOTS` = 2 | [`state.rs`](../../../../engine/crates/layerfs-fuse/src/session/state.rs), [`types.rs`](../../../../engine/crates/layerfs-fuse/src/dispatch/types.rs) |
+| Flags | `FUSE_ASYNC_READ`, `FUSE_BIG_WRITES`, plus `FUSE_MAX_PAGES` when offered; a kernel missing either required flag fails INIT `Unsupported`. Nothing else, writeback caching included | [`mount.rs`](../../../../engine/crates/layerfs-fuse/src/mount.rs) |
+| `max_write`, `max_readahead` | `READ_WINDOW` (128 KiB) | [`mount.rs`](../../../../engine/crates/layerfs-fuse/src/mount.rs) |
+| `max_background`, `congestion_threshold` | 1, 1 | [`mount.rs`](../../../../engine/crates/layerfs-fuse/src/mount.rs) |
+| Time granularity; `page_size` | 1 ns; `sysconf(PAGE_SIZE)` for the symlink-target limit | [`mount.rs`](../../../../engine/crates/layerfs-fuse/src/mount.rs) |
+| Receive loops | `RECEIVE_LOOPS` = `RECEIVE_SLOTS` = 2 | [`state.rs`](../../../../engine/crates/layerfs-fuse/src/session/state.rs), [`disposition.rs`](../../../../engine/crates/layerfs-fuse/src/dispatch/disposition.rs) |
 
 Serving is returned only after the mount exists, INIT completed and every
 receive loop entered; a spawn or a probe of the mount is not that evidence.
@@ -66,10 +66,10 @@ receive loop entered; a spawn or a probe of the mount is not that evidence.
 | --- | --- | --- | --- |
 | `detach` | `umount2(dir, 0)`; no `MNT_DETACH` or `MNT_FORCE` | already detached, or abort written | [`drain.rs`](../../../../engine/crates/layerfs-fuse/src/session/drain.rs) |
 | `drain` | join and quiesce, then release | not detached (`DrainStage::Detach`) | [`drain.rs`](../../../../engine/crates/layerfs-fuse/src/session/drain.rs) |
-| `abort` | one `write(2)` of one byte on the bound control | detached, aborted, or no control (`ForceRefusal`) | [`force.rs`](../../../../engine/crates/layerfs-fuse/src/session/force.rs) |
-| `force_drain` | quiesce, then one plain detach | abort not `Written`, or a recorded failed detach | [`force.rs`](../../../../engine/crates/layerfs-fuse/src/session/force.rs) |
-| `Undrained::end_stalled` | `abort_detached`, then `force_drain` | stage is not `Join` | [`force.rs`](../../../../engine/crates/layerfs-fuse/src/session/force.rs) |
-| `Undrained::retry_detach` | for a later terminal call: clears the recorded failed detach, then `force_drain` (local drain, one plain detach); the abort is not written again | stage is not `Detach`, or no recorded failed detach | [`force.rs`](../../../../engine/crates/layerfs-fuse/src/session/force.rs) |
+| `abort` | one `write(2)` of one byte on the bound control | detached, aborted, or no control (`ForceRefusal`) | [`forced.rs`](../../../../engine/crates/layerfs-fuse/src/session/forced.rs) |
+| `force_drain` | quiesce, then one plain detach | abort not `Written`, or a recorded failed detach | [`forced.rs`](../../../../engine/crates/layerfs-fuse/src/session/forced.rs) |
+| `Undrained::end_stalled` | `abort_detached`, then `force_drain` | stage is not `Join` | [`forced.rs`](../../../../engine/crates/layerfs-fuse/src/session/forced.rs) |
+| `Undrained::retry_detach` | for a later terminal call: clears the recorded failed detach, then `force_drain` (local drain, one plain detach); the abort is not written again | stage is not `Detach`, or no recorded failed detach | [`forced.rs`](../../../../engine/crates/layerfs-fuse/src/session/forced.rs) |
 | `Invalidator::inode(serial)` | one `inval_inode(inode, 0, 0)`: attributes and cached pages or listing | uncached target: `ENOENT`, reported as success | [`invalidate.rs`](../../../../engine/crates/layerfs-fuse/src/session/invalidate.rs) |
 | `Invalidator::entry(parent, name)` | one `inval_entry` | same | [`invalidate.rs`](../../../../engine/crates/layerfs-fuse/src/session/invalidate.rs) |
 | `Deferred::pages(serial)` | queues one `Invalidator::inode(serial)` for the mount's page thread (`layerfs-pages-<owner>`, started before serving, ended with the callbacks) | page thread not started: nothing was replied | [`invalidate.rs`](../../../../engine/crates/layerfs-fuse/src/session/invalidate.rs) |
@@ -82,7 +82,7 @@ detach, abort, join or revocation; `Drained` is necessary for terminal
 unmount, not sufficient. The daemon uses the `Invalidator` only after a Commit
 installed a root other than the one shown, for each `Stale::Inode` or
 `Stale::Entry` that `stale_after_install` returns
-([`invalidate.rs`](../../../../engine/crates/layerfs-daemon/src/control/invalidate.rs)).
+([`invalidate.rs`](../../../../engine/crates/layerfs-daemon/src/workspace/fuse/invalidate.rs)).
 The adapter itself defers one inode invalidation after an `O_APPEND` WRITE
 whose resolved end differs from the kernel's (see
 [Writes and `O_APPEND`](#writes-and-o_append)); it runs on the page thread
@@ -106,7 +106,7 @@ A request that ends itself (fenced, failed base demand, stale serial) is
 | Item | Meaning | Source |
 | --- | --- | --- |
 | `MountRequests` | Per-mount request owner: counts, retained failures, parked threads, its `Fence`; no daemon-wide dispatcher | [`requests.rs`](../../../../engine/crates/layerfs-fuse/src/dispatch/requests.rs) |
-| `MountWork` | `active`, `retained`, `requests`, `completed`, `terminal` | [`diagnostics.rs`](../../../../engine/crates/layerfs-fuse/src/dispatch/diagnostics.rs) |
+| `MountWork` | `active`, `retained`, `requests`, `completed`, `terminal` | [`work.rs`](../../../../engine/crates/layerfs-fuse/src/dispatch/work.rs) |
 | `stop_receive`, `stop_service` | Mark terminal; `stop_service` also stops the fence and unparks every running request | [`requests.rs`](../../../../engine/crates/layerfs-fuse/src/dispatch/requests.rs) |
 | `finish` | Releases the owner only when terminal with nothing active or retained; else `Busy` | [`requests.rs`](../../../../engine/crates/layerfs-fuse/src/dispatch/requests.rs) |
 
@@ -119,14 +119,14 @@ reader holds its loop; two loops let one request proceed while another waits.
 | --- | --- | --- |
 | Fenced step (forced teardown) | `ENOTCONN`, counted on the fence | [`terminal.rs`](../../../../engine/crates/layerfs-fuse/src/request/terminal.rs) |
 | Failed base demand of this request | `EIO`; the mount keeps serving | [`terminal.rs`](../../../../engine/crates/layerfs-fuse/src/request/terminal.rs) |
-| Stale serial: a LOOKUP, GETATTR, OPEN, OPENDIR, READ, READLINK or READDIR names a serial that neither a local row nor the base has, because an install dropped it while the kernel held it (a merge rebuilt that directory or file under a fresh serial, or took the other side's removal) | `ESTALE` for that request alone; nothing is retained and the mount keeps serving. Only the engine's own `Stale` answer counts (`ports::stale`): an uncertain, retained or owner failure that carries one stays retained. A name that binds an absent inode, or a count leaving its range, is still corruption and still retained | [`terminal.rs`](../../../../engine/crates/layerfs-fuse/src/request/terminal.rs), [`ports.rs`](../../../../engine/crates/layerfs-mount-ports/src/ports.rs), [`eval.rs`](../../../../engine/crates/layerfs-workspace/src/mutation/eval.rs) |
+| Stale serial: a LOOKUP, GETATTR, OPEN, OPENDIR, READ, READLINK or READDIR names a serial that neither a local row nor the base has, because an install dropped it while the kernel held it (a merge rebuilt that directory or file under a fresh serial, or took the other side's removal) | `ESTALE` for that request alone; nothing is retained and the mount keeps serving. Only the engine's own `Stale` answer counts (`ports::stale`): an uncertain, retained or owner failure that carries one stays retained. A name that binds an absent inode, or a count leaving its range, is still corruption and still retained | [`terminal.rs`](../../../../engine/crates/layerfs-fuse/src/request/terminal.rs), [`mount.rs`](../../../../engine/crates/layerfs-vfs/src/ports/mount.rs), [`eval.rs`](../../../../engine/crates/layerfs-vfs/src/job/eval.rs) |
 | `Refusal` | `EEXIST`, `ENOENT`, `ENOTDIR`, `EISDIR`, `ENOTEMPTY`, `EPERM`, `EOPNOTSUPP`, `EINVAL`, `EMLINK`, `EFBIG` | [`attributes.rs`](../../../../engine/crates/layerfs-fuse/src/attributes.rs) |
 | `Declined::NoSpace`, `Contended`, `TargetTooLong` | `ENOSPC`, `EAGAIN`, `ENAMETOOLONG` | [`attributes.rs`](../../../../engine/crates/layerfs-fuse/src/attributes.rs) |
 | Missing LOOKUP name | Negative entry (node 0), 60 s entry TTL; every create, link, mkdir, symlink or rename through the mount replaces it | [`reply.rs`](../../../../engine/crates/layerfs-fuse/src/request/reply.rs) |
 | FLUSH, FSYNC, FSYNCDIR and the unsupported set | `ENOSYS` | [`callbacks.rs`](../../../../engine/crates/layerfs-fuse/src/request/callbacks.rs) |
 | Shared-mapping store | WRITE with `FUSE_WRITE_CACHE`, counted in `store_units`, at its own offset | [`callbacks.rs`](../../../../engine/crates/layerfs-fuse/src/request/callbacks.rs) |
-| WRITE through an `O_APPEND` descriptor (the file flags of every WRITE, ABI 7.9) | Written at the file's end as the engine job finds it (`Position::End`), not at the kernel's offset; the full count is replied, then the inode's pages are invalidated if the two ends differ | [`callbacks.rs`](../../../../engine/crates/layerfs-fuse/src/request/callbacks.rs), [`mutate.rs`](../../../../engine/crates/layerfs-fuse/src/request/mutate.rs) |
-| Reply not composable from the published result | `EIO`, request retained | [`mutate.rs`](../../../../engine/crates/layerfs-fuse/src/request/mutate.rs) |
+| WRITE through an `O_APPEND` descriptor (the file flags of every WRITE, ABI 7.9) | Written at the file's end as the engine job finds it (`Position::End`), not at the kernel's offset; the full count is replied, then the inode's pages are invalidated if the two ends differ | [`callbacks.rs`](../../../../engine/crates/layerfs-fuse/src/request/callbacks.rs), [`mutation.rs`](../../../../engine/crates/layerfs-fuse/src/request/mutation.rs) |
+| Reply not composable from the published result | `EIO`, request retained | [`mutation.rs`](../../../../engine/crates/layerfs-fuse/src/request/mutation.rs) |
 
 | Identity | Rule | Source |
 | --- | --- | --- |
@@ -180,7 +180,7 @@ READ/WRITE frames ([`accounting.rs`](../../../../engine/crates/layerfs-fuse/src/
 | `abort_control`, `control_root` | open `<control>/<minor>/abort`; mount `fusectl` | Only a major-0 `fuse`/`layerfs` row; `/sys/fs/fuse/connections`, else a private 0700 copy |
 | `abort` | `write(control, "1")` | One write: `Written`, `Short(n)` or `Failed(errno)` |
 
-All in [`syscalls.rs`](../../../../engine/crates/layerfs-fuse/src/mount/syscalls.rs).
+All in [`mount.rs`](../../../../engine/crates/layerfs-fuse/src/mount.rs).
 
 ## Fuser Git dependency
 
@@ -200,7 +200,7 @@ The fork owns three changes independently of LayerFS:
 | Change | Behavior | Used here |
 | --- | --- | --- |
 | [Signed timestamps](https://github.com/Ephemeral-AI-Lab/fuser/blob/7393bca050fcbd0ed2a03f7e79bec0f8bd9755c4/src/time.rs) | Count nanoseconds forward from a negative whole second and avoid signed-minimum negation overflow. | Signed mtimes; the adapter's own [timestamp conversion](../../../../engine/crates/layerfs-fuse/src/attributes.rs) follows the same rule. |
-| [Session lifecycle](https://github.com/Ephemeral-AI-Lab/fuser/blob/7393bca050fcbd0ed2a03f7e79bec0f8bd9755c4/src/session/lifecycle.rs) | Additive `Session::into_runner`, `SessionRunner` and `SessionMonitor`; all-loop startup observation and retained original receiver joins and cleanup outcomes. `Session::run` remains available. | [Attach and the fence watcher](../../../../engine/crates/layerfs-fuse/src/session/startup.rs), [session facts](../../../../engine/crates/layerfs-fuse/src/session/state.rs) and [drain](../../../../engine/crates/layerfs-fuse/src/session/drain.rs). |
+| [Session lifecycle](https://github.com/Ephemeral-AI-Lab/fuser/blob/7393bca050fcbd0ed2a03f7e79bec0f8bd9755c4/src/session/lifecycle.rs) | Additive `Session::into_runner`, `SessionRunner` and `SessionMonitor`; all-loop startup observation and retained original receiver joins and cleanup outcomes. `Session::run` remains available. | [Attach and the fence watcher](../../../../engine/crates/layerfs-fuse/src/session/attach.rs), [session facts](../../../../engine/crates/layerfs-fuse/src/session/state.rs) and [drain](../../../../engine/crates/layerfs-fuse/src/session/drain.rs). |
 | [Receive buffer](https://github.com/Ephemeral-AI-Lab/fuser/blob/7393bca050fcbd0ed2a03f7e79bec0f8bd9755c4/src/read_buf.rs) | Receive loops allocate `max_write + 4096` after INIT; the handshake keeps the maximum buffer. | Two loops, each negotiated to 128 KiB + 4 KiB, rather than 16 MiB + 4 KiB. |
 
 A monitor deadline returns a snapshot; it does not cancel, detach, retry or

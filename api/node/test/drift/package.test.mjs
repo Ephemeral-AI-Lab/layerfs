@@ -35,7 +35,7 @@ test("the package names its repository, platform and npm page", () => {
 });
 
 test("index.d.ts is exactly what the call table generates", () => {
-  assert.equal(readFileSync(here("../src/index.d.ts"), "utf8"), render(table), "run node api/scripts/gen-node-types.mjs");
+  assert.equal(readFileSync(here("../src/index.d.ts"), "utf8"), render(table), "run node api/scripts/node-types.mjs");
   assert.equal(manifest.types, "./src/index.d.ts");
   assert.equal(manifest.exports["."].types, "./src/index.d.ts");
 });

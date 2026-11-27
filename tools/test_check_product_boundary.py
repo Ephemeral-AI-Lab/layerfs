@@ -57,7 +57,7 @@ class ProductBoundaryTests(unittest.TestCase):
             self.assertFalse(violations(path, '#[cfg(not(feature = "worker-fault"))]\nmod plain;'))
         # no other file of those crates, and no other crate, may name it
         for path in (
-            Path("api/crates/layerfs-api/src/store/mod.rs"),
+            Path("api/crates/layerfs-api/src/families/store/mod.rs"),
             Path("control/crates/layerfs-store/src/admin/with_users.rs"),
             Path("control/crates/layerfs-inspect/src/doctor/runner.rs"),
             Path("control/crates/layerfs-sandbox/src/worker/fault.rs"),
@@ -160,7 +160,7 @@ class ProductBoundaryTests(unittest.TestCase):
             findings = violations(Path(relative), "pub use std::io::Read;")
             self.assertTrue(any("retired by #536" in message for _, message in findings), relative)
         # layerfs-project#107: the call machinery lives in layerfs-api again
-        for relative in ("api/crates/layerfs-api/src/store/push.rs", "api/crates/layerfs-api/src/calls/table.rs"):
+        for relative in ("api/crates/layerfs-api/src/families/store/push.rs", "api/crates/layerfs-api/src/dispatch/table.rs"):
             clean = violations(Path(relative), "pub use std::io::Read;")
             self.assertFalse(any("retired by #536" in message for _, message in clean), relative)
 
@@ -205,7 +205,7 @@ class ProductBoundaryTests(unittest.TestCase):
             self.assertTrue(dependency_violations(f'[package]\nname="{name}"\n'), name)
 
     def test_sdk_source_edges_and_unsafe_boundary(self):
-        path = Path("control/crates/layerfs-store/src/project/init.rs")
+        path = Path("control/crates/layerfs-store/src/data/project/init/worker.rs")
         self.assertFalse(violations(path, "use layerfs_persistence::SqliteHandles;"))
         # #106: what spans entities no longer opens a Store itself
         control_src = Path("control/crates/layerfs-inspect/src/doctor/scan.rs")
@@ -347,8 +347,8 @@ class ProductBoundaryTests(unittest.TestCase):
         self.assertFalse(dependency_violations(prefix + 'layerfs-protocol={path="../../layerfs-protocol"}'))
         self.assertTrue(dependency_violations(prefix + 'layerfs-persistence={path="../../layerfs-persistence"}'))
         self.assertTrue(dependency_violations(prefix + 'layerfs-project={path="../../layerfs-project"}'))
-        self.assertTrue(violations(Path("api/crates/layerfs-api/src/store/push.rs"), "use layerfs_project::Init;"))
-        self.assertFalse(violations(Path("api/crates/layerfs-api/src/store/push.rs"), "use layerfs_inspect::family;"))
+        self.assertTrue(violations(Path("api/crates/layerfs-api/src/families/store/push.rs"), "use layerfs_project::Init;"))
+        self.assertFalse(violations(Path("api/crates/layerfs-api/src/families/store/push.rs"), "use layerfs_inspect::family;"))
         control = '[package]\nname="layerfs-inspect"\n[dependencies]\n'
         self.assertTrue(dependency_violations(control + 'layerfs-persistence={path="../../layerfs-persistence"}'))
         store = '[package]\nname="layerfs-store"\n[dependencies]\n'
@@ -397,7 +397,7 @@ class ProductBoundaryTests(unittest.TestCase):
         self.assertTrue(violations(path, "use layerfs_api::Runtime;"))
         sdk = '[package]\nname="layerfs-api"\n[dependencies]\n'
         self.assertTrue(dependency_violations(sdk + 'layerfs-daemon={path="../../layerfs-daemon"}'))
-        self.assertTrue(violations(Path("api/crates/layerfs-api/src/project/init.rs"), "use layerfs_daemon::Owner;"))
+        self.assertTrue(violations(Path("api/crates/layerfs-api/src/families/project/init.rs"), "use layerfs_daemon::Owner;"))
 
     def test_store_service_engine_edges(self):
         prefix = '[package]\nname="layerfs-store-service"\n[dependencies]\n'
@@ -425,7 +425,7 @@ class ProductBoundaryTests(unittest.TestCase):
             source = f'[package]\nname="{package}"\n[dependencies]\nlayerfs-vfs={{path="../layerfs-vfs"}}\n'
             self.assertEqual(bool(dependency_violations(source)), package == "layerfs-api")
             path = (
-                Path("api/crates/layerfs-api/src/project/init.rs")
+                Path("api/crates/layerfs-api/src/families/project/init.rs")
                 if package == "layerfs-api"
                 else Path("engine/crates/layerfs-daemon/src/commands.rs")
             )

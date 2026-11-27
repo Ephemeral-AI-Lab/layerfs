@@ -20,11 +20,11 @@
 //! each under the 120 s ceiling:
 //!
 //! ```text
-//! cargo +1.85.1 test --locked -p layerfs-persistence --test postgresql_history_scaling -- --exact stage_1_grow_to_50_and_probe
-//! cargo +1.85.1 test --locked -p layerfs-persistence --test postgresql_history_scaling -- --exact --ignored stage_2_grow_to_200_and_probe
-//! cargo +1.85.1 test --locked -p layerfs-persistence --test postgresql_history_scaling -- --exact --ignored stage_3_grow_to_500
-//! cargo +1.85.1 test --locked -p layerfs-persistence --test postgresql_history_scaling -- --exact --ignored stage_4_grow_to_800
-//! cargo +1.85.1 test --locked -p layerfs-persistence --test postgresql_history_scaling -- --exact --ignored stage_5_probe_800_compare_and_drop
+//! cargo +1.85.1 test --locked -p layerfs-persistence --test postgresql history_scaling -- --exact stage_1_grow_to_50_and_probe
+//! cargo +1.85.1 test --locked -p layerfs-persistence --test postgresql history_scaling -- --exact --ignored stage_2_grow_to_200_and_probe
+//! cargo +1.85.1 test --locked -p layerfs-persistence --test postgresql history_scaling -- --exact --ignored stage_3_grow_to_500
+//! cargo +1.85.1 test --locked -p layerfs-persistence --test postgresql history_scaling -- --exact --ignored stage_4_grow_to_800
+//! cargo +1.85.1 test --locked -p layerfs-persistence --test postgresql history_scaling -- --exact --ignored stage_5_probe_800_compare_and_drop
 //! ```
 //!
 //! The last stage compares every checkpoint's probe and drops both schemas.

@@ -9,7 +9,7 @@ content-defined chunking, complete-file construction and bounded reads.
 | --- | --- |
 | Layer | [Core](../README.md) |
 | Crates | `layerfs-content` |
-| Source | [`file/`](../../../../core/crates/layerfs-content/src/file), [`contract/policy.rs`](../../../../core/crates/layerfs-content/src/contract/policy.rs) |
+| Source | [`file/`](../../../../core/crates/layerfs-content/src/file), [`src/policy.rs`](../../../../core/crates/layerfs-content/src/policy.rs) |
 | Uses | [Objects](../objects/README.md) |
 | Used by | [Filesystem trees](../filesystem-trees/README.md), [Compare and merge](../compare-and-merge/README.md), [Engine: Project Init](../../engine/project-init/README.md), [Engine: Commit](../../engine/commit/README.md), [Engine: Store calls](../../engine/store-calls/README.md) |
 | Flows | [A Commit](../../flows/commit.md), [Project Init](../../flows/init.md) |
@@ -52,7 +52,7 @@ The module opens no database, pack or file
 
 A file is one root object ID plus a logical length. The policy picks the
 representation from the length
-([`policy.rs`](../../../../core/crates/layerfs-content/src/contract/policy.rs)).
+([`policy.rs`](../../../../core/crates/layerfs-content/src/policy.rs)).
 
 | Length | Representation | Root object |
 | --- | --- | --- |
@@ -66,7 +66,7 @@ The default cutoff is 131,072 bytes; a Store may record any power of two up to
 ### Chunking
 
 A chunked file is cut by `FastCdc`, a frozen two-byte rolling GEAR scanner
-([`cdc/gear.rs`](../../../../core/crates/layerfs-content/src/file/cdc/gear.rs)).
+([`file/cdc.rs`](../../../../core/crates/layerfs-content/src/file/cdc.rs)).
 
 ```text
  one chunk, by its length so far
@@ -80,12 +80,12 @@ A chunked file is cut by `FastCdc`, a frozen two-byte rolling GEAR scanner
 
 | Rule | Detail | Source |
 | --- | --- | --- |
-| Profile | min 8,192, target 16,384 (switches masks), max 32,768; shift 2, seed 0; fixed masks and 256 GEAR values; `profile_id()` hashes them all under `layerfs/fastcdc-profile/v1` | [`gear.rs`](../../../../core/crates/layerfs-content/src/file/cdc/gear.rs) |
-| Read sizes never move a boundary | An odd trailing byte of one `Read` is paired with the next read's first byte | `process_pending_pair` in [`gear.rs`](../../../../core/crates/layerfs-content/src/file/cdc/gear.rs) |
-| Bounded memory | One chunk buffer and one read buffer of 32 KiB each; never the whole input | [`gear.rs`](../../../../core/crates/layerfs-content/src/file/cdc/gear.rs) |
-| Zero runs | A run of length L: the first 32 KiB is scanned, the interior is `n` identical 32 KiB chunks handed over as one repeat count, the rest is scanned; the partition equals byte-by-byte scanning | [`cdc/zeros.rs`](../../../../core/crates/layerfs-content/src/file/cdc/zeros.rs) |
+| Profile | min 8,192, target 16,384 (switches masks), max 32,768; shift 2, seed 0; fixed masks and 256 GEAR values; `profile_id()` hashes them all under `layerfs/fastcdc-profile/v1` | [`cdc.rs`](../../../../core/crates/layerfs-content/src/file/cdc.rs) |
+| Read sizes never move a boundary | An odd trailing byte of one `Read` is paired with the next read's first byte | `process_pending_pair` in [`cdc.rs`](../../../../core/crates/layerfs-content/src/file/cdc.rs) |
+| Bounded memory | One chunk buffer and one read buffer of 32 KiB each; never the whole input | [`cdc.rs`](../../../../core/crates/layerfs-content/src/file/cdc.rs) |
+| Zero runs | A run of length L: the first 32 KiB is scanned, the interior is `n` identical 32 KiB chunks handed over as one repeat count, the rest is scanned; the partition equals byte-by-byte scanning | [`file/cdc.rs`](../../../../core/crates/layerfs-content/src/file/cdc.rs) |
 | Frozen | The CDC profile ID is hashed into the mapping profile every file state records; a change fails old file states with `InvalidRecord("file state profile")` | [`mapping/codec.rs`](../../../../core/crates/layerfs-content/src/file/mapping/codec.rs) |
-| Hints | `cut_candidates` reports every possible boundary; a candidate proves nothing | [`gear.rs`](../../../../core/crates/layerfs-content/src/file/cdc/gear.rs) |
+| Hints | `cut_candidates` reports every possible boundary; a candidate proves nothing | [`cdc.rs`](../../../../core/crates/layerfs-content/src/file/cdc.rs) |
 
 The rolling value only picks boundaries; a chunk's identity is its object ID.
 
@@ -125,7 +125,7 @@ never a payload read.
 Engine callers: Project Init imports with `construct_stream`
 ([`import/files.rs`](../../../../engine/crates/layerfs-project/src/import/files.rs));
 Commit builds captured files with `construct_runs`, its predecessor form or
-an edit ([`captured/owner.rs`](../../../../engine/crates/layerfs-workspace/src/construction/captured/owner.rs)).
+an edit ([`file/owner.rs`](../../../../engine/crates/layerfs-vfs/src/construction/file/owner.rs)).
 A whole-file payload peaks at about twice its size during complete
 construction (value and envelope are separate allocations); the edit route
 writes into one pre-sized object.
@@ -167,7 +167,7 @@ file length: a long read is a sequence of bounded waves.
 | Equal bytes under one policy give one root, whether they came as a slice, a stream or runs | one builder for every route: [`mapping/build.rs`](../../../../core/crates/layerfs-content/src/file/mapping/build.rs), [`chunk_runs.rs`](../../../../core/crates/layerfs-content/src/file/construction/chunk_runs.rs) |
 | A chunked edit result keeps the base's untouched extents, so its root depends on edit boundaries | [`edit/tree.rs`](../../../../core/crates/layerfs-content/src/file/edit/tree.rs) |
 | Construction memory depends on tree height and page size, not file length | `ExtentBuilder` in [`mapping/build.rs`](../../../../core/crates/layerfs-content/src/file/mapping/build.rs) |
-| Chunk and mapping profiles are frozen and recorded in every file state | `profile_id()` in [`gear.rs`](../../../../core/crates/layerfs-content/src/file/cdc/gear.rs), [`mapping/codec.rs`](../../../../core/crates/layerfs-content/src/file/mapping/codec.rs) |
+| Chunk and mapping profiles are frozen and recorded in every file state | `profile_id()` in [`cdc.rs`](../../../../core/crates/layerfs-content/src/file/cdc.rs), [`mapping/codec.rs`](../../../../core/crates/layerfs-content/src/file/mapping/codec.rs) |
 | An object is emitted only when its bytes can no longer change, children before parents | [`mapping/build.rs`](../../../../core/crates/layerfs-content/src/file/mapping/build.rs), [`edit/finish.rs`](../../../../core/crates/layerfs-content/src/file/edit/finish.rs) |
 | Advisory predecessors never change bytes, IDs or partitions | [`object/predecessor.rs`](../../../../core/crates/layerfs-content/src/object/predecessor.rs), [`construction/runs.rs`](../../../../core/crates/layerfs-content/src/file/construction/runs.rs) |
 | Reads stay inside declared windows and are served exactly or refused | [`mapping/read.rs`](../../../../core/crates/layerfs-content/src/file/mapping/read.rs) |
@@ -179,10 +179,10 @@ file length: a long read is a sequence of bounded waves.
 | File length | no product cap; `u64`, overflow is `LengthOverflow` | [`mapping/build.rs`](../../../../core/crates/layerfs-content/src/file/mapping/build.rs) |
 | Whole-file payload | at most cutoff − 1, else `BoundedCapacityExceeded { what: "construction.whole_file" }` | [`construction/bytes.rs`](../../../../core/crates/layerfs-content/src/file/construction/bytes.rs) |
 | Chunk payload | at most 32,768, else `ObjectLimitExceeded` | [`mapping/codec.rs`](../../../../core/crates/layerfs-content/src/file/mapping/codec.rs) |
-| Mapping depth and pages | see [Edits: Mapping](edits.md#filemapping) | [`mapping/types.rs`](../../../../core/crates/layerfs-content/src/file/mapping/types.rs) |
-| Policy out of range | `UnsupportedPolicy` before any work | [`policy.rs`](../../../../core/crates/layerfs-content/src/contract/policy.rs) |
+| Mapping depth and pages | see [Edits: Mapping](edits.md#filemapping) | [`mapping/node.rs`](../../../../core/crates/layerfs-content/src/file/mapping/node.rs) |
+| Policy out of range | `UnsupportedPolicy` before any work | [`policy.rs`](../../../../core/crates/layerfs-content/src/policy.rs) |
 | Bad read range | `InvalidRange { start, end, length }` | [`read.rs`](../../../../core/crates/layerfs-content/src/file/read.rs) |
-| Input stream fails | `Io`, returned once; objects already accepted stay with the consumer | [`gear.rs`](../../../../core/crates/layerfs-content/src/file/cdc/gear.rs) |
+| Input stream fails | `Io`, returned once; objects already accepted stay with the consumer | [`cdc.rs`](../../../../core/crates/layerfs-content/src/file/cdc.rs) |
 | Run source breaks its contract | `InvalidRecord("file run window")` or `("file run accounting")` | [`construction/runs.rs`](../../../../core/crates/layerfs-content/src/file/construction/runs.rs) |
 | Provider returns wrong count or role | `BatchCardinality`, `WrongLogicalRole` | [`mapping/read.rs`](../../../../core/crates/layerfs-content/src/file/mapping/read.rs) |
 
@@ -194,9 +194,9 @@ of at most 120 s.
 
 | Test or example | Command | Platform | Shows |
 | --- | --- | --- | --- |
-| [`file_complete.rs`](../../../../core/crates/layerfs-content/tests/file_complete.rs) | `cargo +1.85.1 test --locked -p layerfs-content --test file_complete` | any | Representation boundaries (0, 1, cutoff − 1, cutoff), the frozen chunk partition, slice and stream agreeing, an `Io` failure after early chunks |
-| [`file_read.rs`](../../../../core/crates/layerfs-content/tests/file_read.rs) | `cargo +1.85.1 test --locked -p layerfs-content --test file_read` | any | Ranges across pages, invalid ranges, one provider call per navigation level, wave ceilings, refused non-canonical pages |
-| [`zero_cdc.rs`](../../../../core/crates/layerfs-content/tests/zero_cdc.rs) | `cargo +1.85.1 test --locked -p layerfs-content --test zero_cdc` | any | A zero stream is cut into full 32 KiB chunks: the period the zero-run path relies on |
+| [`complete.rs`](../../../../core/crates/layerfs-content/tests/file/complete.rs) | `cargo +1.85.1 test --locked -p layerfs-content --test file complete` | any | Representation boundaries (0, 1, cutoff − 1, cutoff), the frozen chunk partition, slice and stream agreeing, an `Io` failure after early chunks |
+| [`read.rs`](../../../../core/crates/layerfs-content/tests/file/read.rs) | `cargo +1.85.1 test --locked -p layerfs-content --test file read` | any | Ranges across pages, invalid ranges, one provider call per navigation level, wave ceilings, refused non-canonical pages |
+| [`cdc_zeros.rs`](../../../../core/crates/layerfs-content/tests/file/cdc_zeros.rs) | `cargo +1.85.1 test --locked -p layerfs-content --test file cdc_zeros` | any | A zero stream is cut into full 32 KiB chunks: the period the zero-run path relies on |
 | [`edit_timing_c1.rs`](../../../../core/crates/layerfs-content/examples/edit_timing_c1.rs) | `cargo +1.85.1 run --release --locked -p layerfs-content --example edit_timing_c1 -- --case shrink` | any | One edit on a 3.3 MB chunked base: elapsed time, root and objects demanded and written (diagnostic, not a measurement) |
 
 ## Pages

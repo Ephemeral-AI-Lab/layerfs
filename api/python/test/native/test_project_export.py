@@ -1,6 +1,6 @@
 """LP53b: run the actual Python shells with a synthetic native call table.
 
-python3 -B api/python/test/test_project_export.py
+python3 -B api/python/test/native/test_project_export.py
 LP53_EXPORT_NATIVE=1 enables real sync/aio integration after LP53a and a native
 build; missing export then FAILS rather than silently skipping. Use an external
 wall timeout <=120 seconds. Stub checks prove binding behavior, not filesystem

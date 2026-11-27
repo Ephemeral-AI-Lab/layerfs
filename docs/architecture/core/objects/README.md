@@ -9,7 +9,7 @@ stores and compares, and the two ports through which they are read and written.
 | --- | --- |
 | Layer | [Core](../README.md) |
 | Crates | `layerfs-content` |
-| Source | [`object/`](../../../../core/crates/layerfs-content/src/object), [`contract/`](../../../../core/crates/layerfs-content/src/contract) |
+| Source | [`object/`](../../../../core/crates/layerfs-content/src/object), [`src/`](../../../../core/crates/layerfs-content/src) |
 | Uses | — |
 | Used by | [Files](../files/README.md), [Filesystem trees](../filesystem-trees/README.md), [Compare and merge](../compare-and-merge/README.md), [Physical storage](../physical-storage/README.md), [History](../history/README.md) |
 | Flows | [A Commit](../../flows/commit.md), [Project Init](../../flows/init.md) |
@@ -56,7 +56,7 @@ stores and compares, and the two ports through which they are read and written.
 | Streaming ID | `ObjectId::stream()` hashes parts in order without keeping them; chunk construction hashes while it scans | [`id.rs`](../../../../core/crates/layerfs-content/src/object/id.rs), [`mapping/codec.rs`](../../../../core/crates/layerfs-content/src/file/mapping/codec.rs) |
 | Envelope | `LFSO`, kind `1`, two lengths; `decode_bytes_object` returns the value as a borrowed slice and checks, in order, total ceiling, length, magic, kind, payload and value ceilings, truncation and trailing bytes | [`codec.rs`](../../../../core/crates/layerfs-content/src/object/codec.rs) |
 | Equal logical content | Same ID for whole files, chunks, symlink targets and fresh file construction; a chunked edit result keeps the base's chunks and need not match; a filesystem root depends on its scope and serials | [Files](../files/README.md), [Filesystem trees](../filesystem-trees/README.md) |
-| Pack key | Physical storage names a pack by `ObjectKey`, SHA-256 of the sealed pack bytes, a separate digest | [`port/pack.rs`](../../../../core/crates/layerfs-storage/src/port/pack.rs) |
+| Pack key | Physical storage names a pack by `ObjectKey`, SHA-256 of the sealed pack bytes, a separate digest | [`port/object_key.rs`](../../../../core/crates/layerfs-storage/src/port/object_key.rs) |
 
 ### Object kinds
 
@@ -133,10 +133,10 @@ Physical storage, which pools the values.
 
 | Check | Detail | Source |
 | --- | --- | --- |
-| `admit` | One object alone; trusts no supplied reference list or predecessor. Per role: nonempty whole file under the cutoff, extent levels, file-state counts, inode placement, branch summaries, root scope | [`admission.rs`](../../../../core/crates/layerfs-content/src/object/admission.rs) |
-| `validate_context` | Re-derives references, then reads each direct child as its own one-ID demand and checks levels, fills, keys, summaries, content kinds and portable metadata; refusals run before any demand | [`context/`](../../../../core/crates/layerfs-content/src/object/context) |
+| `admit` | One object alone; trusts no supplied reference list or predecessor. Per role: nonempty whole file under the cutoff, extent levels, file-state counts, inode placement, branch summaries, root scope | [`decode.rs`](../../../../core/crates/layerfs-content/src/verify/decode.rs) |
+| `validate_context` | Re-derives references, then reads each direct child as its own one-ID demand and checks levels, fills, keys, summaries, content kinds and portable metadata; refusals run before any demand | [`verify/`](../../../../core/crates/layerfs-content/src/verify) |
 | Not checked | Peer authority, saved closure, serial membership, reverse bindings, aliases, cycles, full descendant topology: the caller's job ([Filesystem trees: Validation](../filesystem-trees/validation.md)) | [`output.rs`](../../../../core/crates/layerfs-content/src/object/output.rs) |
-| Callers | Product constructors use `FinalizedObject::new` (checks the envelope, hashes once). `admit` runs in the [Store diagnostic](../../engine/store/diagnostics.md) scan; `validate_context` only in tests | [`diagnostic/scan.rs`](../../../../engine/crates/layerfs-persistence/src/diagnostic/scan.rs), [`object_context.rs`](../../../../core/crates/layerfs-content/tests/object_context.rs) |
+| Callers | Product constructors use `FinalizedObject::new` (checks the envelope, hashes once). `admit` runs in the [Store diagnostic](../../engine/store/diagnostics.md) scan; `validate_context` only in tests | [`check/store.rs`](../../../../engine/crates/layerfs-persistence/src/diagnostic/check/store.rs), [`context.rs`](../../../../core/crates/layerfs-content/tests/object/context.rs) |
 
 ### Reading and writing objects
 
@@ -153,22 +153,22 @@ Physical storage, which pools the values.
 | Port | Contract | Source |
 | --- | --- | --- |
 | `read_canonical_batch(ids)` | One grouped demand, exactly one value per ID, in demand order; scoped and single-ID forms default to it; `decoded_pages()` may share decoded tree pages (skips a decode, never a check) | [`access.rs`](../../../../core/crates/layerfs-content/src/object/access.rs) |
-| Provider answers | Bytes already authenticated; `MissingObject` (absent), `ProviderFailure` (held but unservable), `IdentityMismatch`; `PathNotFound` is a tree answer, not a provider one | [`contract/error.rs`](../../../../core/crates/layerfs-content/src/contract/error.rs) |
-| Providers | Storage `Reader` and an open Save; engine Store ports and cached reads; the compare memo | [`read/provider.rs`](../../../../core/crates/layerfs-storage/src/read/provider.rs), [`save/provider.rs`](../../../../core/crates/layerfs-storage/src/save/provider.rs), [`read/cached.rs`](../../../../engine/crates/layerfs-store-service/src/read/cached.rs), [`compare/memo.rs`](../../../../core/crates/layerfs-content/src/compare/memo.rs) |
+| Provider answers | Bytes already authenticated; `MissingObject` (absent), `ProviderFailure` (held but unservable), `IdentityMismatch`; `PathNotFound` is a tree answer, not a provider one | [`src/error.rs`](../../../../core/crates/layerfs-content/src/error.rs) |
+| Providers | Storage `Reader` and an open Save; engine Store ports and cached reads; the compare memo | [`read/provider.rs`](../../../../core/crates/layerfs-storage/src/read/provider.rs), [`save/provider.rs`](../../../../core/crates/layerfs-storage/src/save/provider.rs), [`filesystem/cache.rs`](../../../../engine/crates/layerfs-store-service/src/filesystem/cache.rs), [`compare/memo.rs`](../../../../core/crates/layerfs-content/src/compare/memo.rs) |
 | `FinalizedObject` | `id`, `role`, owned `canonical` bytes, direct `references` in canonical order, up to four advisory `predecessors`; `into_parts` moves them all | [`output.rs`](../../../../core/crates/layerfs-content/src/object/output.rs) |
 | `FinalizedConsumer::accept` | Emitted only when later input cannot change the object; an error ends construction, with no resend | [`output.rs`](../../../../core/crates/layerfs-content/src/object/output.rs) |
-| Consumers | Storage Save sink, engine Commit staging; `DiscardingConsumer` only counts | [`save/operation.rs`](../../../../core/crates/layerfs-storage/src/save/operation.rs), [`construction/driver.rs`](../../../../engine/crates/layerfs-workspace/src/construction/driver.rs) |
+| Consumers | Storage Save sink, engine Commit staging; `DiscardingConsumer` only counts | [`save/operation.rs`](../../../../core/crates/layerfs-storage/src/save/operation.rs), [`construction/driver.rs`](../../../../engine/crates/layerfs-vfs/src/construction/driver.rs) |
 
 | Advisory predecessor | Meaning | Proposed by |
 | --- | --- | --- |
 | `OriginalBase` | The base object an edit declared | Whole-file edit ([`edit/apply.rs`](../../../../core/crates/layerfs-content/src/file/edit/apply.rs)) |
-| `UnchangedPrefix` | The object holding the bytes just before a replaced range | Mapping build, sorted tree pages ([`mapping/build.rs`](../../../../core/crates/layerfs-content/src/file/mapping/build.rs), [`sorted/page.rs`](../../../../core/crates/layerfs-content/src/filesystem/sorted/page.rs)) |
+| `UnchangedPrefix` | The object holding the bytes just before a replaced range | Mapping build, sorted tree pages ([`mapping/build.rs`](../../../../core/crates/layerfs-content/src/file/mapping/build.rs), [`pages/page.rs`](../../../../core/crates/layerfs-content/src/filesystem/tree/pages/page.rs)) |
 | `ReusedRange` | A stored object covering a reused range | Chunk runs ([`chunk_runs.rs`](../../../../core/crates/layerfs-content/src/file/construction/chunk_runs.rs)) |
 
 ### Construction policy
 
 `ConstructionPolicy` is the profile a Store records;
-[`policy.rs`](../../../../core/crates/layerfs-content/src/contract/policy.rs)
+[`policy.rs`](../../../../core/crates/layerfs-content/src/policy.rs)
 validates it before any work.
 
 | Field | Accepted | Default |
@@ -191,24 +191,24 @@ records the depths; only Physical storage runs a delta codec.
 | The canonical form decides the ID; compression, delta and pack layout are outside it | [`id.rs`](../../../../core/crates/layerfs-content/src/object/id.rs) |
 | IDs are domain-separated, never a raw digest of the payload | [`id.rs`](../../../../core/crates/layerfs-content/src/object/id.rs) |
 | One canonical encoding per value: decoders refuse trailing bytes, padding and non-canonical partitions instead of repairing them | [`codec.rs`](../../../../core/crates/layerfs-content/src/object/codec.rs), [`inode_leaf.rs`](../../../../core/crates/layerfs-content/src/object/inode_leaf.rs) |
-| References are derived from the bytes, never trusted from a caller | [`admission.rs`](../../../../core/crates/layerfs-content/src/object/admission.rs) |
+| References are derived from the bytes, never trusted from a caller | [`decode.rs`](../../../../core/crates/layerfs-content/src/verify/decode.rs) |
 | Predecessors are hints: at most four, outside the ID, chosen or ignored by Physical storage | [`predecessor.rs`](../../../../core/crates/layerfs-content/src/object/predecessor.rs) |
 | Content opens no database, pack or file, and forbids unsafe code | [`lib.rs`](../../../../core/crates/layerfs-content/src/lib.rs) (`#![forbid(unsafe_code)]`) |
-| Absence (`MissingObject`) and failure (`ProviderFailure`) stay distinct; a provider failure ends the operation once | [`contract/error.rs`](../../../../core/crates/layerfs-content/src/contract/error.rs) |
+| Absence (`MissingObject`) and failure (`ProviderFailure`) stay distinct; a provider failure ends the operation once | [`src/error.rs`](../../../../core/crates/layerfs-content/src/error.rs) |
 
 ## Limits and failures
 
 | Limit or failure | Value or error | Source |
 | --- | --- | --- |
-| Canonical object, any role | `MAX_CANONICAL_OBJECT_BYTES` 16 MiB | [`policy.rs`](../../../../core/crates/layerfs-content/src/contract/policy.rs) |
+| Canonical object, any role | `MAX_CANONICAL_OBJECT_BYTES` 16 MiB | [`policy.rs`](../../../../core/crates/layerfs-content/src/policy.rs) |
 | One value field | `MAX_OBJECT_FIELD_BYTES` 8 MiB | same |
-| Largest produced objects | whole file < cutoff + 23, chunk 32,789 B, tree page 8,192 B; the 16 MiB ceiling never binds on them | [`policy.rs`](../../../../core/crates/layerfs-content/src/contract/policy.rs), [`limits.rs`](../../../../core/crates/layerfs-content/src/filesystem/limits.rs) |
+| Largest produced objects | whole file < cutoff + 23, chunk 32,789 B, tree page 8,192 B; the 16 MiB ceiling never binds on them | [`policy.rs`](../../../../core/crates/layerfs-content/src/policy.rs), [`limits.rs`](../../../../core/crates/layerfs-content/src/filesystem/limits.rs) |
 | Advisory predecessors | 4; a fifth is `BoundedCapacityExceeded { what: "object.predecessors" }`; a repeated ID is ignored | [`predecessor.rs`](../../../../core/crates/layerfs-content/src/object/predecessor.rs) |
-| Cutoff or depth out of range | `UnsupportedPolicy` | [`policy.rs`](../../../../core/crates/layerfs-content/src/contract/policy.rs) |
+| Cutoff or depth out of range | `UnsupportedPolicy` | [`policy.rs`](../../../../core/crates/layerfs-content/src/policy.rs) |
 | ID width or text | `InvalidIdentityLength`, `InvalidIdentityText` | [`id.rs`](../../../../core/crates/layerfs-content/src/object/id.rs) |
-| Wrong magic; wrong kind or role | `UnsupportedFraming`; `WrongLogicalRole` | [`codec.rs`](../../../../core/crates/layerfs-content/src/object/codec.rs), [`admission.rs`](../../../../core/crates/layerfs-content/src/object/admission.rs) |
+| Wrong magic; wrong kind or role | `UnsupportedFraming`; `WrongLogicalRole` | [`codec.rs`](../../../../core/crates/layerfs-content/src/object/codec.rs), [`decode.rs`](../../../../core/crates/layerfs-content/src/verify/decode.rs) |
 | Short or long input | `UnexpectedEof`, `TrailingBytes` | [`codec.rs`](../../../../core/crates/layerfs-content/src/object/codec.rs) |
-| Bytes that do not hash to the ID | `IdentityMismatch` | [`admission.rs`](../../../../core/crates/layerfs-content/src/object/admission.rs) |
+| Bytes that do not hash to the ID | `IdentityMismatch` | [`decode.rs`](../../../../core/crates/layerfs-content/src/verify/decode.rs) |
 | Unknown role or kind code, broken summary | `InvalidRecord(label)` | [`output.rs`](../../../../core/crates/layerfs-content/src/object/output.rs), [`inode_leaf.rs`](../../../../core/crates/layerfs-content/src/object/inode_leaf.rs) |
 | Unsupported grammar version | `UnsupportedMappingVersion { version }` | [`inode_leaf.rs`](../../../../core/crates/layerfs-content/src/object/inode_leaf.rs) |
 | Provider returns the wrong count | `BatchCardinality` | [`access.rs`](../../../../core/crates/layerfs-content/src/object/access.rs) |
@@ -222,8 +222,8 @@ Give each command a wall timeout of at most 120 s.
 
 | Test or example | Command | Platform | Shows |
 | --- | --- | --- | --- |
-| [`object_identity.rs`](../../../../core/crates/layerfs-content/tests/object_identity.rs) | `cargo +1.85.1 test --locked -p layerfs-content --test object_identity` | any | Frozen domain and fixture IDs, a damaged byte changes the ID, every envelope malformation, the 8 MiB and 16 MiB ceilings at ±1 |
-| [`object_admission.rs`](../../../../core/crates/layerfs-content/tests/object_admission.rs) | `cargo +1.85.1 test --locked -p layerfs-content --test object_admission` | any | `admit` on all 13 roles: exact references; role confusion, truncation, wrong scope and impossible summaries refused |
-| [`object_context.rs`](../../../../core/crates/layerfs-content/tests/object_context.rs) | `cargo +1.85.1 test --locked -p layerfs-content --test object_context` | any | `validate_context` with one-ID demands; refusals before demands; a provider failure ends without retry |
-| [`inode_leaf.rs`](../../../../core/crates/layerfs-content/tests/inode_leaf.rs) | `cargo +1.85.1 test --locked -p layerfs-content --test inode_leaf` | any | Leaf layout, both metadata forms, the 94-byte pooled value and pooled round trip |
-| [`object_key.rs`](../../../../core/crates/layerfs-storage/tests/object_key.rs) | `cargo +1.85.1 test --locked -p layerfs-storage --test object_key` | any | `ObjectKey` is plain SHA-256 of sealed pack bytes, separate from `ObjectId` |
+| [`identity.rs`](../../../../core/crates/layerfs-content/tests/object/identity.rs) | `cargo +1.85.1 test --locked -p layerfs-content --test object identity` | any | Frozen domain and fixture IDs, a damaged byte changes the ID, every envelope malformation, the 8 MiB and 16 MiB ceilings at ±1 |
+| [`admission.rs`](../../../../core/crates/layerfs-content/tests/object/admission.rs) | `cargo +1.85.1 test --locked -p layerfs-content --test object admission` | any | `admit` on all 13 roles: exact references; role confusion, truncation, wrong scope and impossible summaries refused |
+| [`context.rs`](../../../../core/crates/layerfs-content/tests/object/context.rs) | `cargo +1.85.1 test --locked -p layerfs-content --test object context` | any | `validate_context` with one-ID demands; refusals before demands; a provider failure ends without retry |
+| [`inode_leaf.rs`](../../../../core/crates/layerfs-content/tests/object/inode_leaf.rs) | `cargo +1.85.1 test --locked -p layerfs-content --test object inode_leaf` | any | Leaf layout, both metadata forms, the 94-byte pooled value and pooled round trip |
+| [`object_key.rs`](../../../../core/crates/layerfs-storage/tests/port/object_key.rs) | `cargo +1.85.1 test --locked -p layerfs-storage --test port object_key` | any | `ObjectKey` is plain SHA-256 of sealed pack bytes, separate from `ObjectId` |

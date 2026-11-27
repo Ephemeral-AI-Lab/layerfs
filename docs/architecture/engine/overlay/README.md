@@ -8,7 +8,7 @@ Each mounted Workspace's own disposable SQLite file of changed names, inodes, by
 | --- | --- |
 | Layer | [Engine](../README.md) |
 | Crates | `layerfs-overlay`; the roster and lock in `layerfs-store-service` |
-| Source | [`layerfs-overlay/src`](../../../../engine/crates/layerfs-overlay/src), [`layerfs-overlay/sql/schema.sql`](../../../../engine/crates/layerfs-overlay/sql/schema.sql), [`layerfs-store-service/src/overlay`](../../../../engine/crates/layerfs-store-service/src/overlay) |
+| Source | [`layerfs-overlay/src`](../../../../engine/crates/layerfs-overlay/src), [`layerfs-overlay/sql/schema.sql`](../../../../engine/crates/layerfs-overlay/sql/schema.sql), [`src/workspace/owner`](../../../../engine/crates/layerfs-store-service/src/workspace/owner) |
 | Uses | — (SQLite through `rusqlite`; no Store or content I/O) |
 | Used by | [Workspace](../workspace/README.md), [Commit](../commit/README.md), [Store calls](../store-calls/README.md), [Kernel routes](../kernel-routes/README.md), [Daemon](../daemon/README.md) |
 | Flows | [A Workspace session](../../flows/workspace.md), [A Commit](../../flows/commit.md) |
@@ -59,17 +59,17 @@ Workspaces share no connection, file, pager or lock.
 
 | Behaviour | Detail | Source |
 | --- | --- | --- |
-| Template | At daemon start `Overlay::create_observed` builds the schema at the configured path, then `close_database_file` closes it. Its size is recorded; a mount refuses a template whose size changed | [`workspaces.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/workspaces.rs) |
-| Admission | `open` takes the next namespace (never reused; overflow is `IdentityExhausted`), refuses a zero or duplicate incarnation, and refuses with `AdmissionFull` when the roster already holds `namespaces` slots in any state | [`workspaces.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/workspaces.rs) |
-| Copy | `Owner::start_copy` copies the template bytes into a fresh `<n>.sqlite` beside it (never a hard link), then `Backing::new` records the file's device, inode and link count 1 | [`owner.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/owner.rs), [`startup.rs`](../../../../engine/crates/layerfs-overlay/src/database/startup.rs), [`backing.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/backing.rs) |
-| Bind | `OwnerClient::open` runs `open_workspace(base_root)` as the first job and fixes the `Route` (namespace, engine, incarnation) | [`scopes.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/scopes.rs) |
-| One lock | `Shared.state: Mutex<State>` holds the connection, failure, maintenance cursor, backing and counters; every job, reply attempt and close takes it | [`state.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/state.rs) |
-| A job | `call` / `call_observed`: the closure "performs at most one transaction and does no provider I/O"; a stale route or stopped Workspace is `Unattempted` with the original input kept | [`owner.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/owner.rs) |
-| Frontier | A waiting Capture makes later mutations wait; a waiting known install makes later base-source acquisitions wait. Waits are on the `Condvar`, before any effect, so traffic cannot extend what the waiter awaits | [`state.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/state.rs) `behind_frontier`, [`owner.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/owner.rs) |
-| Reply attempt | `reply_attempted` holds the lock briefly, with no SQL, to settle one reply ticket | [`owner.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/owner.rs) |
-| Deferred job | `call_deferred` leaves the maintenance it readies queued; Commit's releases use it, and the daemon drains it after the Commit's answer, on a thread of its own. A terminal unmount's maintenance hold stops that drain and every other one ([`hold.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/hold.rs)) | [`owner.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/owner.rs), [`operations.rs`](../../../../engine/crates/layerfs-daemon/src/control/operations.rs) `reclaim_after_commit` |
-| Panic | A panic in a job is caught; the connection and payload are kept in `WorkspacePanicked` and every later call is refused | [`owner.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/owner.rs) `retain_panic` |
-| Counters | Per service class: jobs, lock wait, hold time, SQL, allocation and payload work; maintenance steps counted apart | [`state.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/state.rs) `record` |
+| Template | At daemon start `Overlay::create_observed` builds the schema at the configured path, then `close_database_file` closes it. Its size is recorded; a mount refuses a template whose size changed | [`workspaces.rs`](../../../../engine/crates/layerfs-store-service/src/workspace/owner/roster/workspaces.rs) |
+| Admission | `open` takes the next namespace (never reused; overflow is `IdentityExhausted`), refuses a zero or duplicate incarnation, and refuses with `AdmissionFull` when the roster already holds `namespaces` slots in any state | [`workspaces.rs`](../../../../engine/crates/layerfs-store-service/src/workspace/owner/roster/workspaces.rs) |
+| Copy | `Owner::start_copy` copies the template bytes into a fresh `<n>.sqlite` beside it (never a hard link), then `Backing::new` records the file's device, inode and link count 1 | [`jobs.rs`](../../../../engine/crates/layerfs-store-service/src/workspace/owner/jobs.rs), [`startup.rs`](../../../../engine/crates/layerfs-overlay/src/backing/startup.rs), [`backing.rs`](../../../../engine/crates/layerfs-store-service/src/workspace/owner/roster/backing.rs) |
+| Bind | `OwnerClient::open` runs `open_workspace(base_root)` as the first job and fixes the `Route` (namespace, engine, incarnation) | [`scopes.rs`](../../../../engine/crates/layerfs-store-service/src/workspace/owner/roster/scopes.rs) |
+| One lock | `Shared.state: Mutex<State>` holds the connection, failure, maintenance cursor, backing and counters; every job, reply attempt and close takes it | [`state.rs`](../../../../engine/crates/layerfs-store-service/src/workspace/owner/state.rs) |
+| A job | `call` / `call_observed`: the closure "performs at most one transaction and does no provider I/O"; a stale route or stopped Workspace is `Unattempted` with the original input kept | [`jobs.rs`](../../../../engine/crates/layerfs-store-service/src/workspace/owner/jobs.rs) |
+| Frontier | A waiting Capture makes later mutations wait; a waiting known install makes later base-source acquisitions wait. Waits are on the `Condvar`, before any effect, so traffic cannot extend what the waiter awaits | [`state.rs`](../../../../engine/crates/layerfs-store-service/src/workspace/owner/state.rs) `behind_frontier`, [`jobs.rs`](../../../../engine/crates/layerfs-store-service/src/workspace/owner/jobs.rs) |
+| Reply attempt | `reply_attempted` holds the lock briefly, with no SQL, to settle one reply ticket | [`jobs.rs`](../../../../engine/crates/layerfs-store-service/src/workspace/owner/jobs.rs) |
+| Deferred job | `call_deferred` leaves the maintenance it readies queued; Commit's releases use it, and the daemon drains it after the Commit's answer, on a thread of its own. A terminal unmount's maintenance hold stops that drain and every other one ([`hold.rs`](../../../../engine/crates/layerfs-store-service/src/workspace/owner/operations/hold.rs)) | [`jobs.rs`](../../../../engine/crates/layerfs-store-service/src/workspace/owner/jobs.rs), [`dispatch.rs`](../../../../engine/crates/layerfs-daemon/src/workspace/route/dispatch.rs) `reclaim_after_commit` |
+| Panic | A panic in a job is caught; the connection and payload are kept in `WorkspacePanicked` and every later call is refused | [`jobs.rs`](../../../../engine/crates/layerfs-store-service/src/workspace/owner/jobs.rs) `retain_panic` |
+| Counters | Per service class: jobs, lock wait, hold time, SQL, allocation and payload work; maintenance steps counted apart | [`state.rs`](../../../../engine/crates/layerfs-store-service/src/workspace/owner/state.rs) `record` |
 
 ### Database
 
@@ -88,21 +88,21 @@ Workspace's `WorkspaceState` lives in memory.
 
 | Profile setting | Value | Source |
 | --- | --- | --- |
-| `page_size`, `auto_vacuum` | 4096, `NONE` | [`profile.rs`](../../../../engine/crates/layerfs-overlay/src/database/profile.rs) |
+| `page_size`, `auto_vacuum` | 4096, `NONE` | [`profile.rs`](../../../../engine/crates/layerfs-overlay/src/backing/profile.rs) |
 | `journal_mode`, `synchronous`, `locking_mode` | `MEMORY`, `OFF`, `EXCLUSIVE` | same |
 | `mmap_size`, `temp_store`, `foreign_keys` | 0, `MEMORY`, `ON` | same |
 | `cache_size` | `-pager_kib` (default 2048 KiB), per connection; a hint, not a resident ceiling | same |
-| `max_page_count` | `max_pages`, or `u32::MAX - 1` (SQLite's format ceiling) when `None`, which the daemon passes | same, [`application/owner.rs`](../../../../engine/crates/layerfs-daemon/src/application/owner.rs) |
+| `max_page_count` | `max_pages`, or `u32::MAX - 1` (SQLite's format ceiling) when `None`, which the daemon passes | same, [`startup/lifecycle.rs`](../../../../engine/crates/layerfs-daemon/src/application/startup/lifecycle.rs) |
 | `busy_timeout` | 0 | same |
 
 Every value is read back; a difference is `Invalid("profile readback differs")`.
 
 | Job rule | Source |
 | --- | --- |
-| A job that writes nothing begins no transaction; the first write begins `BEGIN IMMEDIATE`; success commits SQL and the open-state journal together | [`connection.rs`](../../../../engine/crates/layerfs-overlay/src/database/connection.rs) `transaction` |
+| A job that writes nothing begins no transaction; the first write begins `BEGIN IMMEDIATE`; success commits SQL and the open-state journal together | [`connection.rs`](../../../../engine/crates/layerfs-overlay/src/backing/connection.rs) `transaction` |
 | A failed job rolls back once and restores open state, `WorkspaceState`, hints and its reply tickets; a nested job is refused | same |
-| SQL text is a fixed set of constants under a 256-entry prepared cache; every statement is counted under one of twelve `StatementKind` families | [`statements.rs`](../../../../engine/crates/layerfs-overlay/src/database/statements.rs), [`startup.rs`](../../../../engine/crates/layerfs-overlay/src/database/startup.rs), [`metrics.rs`](../../../../engine/crates/layerfs-overlay/src/diagnostics/metrics.rs) |
-| `resources()` projects row counts, bytes, open-state counts, pages, freelist and `debt_upper_bytes` (an upper bound, not exclusive debt) on demand; ordinary jobs keep no accounting row | [`accounting.rs`](../../../../engine/crates/layerfs-overlay/src/database/accounting.rs) |
+| SQL text is a fixed set of constants under a 256-entry prepared cache; every statement is counted under one of twelve `StatementKind` families | [`statements.rs`](../../../../engine/crates/layerfs-overlay/src/backing/statements.rs), [`startup.rs`](../../../../engine/crates/layerfs-overlay/src/backing/startup.rs), [`metrics.rs`](../../../../engine/crates/layerfs-overlay/src/backing/metrics.rs) |
+| `resources()` projects row counts, bytes, open-state counts, pages, freelist and `debt_upper_bytes` (an upper bound, not exclusive debt) on demand; ordinary jobs keep no accounting row | [`accounting.rs`](../../../../engine/crates/layerfs-overlay/src/backing/accounting.rs) |
 
 ### Namespace
 
@@ -120,8 +120,8 @@ no row = the committed base decides (merged by Workspace, outside SQL)
 | Compound job | `apply` publishes at most `COMPOUND_INODES` (4) inodes, `COMPOUND_DIRECTORY_ENTRIES` (2) names and one payload write together, adds one to `revision` and issues one reply ticket | [`compound.rs`](../../../../engine/crates/layerfs-overlay/src/namespace/compound.rs), [`types.rs`](../../../../engine/crates/layerfs-overlay/src/contract/types.rs) |
 | Grammar only | The overlay checks representable values (`inode::check`, `check_name`); filesystem semantics belong to Workspace | [`inode.rs`](../../../../engine/crates/layerfs-overlay/src/namespace/inode.rs) |
 | Created serials | A `created` serial was reserved by the caller; an existing row fails the whole job | [`compound.rs`](../../../../engine/crates/layerfs-overlay/src/namespace/compound.rs) |
-| Name reads | `NAME_LAYERS` returns the active row and the newest lower row in one seek; a window returns at most `PAGE_ROWS` (1,024) names of one parent, active and captured | [`directory_entry.rs`](../../../../engine/crates/layerfs-overlay/src/namespace/directory_entry.rs), [`statements.rs`](../../../../engine/crates/layerfs-overlay/src/database/statements.rs) |
-| Captured reads | A `CapturedReader` sees only the sealed generation, through the capture indexes; it stays valid across install and failure until its exact release | [`captured_namespace.rs`](../../../../engine/crates/layerfs-overlay/src/namespace/captured_namespace.rs), [`captured_reader.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/captured_reader.rs) |
+| Name reads | `NAME_LAYERS` returns the active row and the newest lower row in one seek; a window returns at most `PAGE_ROWS` (1,024) names of one parent, active and captured | [`directory_entry.rs`](../../../../engine/crates/layerfs-overlay/src/namespace/directory_entry.rs), [`statements.rs`](../../../../engine/crates/layerfs-overlay/src/backing/statements.rs) |
+| Captured reads | A `CapturedReader` sees only the sealed generation, through the capture indexes; it stays valid across install and failure until its exact release | [`names.rs`](../../../../engine/crates/layerfs-overlay/src/generation/captured/names.rs), [`reader.rs`](../../../../engine/crates/layerfs-overlay/src/generation/captured/reader.rs) |
 | Predecessors | Rename over a base file records it; over a local file inherits its predecessor; Commit pages them with `captured_predecessors` | [`predecessor.rs`](../../../../engine/crates/layerfs-overlay/src/namespace/predecessor.rs) |
 
 ### Open state
@@ -131,17 +131,17 @@ commits or rolls back with that job's SQL through undo journals.
 
 | Map | Holds | Source |
 | --- | --- | --- |
-| `mount`, `kernel`, `parents` | One kernel connection, `(mount, serial)` lookup counts, retained directory parents with the name each was recorded under (an install rewrites none; `kernel_ancestors` returns the links for the caller to check against its view) | [`open/kernel.rs`](../../../../engine/crates/layerfs-overlay/src/open/kernel.rs) |
+| `mount`, `kernel`, `parents` | One kernel connection, `(mount, serial)` lookup counts, retained directory parents with the name each was recorded under (an install rewrites none; `kernel_ancestors` returns the links for the caller to check against its view) | [`open/state.rs`](../../../../engine/crates/layerfs-overlay/src/open/state.rs) |
 | `files`, `directories`, `cookies` | Open descriptors, open directories and published READDIR cookie pages | same, [`open/directories.rs`](../../../../engine/crates/layerfs-overlay/src/open/directories.rs) |
-| `reads`, `lookups`, `operations`, `captured` | Read windows, lookup references, operation owners, captured readers | [`open/kernel.rs`](../../../../engine/crates/layerfs-overlay/src/open/kernel.rs) |
+| `reads`, `lookups`, `operations`, `captured` | Read windows, lookup references, operation owners, captured readers | [`open/state.rs`](../../../../engine/crates/layerfs-overlay/src/open/state.rs) |
 | `custody`, `sources`, `orphans` | Per-serial opens, lookups and readers; held `BaseSource` windows; orphans | same |
 
 | Rule | Source |
 | --- | --- |
-| Owner numbers come from one process-wide counter, never reused: a stale token is `Stale`; copying a token acquires nothing | [`file_owners.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/file_owners.rs), [`custody.rs`](../../../../engine/crates/layerfs-overlay/src/contract/custody.rs) |
-| Each owner table is indexed by the caller's request too, so custody after a lost reply is observable (`retained_file`, `retained_lookup`); absence never permits a repeat | [`journal.rs`](../../../../engine/crates/layerfs-overlay/src/open/journal.rs) `OwnerTable`, [`lookup.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/lookup.rs) |
-| A kernel visit records nothing of its own; a mutation's reply custody (`KernelEffect`) is acquired in the publishing transaction | [`kernel_visit.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/kernel_visit.rs), [`kernel_mutation.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/kernel_mutation.rs) |
-| FORGET below zero is `Invalid`; a foreign mount is `Stale`; nothing compensates a lost send | [`lifetime/kernel.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/kernel.rs) |
+| Owner numbers come from one process-wide counter, never reused: a stale token is `Stale`; copying a token acquires nothing | [`file.rs`](../../../../engine/crates/layerfs-overlay/src/custody/file.rs), [`custody.rs`](../../../../engine/crates/layerfs-overlay/src/contract/custody.rs) |
+| Each owner table is indexed by the caller's request too, so custody after a lost reply is observable (`retained_file`, `retained_lookup`); absence never permits a repeat | [`journal.rs`](../../../../engine/crates/layerfs-overlay/src/open/journal.rs) `OwnerTable`, [`lookup.rs`](../../../../engine/crates/layerfs-overlay/src/custody/lookup.rs) |
+| A kernel visit records nothing of its own; a mutation's reply custody (`KernelEffect`) is acquired in the publishing transaction | [`visit.rs`](../../../../engine/crates/layerfs-overlay/src/kernel/visit.rs), [`mutation.rs`](../../../../engine/crates/layerfs-overlay/src/kernel/mutation.rs) |
+| FORGET below zero is `Invalid`; a foreign mount is `Stale`; nothing compensates a lost send | [`kernel/references.rs`](../../../../engine/crates/layerfs-overlay/src/kernel/references.rs) |
 | Cookies 1 and 2 are the dot entries; an offset from before the last rewind lists nothing; detached listings are freed after the lock is released | [`kernel_directory.rs`](../../../../engine/crates/layerfs-overlay/src/contract/kernel_directory.rs), [`open/directories.rs`](../../../../engine/crates/layerfs-overlay/src/open/directories.rs) |
 
 ### Operation records
@@ -156,35 +156,35 @@ release_operation(owner) -> OPERATION_RECORD cleanup, one envelope a step
 
 | Rule | Source |
 | --- | --- |
-| The overlay gives records no meaning; Content and Workspace own every value (Commit construction scratch, SDK hard-link maps) | [`ports/operation_record.rs`](../../../../engine/crates/layerfs-workspace/src/ports/operation_record.rs) |
-| `apply` checks every expected value (`Missing` or `ExactBytes`) before changing a row; a mismatch is `NotApplied { index, key, actual }` and changes nothing | [`lifetime/indexed_operation_record.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/indexed_operation_record.rs) |
-| One batch is strictly ordered and fits `OPERATION_RECORD_BYTES` (65 536); key and entry windows hold at most `RECORD_ROWS` (64) rows | [`contract/indexed_operation_record.rs`](../../../../engine/crates/layerfs-overlay/src/contract/indexed_operation_record.rs) |
-| `explain_indexed_operation_record` returns `EXPLAIN QUERY PLAN` text per statement shape: an operator diagnostic, not a contract | [`indexed_operation_record_plan.rs`](../../../../engine/crates/layerfs-overlay/src/diagnostics/indexed_operation_record_plan.rs) |
+| The overlay gives records no meaning; Content and Workspace own every value (Commit construction scratch, SDK hard-link maps) | [`ports/operation_record.rs`](../../../../engine/crates/layerfs-vfs/src/ports/operation_record.rs) |
+| `apply` checks every expected value (`Missing` or `ExactBytes`) before changing a row; a mismatch is `NotApplied { index, key, actual }` and changes nothing | [`custody/operation_record.rs`](../../../../engine/crates/layerfs-overlay/src/custody/operation_record.rs) |
+| One batch is strictly ordered and fits `OPERATION_RECORD_BYTES` (65 536); key and entry windows hold at most `RECORD_ROWS` (64) rows | [`contract/operation_record.rs`](../../../../engine/crates/layerfs-overlay/src/contract/operation_record.rs) |
+| `explain_indexed_operation_record` returns `EXPLAIN QUERY PLAN` text per statement shape: an operator diagnostic, not a contract | [`explain.rs`](../../../../engine/crates/layerfs-overlay/src/backing/explain.rs) |
 
 ## Invariants
 
 | Rule | Enforced by |
 | --- | --- |
-| One file, one connection, one `Overlay`, one lock per Workspace; Workspaces share no connection, writer, pager or memory budget | [`workspaces.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/workspaces.rs) `open`, [`state.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/state.rs) |
-| The lock is held for one short job, never across Store I/O, a whole Exec or a whole Commit | [`owner.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/owner.rs) `call` |
-| No sync and no space reserved ahead of use: `synchronous=OFF`, `close_database` performs no sync, `reserved_tail_bytes` and `cleanup_headroom_bytes` are 0 | [`profile.rs`](../../../../engine/crates/layerfs-overlay/src/database/profile.rs), [`connection.rs`](../../../../engine/crates/layerfs-overlay/src/database/connection.rs), [`physical.rs`](../../../../engine/crates/layerfs-overlay/src/database/physical.rs) |
-| One attempt: `busy_timeout=0`, no replay; an unknown outcome quarantines the engine for good | [`connection.rs`](../../../../engine/crates/layerfs-overlay/src/database/connection.rs) |
-| A published mutation stays published: a later maintenance failure is retained, not returned to that job | [`owner.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/owner.rs) `maintain` |
-| Mount copies only the template; it scans and copies no tree | [`startup.rs`](../../../../engine/crates/layerfs-overlay/src/database/startup.rs) `copy_template` |
-| The file is unlinked only after both the terminal mark and a checked close, and only if its device, inode and link count still match | [`backing.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/backing.rs) `Drop` |
+| One file, one connection, one `Overlay`, one lock per Workspace; Workspaces share no connection, writer, pager or memory budget | [`workspaces.rs`](../../../../engine/crates/layerfs-store-service/src/workspace/owner/roster/workspaces.rs) `open`, [`state.rs`](../../../../engine/crates/layerfs-store-service/src/workspace/owner/state.rs) |
+| The lock is held for one short job, never across Store I/O, a whole Exec or a whole Commit | [`jobs.rs`](../../../../engine/crates/layerfs-store-service/src/workspace/owner/jobs.rs) `call` |
+| No sync and no space reserved ahead of use: `synchronous=OFF`, `close_database` performs no sync, `reserved_tail_bytes` and `cleanup_headroom_bytes` are 0 | [`profile.rs`](../../../../engine/crates/layerfs-overlay/src/backing/profile.rs), [`connection.rs`](../../../../engine/crates/layerfs-overlay/src/backing/connection.rs), [`physical.rs`](../../../../engine/crates/layerfs-overlay/src/backing/physical.rs) |
+| One attempt: `busy_timeout=0`, no replay; an unknown outcome quarantines the engine for good | [`connection.rs`](../../../../engine/crates/layerfs-overlay/src/backing/connection.rs) |
+| A published mutation stays published: a later maintenance failure is retained, not returned to that job | [`jobs.rs`](../../../../engine/crates/layerfs-store-service/src/workspace/owner/jobs.rs) `maintain` |
+| Mount copies only the template; it scans and copies no tree | [`startup.rs`](../../../../engine/crates/layerfs-overlay/src/backing/startup.rs) `copy_template` |
+| The file is unlinked only after both the terminal mark and a checked close, and only if its device, inode and link count still match | [`backing.rs`](../../../../engine/crates/layerfs-store-service/src/workspace/owner/roster/backing.rs) `Drop` |
 
 ## Limits and failures
 
 | Limit or failure | Value or error | Source |
 | --- | --- | --- |
 | Job windows (bound one job, not a file or Workspace) | `WRITE_WINDOW` 256 KiB, `READ_WINDOW` 128 KiB, `PAGE_ROWS` 1,024, `RECORD_ROWS` 64, `OPERATION_RECORD_BYTES` 65 536 | [`types.rs`](../../../../engine/crates/layerfs-overlay/src/contract/types.rs) |
-| Open state | Grows with open files, lookups, readers and kernel references; no cap (the one resident exception) | [`open/kernel.rs`](../../../../engine/crates/layerfs-overlay/src/open/kernel.rs) |
-| Admitted Workspaces | `OwnerConfig.namespaces` (daemon: `DaemonLimits.namespaces`; library default 16); one more is `AdmissionFull` | [`owner.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/owner.rs), [`application/owner.rs`](../../../../engine/crates/layerfs-daemon/src/application/owner.rs) |
-| Full device | Job rolled back, then `OverlayError::NoSpace` | [`connection.rs`](../../../../engine/crates/layerfs-overlay/src/database/connection.rs), [`physical.rs`](../../../../engine/crates/layerfs-overlay/src/database/physical.rs) |
-| Unknown outcome | `Uncertain`; later jobs `Quarantined` | [`connection.rs`](../../../../engine/crates/layerfs-overlay/src/database/connection.rs) |
-| Maintenance failure | Kept as the Workspace's `maintenance_error`; the daemon then refuses new Mounts (`mount:debt`) | [`owner.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/owner.rs), [`operations.rs`](../../../../engine/crates/layerfs-daemon/src/control/operations.rs) |
-| Close or unlink fails | `CloseFailure` keeps the connection; `OwnerError::Deletion` keeps the file handle and marks the slot `Failed` | [`error.rs`](../../../../engine/crates/layerfs-overlay/src/contract/error.rs), [`workspaces.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/workspaces.rs) |
-| Platform and SQLite | Linux or macOS, else `UnsupportedPlatform`; SQLite 3.51.0 or 3.53.2 | [`physical.rs`](../../../../engine/crates/layerfs-overlay/src/database/physical.rs), [`profile.rs`](../../../../engine/crates/layerfs-overlay/src/database/profile.rs) |
+| Open state | Grows with open files, lookups, readers and kernel references; no cap (the one resident exception) | [`open/state.rs`](../../../../engine/crates/layerfs-overlay/src/open/state.rs) |
+| Admitted Workspaces | `OwnerConfig.namespaces` (daemon: `DaemonLimits.namespaces`; library default 16); one more is `AdmissionFull` | [`jobs.rs`](../../../../engine/crates/layerfs-store-service/src/workspace/owner/jobs.rs), [`startup/lifecycle.rs`](../../../../engine/crates/layerfs-daemon/src/application/startup/lifecycle.rs) |
+| Full device | Job rolled back, then `OverlayError::NoSpace` | [`connection.rs`](../../../../engine/crates/layerfs-overlay/src/backing/connection.rs), [`physical.rs`](../../../../engine/crates/layerfs-overlay/src/backing/physical.rs) |
+| Unknown outcome | `Uncertain`; later jobs `Quarantined` | [`connection.rs`](../../../../engine/crates/layerfs-overlay/src/backing/connection.rs) |
+| Maintenance failure | Kept as the Workspace's `maintenance_error`; the daemon then refuses new Mounts (`mount:debt`) | [`jobs.rs`](../../../../engine/crates/layerfs-store-service/src/workspace/owner/jobs.rs), [`dispatch.rs`](../../../../engine/crates/layerfs-daemon/src/workspace/route/dispatch.rs) |
+| Close or unlink fails | `CloseFailure` keeps the connection; `OwnerError::Deletion` keeps the file handle and marks the slot `Failed` | [`error.rs`](../../../../engine/crates/layerfs-overlay/src/contract/error.rs), [`workspaces.rs`](../../../../engine/crates/layerfs-store-service/src/workspace/owner/roster/workspaces.rs) |
+| Platform and SQLite | Linux or macOS, else `UnsupportedPlatform`; SQLite 3.51.0 or 3.53.2 | [`physical.rs`](../../../../engine/crates/layerfs-overlay/src/backing/physical.rs), [`profile.rs`](../../../../engine/crates/layerfs-overlay/src/backing/profile.rs) |
 
 ## Demonstration
 
@@ -193,10 +193,10 @@ public API; none needs root, Docker or an environment variable.
 
 | Test or example | Command | Platform | Shows |
 | --- | --- | --- | --- |
-| [`payload.rs`](../../../../engine/crates/layerfs-overlay/tests/payload.rs) | `cargo +1.85.1 test --locked -p layerfs-overlay --test payload` | Linux, macOS | Layered reads match a model across writes, shrinks, capture and install; holes cost no rows |
-| [`indexed_operation_record.rs`](../../../../engine/crates/layerfs-overlay/tests/indexed_operation_record.rs) | `cargo +1.85.1 test --locked -p layerfs-overlay --test indexed_operation_record` | Linux, macOS | Keys never alias; guarded apply; records reclaim in windows after release |
-| [`captured_namespace.rs`](../../../../engine/crates/layerfs-overlay/tests/captured_namespace.rs) | `cargo +1.85.1 test --locked -p layerfs-overlay --test captured_namespace` | Linux, macOS | A captured reader sees sealed rows only |
-| [`kernel_memory.rs`](../../../../engine/crates/layerfs-overlay/tests/kernel_memory.rs) | `cargo +1.85.1 test --locked -p layerfs-overlay --test kernel_memory` | Linux, macOS | Requested allocation of kernel-reference and custody maps for 5,000 remembered files |
+| [`layers.rs`](../../../../engine/crates/layerfs-overlay/tests/payload/layers.rs) | `cargo +1.85.1 test --locked -p layerfs-overlay --test payload` | Linux, macOS | Layered reads match a model across writes, shrinks, capture and install; holes cost no rows |
+| [`identity.rs`](../../../../engine/crates/layerfs-overlay/tests/operation_record/identity.rs) | `cargo +1.85.1 test --locked -p layerfs-overlay --test operation_record identity` | Linux, macOS | Keys never alias; guarded apply; records reclaim in windows after release |
+| [`captured_namespace.rs`](../../../../engine/crates/layerfs-overlay/tests/custody/captured_namespace.rs) | `cargo +1.85.1 test --locked -p layerfs-overlay --test custody captured_namespace` | Linux, macOS | A captured reader sees sealed rows only |
+| [`kernel_memory.rs`](../../../../engine/crates/layerfs-overlay/tests/standalone/kernel_memory.rs) | `cargo +1.85.1 test --locked -p layerfs-overlay --test kernel_memory` | Linux, macOS | Requested allocation of kernel-reference and custody maps for 5,000 remembered files |
 
 ## Pages
 

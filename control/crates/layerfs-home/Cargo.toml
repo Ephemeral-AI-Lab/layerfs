@@ -7,9 +7,9 @@ rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
-# Also this process as a record names it (pid, kernel start time, boot):
-# `layerfs_bridge::process`, below the drivers (layerfs-project#112).
 layerfs-protocol = { path = "../../../engine/crates/layerfs-protocol" }
 libc = "=0.2.189"
 nix = { version = "=0.31.3", default-features = false, features = ["fs", "user", "signal", "socket", "poll"] }
+# Also this process as a record names it (pid, kernel start time, boot):
+# `layerfs_os::process`, below the drivers (layerfs-project#112).
 layerfs-os = { path = "../../../engine/crates/layerfs-os" }

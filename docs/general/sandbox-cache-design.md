@@ -84,23 +84,23 @@ one daemon (complete process/bootstrap integration still in progress)
 
 The relevant production boundaries are:
 
-- [`workspace.rs`](../../engine/crates/layerfs-workspace/src/workspace/state.rs):
+- [`workspace.rs`](../../engine/crates/layerfs-vfs/src/binding/state.rs):
   `Workspace::open` accepts `Arc<CanonicalClient>`, a filesystem root, allocation
   scope and incarnation, then binds a separate overlay route.
-- [`base.rs`](../../engine/crates/layerfs-workspace/src/base/view.rs): `BaseView` retains
+- [`base.rs`](../../engine/crates/layerfs-vfs/src/base/read.rs): `BaseView` retains
   that root and shared client; lookup, listing and file reads use public
   cluster-one content APIs. Root binding reads the root without enumerating the
   whole namespace or materializing all file payloads.
-- [`client.rs`](../../engine/crates/layerfs-workspace/src/base/client.rs):
+- [`fetch.rs`](../../engine/crates/layerfs-vfs/src/base/fetch.rs):
   `CanonicalClient` checks demand cardinality, object identities and processing
   windows, and releases the cache lock before upstream acquisition.
-- [`cache.rs`](../../engine/crates/layerfs-workspace/src/base/cache.rs): bounded standard
+- [`cache.rs`](../../engine/crates/layerfs-vfs/src/base/cache.rs): bounded standard
   maps store immutable bytes and recency. Large entries can bypass retention.
 - [`owner.rs`](https://github.com/Ephemeral-AI-Lab/layerfs/blob/c6df039e63187da1f407843540c37477c9e25beb/core/crates/layerfs-daemon/src/owner.rs) and
   [`credits.rs`](https://github.com/Ephemeral-AI-Lab/layerfs/blob/c6df039e63187da1f407843540c37477c9e25beb/core/crates/layerfs-daemon/src/credits.rs): short SQL service
   and aggregate admission credits, including caller-retained result ownership.
-- [`db.rs`](../../engine/crates/layerfs-overlay/src/database/connection.rs),
-  [`profile.rs`](../../engine/crates/layerfs-overlay/src/database/profile.rs) and
+- [`db.rs`](../../engine/crates/layerfs-overlay/src/backing/connection.rs),
+  [`profile.rs`](../../engine/crates/layerfs-overlay/src/backing/profile.rs) and
   [`schema.sql`](../../engine/crates/layerfs-overlay/sql/schema.sql): one initialized
   disposable connection, read-back settings and Workspace-prefixed relations.
 

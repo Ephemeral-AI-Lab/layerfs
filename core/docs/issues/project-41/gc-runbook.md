@@ -252,7 +252,7 @@ ext4): the historical `VACUUM INTO` arm measured mark 17.2 s/live GB, build
 install 7.311 s. The fresh-copy prototype's 10 GiB run measured 32.5 s against
 120.8 s for that build; the 10 GB arm is the agent budget, the 50 GB arm is the
 owner-final measurement (#42 item 44). Its receipt is
-`engine/crates/layerfs-persistence/tests/fixtures/sqlite_compact_capacity_measure_50gb.json`
+`engine/crates/layerfs-persistence/tests/support/fixtures/sqlite_compact_capacity_measure_50gb.json`
 (`none` 1,633.585 s, `rebuild` 5,131.835 s, one run per path on the superseded
 build), and the whole-Store 10 GB medians are kept in
 `.../sqlite_compact_capacity_measure_whole_store.json` (a transcribed summary:

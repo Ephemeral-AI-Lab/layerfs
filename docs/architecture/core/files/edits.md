@@ -45,7 +45,7 @@ replacements. Each `Edit` replaces `start..end` with `replacement_len` bytes in
 A whole-file or empty result has the root complete construction would give.
 A chunked result keeps the base's untouched extents and chunks only the
 replacement, so in general its root differs from fresh construction of the
-same bytes ([`edit_model.rs`](../../../../core/crates/layerfs-content/tests/edit_model.rs)).
+same bytes ([`model.rs`](../../../../core/crates/layerfs-content/tests/edit/model.rs)).
 
 ### Plans
 
@@ -83,10 +83,10 @@ replaced base range is never read.
 
 | Step | Source |
 | --- | --- |
-| Split cuts one stored extent; the payload ID stays, offset and length move | [`split.rs`](../../../../core/crates/layerfs-content/src/file/edit/split.rs), [`tree.rs`](../../../../core/crates/layerfs-content/src/file/edit/tree.rs) |
+| Split cuts one stored extent; the payload ID stays, offset and length move | [`tree.rs`](../../../../core/crates/layerfs-content/src/file/edit/tree.rs) |
 | The removed middle is discarded before it is encoded | `tree::discard` in [`apply.rs`](../../../../core/crates/layerfs-content/src/file/edit/apply.rs) |
 | The replacement goes through the construction scanner and builder; each new chunk takes an `Aligner` hint | [`chunk_runs.rs`](../../../../core/crates/layerfs-content/src/file/construction/chunk_runs.rs) |
-| Concatenation rebuilds pages on the join boundaries only; contiguous slices of one payload coalesce | [`tree.rs`](../../../../core/crates/layerfs-content/src/file/edit/tree.rs), [`concat.rs`](../../../../core/crates/layerfs-content/src/file/edit/concat.rs) |
+| Concatenation rebuilds pages on the join boundaries only; contiguous slices of one payload coalesce | [`tree.rs`](../../../../core/crates/layerfs-content/src/file/edit/tree.rs), [`coalesce.rs`](../../../../core/crates/layerfs-content/src/file/edit/coalesce.rs) |
 | Drafts no longer reachable are released after each edit; only pages the final root reaches are emitted, children first | [`objects.rs`](../../../../core/crates/layerfs-content/src/file/edit/objects.rs), [`finish.rs`](../../../../core/crates/layerfs-content/src/file/edit/finish.rs) |
 
 ### Runs and state profiles
@@ -96,7 +96,7 @@ compare pass checks it against stored ranges without reading payloads where it
 can ([`zero.rs`](../../../../core/crates/layerfs-content/src/file/edit/zero.rs)).
 One request applies any number of edits in one pass; the unfinished frontier
 lives in one of two profiles
-([`state.rs`](../../../../core/crates/layerfs-content/src/file/edit/state.rs)):
+([`state.rs`](../../../../core/crates/layerfs-content/src/file/draft/state.rs)):
 
 | Profile | Entry point | Drafts live | Bound |
 | --- | --- | --- | --- |
@@ -106,7 +106,7 @@ lives in one of two profiles
 The backing is plain keyed records with guarded batches
 (`EditRecordChange` with an expected pre-state; `Applied` or `NotApplied`);
 Content defines no database type. Commit supplies the backing
-([`captured/owner.rs`](../../../../engine/crates/layerfs-workspace/src/construction/captured/owner.rs)).
+([`file/owner.rs`](../../../../engine/crates/layerfs-vfs/src/construction/file/owner.rs)).
 A failure is returned once and the editor becomes terminal.
 
 ### Cost
@@ -114,12 +114,12 @@ A failure is returned once and the editor becomes terminal.
 | Work | Grows with | Source |
 | --- | --- | --- |
 | Mapping pages read | paths from the root to each edit boundary | [`tree.rs`](../../../../core/crates/layerfs-content/src/file/edit/tree.rs) |
-| Payloads read | same-length replaced ranges, read by the compare pass up to the first difference; a split reads none | [`compare.rs`](../../../../core/crates/layerfs-content/src/file/edit/compare.rs) |
+| Payloads read | same-length replaced ranges, read by the compare pass up to the first difference; a split reads none | [`noop.rs`](../../../../core/crates/layerfs-content/src/file/edit/noop.rs) |
 | Payloads written | replacement bytes | [`chunk_runs.rs`](../../../../core/crates/layerfs-content/src/file/construction/chunk_runs.rs) |
 | Pages emitted | changed pages on the join paths | [`finish.rs`](../../../../core/crates/layerfs-content/src/file/edit/finish.rs) |
 | A page two passes need | one read (shared `PageCache`) | [`apply.rs`](../../../../core/crates/layerfs-content/src/file/edit/apply.rs) |
 
-[`edit_localized.rs`](../../../../core/crates/layerfs-content/tests/edit_localized.rs)
+[`localized.rs`](../../../../core/crates/layerfs-content/tests/edit/localized.rs)
 records one overwrite of three extents: 3 pages read on an 8 MB file, 4 on a
 24 MB file, and the same 3 payloads in both. Routes whose cost follows the
 result instead: a whole-file result reads every kept byte (at most the
@@ -144,7 +144,7 @@ file state. All integers are big-endian.
 
 | Rule | Value | Source |
 | --- | --- | --- |
-| Entries per non-root page | `MIN_ENTRIES` 64 to `MAX_ENTRIES` 128 | [`types.rs`](../../../../core/crates/layerfs-content/src/file/mapping/types.rs) |
+| Entries per non-root page | `MIN_ENTRIES` 64 to `MAX_ENTRIES` 128 | [`node.rs`](../../../../core/crates/layerfs-content/src/file/mapping/node.rs) |
 | Root leaf / root branch | 0 to 128 entries / at least 2 children | same |
 | Levels | at most `MAX_LEVEL` 31, else `MappingDepthExceeded` | same |
 | Page size | at most 8,192 canonical bytes, else `ObjectLimitExceeded` | same |

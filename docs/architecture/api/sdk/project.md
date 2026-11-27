@@ -6,7 +6,7 @@ The `project` calls: import a folder on this computer into a Store as `<store>/<
 
 | | |
 | --- | --- |
-| Source | [`api/crates/layerfs-api/src/project`](../../../../api/crates/layerfs-api/src/project) (one file per call), [`layerfs-store/src/project`](../../../../control/crates/layerfs-store/src/project), [`layerfs-store/src/calls/project.rs`](../../../../control/crates/layerfs-store/src/calls/project.rs), [`layerfs-control/src/project.rs`](../../../../control/crates/layerfs-control/src/project.rs) |
+| Source | [`crates/layerfs-api/src/families/project`](../../../../api/crates/layerfs-api/src/families/project) (one file per call), [`src/data/project`](../../../../control/crates/layerfs-store/src/data/project), [`src/data/project/hide_path.rs`](../../../../control/crates/layerfs-store/src/data/project/hide_path.rs), [`data/project/with_users.rs`](../../../../control/crates/layerfs-store/src/data/project/with_users.rs) |
 | Runs by default | `list`, `get`: the home's records, then each ready Store's own list where its calls run. `init`, `stats`, `export`, `delete`, `hide_path`: where the Store's calls run (the caller's process for PostgreSQL and for a sqlite Store on a locally executing machine, else that machine's worker). `doctor`: [the doctors](../../control/doctor/README.md) |
 | Design | [Stores and projects](../../control/stores-and-projects/README.md), [projects](../../control/stores-and-projects/projects.md), [Project Init](../../engine/project-init/README.md) |
 
@@ -40,13 +40,13 @@ The `project` calls: import a folder on this computer into a Store as `<store>/<
 A `project` argument is `<store>/<project>`: both parts 1 to 63 characters
 of `a-z 0-9 _ . -`, starting and ending with a letter or digit, not a
 Windows device name, checked before dispatch
-([`calls/check.rs`](../../../../api/crates/layerfs-api/src/calls/check.rs),
+([`guard/arguments.rs`](../../../../api/crates/layerfs-api/src/dispatch/guard/arguments.rs),
 [`names.rs`](../../../../control/crates/layerfs-home/src/names.rs)); a bare
 `api` is `InvalidInput`. A folder scope refuses every `project` call
 (`out of scope: project.<call>`,
-[`calls/scope.rs`](../../../../api/crates/layerfs-api/src/calls/scope.rs)).
+[`guard/scope.rs`](../../../../api/crates/layerfs-api/src/dispatch/guard/scope.rs)).
 
-**A project's state** ([`project/state.rs`](../../../../control/crates/layerfs-store/src/project/state.rs))
+**A project's state** ([`status/state.rs`](../../../../control/crates/layerfs-store/src/data/project/status/state.rs))
 comes from the records, with no probe: `busy` while an Init or a delete of
 it runs (`op { name, phase, started_at }`, `name` `init` or `delete`);
 `blocked` when its Store, or that Store's machine, is not ready or the Store
@@ -85,8 +85,8 @@ whole, with no Git-ignore filtering. The project's entry is claimed first
 (a name the home already holds is `Exists`), so the project is listed `busy`
 while Init runs; a refusal removes the entry, and an outcome that is not
 known (a lost reply) keeps it `broken` `unresolved`
-([`project/family.rs`](../../../../control/crates/layerfs-store/src/project/family.rs),
-[`project/add.rs`](../../../../control/crates/layerfs-store/src/project/add.rs)).
+([`init/run.rs`](../../../../control/crates/layerfs-store/src/data/project/init/run.rs),
+[`init/sqlite.rs`](../../../../control/crates/layerfs-store/src/data/project/init/sqlite.rs)).
 `commit` is main's first publication; the long form adds `outcome`
 (`created`), `project`, `store`, `engine`, `machine`, `root` and
 `created_at`. Progress events are `{phase, done, total}`: `check`, `send`
@@ -96,18 +96,18 @@ known (a lost reply) keeps it `broken` `unresolved`
 | --- | --- |
 | PostgreSQL | the caller's process |
 | sqlite on a locally executing machine (the host machine, `linux-host` or `macos-host`) | the caller's process; the kernel guard admits the Store's directory only when it is owned by this user and private (`0700`) on Linux ext4, xfs or btrfs, or macOS apfs or hfs |
-| sqlite on any other machine (which must be running), and the `host` platform on Windows | that machine's worker, on a staged copy of the folder sent from the caller, deleted when its Init ends ([`project/send.rs`](../../../../control/crates/layerfs-store/src/project/send.rs)) |
+| sqlite on any other machine (which must be running), and the `host` platform on Windows | that machine's worker, on a staged copy of the folder sent from the caller, deleted when its Init ends ([`init/send.rs`](../../../../control/crates/layerfs-store/src/data/project/init/send.rs)) |
 
 | Refusal | When | Source |
 | --- | --- | --- |
-| `InvalidInput` | a relative `folder`, a `timeout` that is not positive, a source entry Init refuses (device, FIFO, socket, set-user-ID or sticky bits), a missing folder | [`project/init.rs`](../../../../control/crates/layerfs-store/src/project/init.rs), [`project/send.rs`](../../../../control/crates/layerfs-store/src/project/send.rs) |
-| `NotFound` | no Store of that name, or no Store file at its path | [`project/add.rs`](../../../../control/crates/layerfs-store/src/project/add.rs) |
+| `InvalidInput` | a relative `folder`, a `timeout` that is not positive, a source entry Init refuses (device, FIFO, socket, set-user-ID or sticky bits), a missing folder | [`init/worker.rs`](../../../../control/crates/layerfs-store/src/data/project/init/worker.rs), [`init/send.rs`](../../../../control/crates/layerfs-store/src/data/project/init/send.rs) |
+| `NotFound` | no Store of that name, or no Store file at its path | [`init/sqlite.rs`](../../../../control/crates/layerfs-store/src/data/project/init/sqlite.rs) |
 | `Exists` | the project's entry or its name in the Store exists (raised `NameTaken`) | same |
 | `Busy` | another project is being added to the same Store | same |
-| `Capacity` | worker route: the machine's free disk is below the copy plus headroom | [`project/send.rs`](../../../../control/crates/layerfs-store/src/project/send.rs) |
-| `Unsupported` | the kernel guard refuses the Store's directory | [`kernel_guard.rs`](../../../../engine/crates/layerfs-store-service/src/kernel_guard.rs) |
-| `Failed` | the deadline passed, a read error, or another engine failure | [`project/add.rs`](../../../../control/crates/layerfs-store/src/project/add.rs) |
-| `Unknown` | worker route: a stage or the answer was lost; the entry stays `broken` `unresolved` until `project delete` | [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) |
+| `Capacity` | worker route: the machine's free disk is below the copy plus headroom | [`init/send.rs`](../../../../control/crates/layerfs-store/src/data/project/init/send.rs) |
+| `Unsupported` | the kernel guard refuses the Store's directory | [`kernel_guard.rs`](../../../../engine/crates/layerfs-store-service/src/store/kernel_guard.rs) |
+| `Failed` | the deadline passed, a read error, or another engine failure | [`init/sqlite.rs`](../../../../control/crates/layerfs-store/src/data/project/init/sqlite.rs) |
+| `Unknown` | worker route: a stage or the answer was lost; the entry stays `broken` `unresolved` until `project delete` | [`guest/client.rs`](../../../../control/crates/layerfs-machine/src/route/guest/client.rs) |
 
 Run on macOS (`macos-host`) with a debug build:
 
@@ -153,7 +153,7 @@ companion when not `ready`; its long form adds `store`, `engine`, `machine`,
 recorded projects are listed `blocked`. `--with stats` adds `size` to each
 row: the length main's head publication records, one record per project and
 no tree walk; it is left out for a blocked project
-([`project/listing.rs`](../../../../control/crates/layerfs-store/src/project/listing.rs)).
+([`status/listing.rs`](../../../../control/crates/layerfs-store/src/data/project/status/listing.rs)).
 
 ```console
 $ layerfs project list
@@ -221,7 +221,7 @@ symlinks are not followed. `size` is the length the counted node records,
 less the files `project hide-path` hides. The walk shares the saved-read
 work bound; past it the counts are partial and `partial: true`, never a
 silent cap. An object read error is a refusal, not a partial answer
-([`read/tree_stats.rs`](../../../../engine/crates/layerfs-store-service/src/read/tree_stats.rs)).
+([`tree/stats.rs`](../../../../engine/crates/layerfs-store-service/src/filesystem/tree/stats.rs)).
 
 ```console
 $ layerfs project stats shop/api
@@ -263,11 +263,11 @@ size }` (`size` the bytes written); the long form adds `dir_count`,
 an existing parent. Everything is written into a private `0700` staging
 folder beside it, then renamed onto it once complete; any failure removes
 this call's staging folder only
-([`project/export/`](../../../../control/crates/layerfs-store/src/project/export/mod.rs)).
+([`project/export/`](../../../../control/crates/layerfs-store/src/data/project/export/mod.rs)).
 Progress events are `{phase, done, total}`: `prepare`, `export` and
 `finalize`, `done` the bytes written so far and `total` null; `finalize`
 comes only once the folder is in place, and `export` events come at most
-every 200 ms ([`export/writer.rs`](../../../../control/crates/layerfs-store/src/project/export/writer.rs)).
+every 200 ms ([`export/writer.rs`](../../../../control/crates/layerfs-store/src/data/project/export/writer.rs)).
 
 | Fidelity | Contract |
 | --- | --- |
@@ -331,15 +331,15 @@ home entry cannot be removed, the call still succeeds with
 (`store/<store>/delete/<project>.json`), so running it again finishes the
 entry. Running it again also clears a `broken` `unresolved` project,
 including the entry of an Init that never reached the Store
-([`project/delete.rs`](../../../../control/crates/layerfs-store/src/project/delete.rs)).
+([`delete/run.rs`](../../../../control/crates/layerfs-store/src/data/project/delete/run.rs)).
 The long form is `ok, home_entry_kept, outcome ("deleted"), deleted_at`.
 
 | Refusal | When | Source |
 | --- | --- | --- |
-| `NotFound` | the Store or project is missing (or already retired) | [`project/delete.rs`](../../../../control/crates/layerfs-store/src/project/delete.rs) |
+| `NotFound` | the Store or project is missing (or already retired) | [`delete/run.rs`](../../../../control/crates/layerfs-store/src/data/project/delete/run.rs) |
 | `Busy` | a Sandbox of the project is recorded (`detail.related` lists each), or another call's `op` holds the project | same |
-| `InUse` | a Workspace of the project is mounted (raised `MountsActive`) | [`history/admission.rs`](../../../../engine/crates/layerfs-store-service/src/history/admission.rs) |
-| `Unknown` | worker route: the answer was lost; the intent stays | [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) |
+| `InUse` | a Workspace of the project is mounted (raised `MountsActive`) | [`history/gc_admission.rs`](../../../../engine/crates/layerfs-store-service/src/history/gc_admission.rs) |
+| `Unknown` | worker route: the answer was lost; the intent stays | [`guest/client.rs`](../../../../control/crates/layerfs-machine/src/route/guest/client.rs) |
 
 ### project.hide_path
 
@@ -369,7 +369,7 @@ re-creations. A path already hidden answers `{"unchanged":true}`. The long
 form is `ok, unchanged, outcome ("hidden" or "unchanged"), path,
 frontier_serial, hidden_at`. The path must be a normalized absolute POSIX
 path of at most 4096 bytes and 256 components
-([`path.rs`](../../../../core/crates/layerfs-history/src/contract/path.rs)).
+([`path.rs`](../../../../core/crates/layerfs-history/src/catalog/path.rs)).
 It was `project.remove_file`, removed with no alias.
 
 ```console
@@ -431,10 +431,10 @@ $ layerfs project doctor shop/api --full --detail
 Every `project` call except `list`, `get` and `doctor` can also meet the
 Store refusals: `NotFound` for the Store or project; `Busy` or `Unresolved`
 while the Store's record holds another operation
-([`op.rs`](../../../../control/crates/layerfs-home/src/op.rs)); `Unavailable`
+([`intent.rs`](../../../../control/crates/layerfs-home/src/record/intent.rs)); `Unavailable`
 when the Store's worker is not recorded or not reached, with `fix: layerfs
 machine start <machine>`; nothing starts a machine
-([`place.rs`](../../../../control/crates/layerfs-store/src/place.rs)). The
+([`executor.rs`](../../../../control/crates/layerfs-store/src/admin/route/executor.rs)). The
 catalog is in [errors and events](../calls/errors-and-events.md).
 
 ## Related

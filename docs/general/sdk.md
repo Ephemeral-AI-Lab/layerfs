@@ -68,12 +68,12 @@ Every new Store explicitly selects the Normal profile (WAL, `synchronous=NORMAL`
 Init publishes its original initial Layer and Branch, seals the sole Store, and
 returns a closed file and the actual original acknowledgements.
 
-[Fork](../../engine/crates/layerfs-store-service/src/methods/branch/fork.rs) preserves the original
+[Fork](../../engine/crates/layerfs-store-service/src/families/branch/fork.rs) preserves the original
 explicit ForkRequest and its Layer or Commit source. It does not invent a latest
 head lookup or a hidden refresh. The history trunk is a LayerStack, not a Branch;
 the first working Branch is named main today.
 
-[Branches](../../engine/crates/layerfs-store-service/src/methods/project.rs) reads one page of a
+[Branches](../../engine/crates/layerfs-store-service/src/families/branch/list.rs) reads one page of a
 selected stack in name order, with id, name, base Layer and head Commit. It uses
 one authorized additive Bridge request (tag 14), one reply (tag 17) and one daemon
 dispatch arm to the existing HistoryCatalog::branches port. The existing control
@@ -81,7 +81,7 @@ window is 32 records. The existing authenticated History cursor covers further
 pages; the caller advances it explicitly. The SDK checks stack identity, result
 size, ordered names and continuation shape without a second request.
 
-[Commits](../../engine/crates/layerfs-store-service/src/methods/branch/list_commits.rs) renames the public
+[Commits](../../engine/crates/layerfs-store-service/src/families/commit/list.rs) renames the public
 history method. It sends the unchanged History request and returns one anchored,
 bounded ancestry page, newest first. On `main` it pages the stack's published
 Layers, each with its source Branch and Commit (S §3.3: on main, a Layer id is
@@ -90,7 +90,7 @@ publication semantics and original control bytes are unchanged.
 
 ## Sandbox
 
-[Create](../../api/crates/layerfs-api/src/sandbox/create.rs) uses the original
+[Create](../../api/crates/layerfs-api/src/families/sandbox/create.rs) uses the original
 explicit deployment/image/volume, private configuration, executable, authentication
 keys and startup wait. For a fresh Store it creates, uploads, starts, authenticates,
 sends the original initial Hello, installs the sealed Project once, then waits on
@@ -101,7 +101,7 @@ startup and sends no second install. Its manifest must match the supplied Projec
 only the populated daemon SQLite version may differ from the host Init manifest.
 A mismatched selection fails at Validate before deployment or control effects.
 
-[Close](../../api/crates/layerfs-api/src/sandbox/close.rs) consumes the owner. It
+[Close](../../api/crates/layerfs-api/src/families/sandbox/close.rs) consumes the owner. It
 attempts the original one-second stop once, then deletes once after acknowledged
 stop, with force=false and v=false. Stop failure does not attempt delete. Either
 failure retains exact runtime, control, original inputs, handshake, observation
@@ -113,14 +113,14 @@ or command/descriptor drain. The caller explicitly unmounts Workspaces first.
 
 ## Workspace
 
-[Mount](../../api/crates/layerfs-api/src/sandbox/mount.rs) takes no Project argument;
+[Mount](../../api/crates/layerfs-api/src/families/sandbox/mount.rs) takes no Project argument;
 the Sandbox has already selected its Store. It sends the original bind and attach
 requests once each. The first acknowledgement carries the selected Branch/root;
 the second carries the mounted directory and native negotiation receipt. A failed
 attach retains the bound token in MountFailure. No bind, attach, unmount or rollback
 is guessed from a lost reply or attempted again automatically.
 
-[Exec](../../api/crates/layerfs-api/src/sandbox/exec.rs) delegates ordinary existing
+[Exec](../../api/crates/layerfs-api/src/families/sandbox/exec.rs) delegates ordinary existing
 Sandbox execution with the mount as working directory and the deployment's admitted
 identity. It returns the original runtime owner for Start, streams, exit status and
 explicit cancellation. It sends no daemon control request, registers no filesystem
@@ -128,12 +128,12 @@ Exec, applies no ordinary command deadline, and performs no Commit or unmount.
 Any other permitted process can use the same mount through ordinary filesystem
 calls; the filesystem daemon supervises no commands.
 
-[Commit](../../api/crates/layerfs-api/src/sandbox/commit.rs) captures the shared
+[Commit](../../api/crates/layerfs-api/src/families/sandbox/commit.rs) captures the shared
 published frontier and returns Committed or UpToDate. It does not filter mutations
-by launch route or command completion. [Status](../../api/crates/layerfs-api/src/sandbox/status.rs)
+by launch route or command completion. [Status](../../api/crates/layerfs-api/src/families/sandbox/status.rs)
 retains the existing maintained-state scope and never resolves an unknown operation.
 
-[Unmount](../../api/crates/layerfs-api/src/sandbox/unmount.rs) folds normal and
+[Unmount](../../api/crates/layerfs-api/src/families/sandbox/unmount.rs) folds normal and
 forced terminal operations into `unmount(token, force)`. Normal success returns
 None; forced success returns Some(ForcedOutcome) with the original dispositions.
 Normal Busy keeps the mount usable. Public force does not relinquish unknown

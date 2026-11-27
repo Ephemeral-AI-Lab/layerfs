@@ -1,5 +1,5 @@
 target/
-# The Node addon that api/scripts/build-native.mjs builds into the package.
+# The Node addon that api/scripts/native-addon.mjs builds into the package.
 /api/node/layerfs.node
 /target-linux/
 /eval/runs/

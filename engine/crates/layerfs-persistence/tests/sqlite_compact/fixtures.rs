@@ -14,7 +14,7 @@
 //! AC-48 (empty Store and rebuild arms), AC-52, AC-56 (SQLite half), AC-58.
 //!
 //! Update the golden deliberately with `UPDATE_GOLDEN=1 cargo test -p
-//! layerfs-persistence --test sqlite_compact_fixtures`; the second run checks
+//! layerfs-persistence --test sqlite_compact fixtures`; the second run checks
 //! the new file.
 #![cfg(any(target_os = "macos", target_os = "linux"))]
 use crate::support;

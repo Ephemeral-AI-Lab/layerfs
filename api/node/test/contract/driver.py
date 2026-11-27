@@ -1,4 +1,4 @@
-"""Runs a list of calls through the Python package for api/node/test/contract.mjs.
+"""Runs a list of calls through the Python package for api/node/test/contract/front-ends.test.mjs.
 
 stdin: JSON `{ "home": ..., "aio": bool, "steps": [{ "call": "file.read", "args": [...], "opts": {...} }] }`
 with bytes as `{"$bytes": base64}` and a float as `{"$float": text}` (a one-key `{"base64": ...}` map stays a map).

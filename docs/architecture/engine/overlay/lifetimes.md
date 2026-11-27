@@ -6,7 +6,7 @@ When [Overlay](README.md) state can be released and how it is reclaimed: generat
 
 | | |
 | --- | --- |
-| Source | [`layerfs-overlay/src/lifetime`](../../../../engine/crates/layerfs-overlay/src/lifetime), [`layerfs-overlay/src/maintenance`](../../../../engine/crates/layerfs-overlay/src/maintenance), [`layerfs-store-service/src/overlay`](../../../../engine/crates/layerfs-store-service/src/overlay) |
+| Source | [`crates/layerfs-overlay/src`](../../../../engine/crates/layerfs-overlay/src), [`layerfs-overlay/src/reclaim`](../../../../engine/crates/layerfs-overlay/src/reclaim), [`src/workspace/owner`](../../../../engine/crates/layerfs-store-service/src/workspace/owner) |
 
 ## Generations and frontier
 
@@ -29,24 +29,24 @@ When [Overlay](README.md) state can be released and how it is reclaimed: generat
 | `revision` | Local publication count; each published job adds one | same |
 | `base_root` | Committed root the Workspace shows | same |
 | `dirty_inodes`, `dirty_directory_entries` | Changes since the last capture | same |
-| `base_readers` | Held `BaseSource` windows; `install` requires zero | [`workspace.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/workspace.rs), [`generation.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/generation.rs) |
+| `base_readers` | Held `BaseSource` windows; `install` requires zero | [`workspace.rs`](../../../../engine/crates/layerfs-overlay/src/backing/workspace.rs), [`capture.rs`](../../../../engine/crates/layerfs-overlay/src/generation/capture.rs) |
 | `consolidating` | A failed capture being folded back into active | same |
-| `closed` | Terminal close admitted | [`close.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/close.rs) |
+| `closed` | Terminal close admitted | [`close.rs`](../../../../engine/crates/layerfs-overlay/src/backing/close.rs) |
 
 | Step | Call | Source |
 | --- | --- | --- |
-| Capture | `capture()`: active g becomes captured, active g+1; dirty counts 0; copies no rows | [`generation.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/generation.rs) |
+| Capture | `capture()`: active g becomes captured, active g+1; dirty counts 0; copies no rows | [`capture.rs`](../../../../engine/crates/layerfs-overlay/src/generation/capture.rs) |
 | Known success | `install(capture, root)`: `installed = g`, `base_root = root`, queue `RETIRE g` | same |
 | Known success, merged root | `install_merged(capture, root, changed)`: as `install`, and in the same transaction deletes the active row `keep_live_row` carried for each serial in `changed` (it would let bytes fall through to the merge's different ones). The caller refuses the install while any other active row overlaps `changed`, and holds mutations from that check to the install ([Commit](../commit/README.md#what-it-does)) | same |
-| Definite failure | `resolve_failed_capture`: `consolidating = g`, queue `FOLD g` | [`composition.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/composition.rs) |
+| Definite failure | `resolve_failed_capture`: `consolidating = g`, queue `FOLD g` | [`failed.rs`](../../../../engine/crates/layerfs-overlay/src/generation/failed.rs) |
 
 The frontier rule lives in the Workspace lock, not the engine: while a
 Capture waits, later mutations wait before any effect; while a merged Commit
 holds the Workspace (`MutationHold`, from its check of the active rows to its
 install), mutations wait too; while a known install
 waits, later base-source acquisitions wait
-([`state.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/state.rs),
-[`owner.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/owner.rs)).
+([`state.rs`](../../../../engine/crates/layerfs-store-service/src/workspace/owner/state.rs),
+[`jobs.rs`](../../../../engine/crates/layerfs-store-service/src/workspace/owner/jobs.rs)).
 These are readiness waits on a condition variable, not retries.
 
 ## Tickets
@@ -61,10 +61,10 @@ issue(rev) -> pending     reply sent or lost
 
 | Rule | Source |
 | --- | --- |
-| Every published job issues one reply-attempt ticket; a job that does not commit withdraws it | [`connection.rs`](../../../../engine/crates/layerfs-overlay/src/database/connection.rs), [`inode.rs`](../../../../engine/crates/layerfs-overlay/src/namespace/inode.rs) |
-| Tickets are a `Mutex<BTreeMap>` shared with replying threads; an attempt takes no Workspace job and no SQL | [`tickets.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/tickets.rs), [`owner.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/owner.rs) `reply_attempted` |
-| An attempt, including a lost reply, settles the ticket; it never removes published state or claims delivery | [`tickets.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/tickets.rs) |
-| Capture and terminal cleanup wait until no ticket is pending; `pending_publications` pages them for observation | [`generation.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/generation.rs), [`close.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/close.rs), [`frontier.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/frontier.rs) |
+| Every published job issues one reply-attempt ticket; a job that does not commit withdraws it | [`connection.rs`](../../../../engine/crates/layerfs-overlay/src/backing/connection.rs), [`inode.rs`](../../../../engine/crates/layerfs-overlay/src/namespace/inode.rs) |
+| Tickets are a `Mutex<BTreeMap>` shared with replying threads; an attempt takes no Workspace job and no SQL | [`tickets.rs`](../../../../engine/crates/layerfs-overlay/src/generation/tickets.rs), [`jobs.rs`](../../../../engine/crates/layerfs-store-service/src/workspace/owner/jobs.rs) `reply_attempted` |
+| An attempt, including a lost reply, settles the ticket; it never removes published state or claims delivery | [`tickets.rs`](../../../../engine/crates/layerfs-overlay/src/generation/tickets.rs) |
+| Capture and terminal cleanup wait until no ticket is pending; `pending_publications` pages them for observation | [`capture.rs`](../../../../engine/crates/layerfs-overlay/src/generation/capture.rs), [`close.rs`](../../../../engine/crates/layerfs-overlay/src/backing/close.rs), [`capture.rs`](../../../../engine/crates/layerfs-overlay/src/generation/capture.rs) |
 
 ## Orphans
 
@@ -83,10 +83,10 @@ last reference goes   finish_release: up to one step's page inline,
 
 | Rule | Source |
 | --- | --- |
-| An orphan reads at most three layers: its own domain plus at most two retained lower layers, over its own base root | [`orphan.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/orphan.rs) |
-| Orphans survive any number of installs and failed captures; their work does not depend on Commit count | [`maintenance/orphan.rs`](../../../../engine/crates/layerfs-overlay/src/maintenance/orphan.rs) |
-| A lower layer that an unsettled capture or a captured reader still holds parks the orphan; the release that ends the hold wakes it | [`source_wait.rs`](../../../../engine/crates/layerfs-overlay/src/maintenance/source_wait.rs) |
-| The `orphan_seen` hint false means no orphan row exists, so inode reads stop probing generation `-1` | [`orphan.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/orphan.rs) |
+| An orphan reads at most three layers: its own domain plus at most two retained lower layers, over its own base root | [`orphan.rs`](../../../../engine/crates/layerfs-overlay/src/custody/orphan.rs) |
+| Orphans survive any number of installs and failed captures; their work does not depend on Commit count | [`reclaim/orphan.rs`](../../../../engine/crates/layerfs-overlay/src/reclaim/orphan.rs) |
+| A lower layer that an unsettled capture or a captured reader still holds parks the orphan; the release that ends the hold wakes it | [`source_wait.rs`](../../../../engine/crates/layerfs-overlay/src/reclaim/source_wait.rs) |
+| The `orphan_seen` hint false means no orphan row exists, so inode reads stop probing generation `-1` | [`orphan.rs`](../../../../engine/crates/layerfs-overlay/src/custody/orphan.rs) |
 
 ## Maintenance
 
@@ -105,10 +105,10 @@ last reference goes   finish_release: up to one step's page inline,
 
 The schema allows kinds 1 to 12; source uses no 10 or 11. A `FOLD` or
 `RETIRE` item whose generation a captured reader holds is set `ready = 0`
-instead of run. Source: [`ready.rs`](../../../../engine/crates/layerfs-overlay/src/maintenance/ready.rs),
-[`garbage.rs`](../../../../engine/crates/layerfs-overlay/src/maintenance/garbage.rs),
-[`pieces.rs`](../../../../engine/crates/layerfs-overlay/src/maintenance/pieces.rs),
-[`indexed_operation_record.rs`](../../../../engine/crates/layerfs-overlay/src/maintenance/indexed_operation_record.rs).
+instead of run. Source: [`ready.rs`](../../../../engine/crates/layerfs-overlay/src/reclaim/ready.rs),
+[`garbage.rs`](../../../../engine/crates/layerfs-overlay/src/reclaim/garbage.rs),
+[`pieces.rs`](../../../../engine/crates/layerfs-overlay/src/reclaim/pieces.rs),
+[`operation_record.rs`](../../../../engine/crates/layerfs-overlay/src/reclaim/operation_record.rs).
 
 ```text
 job ends: maintenance_pending()      unlock, then OwnerClient::maintain()
@@ -122,17 +122,17 @@ job ends: maintenance_pending()      unlock, then OwnerClient::maintain()
 
 | Rule | Value or effect | Source |
 | --- | --- | --- |
-| One step is one atomic job over one `cleanup_task` row | `PAGE` = 14 cells, 64 rows; the widest row fits one page | [`ready.rs`](../../../../engine/crates/layerfs-overlay/src/maintenance/ready.rs) |
+| One step is one atomic job over one `cleanup_task` row | `PAGE` = 14 cells, 64 rows; the widest row fits one page | [`ready.rs`](../../../../engine/crates/layerfs-overlay/src/reclaim/ready.rs) |
 | Order | Ready rows in key order from a cursor; wraps once to the start | same |
-| `maintenance_ready` hint | False is exact; true may be a false positive the next turn clears | [`connection.rs`](../../../../engine/crates/layerfs-overlay/src/database/connection.rs) |
-| A step fails | Stored as `maintenance_error`; no more steps; the daemon refuses new Mounts | [`owner.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/owner.rs), [`operations.rs`](../../../../engine/crates/layerfs-daemon/src/control/operations.rs) |
-| Inline release | A job that drops an orphan's last reference may finish one step's page itself | [`maintenance/orphan.rs`](../../../../engine/crates/layerfs-overlay/src/maintenance/orphan.rs) |
-| Deferred jobs | A Commit's two releases (`release_captured_reader`, `release_operation_deferred`) and terminal `close` leave what they ready queued | [`lifetime_operations.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/lifetime_operations.rs) |
-| After a Commit's answer | The daemon drains the same loop through `reclaim_after_commit` on a thread of its own (`layerfs-reclaim`), so the connection reads its next call at once (#679; until then the connection thread drained before reading it, and a Sandbox's reused connection held its next call for the whole reclamation); a thread that does not start leaves it to the Workspace's next job | [`connection.rs`](../../../../engine/crates/layerfs-daemon/src/application/connection.rs), [`operations.rs`](../../../../engine/crates/layerfs-daemon/src/control/operations.rs) |
-| Observations (#679) | The daemon's control Status and the operator's Inspect read `state` through `observe_state`, a deferred job: they leave the queue to `reclaim_after_commit`. A Sandbox probes every Workspace's Status before most calls, an unmount's included, so a draining probe made the first call after a Commit run its reclamation | [`lifetime_operations.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/lifetime_operations.rs), [`status.rs`](../../../../engine/crates/layerfs-daemon/src/control/status.rs), [`inspect.rs`](../../../../engine/crates/layerfs-daemon/src/control/inspect.rs) |
-| Drains yield (#679) | A drain loop waits on `changed` while `Shared.waiting` counts foreground jobs or reply attempts waiting for the lock (std's Mutex is not fair, so a loop retaking it step after step would hold them for the whole queue); the last waiter in notifies `changed` | [`state.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/state.rs) `foreground`, [`owner.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/owner.rs) `maintain` |
-| Terminal unmount (#679) | The daemon's `unmount` takes a maintenance hold for the whole call: a counter on `Shared` outside the lock, so it lands while a drain loop keeps retaking the lock. While any hold is live no step runs, so neither the end of a job, a reply attempt nor `reclaim_after_commit` drains, and close deletes the queue with the file. An unmount that leaves the Workspace bound (a refusal, or a failure before Close) drains the queue itself after dropping the hold | [`hold.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/hold.rs), [`owner.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/owner.rs) `maintain`, [`unmount.rs`](../../../../engine/crates/layerfs-daemon/src/control/unmount.rs) |
-| A failed Commit's fold | `resolve_failed` sets `consolidating` and queues `FOLD`; until it runs, the active dirty counts are 0. The dirty check, like Commit's up-to-date check, counts `consolidating` as a change, and names no paths for it (`truncated`) | [`composition.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/composition.rs), [`dirty.rs`](../../../../engine/crates/layerfs-daemon/src/control/dirty.rs) |
+| `maintenance_ready` hint | False is exact; true may be a false positive the next turn clears | [`connection.rs`](../../../../engine/crates/layerfs-overlay/src/backing/connection.rs) |
+| A step fails | Stored as `maintenance_error`; no more steps; the daemon refuses new Mounts | [`jobs.rs`](../../../../engine/crates/layerfs-store-service/src/workspace/owner/jobs.rs), [`dispatch.rs`](../../../../engine/crates/layerfs-daemon/src/workspace/route/dispatch.rs) |
+| Inline release | A job that drops an orphan's last reference may finish one step's page itself | [`reclaim/orphan.rs`](../../../../engine/crates/layerfs-overlay/src/reclaim/orphan.rs) |
+| Deferred jobs | A Commit's two releases (`release_captured_reader`, `release_operation_deferred`) and terminal `close` leave what they ready queued | [`lifetime.rs`](../../../../engine/crates/layerfs-store-service/src/workspace/owner/operations/lifetime.rs) |
+| After a Commit's answer | The daemon drains the same loop through `reclaim_after_commit` on a thread of its own (`layerfs-reclaim`), so the connection reads its next call at once (#679; until then the connection thread drained before reading it, and a Sandbox's reused connection held its next call for the whole reclamation); a thread that does not start leaves it to the Workspace's next job | [`workers.rs`](../../../../engine/crates/layerfs-daemon/src/application/connection/workers.rs), [`dispatch.rs`](../../../../engine/crates/layerfs-daemon/src/workspace/route/dispatch.rs) |
+| Observations (#679) | The daemon's control Status and the operator's Inspect read `state` through `observe_state`, a deferred job: they leave the queue to `reclaim_after_commit`. A Sandbox probes every Workspace's Status before most calls, an unmount's included, so a draining probe made the first call after a Commit run its reclamation | [`lifetime.rs`](../../../../engine/crates/layerfs-store-service/src/workspace/owner/operations/lifetime.rs), [`get.rs`](../../../../engine/crates/layerfs-daemon/src/workspace/status/get.rs), [`list.rs`](../../../../engine/crates/layerfs-daemon/src/workspace/status/list.rs) |
+| Drains yield (#679) | A drain loop waits on `changed` while `Shared.waiting` counts foreground jobs or reply attempts waiting for the lock (std's Mutex is not fair, so a loop retaking it step after step would hold them for the whole queue); the last waiter in notifies `changed` | [`state.rs`](../../../../engine/crates/layerfs-store-service/src/workspace/owner/state.rs) `foreground`, [`jobs.rs`](../../../../engine/crates/layerfs-store-service/src/workspace/owner/jobs.rs) `maintain` |
+| Terminal unmount (#679) | The daemon's `unmount` takes a maintenance hold for the whole call: a counter on `Shared` outside the lock, so it lands while a drain loop keeps retaking the lock. While any hold is live no step runs, so neither the end of a job, a reply attempt nor `reclaim_after_commit` drains, and close deletes the queue with the file. An unmount that leaves the Workspace bound (a refusal, or a failure before Close) drains the queue itself after dropping the hold | [`hold.rs`](../../../../engine/crates/layerfs-store-service/src/workspace/owner/operations/hold.rs), [`jobs.rs`](../../../../engine/crates/layerfs-store-service/src/workspace/owner/jobs.rs) `maintain`, [`normal.rs`](../../../../engine/crates/layerfs-daemon/src/workspace/teardown/normal.rs) |
+| A failed Commit's fold | `resolve_failed` sets `consolidating` and queues `FOLD`; until it runs, the active dirty counts are 0. The dirty check, like Commit's up-to-date check, counts `consolidating` as a change, and names no paths for it (`truncated`) | [`failed.rs`](../../../../engine/crates/layerfs-overlay/src/generation/failed.rs), [`dirty.rs`](../../../../engine/crates/layerfs-daemon/src/workspace/status/dirty.rs) |
 
 Deferring changes when reclamation runs, not what is queued: the overlay
 file holds the same rows at any point, and terminal close deletes whatever
@@ -152,10 +152,10 @@ retire(namespace)   Backing.terminal(); checked close_database()
 
 | Rule | Source |
 | --- | --- |
-| Rows are not swept before deletion: the file goes as a whole | [`backing.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/backing.rs) |
+| Rows are not swept before deletion: the file goes as a whole | [`backing.rs`](../../../../engine/crates/layerfs-store-service/src/workspace/owner/roster/backing.rs) |
 | Unlink needs both marks and an unchanged device, inode and link count 1 | same |
-| A failed close keeps the connection (`CloseFailure`); a failed unlink keeps the file handle (`OwnerError::Deletion`) and the slot `Failed` | [`close.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/close.rs), [`workspaces.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/workspaces.rs) |
-| Daemon stop closes every connection with `terminal = false`, so files are not deleted | [`workspaces.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/workspaces.rs) `stop` |
+| A failed close keeps the connection (`CloseFailure`); a failed unlink keeps the file handle (`OwnerError::Deletion`) and the slot `Failed` | [`close.rs`](../../../../engine/crates/layerfs-overlay/src/backing/close.rs), [`workspaces.rs`](../../../../engine/crates/layerfs-store-service/src/workspace/owner/roster/workspaces.rs) |
+| Daemon stop closes every connection with `terminal = false`, so files are not deleted | [`workspaces.rs`](../../../../engine/crates/layerfs-store-service/src/workspace/owner/roster/workspaces.rs) `stop` |
 
 ## Related
 

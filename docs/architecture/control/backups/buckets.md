@@ -7,7 +7,7 @@ checked and reported, within [Backups](README.md).
 
 | | |
 | --- | --- |
-| Source | [`control/crates/layerfs-bucket/src/bucket`](../../../../control/crates/layerfs-bucket/src/bucket); features in [`Cargo.toml`](../../../../control/crates/layerfs-bucket/Cargo.toml) |
+| Source | [`control/crates/layerfs-store/src/bucket`](../../../../control/crates/layerfs-store/src/bucket); features in [`Cargo.toml`](../../../../control/crates/layerfs-store/Cargo.toml) |
 
 ## Driver
 
@@ -25,16 +25,16 @@ checked and reported, within [Backups](README.md).
 
 | Rule | Value | Source |
 | --- | --- | --- |
-| Sealed | Only this crate's providers implement `Driver`; a new provider is a folder under `bucket/`. | [`driver.rs`](../../../../control/crates/layerfs-bucket/src/bucket/driver.rs) |
+| Sealed | Only this crate's providers implement `Driver`; a new provider is a folder under `bucket/`. | [`driver.rs`](../../../../control/crates/layerfs-store/src/backup/bucket/driver.rs) |
 | One attempt | Each call sends each of its requests once; a sent request with an unknown outcome is `Uncertain`. | same |
 | Names | Slash-separated segments of `[A-Za-z0-9._-]`, none empty or starting with `.`, at most 512 bytes (`check_name`). | same |
 | Metadata | Keys 1 to 64 of `[a-z0-9-]`; values at most 256 printable ASCII bytes, no space (`check_metadata`). | same |
 | Span | `offset + length` within the file, else `Invalid` (`open_span`). | same |
 | Listing | One paged pass, at most `MAX_LIST_PAGES` (10,000), then `Invalid`; `Listed.metadata` is `None` where a stat is needed. | same |
-| Limits | `validate` refuses a zero value or `piece_size > max_file`; `pieces(bytes)` is 0 when the file fits one object, else `ceil(bytes / piece_size)`. | [`limits.rs`](../../../../control/crates/layerfs-bucket/src/bucket/limits.rs) |
-| Time | `Last-Modified` and listing `LastModified` as milliseconds since the epoch, anything else `None`. | [`time.rs`](../../../../control/crates/layerfs-bucket/src/bucket/time.rs) |
+| Limits | `validate` refuses a zero value or `piece_size > max_file`; `pieces(bytes)` is 0 when the file fits one object, else `ceil(bytes / piece_size)`. | [`limits.rs`](../../../../control/crates/layerfs-store/src/backup/bucket/limits.rs) |
+| Time | `Last-Modified` and listing `LastModified` as milliseconds since the epoch, anything else `None`. | [`time.rs`](../../../../control/crates/layerfs-store/src/backup/s3_api/time.rs) |
 
-`RemoteError` ([`error.rs`](../../../../control/crates/layerfs-bucket/src/bucket/error.rs)):
+`RemoteError` ([`error.rs`](../../../../control/crates/layerfs-store/src/backup/bucket/error.rs)):
 
 | Variant | Meaning | Sent? |
 | --- | --- | --- |
@@ -81,7 +81,7 @@ requests: because the manifest goes last it names only pieces already sent, so
 a download racing an upload fails a sha256 check instead of returning mixed
 bytes; a previous manifest whose pieces were overwritten fails the same way.
 `pieces::delete` removes the name, then its pieces from index 0. Source:
-[`pieces.rs`](../../../../control/crates/layerfs-bucket/src/bucket/pieces.rs).
+[`pieces.rs`](../../../../control/crates/layerfs-store/src/backup/bucket/pieces.rs).
 
 ## Progress
 
@@ -95,9 +95,9 @@ bytes; a previous manifest whose pieces were overwritten fails the same way.
 
 | Rule | Source |
 | --- | --- |
-| A transfer runs on one thread; reports go to that thread's installed `Progress`, else nowhere. No thread is added and nothing is retried. | [`progress.rs`](../../../../control/crates/layerfs-bucket/src/bucket/progress.rs) |
+| A transfer runs on one thread; reports go to that thread's installed `Progress`, else nowhere. No thread is added and nothing is retried. | [`progress.rs`](../../../../control/crates/layerfs-store/src/backup/bucket/progress.rs) |
 | `Cell` publishes byte counts at most once per `INTERVAL` (250 ms); a new phase or piece count at once. | same |
-| Phases: `hash` and `upload` from an upload (bytes sent by the driver's request body), `download` from a download; `quiet` runs the manifest upload unreported. | same; [`pieces.rs`](../../../../control/crates/layerfs-bucket/src/bucket/pieces.rs) |
+| Phases: `hash` and `upload` from an upload (bytes sent by the driver's request body), `download` from a download; `quiet` runs the manifest upload unreported. | same; [`pieces.rs`](../../../../control/crates/layerfs-store/src/backup/bucket/pieces.rs) |
 
 The `backup` calls install their own `Progress` that keeps each phase's exact
 last count ([Backups](README.md)).
@@ -115,9 +115,9 @@ last count ([Backups](README.md)).
 
 | Rule | Source |
 | --- | --- |
-| The caller reads the key (its id from the bucket's record, its secret from the home's secret folder) and hands it to the driver; no `env:` or `file:` key reference is read. A record with no `access_key` is refused `Failed` with the fix that connects it again at its URL, which keeps its Stores' links. A new key replaces the old one by connecting again at the same URL (spec v21) | [`credentials.rs`](../../../../control/crates/layerfs-bucket/src/bucket/credentials.rs), [`backup/record.rs`](../../../../control/crates/layerfs-store/src/backup/record.rs) `credentials` |
-| Keys must be non-empty printable ASCII, else `Invalid` "empty or unprintable credentials". | [`credentials.rs`](../../../../control/crates/layerfs-bucket/src/bucket/credentials.rs) `checked` |
-| `connect` checks the key and sends nothing. | [`minio/provider.rs`](../../../../control/crates/layerfs-bucket/src/bucket/minio/provider.rs), [`r2/provider.rs`](../../../../control/crates/layerfs-bucket/src/bucket/r2/provider.rs) |
+| The caller reads the key (its id from the bucket's record, its secret from the home's secret folder) and hands it to the driver; no `env:` or `file:` key reference is read. A record with no `access_key` is refused `Failed` with the fix that connects it again at its URL, which keeps its Stores' links. A new key replaces the old one by connecting again at the same URL (spec v21) | [`auth.rs`](../../../../control/crates/layerfs-store/src/backup/bucket/auth.rs), [`bucket/record.rs`](../../../../control/crates/layerfs-store/src/backup/bucket/record.rs) `credentials` |
+| Keys must be non-empty printable ASCII, else `Invalid` "empty or unprintable credentials". | [`auth.rs`](../../../../control/crates/layerfs-store/src/backup/bucket/auth.rs) `checked` |
+| `connect` checks the key and sends nothing. | [`s3/settings.rs`](../../../../control/crates/layerfs-store/src/backup/providers/s3/settings.rs), [`r2/settings.rs`](../../../../control/crates/layerfs-store/src/backup/providers/r2/settings.rs) |
 
 ## Local folder
 
@@ -131,8 +131,8 @@ last count ([Backups](README.md)).
 `Limits`, so tests force pieces with a small `max_file`; its listing carries
 metadata. As a `Provider::LocalFolder` its limits are `u64::MAX`. Feature
 `local_folder` (default). Source:
-[`local_folder/folder.rs`](../../../../control/crates/layerfs-bucket/src/bucket/local_folder/folder.rs),
-[`link.rs`](../../../../control/crates/layerfs-bucket/src/backup/link.rs).
+[`local_folder/driver.rs`](../../../../control/crates/layerfs-store/src/backup/providers/local_folder/driver.rs),
+[`registry.rs`](../../../../control/crates/layerfs-store/src/backup/bucket/registry.rs).
 
 ## MinIO and R2
 
@@ -147,7 +147,7 @@ metadata. As a `Provider::LocalFolder` its limits are `u64::MAX`. Feature
 | `max_request` (one PUT or part) | 5 TiB | 5 GiB − 5 MiB (4.995 GiB) |
 | `piece_size` | 5 TiB | 4.995 TiB |
 | Part size | 5 MiB to 5 GiB; default 64 MiB (`DEFAULT_PART_SIZE`) | 5 MiB to 4.995 GiB; above is `Invalid` before anything is sent |
-| Source | [`minio/provider.rs`](../../../../control/crates/layerfs-bucket/src/bucket/minio/provider.rs) | [`r2/provider.rs`](../../../../control/crates/layerfs-bucket/src/bucket/r2/provider.rs) |
+| Source | [`s3/settings.rs`](../../../../control/crates/layerfs-store/src/backup/providers/s3/settings.rs) | [`r2/settings.rs`](../../../../control/crates/layerfs-store/src/backup/providers/r2/settings.rs) |
 
 ## S3 API
 
@@ -170,19 +170,19 @@ metadata. As a `Provider::LocalFolder` its limits are `u64::MAX`. Feature
 
 | Part | What | Source |
 | --- | --- | --- |
-| Config | Bucket 3 to 63 of `[a-z0-9.-]`, alphanumeric at both ends; prefix a valid name; endpoint `http://` or `https://` with no path or credentials; part size within `MIN_PART`..`MAX_PART` and at most `max_request`. All refused before anything is sent. | [`config.rs`](../../../../control/crates/layerfs-bucket/src/bucket/s3_api/config.rs) |
-| Signing | Header SigV4 (`AWS4-HMAC-SHA256`) with `x-amz-content-sha256` of the payload. | [`sign.rs`](../../../../control/crates/layerfs-bucket/src/bucket/s3_api/sign.rs) |
-| Requests | Hand-written HTTP/1.1; streamed file and reply bodies in 256 KiB buffers; headers at most 16 KiB; error and XML replies read up to 4 MiB; a body buffer that takes longer than the I/O timeout to send is `Uncertain`. | [`http.rs`](../../../../control/crates/layerfs-bucket/src/bucket/s3_api/http.rs) |
-| Keep-alive | No `Connection: close` is sent. A kept connection older than 10 s or with anything to read is closed before any byte is written, so taking one is never a resend. TLS is `native-tls` against the system roots. | [`connection.rs`](../../../../control/crates/layerfs-bucket/src/bucket/s3_api/connection.rs) |
-| Parts | 5 MiB (`MIN_PART`) to 5 GiB (`MAX_PART`), at most 10,000 (`MAX_PARTS`); `part_size` raises the configured size to whole MiB when a file would need more parts. | [`multipart.rs`](../../../../control/crates/layerfs-bucket/src/bucket/s3_api/multipart.rs) |
-| Reads and lists | Ranged GET with `content-range` checked, HEAD, DELETE, ListObjectsV2 with continuation tokens; `pending_uploads` and `abort_upload` for an operator. | [`client.rs`](../../../../control/crates/layerfs-bucket/src/bucket/s3_api/client.rs) |
-| Diagnostics | For [Doctor](../doctor/README.md): one authenticated list page (`max-keys=1`); with versioning positively enabled, conditional create, read and version-owned delete of probes under `_layerfs_doctor`; never a full enumeration, never a resend. `diagnostic_within` bounds them by one absolute deadline. | [`diagnostic.rs`](../../../../control/crates/layerfs-bucket/src/bucket/s3_api/diagnostic.rs), [`deadline.rs`](../../../../control/crates/layerfs-bucket/src/bucket/s3_api/deadline.rs) |
+| Config | Bucket 3 to 63 of `[a-z0-9.-]`, alphanumeric at both ends; prefix a valid name; endpoint `http://` or `https://` with no path or credentials; part size within `MIN_PART`..`MAX_PART` and at most `max_request`. All refused before anything is sent. | [`config.rs`](../../../../control/crates/layerfs-store/src/backup/s3_api/config.rs) |
+| Signing | Header SigV4 (`AWS4-HMAC-SHA256`) with `x-amz-content-sha256` of the payload. | [`sign.rs`](../../../../control/crates/layerfs-store/src/backup/s3_api/sign.rs) |
+| Requests | Hand-written HTTP/1.1; streamed file and reply bodies in 256 KiB buffers; headers at most 16 KiB; error and XML replies read up to 4 MiB; a body buffer that takes longer than the I/O timeout to send is `Uncertain`. | [`http.rs`](../../../../control/crates/layerfs-store/src/backup/s3_api/http.rs) |
+| Keep-alive | No `Connection: close` is sent. A kept connection older than 10 s or with anything to read is closed before any byte is written, so taking one is never a resend. TLS is `native-tls` against the system roots. | [`connection.rs`](../../../../control/crates/layerfs-store/src/backup/s3_api/connection.rs) |
+| Parts | 5 MiB (`MIN_PART`) to 5 GiB (`MAX_PART`), at most 10,000 (`MAX_PARTS`); `part_size` raises the configured size to whole MiB when a file would need more parts. | [`multipart.rs`](../../../../control/crates/layerfs-store/src/backup/s3_api/multipart.rs) |
+| Reads and lists | Ranged GET with `content-range` checked, HEAD, DELETE, ListObjectsV2 with continuation tokens; `pending_uploads` and `abort_upload` for an operator. | [`client.rs`](../../../../control/crates/layerfs-store/src/backup/s3_api/client.rs) |
+| Diagnostics | For [Doctor](../doctor/README.md): one authenticated list page (`max-keys=1`); with versioning positively enabled, conditional create, read and version-owned delete of probes under `_layerfs_doctor`; never a full enumeration, never a resend. `diagnostic_within` bounds them by one absolute deadline. | [`diagnostic.rs`](../../../../control/crates/layerfs-store/src/backup/s3_api/diagnostic.rs), [`deadline.rs`](../../../../control/crates/layerfs-store/src/backup/s3_api/deadline.rs) |
 
 ## Tested providers
 
 | Fact | MinIO | R2 |
 | --- | --- | --- |
-| Tested against | the pinned Chainguard image (by digest) that [`minio_service.sh`](../../../../control/crates/layerfs-bucket/tests/minio_service.sh) starts, over HTTP; HTTPS with `MINIO_TLS_DIR` set (self-signed, exported as `SSL_CERT_FILE`) and `--features tls` | a real account, region `auto` |
+| Tested against | the pinned Chainguard image (by digest) that [`minio_service.sh`](../../../../control/crates/layerfs-store/tests/minio_service.sh) starts, over HTTP; HTTPS with `MINIO_TLS_DIR` set (self-signed, exported as `SSL_CERT_FILE`) and `--features tls` | a real account, region `auto` |
 | Build | plain HTTP needs no feature | `cargo +1.85.1 build --locked -p layerfs-cli --features tls` |
 | The bucket | must exist; LayerFS never creates or deletes a bucket | same |
 | Bucket missing or not visible | `HTTP 404 NoSuchBucket` | `HTTP 403 AccessDenied` |

@@ -9,7 +9,7 @@ identities, and the one catalog contract a persistence provider implements.
 | --- | --- |
 | Layer | [Core](../README.md) |
 | Crates | `layerfs-history` |
-| Source | [`contract/`](../../../../core/crates/layerfs-history/src/contract), [`lib.rs`](../../../../core/crates/layerfs-history/src/lib.rs); provider: [`layerfs-persistence/src/history/`](../../../../engine/crates/layerfs-persistence/src/history) |
+| Source | [`src/`](../../../../core/crates/layerfs-history/src), [`lib.rs`](../../../../core/crates/layerfs-history/src/lib.rs); provider: [`layerfs-persistence/src/history/`](../../../../engine/crates/layerfs-persistence/src/history) |
 | Uses | [Objects](../objects/README.md) (`ObjectId` roots); merge records from [Compare and merge](../compare-and-merge/README.md) |
 | Used by | [Engine: Store](../../engine/store/README.md), [Engine: Store calls](../../engine/store-calls/README.md), [Engine: Project Init](../../engine/project-init/README.md), [Engine: Daemon](../../engine/daemon/README.md), [Engine: Bridge](../../engine/bridge/README.md), [Engine: Kernel routes](../../engine/kernel-routes/README.md), [Control: Stores and projects](../../control/stores-and-projects/README.md), [Control: Sandboxes](../../control/sandboxes/README.md), [API: Calls](../../api/calls/README.md) |
 | Flows | [A Commit](../../flows/commit.md), [Project Init](../../flows/init.md), [Fork and merge](../../flows/merge.md) |
@@ -51,7 +51,7 @@ Normal profile only; Durable execution is
 
 | Record | Fields | Notes | Source |
 | --- | --- | --- | --- |
-| `LayerStackRecord` | `id`, `name`, `scope`, `profile`, `head_layer` | one project's linear Layer timeline; `initialize_layerstack` writes it with its genesis Layer in one transaction | [`records.rs`](../../../../core/crates/layerfs-history/src/contract/records.rs) |
+| `LayerStackRecord` | `id`, `name`, `scope`, `profile`, `head_layer` | one project's linear Layer timeline; `initialize_layerstack` writes it with its genesis Layer in one transaction | [`records.rs`](../../../../core/crates/layerfs-history/src/records.rs) |
 | `LayerRecord` | `parent`, `root`, `logical`, `source_branch`, `source_commit`, `overwrote_count` | one publication on the main line; provenance absent only for genesis; `logical` counts every hardlink path | same |
 | `BranchRecord` | `id`, `stack`, `name`, `base_layer`, `head_commit`, `forked_from` | no head when forked from a Layer; `BranchSnapshot` adds `head_root`, `base_root`, `effective_root`, `scope`, `profile` | same |
 | `CommitRecord` | `root`, `parent`, `base_layer`, `second_parent` (`NodeId`: Commit or Layer), `meta` | recorded ancestry, not a diff | same |
@@ -73,12 +73,12 @@ or any process, memory, socket or stdout/stderr state.
 
 | Operation | Call | Source |
 | --- | --- | --- |
-| Create a project | `initialize_layerstack` | [`layerstack.rs`](../../../../engine/crates/layerfs-persistence/src/history/layerstack.rs) |
-| Fork | `fork(ForkRequest)`: from `Layer(id)` (no head) or `Commit { branch, commit }`, which must be in that Branch's ancestry, else `NotInHistory` | [`branch.rs`](../../../../engine/crates/layerfs-persistence/src/history/branch.rs) |
-| Commit | `commit_branch(CommitRequest)` against the expected head and base | [`commit.rs`](../../../../engine/crates/layerfs-persistence/src/history/commit.rs) |
-| Publish | `add_layer`: the Commit's root becomes the stack head (overwrite-only at this level; the SDK's `branch.publish` refuses a stale base first unless `force`); Layers it does not contain are counted in `overwrote_count` and paged by `overwritten` | [`layerstack.rs`](../../../../engine/crates/layerfs-persistence/src/history/layerstack.rs) |
-| Merge | `merge_branch`: a new Branch whose first state is a node (fast-forward) or a two-parent Commit | [`merge.rs`](../../../../engine/crates/layerfs-persistence/src/history/merge.rs) |
-| Remove | `remove_layerstack`: the one removal; packs, objects, file digests and the allocation scope stay | [`removal.rs`](../../../../engine/crates/layerfs-persistence/src/history/removal.rs) |
+| Create a project | `initialize_layerstack` | [`layerstack.rs`](../../../../engine/crates/layerfs-persistence/src/history/graph/layerstack.rs) |
+| Fork | `fork(ForkRequest)`: from `Layer(id)` (no head) or `Commit { branch, commit }`, which must be in that Branch's ancestry, else `NotInHistory` | [`branch.rs`](../../../../engine/crates/layerfs-persistence/src/history/graph/branch.rs) |
+| Commit | `commit_branch(CommitRequest)` against the expected head and base | [`commit.rs`](../../../../engine/crates/layerfs-persistence/src/history/graph/commit.rs) |
+| Publish | `add_layer`: the Commit's root becomes the stack head (overwrite-only at this level; the SDK's `branch.publish` refuses a stale base first unless `force`); Layers it does not contain are counted in `overwrote_count` and paged by `overwritten` | [`layerstack.rs`](../../../../engine/crates/layerfs-persistence/src/history/graph/layerstack.rs) |
+| Merge | `merge_branch`: a new Branch whose first state is a node (fast-forward) or a two-parent Commit | [`merge.rs`](../../../../engine/crates/layerfs-persistence/src/history/graph/merge.rs) |
+| Remove | `remove_layerstack`: the one removal; packs, objects, file digests and the allocation scope stay | [`removal.rs`](../../../../engine/crates/layerfs-persistence/src/history/graph/removal.rs) |
 
 ```text
  Store calls (store/commit.rs)             HistoryProvider
@@ -104,11 +104,11 @@ or any process, memory, socket or stdout/stderr state.
 | Otherwise | `Committed { record, displaced: None }` |
 
 The lane flow is in
-[`store/commit.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit.rs).
+[`commit/run.rs`](../../../../engine/crates/layerfs-store-service/src/workspace/commit/run.rs).
 
 ### Catalog and queries
 
-`HistoryCatalog` ([`catalog.rs`](../../../../core/crates/layerfs-history/src/contract/catalog.rs))
+`HistoryCatalog` ([`contract.rs`](../../../../core/crates/layerfs-history/src/catalog/contract.rs))
 is `Send + Sync`; no method hands out SQL, a table, a row cursor or the
 database. `HistoryCatalogConfig` holds `binding_key` (1–128 bytes, hashed into
 `CatalogId`), `incarnation` (1 to `i64::MAX`) and a nonzero `cursor_key`.
@@ -121,7 +121,7 @@ database. `HistoryCatalogConfig` holds `binding_key` (1–128 bytes, hashed into
 | Writes | `initialize_layerstack`, `fork`, `commit_branch`, `add_layer`, `merge_branch`, `remove_layerstack`, `reserve_inodes` |
 | Lane | `publish_lane`: a `PublishLane` hold released on drop |
 | Facts and hints | `statistics`, `record_init`, `record_bindings`, `bindings_of`, `record_file_digests`, `file_roots` (≤ `FILE_DIGEST_WINDOW` 1,024 pairs) |
-| Saved queries | `query_authenticator`: keyed BLAKE3 in `layerfs/saved-query/v1`, binding `CatalogId` and incarnation, payload ≤ 16 KiB ([`query.rs`](../../../../core/crates/layerfs-history/src/contract/query.rs)) |
+| Saved queries | `query_authenticator`: keyed BLAKE3 in `layerfs/saved-query/v1`, binding `CatalogId` and incarnation, payload ≤ 16 KiB ([`query.rs`](../../../../core/crates/layerfs-history/src/catalog/query.rs)) |
 
 Trait defaults return `Unsupported` (or drop hint rows);
 `HistoryProvider` overrides all of them.
@@ -148,7 +148,7 @@ follow Commit parents and second parents, base Layers, Layer parents and
 source Commits, exactly and with no history-size bound; among several best
 common ancestors, the newest Layer ancestry wins, then the deepest first
 parent, then the smallest identity. The provider answers from lineage records
-([`lineage.rs`](../../../../engine/crates/layerfs-persistence/src/history/lineage.rs)).
+([`records.rs`](../../../../engine/crates/layerfs-persistence/src/history/lineage/records.rs)).
 
 ### Identities
 
@@ -163,7 +163,7 @@ parent, then the smallest identity. The provider answers from lineage records
 | `CatalogId` | 32 | BLAKE3 of `layerfs/history/catalog/v1` and the binding key |
 | `NodeId` | 33 | `Commit` or `Layer`, told apart by the tag |
 
-Source: [`identity.rs`](../../../../core/crates/layerfs-history/src/contract/identity.rs).
+Source: [`identity.rs`](../../../../core/crates/layerfs-history/src/identity.rs).
 A wrong tag or width is `Integrity`. Two records deriving one identity must
 agree on every stored field; a mismatch is an integrity failure, never an
 overwrite.
@@ -192,35 +192,35 @@ the client refuses in the same order (`Integrity` for the authority, then
 
 | Caller | Reservation | Source |
 | --- | --- | --- |
-| Project Init | one range of the scanned entry count; its start seeds the tree | [`import/init.rs`](../../../../engine/crates/layerfs-project/src/import/init.rs) |
-| Mounted Workspace | refill windows of 1,024 through `InodeSerials` | [`workspace/serials.rs`](../../../../engine/crates/layerfs-workspace/src/workspace/serials.rs) |
+| Project Init | one range of the scanned entry count; its start seeds the tree | [`import/run.rs`](../../../../engine/crates/layerfs-project/src/import/run.rs) |
+| Mounted Workspace | refill windows of 1,024 through `InodeSerials` | [`binding/serials.rs`](../../../../engine/crates/layerfs-vfs/src/binding/serials.rs) |
 | SDK file calls | at least 4,096, the rest kept in a per-Store, per-scope pool | [`store/ports.rs`](../../../../engine/crates/layerfs-store-service/src/store/ports.rs) |
 
 A range is spent when handed out, used or not; serials are never recycled,
 and `remove_layerstack` keeps the scope row
-([`allocation.rs`](../../../../engine/crates/layerfs-persistence/src/history/allocation.rs)).
+([`allocation.rs`](../../../../engine/crates/layerfs-persistence/src/history/counters/allocation.rs)).
 
 ## Invariants
 
 | Rule | Enforced by |
 | --- | --- |
-| Commits and Layers are immutable; a re-derived identity must match every field | `new_commit` in [`commit.rs`](../../../../engine/crates/layerfs-persistence/src/history/commit.rs), `verify_layer` in [`layerstack.rs`](../../../../engine/crates/layerfs-persistence/src/history/layerstack.rs) |
-| A Branch head moves only through `commit_branch` against the expected head and base | [`commit.rs`](../../../../engine/crates/layerfs-persistence/src/history/commit.rs) |
-| A stack head moves only through `add_layer` against `expected_stack_head`, else `StackMoved` | [`layerstack.rs`](../../../../engine/crates/layerfs-persistence/src/history/layerstack.rs) |
-| History grows by appending; the one removal is a whole LayerStack | [`removal.rs`](../../../../engine/crates/layerfs-persistence/src/history/removal.rs) |
+| Commits and Layers are immutable; a re-derived identity must match every field | `new_commit` in [`commit.rs`](../../../../engine/crates/layerfs-persistence/src/history/graph/commit.rs), `verify_layer` in [`layerstack.rs`](../../../../engine/crates/layerfs-persistence/src/history/graph/layerstack.rs) |
+| A Branch head moves only through `commit_branch` against the expected head and base | [`commit.rs`](../../../../engine/crates/layerfs-persistence/src/history/graph/commit.rs) |
+| A stack head moves only through `add_layer` against `expected_stack_head`, else `StackMoved` | [`layerstack.rs`](../../../../engine/crates/layerfs-persistence/src/history/graph/layerstack.rs) |
+| History grows by appending; the one removal is a whole LayerStack | [`removal.rs`](../../../../engine/crates/layerfs-persistence/src/history/graph/removal.rs) |
 | Stack, Branch and Workspace identities come from the caller | [`lib.rs`](../../../../core/crates/layerfs-history/src/lib.rs) |
-| Inode serials are consumed once and never reused | [`allocation.rs`](../../../../engine/crates/layerfs-persistence/src/history/allocation.rs) |
-| A metadata transaction never spans upload, construction or Save completion | [`catalog.rs`](../../../../core/crates/layerfs-history/src/contract/catalog.rs) |
+| Inode serials are consumed once and never reused | [`allocation.rs`](../../../../engine/crates/layerfs-persistence/src/history/counters/allocation.rs) |
+| A metadata transaction never spans upload, construction or Save completion | [`contract.rs`](../../../../core/crates/layerfs-history/src/catalog/contract.rs) |
 
 ## Limits and failures
 
 | Limit or failure | Value or error | Source |
 | --- | --- | --- |
-| History name | 1–63 ASCII bytes: lowercase, digits, `.` `_` `-`, alphanumeric at both ends | [`identity.rs`](../../../../core/crates/layerfs-history/src/contract/identity.rs) |
-| Commit message | ≤ 4,096 bytes, no control character except `\n`, `\t` | [`records.rs`](../../../../core/crates/layerfs-history/src/contract/records.rs) |
-| Page; cursor | 1–128 records, ≤ 16 KiB; 160 bytes | same, [`query.rs`](../../../../core/crates/layerfs-history/src/contract/query.rs) |
-| Branches, depth, lineage walk | no count limit | [`lineage.rs`](../../../../engine/crates/layerfs-persistence/src/history/lineage.rs) |
-| `HistoryError` | `InvalidInput`, `Missing(..)`, `Unsupported`, `Busy` (never retried silently), `OwnershipUnavailable`, `Capacity`, `Integrity`, `HeadMoved`, `BaseMismatch`, `NotInHistory`, `StackMoved`, `ContinuityUnavailable` | [`error.rs`](../../../../core/crates/layerfs-history/src/contract/error.rs) |
+| History name | 1–63 ASCII bytes: lowercase, digits, `.` `_` `-`, alphanumeric at both ends | [`identity.rs`](../../../../core/crates/layerfs-history/src/identity.rs) |
+| Commit message | ≤ 4,096 bytes, no control character except `\n`, `\t` | [`records.rs`](../../../../core/crates/layerfs-history/src/records.rs) |
+| Page; cursor | 1–128 records, ≤ 16 KiB; 160 bytes | same, [`query.rs`](../../../../core/crates/layerfs-history/src/catalog/query.rs) |
+| Branches, depth, lineage walk | no count limit | [`records.rs`](../../../../engine/crates/layerfs-persistence/src/history/lineage/records.rs) |
+| `HistoryError` | `InvalidInput`, `Missing(..)`, `Unsupported`, `Busy` (never retried silently), `OwnershipUnavailable`, `Capacity`, `Integrity`, `HeadMoved`, `BaseMismatch`, `NotInHistory`, `StackMoved`, `ContinuityUnavailable` | [`error.rs`](../../../../core/crates/layerfs-history/src/error.rs) |
 | Persistence did not answer | `UnknownOutcome`: nothing is replayed, discarded or rolled back on a guess | same |
 
 Callers match variants; nothing parses message text.
@@ -233,7 +233,7 @@ most 120 s.
 
 | Test or example | Command | Platform | Shows |
 | --- | --- | --- | --- |
-| [`heads.rs`](../../../../engine/crates/layerfs-persistence/tests/heads.rs) | `cargo +1.85.1 test --locked -p layerfs-persistence --test heads` | Linux, macOS (no-sidecar check Linux only) | Init, fork and Commit move the recorded heads exactly; a snapshot copy has equal heads |
-| [`layerstack_removal.rs`](../../../../engine/crates/layerfs-persistence/tests/layerstack_removal.rs) | `cargo +1.85.1 test --locked -p layerfs-persistence --test layerstack_removal` | any; the PostgreSQL case needs `LAYERFS_TEST_POSTGRES_URL`, else prints `NOT_RUN` | Removing one project leaves the other whole and frees the name |
-| [`history_allocation.rs`](../../../../engine/crates/layerfs-persistence/tests/history_allocation.rs) | `cargo +1.85.1 test --locked -p layerfs-persistence --test history_allocation` | any | Reservations are half-open, per scope, consumed on failure and refused at the end |
-| [`query_authenticator.rs`](../../../../core/crates/layerfs-history/tests/query_authenticator.rs) | `cargo +1.85.1 test --locked -p layerfs-history --test query_authenticator` | any | Every bound identity (catalog, incarnation) and payload byte changes the authenticator |
+| [`heads.rs`](../../../../engine/crates/layerfs-persistence/tests/history/heads.rs) | `cargo +1.85.1 test --locked -p layerfs-persistence --test history heads` | Linux, macOS (no-sidecar check Linux only) | Init, fork and Commit move the recorded heads exactly; a snapshot copy has equal heads |
+| [`layerstack_removal.rs`](../../../../engine/crates/layerfs-persistence/tests/history/layerstack_removal.rs) | `cargo +1.85.1 test --locked -p layerfs-persistence --test history layerstack_removal` | any; the PostgreSQL case needs `LAYERFS_TEST_POSTGRES_URL`, else prints `NOT_RUN` | Removing one project leaves the other whole and frees the name |
+| [`allocation.rs`](../../../../engine/crates/layerfs-persistence/tests/history/allocation.rs) | `cargo +1.85.1 test --locked -p layerfs-persistence --test history allocation` | any | Reservations are half-open, per scope, consumed on failure and refused at the end |
+| [`query_authenticator.rs`](../../../../core/crates/layerfs-history/tests/history/query_authenticator.rs) | `cargo +1.85.1 test --locked -p layerfs-history --test history query_authenticator` | any | Every bound identity (catalog, incarnation) and payload byte changes the authenticator |

@@ -29,7 +29,7 @@ The package is MIT licensed, requires Node 22 or later, and provides the `layerf
 In the release tree, in WSL:
 
 ```bash
-node api/scripts/build-cli-dist.mjs /root/lfs-clidist/out
+node api/scripts/cli-dist.mjs /root/lfs-clidist/out
 cp target/release/layerfs api/cli/bin/layerfs
 chmod 755 api/cli/bin/layerfs
 cp LICENSE api/cli/LICENSE

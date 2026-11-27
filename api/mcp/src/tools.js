@@ -1,5 +1,5 @@
 // One MCP tool per call of the table, generated from the table's argument and
-// option kinds (the same kinds api/scripts/gen-node-types.mjs maps). No call,
+// option kinds (the same kinds api/scripts/node-types.mjs maps). No call,
 // argument or result name is written here: the names come from the table.
 //
 // Kinds:

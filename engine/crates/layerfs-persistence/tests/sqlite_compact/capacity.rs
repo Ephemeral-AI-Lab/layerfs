@@ -12,7 +12,7 @@
 //! ```text
 //! CAPACITY_MEASURE=1 TMPDIR=/var/tmp/g61 UPDATE_CAPACITY=1 \
 //!   cargo test -p layerfs-persistence --release \
-//!   --test sqlite_compact_capacity -- --ignored --nocapture
+//!   --test sqlite_compact capacity -- --ignored --nocapture
 //! ```
 //!
 //! Knobs: `CAPACITY_GROUPS` (live inode leaves, default 701),

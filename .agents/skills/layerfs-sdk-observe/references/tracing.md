@@ -86,7 +86,7 @@ layerfs home log --limit 1000 --outcome refused --detail | jq -c '.items[] | [.l
 | `ms` | the connection's whole time: connect, secret, request, events and answer |
 
 One worker-routed call is one line (R1). Written by
-`control/crates/layerfs-home/src/trace.rs` `connection`; a line that
+`control/crates/layerfs-home/src/log/trace.rs` `connection`; a line that
 cannot be written changes no outcome.
 
 ## The step lines

@@ -151,7 +151,7 @@ lifecycles (names and paths rechecked 2026-11-16):
   bounded capacities on both routes. An incremental file root need not equal a
   fresh reconstruction: retained chunk boundaries can differ.
 - **The product Commit:** `BoundWorkspace::commit_captured` runs
-  [`CapturedNamespace`](crates/layerfs-workspace/src/construction/driver.rs)
+  [`CapturedNamespace`](crates/layerfs-vfs/src/construction/driver.rs)
   inside the Commit driver. It acquires the captured reader and one operation
   owner, hands the driver the original cause on failure, and releases both
   only once the outcome is known, keeping them with the failure when it is

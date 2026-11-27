@@ -6,7 +6,7 @@ The `branch` calls: list and read a project's Branches, fork one, merge one into
 
 | | |
 | --- | --- |
-| Source | [`api/crates/layerfs-api/src/branch`](../../../../api/crates/layerfs-api/src/branch) (one file per call), [`layerfs-store/src/calls/branch.rs`](../../../../control/crates/layerfs-store/src/calls/branch.rs), [`layerfs-store/src/calls/op.rs`](../../../../control/crates/layerfs-store/src/calls/op.rs), [`layerfs-store-service/src/methods/branch`](../../../../engine/crates/layerfs-store-service/src/methods/branch), [`history/branch.rs`](../../../../engine/crates/layerfs-store-service/src/history/branch.rs), [`history/units.rs`](../../../../engine/crates/layerfs-store-service/src/history/units.rs) |
+| Source | [`crates/layerfs-api/src/families/branch`](../../../../api/crates/layerfs-api/src/families/branch) (one file per call), [`layerfs-store/src/data/branch.rs`](../../../../control/crates/layerfs-store/src/data/branch.rs), [`src/admin/route/methods.rs`](../../../../control/crates/layerfs-store/src/admin/route/methods.rs), [`layerfs-store-service/src/families/branch`](../../../../engine/crates/layerfs-store-service/src/families/branch), [`history/branch.rs`](../../../../engine/crates/layerfs-store-service/src/history/branch.rs), [`history/merge_units.rs`](../../../../engine/crates/layerfs-store-service/src/history/merge_units.rs) |
 | Runs by default | where the Store's calls run: the caller's process for a PostgreSQL Store and for a sqlite Store on a locally executing machine (the host machine, except on Windows); else the Store machine's worker (`store.call`). No daemon serves a Store call |
 | Design | [Store calls](../../engine/store-calls/README.md), [History](../../core/history/README.md), [merge flow](../../flows/merge.md) |
 
@@ -35,9 +35,9 @@ The `branch` calls: list and read a project's Branches, fork one, merge one into
 | [`branch.remove`](#branchremove) | `BranchRemove` | write | `admin` |
 
 Each call file builds a typed request and calls one function of
-[`layerfs_store::calls::branch`](../../../../control/crates/layerfs-store/src/calls/branch.rs).
+[`layerfs_store::calls::branch`](../../../../control/crates/layerfs-store/src/data/branch.rs).
 That function sends one `StoreOp` with `on_project`
-([`calls/op.rs`](../../../../control/crates/layerfs-store/src/calls/op.rs)),
+([`route/methods.rs`](../../../../control/crates/layerfs-store/src/admin/route/methods.rs)),
 which renames the table's snake_case arguments to the engine's and runs the
 engine method on the project's Store, here or in its worker, and then maps
 the engine's answer to the call's full map: the keys of its long form, which
@@ -57,7 +57,7 @@ Reads use the Store's read-only session and never take the publication lane;
 a write does its heavy work first and holds the lane only for its final
 publish step. Under a folder scope a Branch name is `<namespace>.<name>` and
 `list` and `get` answer the name within the namespace
-([`calls/scope.rs`](../../../../api/crates/layerfs-api/src/calls/scope.rs));
+([`guard/scope.rs`](../../../../api/crates/layerfs-api/src/dispatch/guard/scope.rs));
 `branch.remove` is outside the scope's allow list and is refused.
 
 ### branch.list
@@ -215,7 +215,7 @@ The `/.lww` rules of `branch` decide paths both sides changed:
 then `overwritten_count`). `--units` groups paths into units; a unit both
 sides changed comes whole from the side with the later write, and
 overlapping units belong to the first listed
-([`history/units.rs`](../../../../engine/crates/layerfs-store-service/src/history/units.rs)).
+([`history/merge_units.rs`](../../../../engine/crates/layerfs-store-service/src/history/merge_units.rs)).
 The long form's `units` reports each unit's decision (the first 20, then
 `units_count`). All merge work happens before the publication lane; only
 the final publish holds it.
@@ -321,11 +321,11 @@ Commits and objects stay until a later
 
 | Refusal | When | Source |
 | --- | --- | --- |
-| `InvalidInput` | the Branch is `main` (raised `ReservedName`) | [`methods/branch/remove.rs`](../../../../engine/crates/layerfs-store-service/src/methods/branch/remove.rs) |
+| `InvalidInput` | the Branch is `main` (raised `ReservedName`) | [`families/branch/remove.rs`](../../../../engine/crates/layerfs-store-service/src/families/branch/remove.rs) |
 | `NotFound` | the Branch is missing or already removed | same |
-| `InUse` | a Workspace of the Branch is mounted (raised `MountsActive`) | [`history/admission.rs`](../../../../engine/crates/layerfs-store-service/src/history/admission.rs) |
+| `InUse` | a Workspace of the Branch is mounted (raised `MountsActive`) | [`history/gc_admission.rs`](../../../../engine/crates/layerfs-store-service/src/history/gc_admission.rs) |
 | `Busy`, `Unresolved` | another operation holds the Branch, or a gone owner left one uncertain | |
-| `Unknown` | worker route: the answer was lost; it names the Branch | [`unknown.rs`](../../../../control/crates/layerfs-store/src/unknown.rs) |
+| `Unknown` | worker route: the answer was lost; it names the Branch | [`unknown.rs`](../../../../control/crates/layerfs-store/src/data/unknown.rs) |
 
 Run on macOS (`macos-host`) with a debug build:
 
@@ -338,12 +338,12 @@ $ layerfs branch remove shop/api merged
 
 | Error | When | Source |
 | --- | --- | --- |
-| `InvalidInput` | a bad argument, a cursor of other filters or another call, an ambiguous Commit prefix (`matches`); out of scope | [`calls/check.rs`](../../../../api/crates/layerfs-api/src/calls/check.rs), [`calls/scope.rs`](../../../../api/crates/layerfs-api/src/calls/scope.rs) |
-| `NotFound` | the project's Store, the project, a Branch or a Commit is missing (raised `NoSuchStore`, `NoSuchProject`, `NoSuchBranch`, `NoSuchCommit`) | [`resolve.rs`](../../../../control/crates/layerfs-store/src/resolve.rs), [`history/lookup.rs`](../../../../engine/crates/layerfs-store-service/src/history/lookup.rs) |
-| `Busy`, `Unresolved` | a move or remove holds the Store, or left its outcome unknown | [`op.rs`](../../../../control/crates/layerfs-home/src/op.rs) |
-| `Unavailable` | the Store's worker is not recorded or does not answer; a PostgreSQL server is unreachable. Nothing starts a stopped machine: `fix: layerfs machine start <machine>` | [`place.rs`](../../../../control/crates/layerfs-store/src/place.rs) |
-| `Unsupported` | a sqlite Store reached from another kernel, or on a removed platform's machine | [`calls/platform_policy.rs`](../../../../api/crates/layerfs-api/src/calls/platform_policy.rs) |
-| `Unknown` | a worker's answer was lost, or the Store reported an unknown outcome; after a fork, merge or publish, read `branch get` first | [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) |
+| `InvalidInput` | a bad argument, a cursor of other filters or another call, an ambiguous Commit prefix (`matches`); out of scope | [`guard/arguments.rs`](../../../../api/crates/layerfs-api/src/dispatch/guard/arguments.rs), [`guard/scope.rs`](../../../../api/crates/layerfs-api/src/dispatch/guard/scope.rs) |
+| `NotFound` | the project's Store, the project, a Branch or a Commit is missing (raised `NoSuchStore`, `NoSuchProject`, `NoSuchBranch`, `NoSuchCommit`) | [`resolve.rs`](../../../../control/crates/layerfs-store/src/admin/route/resolve.rs), [`src/lookup.rs`](../../../../engine/crates/layerfs-store-service/src/lookup.rs) |
+| `Busy`, `Unresolved` | a move or remove holds the Store, or left its outcome unknown | [`intent.rs`](../../../../control/crates/layerfs-home/src/record/intent.rs) |
+| `Unavailable` | the Store's worker is not recorded or does not answer; a PostgreSQL server is unreachable. Nothing starts a stopped machine: `fix: layerfs machine start <machine>` | [`executor.rs`](../../../../control/crates/layerfs-store/src/admin/route/executor.rs) |
+| `Unsupported` | a sqlite Store reached from another kernel, or on a removed platform's machine | [`guard/platform_policy.rs`](../../../../api/crates/layerfs-api/src/dispatch/guard/platform_policy.rs) |
+| `Unknown` | a worker's answer was lost, or the Store reported an unknown outcome; after a fork, merge or publish, read `branch get` first | [`guest/client.rs`](../../../../control/crates/layerfs-machine/src/route/guest/client.rs) |
 
 ## Related
 

@@ -6,7 +6,7 @@ What each filesystem operation on a [Workspace](README.md) reads and publishes, 
 
 | | |
 | --- | --- |
-| Source | [`layerfs-workspace/src/operations`](../../../../engine/crates/layerfs-workspace/src/operations) |
+| Source | [`layerfs-vfs/src/operations`](../../../../engine/crates/layerfs-vfs/src/operations) |
 
 ## Namespace
 
@@ -39,20 +39,20 @@ only fills the client's caches.
 
 | `Operation` | POSIX call | Published in one transaction | Source |
 | --- | --- | --- | --- |
-| `Create`, `Mkdir`, `Symlink` | creat, mkdir, symlink | New inode on a reserved serial, parent entry and counts, symlink target cell | [`create.rs`](../../../../engine/crates/layerfs-workspace/src/operations/namespace/create.rs) |
+| `Create`, `Mkdir`, `Symlink` | creat, mkdir, symlink | New inode on a reserved serial, parent entry and counts, symlink target cell | [`create.rs`](../../../../engine/crates/layerfs-vfs/src/operations/namespace/create.rs) |
 | `Link` | link | `nlink + 1` and a new name; regular files and symlinks only, never following a symlink target | same |
-| `Unlink`, `Rmdir` | unlink, rmdir | Whiteout or removed row, inode `nlink - 1` (directory to 0), parent counts | [`remove.rs`](../../../../engine/crates/layerfs-workspace/src/operations/namespace/remove.rs) |
-| `Rename` | rename; `replace: false` is the no-replace form | Unbind source, bind destination, dereference a replaced inode, parent counts | [`rename.rs`](../../../../engine/crates/layerfs-workspace/src/operations/namespace/rename.rs) |
+| `Unlink`, `Rmdir` | unlink, rmdir | Whiteout or removed row, inode `nlink - 1` (directory to 0), parent counts | [`remove.rs`](../../../../engine/crates/layerfs-vfs/src/operations/namespace/remove.rs) |
+| `Rename` | rename; `replace: false` is the no-replace form | Unbind source, bind destination, dereference a replaced inode, parent counts | [`rename.rs`](../../../../engine/crates/layerfs-vfs/src/operations/namespace/rename.rs) |
 
 | Rule | Source |
 | --- | --- |
-| A removed inode keeps a row with `nlink` 0, so serial-addressed access does not fall through to the base | [`remove.rs`](../../../../engine/crates/layerfs-workspace/src/operations/namespace/remove.rs) |
-| Moving a directory to another parent needs ancestry evidence: a path caller passes `destination_path`, walked from the root and verified; a kernel caller uses the connection's retained parent index | [`rename.rs`](../../../../engine/crates/layerfs-workspace/src/operations/namespace/rename.rs), [`types.rs`](../../../../engine/crates/layerfs-workspace/src/operations/types.rs) |
-| The retained parent index keeps, per kernel-known directory, its parent and its name there, written by LOOKUP, MKDIR, a READDIRPLUS handle and a rename (to another parent or in place). An install rewrites none of it, and a merged install can move a directory the kernel holds as a cwd or descriptor with no LOOKUP to follow. So a kernel rename of a directory checks every link from the destination up to the root against the current view (the parent must still bind that name to that directory) before its cycle check; a link that no longer holds is `AncestryMismatch` (EINVAL), and the next LOOKUP of that directory records its current place | [`rename.rs`](../../../../engine/crates/layerfs-workspace/src/operations/namespace/rename.rs), [`kernel_mutation.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/kernel_mutation.rs), [`kernel_directory.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/kernel_directory.rs) |
-| Renaming one name of an inode onto another name of the same inode succeeds and changes nothing | [`rename.rs`](../../../../engine/crates/layerfs-workspace/src/operations/namespace/rename.rs) |
+| A removed inode keeps a row with `nlink` 0, so serial-addressed access does not fall through to the base | [`remove.rs`](../../../../engine/crates/layerfs-vfs/src/operations/namespace/remove.rs) |
+| Moving a directory to another parent needs ancestry evidence: a path caller passes `destination_path`, walked from the root and verified; a kernel caller uses the connection's retained parent index | [`rename.rs`](../../../../engine/crates/layerfs-vfs/src/operations/namespace/rename.rs), [`outcomes.rs`](../../../../engine/crates/layerfs-vfs/src/operations/outcomes.rs) |
+| The retained parent index keeps, per kernel-known directory, its parent and its name there, written by LOOKUP, MKDIR, a READDIRPLUS handle and a rename (to another parent or in place). An install rewrites none of it, and a merged install can move a directory the kernel holds as a cwd or descriptor with no LOOKUP to follow. So a kernel rename of a directory checks every link from the destination up to the root against the current view (the parent must still bind that name to that directory) before its cycle check; a link that no longer holds is `AncestryMismatch` (EINVAL), and the next LOOKUP of that directory records its current place | [`rename.rs`](../../../../engine/crates/layerfs-vfs/src/operations/namespace/rename.rs), [`mutation.rs`](../../../../engine/crates/layerfs-overlay/src/kernel/mutation.rs), [`directory.rs`](../../../../engine/crates/layerfs-overlay/src/kernel/directory.rs) |
+| Renaming one name of an inode onto another name of the same inode succeeds and changes nothing | [`rename.rs`](../../../../engine/crates/layerfs-vfs/src/operations/namespace/rename.rs) |
 | A file renamed over a file records a `predecessor`, offered to Commit as a delta base | same |
-| Parent `entries` and `subdirs` move in the same row as the binding; leaving range is an error, never clamped | [`eval.rs`](../../../../engine/crates/layerfs-workspace/src/mutation/eval.rs) |
-| Aliases of a `Link` share one serial, target bytes and link count; removing one name keeps the others; removing the last drops the inode from the committed namespace | [`create.rs`](../../../../engine/crates/layerfs-workspace/src/operations/namespace/create.rs), [`remove.rs`](../../../../engine/crates/layerfs-workspace/src/operations/namespace/remove.rs) |
+| Parent `entries` and `subdirs` move in the same row as the binding; leaving range is an error, never clamped | [`eval.rs`](../../../../engine/crates/layerfs-vfs/src/job/eval.rs) |
+| Aliases of a `Link` share one serial, target bytes and link count; removing one name keeps the others; removing the last drops the inode from the committed namespace | [`create.rs`](../../../../engine/crates/layerfs-vfs/src/operations/namespace/create.rs), [`remove.rs`](../../../../engine/crates/layerfs-vfs/src/operations/namespace/remove.rs) |
 
 ## Listing
 
@@ -77,7 +77,7 @@ longest name, as the directory reader charges them (`NAME_LENGTH_BYTES` +
 Should a base page still end with a continuation before the window's other
 keys, the merge stops at the base's last fetched name: a local key past it
 would skip the base names between
-([`namespace/list.rs`](../../../../engine/crates/layerfs-workspace/src/operations/namespace/list.rs)).
+([`namespace/list.rs`](../../../../engine/crates/layerfs-vfs/src/operations/namespace/list.rs)).
 
 ## Attributes
 
@@ -92,8 +92,8 @@ would skip the base names between
 which also works on a removed file. A smaller size is a logical cut-off:
 discarded bytes are hidden at once and never read again after a regrow.
 Access checks belong to the mount's default-permissions identity
-([`attributes.rs`](../../../../engine/crates/layerfs-workspace/src/operations/attributes.rs),
-[`types.rs`](../../../../engine/crates/layerfs-workspace/src/operations/types.rs)).
+([`attributes.rs`](../../../../engine/crates/layerfs-vfs/src/operations/attributes.rs),
+[`outcomes.rs`](../../../../engine/crates/layerfs-vfs/src/operations/outcomes.rs)).
 
 ## Files
 
@@ -111,10 +111,10 @@ Access checks belong to the mount's default-permissions identity
 
 | Case | Rule | Source |
 | --- | --- | --- |
-| `Write`, `WriteOpen` | One window of at most `WRITE_WINDOW`; stores only its own bytes and reads no base payload; uncovered bytes stay inherited | [`file/write.rs`](../../../../engine/crates/layerfs-workspace/src/operations/file/write.rs) |
+| `Write`, `WriteOpen` | One window of at most `WRITE_WINDOW`; stores only its own bytes and reads no base payload; uncovered bytes stay inherited | [`file/write.rs`](../../../../engine/crates/layerfs-vfs/src/operations/file/write.rs) |
 | `Position::End` | Resolves against the size current in the publishing job, so concurrent appends never overlap | same |
-| `StoreOpen` | A shared-mapping store, clipped to the current size; never extends the file | [`types.rs`](../../../../engine/crates/layerfs-workspace/src/operations/types.rs) |
-| Read, no local row | The whole window is one base read | [`file/read.rs`](../../../../engine/crates/layerfs-workspace/src/operations/file/read.rs) |
+| `StoreOpen` | A shared-mapping store, clipped to the current size; never extends the file | [`outcomes.rs`](../../../../engine/crates/layerfs-vfs/src/operations/outcomes.rs) |
+| Read, no local row | The whole window is one base read | [`file/read.rs`](../../../../engine/crates/layerfs-vfs/src/operations/file/read.rs) |
 | Reference byte past its source's end | An error, not zero | same |
 
 Before its first owner visit a kernel write may pass recognition:
@@ -122,7 +122,7 @@ Before its first owner visit a kernel write may pass recognition:
 committed chunks and turns matches into `WriteClaims`, stored as reference
 pieces instead of bytes. A pass that finds nothing, or cannot read a page,
 leaves the write unchanged
-([`file/recognize.rs`](../../../../engine/crates/layerfs-workspace/src/operations/file/recognize.rs)).
+([`file/recognize.rs`](../../../../engine/crates/layerfs-vfs/src/operations/file/recognize.rs)).
 
 | Recognition constant | Value |
 | --- | --- |
@@ -148,14 +148,14 @@ leaves the write unchanged
 
 | Visit | Requests | Source |
 | --- | --- | --- |
-| `kernel_read_visit` | LOOKUP, GETATTR | [`kernel_visit.rs`](../../../../engine/crates/layerfs-workspace/src/operations/kernel_visit.rs) |
+| `kernel_read_visit` | LOOKUP, GETATTR | [`visit.rs`](../../../../engine/crates/layerfs-vfs/src/operations/kernel/visit.rs) |
 | `kernel_open_visit`, `kernel_opendir_visit` | OPEN of a regular file, OPENDIR; record the descriptor | same |
-| `kernel_data_visit` | READ, READLINK: copies local bytes and names the base root for the rest; `whole` is a fully local reply, `inherits` says a Store read is needed | [`kernel_data.rs`](../../../../engine/crates/layerfs-workspace/src/operations/kernel_data.rs) |
-| `kernel_directory_visit` | READDIR | [`kernel_directory.rs`](../../../../engine/crates/layerfs-workspace/src/operations/kernel_directory.rs) |
-| `kernel_mutation_visit` | Every mutating request | [`kernel_visit.rs`](../../../../engine/crates/layerfs-workspace/src/operations/kernel_visit.rs) |
+| `kernel_data_visit` | READ, READLINK: copies local bytes and names the base root for the rest; `whole` is a fully local reply, `inherits` says a Store read is needed | [`read.rs`](../../../../engine/crates/layerfs-vfs/src/operations/kernel/read.rs) |
+| `kernel_directory_visit` | READDIR | [`directory.rs`](../../../../engine/crates/layerfs-vfs/src/operations/kernel/directory.rs) |
+| `kernel_mutation_visit` | Every mutating request | [`visit.rs`](../../../../engine/crates/layerfs-vfs/src/operations/kernel/visit.rs) |
 
 Each visit uses the same evaluator as the path route
-([`kernel_read.rs`](../../../../engine/crates/layerfs-workspace/src/operations/kernel_read.rs)).
+([`lookup.rs`](../../../../engine/crates/layerfs-vfs/src/operations/kernel/lookup.rs)).
 Facts carried between visits are used only while the Workspace still has the
 base they came from, so an install between visits costs another read, never
 a stale answer. OPEN names an inode the kernel still references, so a file
@@ -187,9 +187,9 @@ inode is still `InvalidRecord`.
 
 | Case | Result | Source |
 | --- | --- | --- |
-| Offset from before the handle was last listed from 0 | `rewound()`: lists nothing | [`kernel_directory.rs`](../../../../engine/crates/layerfs-workspace/src/operations/kernel_directory.rs) |
+| Offset from before the handle was last listed from 0 | `rewound()`: lists nothing | [`directory.rs`](../../../../engine/crates/layerfs-vfs/src/operations/kernel/directory.rs) |
 | Window of whiteouts only | Empty with a continuation; the request reads the next window | same |
-| READDIRPLUS reply | Names and kinds come first (batched per inode-tree level), the reply's offer truncates the window to the names it publishes, and only those names' facts are read outside the owner: a re-sent reply reads nothing for a name it does not send | [`kernel_directory.rs`](../../../../engine/crates/layerfs-workspace/src/operations/kernel_directory.rs) |
+| READDIRPLUS reply | Names and kinds come first (batched per inode-tree level), the reply's offer truncates the window to the names it publishes, and only those names' facts are read outside the owner: a re-sent reply reads nothing for a name it does not send | [`directory.rs`](../../../../engine/crates/layerfs-vfs/src/operations/kernel/directory.rs) |
 | Names the kernel buffer accepted | Become resume cookies; nothing is held between the two visits or after the reply | same |
 
 ## Kernel mutations
@@ -197,7 +197,7 @@ inode is still `InvalidRecord`.
 `kernel_mutation_visit` wraps the ordinary `NamespaceJob` in one owner job.
 The descriptor the kernel names becomes the `OpenFile` of a handle-addressed
 operation; on publication, `effect` hands the reply its kernel custody
-([`kernel_mutation.rs`](../../../../engine/crates/layerfs-workspace/src/operations/kernel_mutation.rs)).
+([`mutation.rs`](../../../../engine/crates/layerfs-vfs/src/operations/kernel/mutation.rs)).
 
 | Operation | Custody the applied reply takes |
 | --- | --- |

@@ -6,7 +6,7 @@
 # A Store opens directly only inside a private (0700) directory, owned by this
 # user, on a local filesystem whose locks reach every opener: ext4, xfs or
 # btrfs on Linux; apfs or hfs on macOS. Anything else is `Unsupported`
-# (engine/crates/layerfs-store-service/src/kernel_guard.rs), because SQLite's
+# (engine/crates/layerfs-store-service/src/store/kernel_guard.rs), because SQLite's
 # WAL locks and the writers' directory flock cannot coordinate across kernels
 # or on tmpfs, overlay, FUSE or network mounts.
 #
@@ -413,7 +413,7 @@ else
   [ -f api/crates/layerfs-api/tests/store/main.rs ] \
     || refuse "no api/crates/layerfs-api/tests/store/ test binary found; is $root the repository root?"
   # The Store family's binary and the Store tests that stay standalone (#828).
-  run_cargo layerfs-api --test store --test idle_checkpoint --test oneshot_close \
+  run_cargo layerfs-api --test store --test sqlite_session idle_checkpoint --test oneshot_close \
     --test open_cache --test reaper --test upgrade_cancel
   # The four GC calls, their trace and the scope refusal, and the CLI's GC
   # commands plus the real-process compaction kill arms (T-G65).

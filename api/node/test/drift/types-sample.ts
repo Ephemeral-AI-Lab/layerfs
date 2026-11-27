@@ -1,7 +1,7 @@
 // Type-checks the generated index.d.ts; it is never run. From a directory
 // outside the repository with `typescript` and `@types/node` installed:
 //   tsc --noEmit --strict --module nodenext --moduleResolution nodenext --target es2022 \
-//     --typeRoots <that dir>/node_modules/@types api/node/test/types/sample.ts
+//     --typeRoots <that dir>/node_modules/@types api/node/test/drift/types-sample.ts
 import layerfs, { client, close, table, LayerFSError, type Result, type FileReadOptions } from "../../src/index.js";
 
 const lfs = client({ home: "/tmp/home", scope: { project: "shop/api", folder: "/web", branch: "agent" } });

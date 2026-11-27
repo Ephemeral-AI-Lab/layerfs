@@ -10,7 +10,7 @@ the harness that enforces it before cargo spends a build.
 | --- | --- |
 | Harness | [`tools/ci/test_store_ext4.sh`](../../../../tools/ci/test_store_ext4.sh) |
 | Suites | `layerfs-persistence`, `layerfs-store-service`, `layerfs-store`, and the `store_*` targets of `layerfs-api` |
-| Guard | [`kernel_guard.rs`](../../../../engine/crates/layerfs-store-service/src/kernel_guard.rs) |
+| Guard | [`kernel_guard.rs`](../../../../engine/crates/layerfs-store-service/src/store/kernel_guard.rs) |
 | CI | [`.github/workflows/store-ext4.yml`](../../../../.github/workflows/store-ext4.yml) |
 | Related | [Store](README.md), [SQLite](sqlite.md), [PostgreSQL](postgresql.md), [Diagnostics](diagnostics.md) |
 
@@ -23,7 +23,7 @@ filesystem holding it is `ext4`, `xfs` or `btrfs` on Linux, or `apfs` or `hfs`
 on macOS. Anything else is `OpenRefusal::Unsupported` with the reason
 `filesystem 0x… at … does not carry SQLite locks; direct Store access needs
 ext4, xfs or btrfs`
-([`kernel_guard.rs`](../../../../engine/crates/layerfs-store-service/src/kernel_guard.rs)).
+([`kernel_guard.rs`](../../../../engine/crates/layerfs-store-service/src/store/kernel_guard.rs)).
 
 The allowlist is not arbitrary. Every opener of one Store must share one kernel
 and a filesystem with working advisory locks: SQLite's WAL locks and the writer
@@ -42,7 +42,7 @@ filesystem of the test environment:
 
 On a host whose `/tmp` is tmpfs, or in a container whose checkout is an
 overlay, the guard refuses the Store and suites such as
-`layerfs-store-service --test kernel_guard` fail at their "a private directory
+`layerfs-store-service --test store kernel_guard` fail at their "a private directory
 on a supported filesystem passes" assertion. That is an environment failure,
 not a product failure. Tests that must prove the refusal on purpose use
 `/dev/shm` (tmpfs), so pointing `TMPDIR` at ext4 does not weaken them.

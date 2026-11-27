@@ -95,7 +95,7 @@ the macOS/Windows worker that runs it) with TLS for https:// remotes. The
 PostgreSQL Store engine (#506) is built beside SQLite in every build (#726);
 macOS Store execution remains unsupported, and Store E2E runs on Linux.
 The Linux target mount stays inside `/work`, which also satisfies the existing
-[native build script](../../api/scripts/build-native.mjs)'s path restriction.
+[native build script](../../api/scripts/native-addon.mjs)'s path restriction.
 The standalone `build:native` script remains available; the isolated launcher
 publishes the daemon and addon together rather than overwriting a live addon.
 
@@ -135,7 +135,7 @@ refuses workspace aggregates, target/config overrides and `fs-bench-pro`.
 ## Run pinned Linux E2E artifacts
 
 ```sh
-python3 tools/worktree.py run --resources /absolute/path/resources.json --bundle /absolute/path/to/sealed-linux-bundle --timeout 90 -- node api/node/test/calls.mjs
+python3 tools/worktree.py run --resources /absolute/path/resources.json --bundle /absolute/path/to/sealed-linux-bundle --timeout 90 -- node api/node/test/calls/every-call.test.mjs
 ```
 
 Select the owning test's Linux entrypoint. Tests that bootstrap their own outer

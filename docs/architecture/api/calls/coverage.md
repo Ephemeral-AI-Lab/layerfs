@@ -6,7 +6,7 @@ Which front end has which call, what lives outside the call table, and where the
 
 | | |
 | --- | --- |
-| Source | [`api/scripts/gen-coverage.mjs`](../../../../api/scripts/gen-coverage.mjs), [`api/node/test/coverage.mjs`](../../../../api/node/test/coverage.mjs), [`api/node/test/contract.mjs`](../../../../api/node/test/contract.mjs), [`api/node/test/contract/cases.mjs`](../../../../api/node/test/contract/cases.mjs) |
+| Source | [`api/scripts/coverage-doc.mjs`](../../../../api/scripts/coverage-doc.mjs), [`node/test/drift/coverage.test.mjs`](../../../../api/node/test/drift/coverage.test.mjs), [`node/test/contract/front-ends.test.mjs`](../../../../api/node/test/contract/front-ends.test.mjs), [`api/node/test/contract/cases.mjs`](../../../../api/node/test/contract/cases.mjs) |
 
 ## The matrix
 
@@ -31,16 +31,16 @@ reason listed under "Front-end problems":
 | CLI | `layerfs help <family>` prints its usage line with the table's arguments, without content and JSON positionals (read from stdin or `--from`), with `on_progress` as `--progress` and without the output functions |
 | MCP | the generated tool's schema and description match the table and its profile lists it; `admin` marks a call only `--profile admin` lists |
 
-`node api/scripts/gen-coverage.mjs` rewrites the block between the markers;
+`node api/scripts/coverage-doc.mjs` rewrites the block between the markers;
 `--check` exits 1 when the block is not what the front ends give, or when a
 front end disagrees with the Node table. Both need the built addon, the Python
 module (`LAYERFS_PYTHON`, default `python3`, with `api/python/src` on its
 path) and the built command (`LAYERFS_CLI`, default `target/debug/layerfs`,
 or under `CARGO_TARGET_DIR`); a missing one is an error, never an empty
-column. [`coverage.mjs`](../../../../api/node/test/coverage.mjs) runs that
+column. [`coverage.test.mjs`](../../../../api/node/test/drift/coverage.test.mjs) runs that
 check and proves a missing, renamed or extra call is reported.
 
-<!-- BEGIN GENERATED: api/scripts/gen-coverage.mjs -->
+<!-- BEGIN GENERATED: api/scripts/coverage-doc.mjs -->
 
 81 calls in 10 families, counted from the Node table. Calls present: Node 81, Python 81, Python `aio` 81, CLI 81, MCP 81 (17 in `work`, 64 admin only).
 
@@ -165,7 +165,7 @@ These are not calls and are not in the matrix.
 
 ## What is checked across the front ends
 
-[`contract.mjs`](../../../../api/node/test/contract.mjs) runs the case list
+[`front-ends.test.mjs`](../../../../api/node/test/contract/front-ends.test.mjs) runs the case list
 in [`contract/cases.mjs`](../../../../api/node/test/contract/cases.mjs)
 through Node, Python, Python `aio` and the command, each in its own fresh
 temporary home (a SQLite Store `shop` on the host machine, project `shop/api`, Branch
@@ -203,11 +203,11 @@ command runs under a wall limit of at most 120 s.
 
 ```text
 cargo +1.85.1 build --locked --offline -p layerfs-cli -p layerfs-node
-node api/scripts/build-native.mjs --debug          # api/node/layerfs.node
+node api/scripts/native-addon.mjs --debug          # api/node/layerfs.node
 (cd api/python && maturin develop --locked --offline)
 export LAYERFS_PYTHON=<python with layerfs importable>   # default python3
-node api/scripts/gen-coverage.mjs                  # rewrite the matrix
-node api/scripts/gen-coverage.mjs --check          # fail when it is stale
+node api/scripts/coverage-doc.mjs                  # rewrite the matrix
+node api/scripts/coverage-doc.mjs --check          # fail when it is stale
 cd api/node
 perl -e 'alarm 120; exec @ARGV' node --test test/coverage.mjs test/contract.mjs
 ```
