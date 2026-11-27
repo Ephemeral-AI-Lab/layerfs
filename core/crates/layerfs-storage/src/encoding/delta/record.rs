@@ -354,11 +354,11 @@ pub fn stored_base(
             crate::encoding::pool::leaf::PooledRecord::Delta { base, .. } => Some(base),
         });
     }
-    if lane == PackLane::Ordinary && crate::encoding::pool::branch::is_program_role(role) {
+    if lane == PackLane::Ordinary && crate::encoding::pool::program_page::is_program_role(role) {
         // An inode-table branch (#360 item 3) or a directory or extent page (#92)
         // may be stored against its predecessor; its record keeps that base, as a
         // pooled leaf's does.
-        return crate::encoding::pool::branch::stored_base(record);
+        return crate::encoding::pool::program_page::stored_base(record);
     }
     Ok(parse(lane, record, canonical_length)?.base)
 }

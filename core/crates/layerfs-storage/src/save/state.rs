@@ -1,5 +1,5 @@
 //! One producer's bounded pending, framing and reconstruction state.
-use super::seal::Packer;
+use super::publish::seal::Packer;
 use crate::{
     encoding::{
         delta::{
@@ -13,7 +13,7 @@ use crate::{
     error::StorageResult,
     location::SignatureRow,
     policy::{SAVE_PENDING_BASE_BYTES, SAVE_RESOLVED_CACHE_BYTES},
-    save::{resolved::Resolved, PendingBatch, SaveProfile},
+    save::{prepare::resolved::Resolved, PendingBatch, SaveProfile},
     storage::Storage,
 };
 use layerfs_content::inode_leaf::INODE_VALUE_BYTES;
@@ -149,7 +149,7 @@ pub(super) struct State<'a> {
     /// similarity ring may propose before they are published (#810).
     pub(super) stored_full: Resolved,
     /// Whole-file objects waiting for this Save to publish their delta base.
-    pub(super) deferred: super::deferred::Deferred,
+    pub(super) deferred: super::prepare::deferred::Deferred,
     /// Values this Save assigned and has not published yet, by ordinal.
     pub(super) values: BTreeMap<u32, [u8; INODE_VALUE_BYTES]>,
     /// Fingerprint of each value this Save assigned and the ordinal it got.

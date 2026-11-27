@@ -1,25 +1,17 @@
 //! Bounded immutable-pack saves through the bounded persistence port.
-mod deferred;
 mod operation;
-mod pooled;
 mod provider;
-mod publication;
-mod reservation;
-mod resolved;
-mod seal;
-mod select;
-mod source;
 mod state;
-mod wave;
 pub use operation::{PreparedTail, Save, SaveSink};
-pub(crate) use reservation::IdBlock;
+pub(crate) use publish::reservation::IdBlock;
 pub use state::WriteOutcome;
 
+pub(crate) mod prepare;
+pub(crate) mod publish;
+pub(crate) mod select;
 mod work;
 pub use work::{SaveHistory, SaveWork, StageWork};
 pub(crate) use work::{Stage, Work};
 
-mod batch;
-mod profile;
-pub(crate) use batch::PendingBatch;
-pub use profile::{PoolCounters, SaveProfile};
+pub(crate) use prepare::batch::PendingBatch;
+pub use select::counters::{PoolCounters, SaveProfile};

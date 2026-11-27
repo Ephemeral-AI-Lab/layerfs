@@ -747,8 +747,8 @@ impl PoolReader {
             let record = crate::encoding::decode::framed_record(&body, location.record_number)?;
             // A whole program page is its tag and a canonical page that may itself
             // reach the metadata record limit (#92).
-            let limit = if crate::encoding::pool::branch::is_program_role(location.role) {
-                crate::encoding::pool::branch::PAGE_RECORD_LIMIT
+            let limit = if crate::encoding::pool::program_page::is_program_role(location.role) {
+                crate::encoding::pool::program_page::PAGE_RECORD_LIMIT
             } else {
                 METADATA_RECORD_LIMIT
             };
