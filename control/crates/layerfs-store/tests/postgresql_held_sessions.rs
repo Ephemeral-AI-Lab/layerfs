@@ -506,3 +506,79 @@ fn an_upgrade_renews_the_login_revision() {
 fn idle(_: &std::path::Path, _: &str) -> Result<(), layerfs_bridge::control::SdkRefusal> {
     Ok(())
 }
+
+#[test]
+fn write_sessions_stay_apart_and_keep_half_of_each_bound_for_reads() {
+    let Some(source) = url() else { return };
+    let _serial = serial();
+    // the sessions are process-wide: none of another test's are left
+    pool::close_idle(Duration::ZERO);
+    let (one, first, open) = connected(&source);
+    let (_two, second, _) = connected(&source);
+    let (_three, third, _) = connected(&source);
+
+    // a read session never serves a write, nor a write session a read
+    pool::run(&first, "pgs", "r1", &open, ok).unwrap();
+    pool::run_write(&first, "pgs", "r1", &open, ok).unwrap();
+    assert_eq!(pool::counts().idle, 2, "one session of each kind");
+    let held = one.pids();
+    pool::run_write(&first, "pgs", "r1", &open, ok).unwrap();
+    pool::run(&first, "pgs", "r1", &open, ok).unwrap();
+    assert_eq!(one.pids(), held, "each kind's held session served again");
+    assert_eq!(pool::counts().idle, 2);
+
+    // a Store lends half its slots to writes; reads keep the rest
+    let writes: Vec<_> = (0..pool::WRITES_PER_STORE)
+        .map(|_| pool::reserve_write(&first, "pgs").expect("a write slot"))
+        .collect();
+    assert_eq!(pool::counts().writes, pool::WRITES_PER_STORE);
+    assert!(
+        pool::reserve_write(&first, "pgs").is_none(),
+        "the Store's write share"
+    );
+    let reads: Vec<_> = (0..pool::PER_STORE - pool::WRITES_PER_STORE)
+        .map(|_| pool::reserve(&first, "pgs").expect("a read slot"))
+        .collect();
+    assert!(pool::reserve(&first, "pgs").is_none(), "the per-Store bound");
+    drop(reads);
+
+    // the process lends half its slots to writes
+    let more: Vec<_> = (0..pool::WRITES_PER_PROCESS - pool::WRITES_PER_STORE)
+        .map(|_| pool::reserve_write(&second, "pgs").expect("a write slot"))
+        .collect();
+    assert_eq!(pool::counts().writes, pool::WRITES_PER_PROCESS);
+    assert!(
+        pool::reserve_write(&third, "pgs").is_none(),
+        "the process's write share"
+    );
+    let read = pool::reserve(&third, "pgs").expect("reads keep their share");
+    drop((writes, more, read));
+    assert_eq!(pool::counts().writes, 0);
+    assert_eq!(pool::counts().lent, 0);
+
+    // a Store at its bound with idle reads makes room for a write by
+    // closing one of them
+    let together = Arc::new(std::sync::Barrier::new(pool::PER_STORE - 1));
+    let (home, args) = (Arc::new(first), Arc::new(open));
+    let calls: Vec<_> = (0..pool::PER_STORE - 1)
+        .map(|_| {
+            let (home, args, together) = (home.clone(), args.clone(), together.clone());
+            std::thread::spawn(move || {
+                pool::run(&home, "pgs", "r1", &args, |_| {
+                    together.wait();
+                    Ok(SdkValue::Null)
+                })
+            })
+        })
+        .collect();
+    for call in calls {
+        call.join().unwrap().unwrap();
+    }
+    assert_eq!(pool::counts().idle, pool::PER_STORE, "three reads, one write");
+    let write = pool::reserve_write(&home, "pgs").expect("the idle write session");
+    let other = pool::reserve_write(&home, "pgs").expect("room made by a read");
+    assert_eq!(pool::counts().idle + pool::counts().lent, pool::PER_STORE);
+    drop((write, other));
+    pool::close_idle(Duration::ZERO);
+    assert_eq!(pool::counts(), pool::Counts::default());
+}

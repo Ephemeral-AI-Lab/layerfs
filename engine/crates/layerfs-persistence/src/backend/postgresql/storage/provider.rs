@@ -93,8 +93,9 @@ impl PostgresStorage {
         }
         alive
     }
-    /// Whether this idle read session can serve one more call as the Store
-    /// its open checked (#819 P-B): not quarantined, its connection
+    /// Whether this idle session (a held read session, or a held writable
+    /// service's writer) can serve one more call as the Store its open
+    /// checked (#819 P-B): not quarantined, its connection
     /// standing, and the Light check ([`crate::PostgresCheck::Light`]: the
     /// schema and format version, the recorded binding and the catalog id
     /// derived from it), run now in one round trip answered within

@@ -118,12 +118,7 @@ pub(crate) fn transition<T, R>(
 /// Opens the Store at `store` for this process, or refuses.
 fn open(store: &Path, args: &OpenArgs, owner: Owner) -> Result<Opened, SdkRefusal> {
     let identity = crate::identity::identity(args)?;
-    let directory = std::env::temp_dir().join(format!(
-        "layerfs-store-{}-{}",
-        std::process::id(),
-        layerfs_bridge::sdk_values::hex(&layerfs_home::helpers::random()?[..12])
-    ));
-    std::fs::create_dir(&directory).map_err(failed)?;
+    let directory = overlay_directory()?;
     let template = directory.join("overlay.sqlite");
     let opened = match identity.kind {
         crate::identity::Kind::Sqlite => {
@@ -154,6 +149,18 @@ fn open(store: &Path, args: &OpenArgs, owner: Owner) -> Result<Opened, SdkRefusa
             Err(refusal)
         }
     }
+}
+
+/// A new private overlay directory in this process's temporary directory,
+/// under a random name (#436).
+fn overlay_directory() -> Result<PathBuf, SdkRefusal> {
+    let directory = std::env::temp_dir().join(format!(
+        "layerfs-store-{}-{}",
+        std::process::id(),
+        layerfs_bridge::sdk_values::hex(&layerfs_home::helpers::random()?[..12])
+    ));
+    std::fs::create_dir(&directory).map_err(failed)?;
+    Ok(directory)
 }
 
 fn with_upgrade_fix(
@@ -194,6 +201,27 @@ pub(crate) fn open_postgres_read(args: &OpenArgs) -> Result<StoreService, SdkRef
     let identity = crate::identity::identity(args)?;
     crate::postgresql::open::open_read_only(args.postgresql.as_ref(), &identity)
         .map_err(|refusal| with_upgrade_fix(args, &identity, refusal))
+}
+
+/// A writable PostgreSQL service over new sessions, held by a host worker
+/// between CLI writes (#819 P-B, [`crate::postgresql::pool`]), with its own
+/// private overlay directory, which the caller removes after closing it.
+pub(crate) fn open_postgres_write(
+    args: &OpenArgs,
+) -> Result<(StoreService, PathBuf), SdkRefusal> {
+    let identity = crate::identity::identity(args)?;
+    let directory = overlay_directory()?;
+    let template = directory.join("overlay.sqlite");
+    let opened =
+        crate::postgresql::open::open_postgres_held(args.postgresql.as_ref(), &identity, &template)
+            .map_err(|refusal| with_upgrade_fix(args, &identity, refusal));
+    match opened {
+        Ok(service) => Ok((service, directory)),
+        Err(refusal) => {
+            let _ = std::fs::remove_dir_all(&directory);
+            Err(refusal)
+        }
+    }
 }
 
 /// One more client of the Store a call names, opening it first.
@@ -344,11 +372,22 @@ pub(crate) fn call_streamed(
     source: &mut dyn layerfs_store_service::methods::Source,
 ) -> Outcome {
     let service = service(open, owner)?;
+    dispatch_streamed(&service, method, args, source)
+}
+
+/// Runs write `method` once on `service`, its content or changes pulled
+/// from `source` (a host worker's held PostgreSQL write session).
+pub(crate) fn dispatch_streamed(
+    service: &StoreService,
+    method: &str,
+    args: SdkValue,
+    source: &mut dyn layerfs_store_service::methods::Source,
+) -> Outcome {
     let call = SdkCall {
         method: method.to_owned(),
         args: routed_out(args),
     };
-    layerfs_store_service::methods::call_streamed(&service, &call, source)
+    layerfs_store_service::methods::call_streamed(service, &call, source)
 }
 
 fn routed_out(args: SdkValue) -> SdkValue {

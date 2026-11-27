@@ -624,7 +624,8 @@ known successful call on stderr and exits 125. The same three reads on a
 PostgreSQL Store go to the same worker, which keeps their connections open
 between calls ([PostgreSQL Stores](machines-and-stores.md#postgresql-stores));
 a Store connected before this release stays direct until `store connect` is
-run again. SDK local calls and other CLI PostgreSQL calls run in the caller, and a SQLite Store on another machine runs through that machine's
+run again. So do the CLI's file writes on such a PostgreSQL Store (below).
+SDK local calls and other CLI PostgreSQL calls run in the caller, and a SQLite Store on another machine runs through that machine's
 worker. See [routes](machines-and-stores.md#routes).
 
 The CLI's writes on the same local SQLite Stores (`write`, `edit`, `mkdir`,
@@ -684,8 +685,12 @@ stop` that ends the worker lists those up to its drain
 reports `running_writes` and "N writes still running; see worker.log"
 (`running_writes_note`), and `InUse` while such a write holds its Store;
 the write finishes, and the worker exits after it. A definite refusal is
-never recorded. CLI PostgreSQL writes run in
-the caller.
+never recorded. CLI writes on a PostgreSQL Store run in the same worker,
+on writable connections it keeps open between calls, with the same
+streaming, waiting, outcome records and `Unknown` boundary; a Store
+connected before this release, or with the host machine stopped, keeps
+them in the caller
+([PostgreSQL Stores](machines-and-stores.md#postgresql-stores)).
 
 The host worker's SQLite cache keeps up to 16 Stores open per home.
 It checks the Store's current record before serving a call, including a

@@ -255,6 +255,22 @@ pub fn open_postgres(
     open(url, schema, sync, identity, template)
 }
 
+/// A host worker's held writable service (#819 P-B writes): opened as
+/// [`open_postgres`] does, the copy of the URL made for it overwritten
+/// after; the service's own copies hold the login while it stays open.
+pub(crate) fn open_postgres_held(
+    postgresql: Option<&PgSelection>,
+    identity: &Identity,
+    template: &Path,
+) -> Result<StoreService, SdkRefusal> {
+    let (url, schema, sync) = resolve_postgres(postgresql, identity)?;
+    let mut chosen = selection(url, schema, sync);
+    let opened =
+        StoreService::open_postgres(&chosen, &identity.binding, identity.cursor_key, template);
+    layerfs_home::wipe::text(std::mem::take(&mut chosen.url));
+    opened.map_err(open_refusal)
+}
+
 /// The fresh command's Store-call session, Full-checked once at open.
 pub(crate) fn open_read_only(
     postgresql: Option<&PgSelection>,

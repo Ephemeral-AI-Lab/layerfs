@@ -454,11 +454,11 @@ fn a_killed_worker_leaves_unsent_writes_refused_and_sent_ones_unknown() {
     drain(&home);
 }
 
-/// Only host SQLite Stores route writes to the worker: on a PostgreSQL
-/// Store each write, streamed input or not, commits on the direct route
-/// and no worker is dialed or started. Needs `LAYERFS_TEST_POSTGRES_URL`.
+/// A PostgreSQL Store whose record holds a login revision routes its
+/// writes to the worker too (#819 P-B writes): each write, streamed input
+/// or not, commits once there. Needs `LAYERFS_TEST_POSTGRES_URL`.
 #[test]
-fn writes_on_a_postgresql_store_stay_direct() {
+fn writes_on_a_postgresql_store_go_to_the_worker() {
     let Ok(url) = std::env::var("LAYERFS_TEST_POSTGRES_URL") else {
         eprintln!("NOT_RUN: LAYERFS_TEST_POSTGRES_URL unset");
         return;
@@ -508,7 +508,7 @@ fn writes_on_a_postgresql_store_stay_direct() {
     assert_eq!(commits(path, project, "work"), before + 3);
     let stat = ok(path, &["file", "stat", project, "work", "/big"], b"");
     assert_eq!(stat.get_int("size"), Some(1 << 20));
-    // no write was routed; its reads may be (Step 11 PostgreSQL reads)
-    assert_eq!(routed(path), 0);
+    // every write was routed, once each
+    assert_eq!(routed(path), 3);
     drain(&home);
 }

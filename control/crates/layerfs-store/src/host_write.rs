@@ -1,5 +1,7 @@
 //! The host worker's file writes: each one `fs.*` method on a host-machine
-//! sqlite Store, its content or changes streamed in bounded frames.
+//! sqlite Store, or on a PostgreSQL Store whose record holds a login
+//! revision (#819 P-B writes), its content or changes streamed in bounded
+//! frames.
 //!
 //! The CLI defers a `file write` or `file apply` input it would read whole
 //! (stdin or `--from`) when the Store looks eligible ([`likely`]). At the
@@ -7,6 +9,13 @@
 //! call streams the deferred input to the worker, any other call reads it
 //! whole and runs directly as before. Single-change writes (`edit`, `mkdir`,
 //! `rm`, `cp`, `mv`) go as one request frame when it fits, else directly.
+//!
+//! A PostgreSQL write's request carries the Store's saved password and the
+//! record's login revision, as a PostgreSQL read's does
+//! ([`crate::host_postgresql`]): every copy of the request the CLI makes is
+//! overwritten once sent or dropped, and the worker dials with it and reads
+//! no secret itself. A PostgreSQL Store whose record holds no login
+//! revision, or whose host machine is stopped, keeps its writes direct.
 use crate::resolve::Target;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::outcome::{refused, Outcome};
@@ -154,7 +163,7 @@ pub fn likely(home: &Path, project: &str) -> bool {
     let Ok(target) = crate::resolve::target(home, project) else {
         return false;
     };
-    host_sqlite(&target)
+    (host_sqlite(&target) || host_postgresql(home, &target))
         && layerfs_machine::worker::HostPaths::new(home).is_ok_and(|paths| paths.fits())
 }
 
@@ -172,6 +181,22 @@ fn host_sqlite(target: &Target) -> bool {
     ) && target.record.unblocked().is_ok()
 }
 
+/// Whether `target` is a PostgreSQL Store whose writes go to the host
+/// worker: its record holds a login revision (a record connected before
+/// login revisions stays direct), it is unblocked, and the host machine is
+/// not stopped (§8.1).
+fn host_postgresql(home: &Path, target: &Target) -> bool {
+    matches!(&target.store_ref, crate::record::StoreRef::Postgres { .. })
+        && layerfs_machine::in_process().is_some()
+        && target.record.login_revision().is_some()
+        && target.record.unblocked().is_ok()
+        && layerfs_machine::record::MachineRecord::admit_host(
+            home,
+            layerfs_home::names::HOST_MACHINE,
+        )
+        .is_ok()
+}
+
 /// The route of one CLI write, chosen before anything is sent: the host
 /// worker's outcome, or None for the direct route with `args` complete.
 #[cfg(any(target_os = "macos", target_os = "linux"))]
@@ -187,7 +212,11 @@ pub(crate) fn routed(
     let direct = |args: &mut Vec<(String, SdkValue)>, input: Option<Input>| {
         input.and_then(|input| materialize(input, args).err().map(Err))
     };
-    if !crate::host_read::cli() || !METHODS.contains(&method) || !host_sqlite(target) {
+    let postgresql = crate::host_read::cli() && host_postgresql(home, target);
+    if !crate::host_read::cli() || !METHODS.contains(&method) {
+        return direct(args, input);
+    }
+    if !postgresql && !host_sqlite(target) {
         return direct(args, input);
     }
     let body = match (method, input.as_ref().map(|input| input.kind)) {
@@ -206,18 +235,28 @@ pub(crate) fn routed(
     if body == "content" {
         fields.push(("streamed".to_owned(), SdkValue::Bool(true)));
     }
-    let header = SdkValue::map([
-        ("method", SdkValue::text(method)),
-        ("store", SdkValue::text(&target.store)),
-        ("project", SdkValue::text(&target.project)),
-        ("body", SdkValue::text(body)),
-        ("fields", SdkValue::Map(fields)),
-    ]);
+    let mut header = vec![
+        ("method".to_owned(), SdkValue::text(method)),
+        ("store".to_owned(), SdkValue::text(&target.store)),
+        ("project".to_owned(), SdkValue::text(&target.project)),
+        ("body".to_owned(), SdkValue::text(body)),
+        ("fields".to_owned(), SdkValue::Map(fields)),
+    ];
+    if let (true, Some(revision)) = (postgresql, target.record.login_revision()) {
+        let saved = match crate::postgresql::login::saved(&target.record) {
+            Ok(saved) => saved,
+            Err(refusal) => return Some(Err(refusal)),
+        };
+        header.push(("login_revision".to_owned(), SdkValue::text(revision)));
+        header.push(("password".to_owned(), SdkValue::text(saved.password())));
+    }
+    // a header that goes direct takes its copy of the password with it
+    let header = layerfs_home::wipe::Guard::new(SdkValue::Map(header), postgresql);
     let paths = match HostPaths::new(home) {
         Ok(paths) => paths,
         Err(error) => return Some(Err(error)),
     };
-    if !paths.request_fits(OP, &header) {
+    if !paths.request_fits(OP, header.get()) {
         return direct(args, input);
     }
     // An input that is not a regular file (a pipe, FIFO or terminal) is
@@ -245,6 +284,7 @@ pub(crate) fn routed(
             return direct(args, input);
         }
     }
+    let header = header.take();
     Some(match input {
         None => paths.call_validated(OP, header, valid_answer),
         Some(Input { kind, source, file }) => {
@@ -290,10 +330,16 @@ fn valid_answer(value: &SdkValue) -> bool {
 /// field names, and that every field value is a scalar (null, a boolean, a
 /// number or text), so a held header stays within its decoded bound. The
 /// engine checks every value as for a direct call.
+///
+/// A PostgreSQL Store's write also carries its non-empty `login_revision`
+/// and `password` (#819 P-B writes), and nothing else.
 pub fn header(request: &SdkValue) -> Result<(&str, &str, &str, &str, &SdkValue), SdkRefusal> {
     let invalid = || refused("InvalidInput", "invalid native Store write request");
+    let login = ["login_revision", "password"]
+        .map(|name| request.get_text(name).is_some_and(|text| !text.is_empty()));
     match request {
         SdkValue::Map(envelope) if envelope.len() == 5 => {}
+        SdkValue::Map(envelope) if envelope.len() == 7 && login == [true, true] => {}
         _ => return Err(invalid()),
     }
     let text = |name| request.get_text(name).ok_or_else(invalid);

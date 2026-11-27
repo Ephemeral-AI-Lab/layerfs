@@ -481,7 +481,10 @@ $ layerfs store doctor shop-pg
 On macOS and Linux, the CLI sends `file read`, `file stat` and `file list`
 on a PostgreSQL Store to the host worker on this computer, which keeps
 read-only PostgreSQL connections open between calls, so a later read logs
-in nothing. The CLI sends the saved password in its request; the worker
+in nothing. The CLI's file writes (`write`, `edit`, `mkdir`, `rm`, `cp`,
+`mv`, `apply`) go there too and run on writable sessions the worker keeps
+open the same way; each holds a few connections (its writer, its
+publication lane, a control reader and the readers its writes open). The CLI sends the saved password in its request; the worker
 saves it nowhere, overwrites its own copies once a call no longer needs
 them, keeps it only in the settings of that Store's open connections (and
 in memory its PostgreSQL client and JSON decoder used, freed but not
@@ -492,7 +495,10 @@ checks the schema and the Store binding when it opens, using the TLS mode
 from the Store's URL, and repeats a short check of the Store's identity
 before each later call; if that check fails, the worker closes the Store's
 idle connections and opens one new one. A Store keeps at most 4 such
-connections and a worker 8; they close after a minute unused, and `store
+sessions, read and write together, and a worker 8; at most 2 of a Store's
+and 4 of a worker's serve writes at once, so reads always keep the rest
+and a write waiting on another writer never delays a read. They close
+after a minute unused, and `store
 connect` (a new password) or `store disconnect` closes them. PostgreSQL
 reads wait on their own threads, and a read waits for a connection of its
 Store without holding a thread, so reads of other Stores never wait behind
@@ -500,7 +506,13 @@ a busy Store. A read that has not started yet does not keep `store
 disconnect` or `store upgrade` waiting. When 64 PostgreSQL reads are
 already waiting or running, the next one is refused `Unavailable` at once,
 without being run; a read whose caller went away before it started is never
-run. `store upgrade` closes the worker's connections to that Store too. A Store connected before this release has no login revision:
+run. Writes wait the same way: a write whose Store has no free write
+session waits without holding a thread, and is never refused for waiting.
+A write whose connection is lost while it runs (a server restart) is
+`Unknown`, with its record kept as on SQLite; writes still waiting then run
+once on new connections, or are refused with nothing sent when none can be
+opened. Nothing is sent twice. `store upgrade` closes the worker's
+connections to that Store too. A Store connected before this release has no login revision:
 it keeps the direct route, one read-only connection per call opened and
 checked the same way, until `store connect` is run for it again. So do a
 stopped host machine, other platforms, and SDK calls.

@@ -166,13 +166,14 @@ impl OpenedStore {
         };
         provider.map(|provider| provider.checkpoint()).transpose()
     }
-    /// Whether a PostgreSQL read service's one session can serve another
-    /// call at the generation it opened at (`PostgresStorage::current`: one
-    /// round trip). `None` for every other service, which holds no such
-    /// session.
-    pub fn read_session_current(&self) -> Option<bool> {
+    /// Whether a held PostgreSQL service can serve another call at the
+    /// generation it opened at (`PostgresStorage::current`: one round trip):
+    /// a read service's one session, or a writable service's writer
+    /// session (#819 P-B writes), whose readers check themselves when used.
+    /// `None` for a SQLite service.
+    pub fn postgres_session_current(&self) -> Option<bool> {
         match &self.writer {
-            Writer::ReadOnly(session) => Some(session.current()),
+            Writer::ReadOnly(session) | Writer::Postgres(session) => Some(session.current()),
             _ => None,
         }
     }

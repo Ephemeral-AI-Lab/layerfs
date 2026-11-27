@@ -1,4 +1,6 @@
-//! The CLI's PostgreSQL file reads through the host worker (#819 P-B).
+//! The CLI's PostgreSQL file reads, and the worker's side of its
+//! PostgreSQL file writes ([`serve_write`]), through the host worker
+//! (#819 P-B).
 //!
 //! The CLI chooses this route after its argument and scope checks, before
 //! taking a lease, for `file.read`, `file.stat` and `file.list` on a
@@ -18,14 +20,19 @@
 //! route does, and holds it for the call alone: no lease is held between
 //! calls, so `store disconnect`, compaction and upgrade see a warm worker
 //! as idle. The call then runs once on a held session
-//! ([`crate::postgresql::pool`]). Only [`READS`] are served here, never a
-//! method the SQLite host route may add.
+//! ([`crate::postgresql::pool`]). Only [`READS`] are served by [`serve`],
+//! never a method the SQLite host route may add.
+//!
+//! A write (`store.write` with the same `login_revision` and `password`,
+//! routed by [`crate::host_write`]) is admitted the same way and runs once
+//! on a held write session: a writable Store service, never a read
+//! session.
 use crate::host_read::Method;
 use crate::lease;
 use crate::open_args::OpenArgs;
 use crate::record::{self, StoreRecord, StoreRef};
 use crate::resolve::{self, Target};
-use layerfs_bridge::control::SdkValue;
+use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::names::{ProjectName, StoreName};
 use layerfs_home::outcome::{refused, Outcome};
 use std::path::Path;
@@ -137,6 +144,63 @@ pub fn serve(home: &Path, request: &SdkValue) -> Outcome {
             "the host worker only serves file read, stat and list",
         )
     })?;
+    let Some(fields @ SdkValue::Map(_)) = request.get("fields").filter(|f| allowed.accepts(f))
+    else {
+        return Err(refused(
+            "InvalidInput",
+            "invalid or unbounded PostgreSQL read arguments",
+        ));
+    };
+    let (store, revision, mut open, fields) = prepared(home, request, fields, &invalid)?;
+    let outcome = crate::postgresql::pool::run(home, &store, revision, &open, |service| {
+        // the lease only once a session is in hand, the record checked again
+        let lease = admit(home, &store, revision)?;
+        let outcome = crate::service::dispatch(service, method, fields);
+        drop(lease);
+        outcome
+    });
+    wipe_dial(&mut open);
+    outcome
+}
+
+/// Runs one authenticated PostgreSQL write request (#819 P-B writes) on
+/// the host worker, its header already checked
+/// ([`crate::host_write::header`]): `method` with `fields`, its content or
+/// changes read from `source` when the request streams them. It is
+/// admitted as a read is, on a held write session, and runs once.
+pub(crate) fn serve_write(
+    home: &Path,
+    request: &SdkValue,
+    (method, fields): (&str, &SdkValue),
+    source: Option<&mut dyn layerfs_store_service::methods::Source>,
+) -> Outcome {
+    harden();
+    let invalid = || refused("InvalidInput", "invalid host PostgreSQL write request");
+    let (store, revision, mut open, fields) = prepared(home, request, fields, &invalid)?;
+    let outcome = crate::postgresql::pool::run_write(home, &store, revision, &open, |service| {
+        // the lease only once a session is in hand, the record checked again
+        let lease = admit(home, &store, revision)?;
+        let outcome = match source {
+            Some(source) => crate::service::dispatch_streamed(service, method, fields, source),
+            None => crate::service::dispatch(service, method, fields),
+        };
+        drop(lease);
+        outcome
+    });
+    wipe_dial(&mut open);
+    outcome
+}
+
+/// What a PostgreSQL request names, checked: its Store, its login
+/// revision, the open arguments with the address dialled with the login it
+/// sent, and `fields` with its project, once the Store's record admitted
+/// it ([`admitted`]).
+fn prepared<'a>(
+    home: &Path,
+    request: &'a SdkValue,
+    fields: &SdkValue,
+    invalid: &dyn Fn() -> SdkRefusal,
+) -> Result<(StoreName, &'a str, OpenArgs, SdkValue), SdkRefusal> {
     let text = |name: &str| request.get_text(name).filter(|text| !text.is_empty());
     let store = text("store")
         .ok_or_else(invalid)
@@ -146,27 +210,22 @@ pub fn serve(home: &Path, request: &SdkValue) -> Outcome {
         .and_then(ProjectName::parse)?;
     let revision = text("login_revision").ok_or_else(invalid)?;
     let password = text("password").ok_or_else(invalid)?;
-    let Some(SdkValue::Map(fields)) = request.get("fields").filter(|f| allowed.accepts(f)) else {
-        return Err(refused(
-            "InvalidInput",
-            "invalid or unbounded PostgreSQL read arguments",
-        ));
+    let SdkValue::Map(fields) = fields else {
+        return Err(invalid());
     };
     resolve::target(home, &format!("{store}/{project}"))?;
     let record = admitted(home, &store, revision)?;
     let dial = crate::postgresql::login::dial_sent(&record, password)?;
     let selection = crate::postgresql::connect::selection_at(&record, dial);
-    let mut open = OpenArgs::dialled(home, &store, &record, selection).with_project(&project);
+    let open = OpenArgs::dialled(home, &store, &record, selection).with_project(&project);
     let mut fields = fields.clone();
     fields.retain(|(name, _)| name != "project");
     fields.push(("project".to_owned(), SdkValue::text(project.as_str())));
-    let outcome = crate::postgresql::pool::run(home, &store, revision, &open, |service| {
-        // the lease only once a session is in hand, the record checked again
-        let lease = admit(home, &store, revision)?;
-        let outcome = crate::service::dispatch(service, method, SdkValue::Map(fields));
-        drop(lease);
-        outcome
-    });
+    Ok((store, revision, open, SdkValue::Map(fields)))
+}
+
+/// Overwrites the address in `open`, which holds the password.
+fn wipe_dial(open: &mut OpenArgs) {
     if let Some(url) = open
         .postgresql
         .as_mut()
@@ -174,7 +233,6 @@ pub fn serve(home: &Path, request: &SdkValue) -> Outcome {
     {
         layerfs_home::wipe::text(url);
     }
-    outcome
 }
 
 /// The record of Store `store`, read under the Store's lock, when it admits

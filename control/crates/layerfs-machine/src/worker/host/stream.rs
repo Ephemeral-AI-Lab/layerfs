@@ -345,17 +345,18 @@ impl HostPaths {
             return Err(unavailable("start", "no accepting host endpoint"));
         };
         let (stream, id, began) = (greeted.stream, greeted.id, greeted.began);
-        // a write carries no login; its request is dropped once encoded
-        let frame = host_frame::encode(greeted.request.get(), HOST_MAX_REQUEST)?;
-        drop(greeted.request);
         // a deadline an earlier frame set on this socket does not apply
         stream
             .set_write_timeout(None)
             .map_err(|error| not_committed(op, &id, &error.to_string()))?;
+        // a PostgreSQL write's request carries a login (#819 P-B): its
+        // request is overwritten once encoded, and its frame once sent
+        let frame = host_frame::encode(greeted.request.get(), HOST_MAX_REQUEST)?;
+        drop(greeted.request);
         let mut sender = StreamSender::new(&stream);
-        sender
-            .raw(&frame)
-            .map_err(|_| match sender.lost.as_deref() {
+        let sent = sender.raw(&frame);
+        host_frame::release(frame, greeted.secret);
+        sent.map_err(|_| match sender.lost.as_deref() {
                 Some(why) => early(&stream, op, &id).unwrap_or_else(|| not_committed(op, &id, why)),
                 None => not_committed(op, &id, "the request was not sent"),
             })?;

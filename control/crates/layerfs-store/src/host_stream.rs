@@ -588,16 +588,12 @@ impl Source for Body<'_, '_> {
 }
 
 /// Runs one authenticated write request on the worker, its streamed input
-/// read from `reader`. Commits only after the input's end was read.
+/// read from `reader`. Commits only after the input's end was read. A
+/// request that carries a login is a PostgreSQL Store's
+/// ([`crate::host_postgresql::serve_write`]); any other runs on a host
+/// SQLite Store.
 pub fn serve(home: &Path, request: &SdkValue, reader: &mut StreamReader<'_>) -> Outcome {
     let (method, store, project, body, fields) = header(request)?;
-    let store = layerfs_home::names::StoreName::parse(store)?;
-    let project = layerfs_home::names::ProjectName::parse(project)?;
-    let resolved = crate::resolve::target(home, &format!("{store}/{project}"))?;
-    let fields = fields.clone();
-    if body == "none" {
-        return crate::open::run_host(home, &resolved.store, &resolved.project, method, fields);
-    }
     let mut source = Body {
         reader,
         changes: body == "changes",
@@ -605,6 +601,17 @@ pub fn serve(home: &Path, request: &SdkValue, reader: &mut StreamReader<'_>) -> 
         counted: (0, 0),
         ended: false,
     };
+    if request.get("password").is_some() {
+        let source = (body != "none").then_some(&mut source as &mut dyn Source);
+        return crate::host_postgresql::serve_write(home, request, (method, fields), source);
+    }
+    let store = layerfs_home::names::StoreName::parse(store)?;
+    let project = layerfs_home::names::ProjectName::parse(project)?;
+    let resolved = crate::resolve::target(home, &format!("{store}/{project}"))?;
+    let fields = fields.clone();
+    if body == "none" {
+        return crate::open::run_host(home, &resolved.store, &resolved.project, method, fields);
+    }
     crate::open::run_host_streamed(
         home,
         &resolved.store,

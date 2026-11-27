@@ -230,10 +230,12 @@ const EGRESS: Duration = Duration::from_secs(5);
 
 /// Serves one Unix connection on a reserved host worker thread: its hello
 /// and request, unless `read` holds a request an ordinary thread already
-/// read, then its operation and answer. A PostgreSQL read read here is
-/// returned for the PostgreSQL lane instead (#819 P-B), and a streamed
-/// write read on the write endpoint for the write lane (S2.2); a
-/// single-change write runs here.
+/// read, then its operation and answer. A PostgreSQL read or single-change
+/// PostgreSQL write read here is returned for the PostgreSQL lane instead
+/// (#819 P-B), and a streamed write read on the write endpoint for the
+/// write lane (S2.2); a single-change SQLite write runs here. A request
+/// that carries a login is overwritten once answered or held, on every
+/// path.
 #[cfg(all(feature = "machine", any(target_os = "macos", target_os = "linux")))]
 pub(super) fn serve_host_connection(
     server: &super::host::HostServer,
@@ -248,7 +250,7 @@ pub(super) fn serve_host_connection(
     let request = match read {
         Some(request) => request,
         None => match read_host_request(server, socket, management) {
-            Some(request) if endpoint == Endpoint::Ordinary && is_postgres_read(&request) => {
+            Some(request) if endpoint == Endpoint::Ordinary && is_postgres(&request) => {
                 layerfs_store::host_postgresql::harden();
                 return Served::Postgres(request);
             }
@@ -256,25 +258,28 @@ pub(super) fn serve_host_connection(
             None => return Served::Answered(false),
         },
     };
+    // a PostgreSQL call's password goes with its answer (#819 P-B)
+    let secret = carries_login(&request);
+    if secret {
+        layerfs_store::host_postgresql::harden();
+    }
+    let request = layerfs_home::wipe::Guard::new(request, secret);
+    let request = request.get();
     let mut refusal = None;
     if !management {
-        match held_write(server, socket, &request, writes) {
+        match held_write(server, socket, request, writes) {
             Some(Ok(held)) if writes => return Served::Write(held),
             Some(Ok(held)) => return Served::Answered(server.answer_write(&held, admitted)),
             Some(Err(error)) => refusal = Some(error),
             None => {}
         }
     }
-    let answered = answer_host_request(server, socket, management, &request, admitted, refusal);
-    // a PostgreSQL read's password goes with its answer (#819 P-B)
-    if is_postgres_read(&request) {
-        layerfs_store::host_postgresql::wipe_request(request);
-    }
+    let answered = answer_host_request(server, socket, management, request, admitted, refusal);
     Served::Answered(answered)
 }
 
-/// Answers PostgreSQL read `request`, read by an ordinary thread and never
-/// run, with `refusal`: whether the answer was written.
+/// Answers PostgreSQL `request`, read by an ordinary thread and never run,
+/// with `refusal`: whether the answer was written.
 #[cfg(all(feature = "machine", any(target_os = "macos", target_os = "linux")))]
 pub(super) fn refuse_host_request(
     server: &super::host::HostServer,
@@ -287,10 +292,25 @@ pub(super) fn refuse_host_request(
     answered
 }
 
-/// Whether `request` is a PostgreSQL read for the host worker's own lane.
+/// Whether `request` is for the host worker's PostgreSQL lane: a
+/// PostgreSQL read, or a single-change write that carries a login (a
+/// streamed one comes in on the write endpoint).
 #[cfg(all(feature = "machine", any(target_os = "macos", target_os = "linux")))]
-fn is_postgres_read(request: &SdkValue) -> bool {
-    request.get_text("op") == Some(layerfs_store::host_postgresql::OP)
+pub(super) fn is_postgres(request: &SdkValue) -> bool {
+    match request.get_text("op") {
+        Some(layerfs_store::host_postgresql::OP) => true,
+        Some(layerfs_store::host_write::OP) => {
+            carries_login(request)
+                && request.get("args").and_then(|args| args.get_text("body")) == Some("none")
+        }
+        _ => false,
+    }
+}
+
+/// Whether `request`'s arguments carry a PostgreSQL login (#819 P-B).
+#[cfg(all(feature = "machine", any(target_os = "macos", target_os = "linux")))]
+fn carries_login(request: &SdkValue) -> bool {
+    (request.get("args")).is_some_and(|args| args.get("password").is_some())
 }
 
 /// The hello, then the one request frame, within their deadlines.
@@ -406,10 +426,16 @@ fn held_write(
     };
     // checked before the write is held: a held write keeps only a header
     // within its bound (scalar fields of a 64 KiB request)
-    let body = match layerfs_store::host_write::header(args) {
-        Ok((_, _, _, body, _)) => body,
+    let (store, body) = match layerfs_store::host_write::header(args) {
+        Ok((_, store, _, body, _)) => (store, body),
         Err(refusal) => return Some(Err(refusal)),
     };
+    // a PostgreSQL write waits for a session slot of its Store (#819 P-B);
+    // an unusable name is refused when it runs, holding none
+    let postgresql = (args.get("password").is_some())
+        .then(|| layerfs_home::names::StoreName::parse(store).ok())
+        .flatten()
+        .map(|store| store.as_str().to_owned());
     match (body != "none", writes) {
         (true, false) => {
             return unsupported("a streamed file write goes to the host worker's write endpoint")
@@ -423,6 +449,7 @@ fn held_write(
             args: args.clone(),
             request_id: request_id.to_owned(),
             traced: request.get_bool("trace_step"),
+            postgresql,
         }),
         Err(error) => Err(refused(
             "Failed",

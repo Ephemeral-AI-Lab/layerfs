@@ -16,7 +16,13 @@
 //! went away is dropped unrun ([`Writes::purge_gone`]), freeing its place.
 //! A write still waiting once the worker drains is refused before any
 //! effect. A single-change write (`body` none: edit, mkdir, rm, cp, mv)
-//! has no input: it runs on the ordinary thread that read it.
+//! has no input: it runs on the ordinary thread that read it, or, on a
+//! PostgreSQL Store, on the PostgreSQL lane (`postgres.rs`).
+//!
+//! A PostgreSQL write (#819 P-B) also needs a write slot of its Store's
+//! held sessions: a write thread starts the oldest waiting write that can
+//! start, taking that slot then, so a PostgreSQL write whose Store or
+//! process lends its share of write slots waits on no thread.
 //!
 //! Drain (§8.3) never stops an admitted write: a running write reads its
 //! whole input and finishes as admitted; the drain answer counts the
@@ -35,8 +41,10 @@ use layerfs_home::outcome::{refused, Outcome};
 use layerfs_machine::worker::StreamReader;
 #[cfg(doc)]
 use layerfs_machine::worker::HOST_HELD_WRITES;
+use layerfs_store::postgresql::pool::Reservation;
 use std::collections::VecDeque;
 use std::os::unix::net::UnixStream;
+use std::path::Path;
 use std::time::Instant;
 
 /// Write threads: streamed writes that run at once.
@@ -51,6 +59,18 @@ pub(in crate::worker_server) struct Held {
     pub(in crate::worker_server) args: SdkValue,
     pub(in crate::worker_server) request_id: String,
     pub(in crate::worker_server) traced: bool,
+    /// The Store of a PostgreSQL write (#819 P-B), which starts only once
+    /// that Store has a free write slot.
+    pub(in crate::worker_server) postgresql: Option<String>,
+}
+
+impl Drop for Held {
+    /// A PostgreSQL write's arguments carry its password: overwritten.
+    fn drop(&mut self) {
+        if self.args.get("password").is_some() {
+            layerfs_store::host_postgresql::wipe_request(std::mem::take(&mut self.args));
+        }
+    }
 }
 
 /// The held writes of one worker, under its activity lock.
@@ -77,6 +97,28 @@ impl Writes {
     /// Running writes and waiting writes.
     pub(super) fn counts(&self) -> (usize, usize) {
         (self.running, self.waiting.len())
+    }
+
+    /// The oldest waiting write that can start now, with its PostgreSQL
+    /// session slot; draining, the oldest, to be refused unrun.
+    fn next(&mut self, home: &Path, draining: bool) -> Option<(Held, Option<Reservation>)> {
+        let mut chosen = None;
+        for (at, held) in self.waiting.iter().enumerate() {
+            match held.postgresql.as_deref() {
+                Some(store) if !draining => {
+                    if let Some(slot) = layerfs_store::postgresql::pool::reserve_write(home, store) {
+                        chosen = Some((at, Some(slot)));
+                        break;
+                    }
+                }
+                _ => {
+                    chosen = Some((at, None));
+                    break;
+                }
+            }
+        }
+        let (at, slot) = chosen?;
+        self.waiting.remove(at).map(|held| (held, slot))
     }
 
     /// Drops waiting writes whose caller has closed its end: none was sent
@@ -131,17 +173,22 @@ impl HostServer {
     }
 
     /// One write thread: runs held writes until the worker drains and none
-    /// waits (a write taken while draining is refused at once, unrun).
+    /// waits (a write taken while draining is refused at once, unrun). It
+    /// takes the oldest waiting write that can start: a SQLite write, or a
+    /// PostgreSQL write whose Store has a free write slot, taken now
+    /// (`pool::reserve_write`). A PostgreSQL write whose Store has none
+    /// waits, on no thread, while later writes start.
     pub(super) fn work_writes(&self) {
         loop {
-            let held = {
+            let next = {
                 let mut activity = self.lock();
                 loop {
                     activity.writes.purge_gone();
-                    if let Some(held) = activity.writes.waiting.pop_front() {
-                        break Some(held);
+                    let draining = activity.draining;
+                    if let Some(next) = activity.writes.next(&self.home, draining) {
+                        break Some(next);
                     }
-                    if activity.draining {
+                    if draining {
                         break None;
                     }
                     activity = self
@@ -150,24 +197,34 @@ impl HostServer {
                         .unwrap_or_else(|error| error.into_inner());
                 }
             };
-            match held {
-                Some(held) => self.run_write(held),
+            match next {
+                Some((held, slot)) => self.run_write(held, slot),
                 None => return,
             }
         }
     }
 
-    /// Runs one held write on this write thread and answers it.
-    pub(super) fn run_write(&self, held: Held) {
+    /// Runs one held write on this write thread, in its PostgreSQL session
+    /// `slot` if it has one, and answers it.
+    pub(super) fn run_write(&self, held: Held, slot: Option<Reservation>) {
         let mut admitted = false;
+        let postgresql = slot.is_some();
+        if let Some(slot) = slot {
+            layerfs_store::postgresql::pool::hold(slot);
+        }
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             self.answer_write(&held, &mut admitted)
         }));
+        layerfs_store::postgresql::pool::release_held();
         if result.is_err() {
             let _ = layerfs_home::trace::steps_take();
             log("a host write panicked; its answer was lost");
         }
         drop(held);
+        if postgresql {
+            // its session slot is free for the PostgreSQL lane and writes
+            self.slot_freed();
+        }
         let mut activity = self.lock();
         activity.writes.held -= 1;
         if admitted {

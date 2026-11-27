@@ -190,7 +190,7 @@ impl StoreService {
 
     /// Opens the CLI's PostgreSQL read path over one Full-checked session:
     /// one call's (P-A), or a host worker's held read session (P-B), which
-    /// checks `opened.read_session_current()` before each later call. There
+    /// checks `opened.postgres_session_current()` before each later call. There
     /// is no writer or private Workspace.
     pub fn open_postgres_read_only(
         selection: &layerfs_persistence::PostgresSelection,

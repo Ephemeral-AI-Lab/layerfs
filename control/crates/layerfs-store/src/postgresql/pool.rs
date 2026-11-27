@@ -1,44 +1,55 @@
-//! A host worker's held PostgreSQL read sessions (#819 P-B): the sessions
-//! the CLI's `file.read`, `file.stat` and `file.list` run on, kept open
-//! between calls so a later call logs in nothing.
+//! A host worker's held PostgreSQL sessions (#819 P-B): the sessions the
+//! CLI's `file.read`, `file.stat` and `file.list` and its file writes run
+//! on, kept open between calls so a later call logs in nothing.
 //!
-//! Each session is a read service over one Full-checked connection
-//! ([`crate::service::open_postgres_read`]), lent to one call at a time.
-//! Sessions are kept per Store (its folder in the home) under one identity:
-//! the record's non-secret login revision and the address dialled with the
-//! login the call sent. Revisions have no order of their own; the Store's
-//! record does. A call naming another revision than the sessions' is
-//! compared, under the Store's lock, with the record's current revision:
-//! the current one replaces the old identity (its idle sessions close at
-//! once, its lent ones when they come back), and any other is refused
-//! `Conflict` with nothing run and the sessions untouched. [`retire`] (a
-//! `store connect`, `store upgrade` or `disconnect`) names the revision it
-//! retires and never retires the record's current one.
+//! A session is of one [`Kind`]. A read session is a read service over one
+//! Full-checked connection ([`crate::service::open_postgres_read`]); a
+//! write session is a writable Store service
+//! ([`crate::service::open_postgres_write`]) with its writer, its lane
+//! connection, its control reader and the Workspace readers its calls'
+//! private Workspaces open, and its private overlay directory. Each is lent
+//! to one call at a time. Sessions are kept per Store (its folder in the
+//! home) under one identity: the record's non-secret login revision and the
+//! address dialled with the login the call sent. Revisions have no order of
+//! their own; the Store's record does. A call naming another revision than
+//! the sessions' is compared, under the Store's lock, with the record's
+//! current revision: the current one replaces the old identity (its idle
+//! sessions close at once, its lent ones when they come back), and any
+//! other is refused `Conflict` with nothing run and the sessions untouched.
+//! [`retire`] (a `store connect`, `store upgrade` or `disconnect`) names
+//! the revision it retires and never retires the record's current one.
 //!
 //! A call first holds a [`Reservation`]: one of its Store's session slots,
-//! taken without waiting ([`reserve`]). The host worker's PostgreSQL lane
-//! starts a queued read only once its Store has a slot, so a read whose
-//! Store is busy waits in the queue, on no thread, and a busy Store never
-//! holds the threads another Store could use (§11). Nothing here waits for a
-//! slot.
+//! taken without waiting ([`reserve`], [`reserve_write`]). The host worker
+//! starts a queued call only once its Store has a slot, so a call whose
+//! Store is busy waits in its queue, on no thread, and a busy Store never
+//! holds the threads another Store could use (§11). Nothing here waits for
+//! a slot.
+//!
+//! Writes never starve reads: write slots lent at once are bounded by
+//! [`WRITES_PER_STORE`] per Store and [`WRITES_PER_PROCESS`] in all, so at
+//! least half of each bound always serves reads, and a write waiting on a
+//! held Store writer keeps no read waiting for a slot.
 //!
 //! Before a held session serves a call it answers one readiness round trip
-//! (`read_session_current`, a Light check). A call probes at most one held
-//! session: when that probe fails, every idle session of the Store is closed
-//! and the call opens exactly one new session. That is a route decision
-//! taken before any byte of the call's operation is sent, as a mount
-//! reader's `usable()` is, so nothing is retried. A call whose outcome is
-//! `Unknown` or `StaleStore` drops the session it used.
+//! (`postgres_session_current`, a Light check, on the read session or the
+//! write session's writer). A call probes at most one held session: when
+//! that probe fails, every idle session of the Store is closed and the call
+//! opens exactly one new session. That is a route decision taken before any
+//! byte of the call's operation is sent, as a mount reader's `usable()` is,
+//! so nothing is retried. A call whose outcome is `Unknown` or `StaleStore`
+//! drops the session it used.
 //!
-//! Bounds: [`PER_STORE`] sessions per Store and [`PER_PROCESS`] in all,
-//! idle, lent and reserved. An idle session of another Store is closed to
-//! make room. Every slot is given back by a guard, a panicking call
-//! included. The open-Store reaper closes sessions unused for
-//! [`crate::open::IDLE`]; a drain closes them. A Store with no session left
-//! forgets its identity, and the dialled address, which holds the password,
-//! is overwritten before it is freed ([`wipe`]). While a Store has sessions
-//! the address stays here, and each open session keeps the login in its
-//! connection settings.
+//! Bounds: [`PER_STORE`] sessions per Store and [`PER_PROCESS`] in all, of
+//! both kinds, idle, lent and reserved. An idle session of the other kind
+//! or of another Store is closed to make room. Every slot is given back by
+//! a guard, a panicking call included. The open-Store reaper closes
+//! sessions unused for [`crate::open::IDLE`]; a drain closes them. A Store
+//! with no session left forgets its identity, and the dialled address,
+//! which holds the password, is overwritten before it is freed ([`wipe`]).
+//! While a Store has sessions the address stays here, and each open session
+//! keeps the login in its connection settings (a write session's reader
+//! factory keeps one copy for the readers it opens).
 use crate::open_args::OpenArgs;
 use crate::record::{self, StoreRecord};
 use layerfs_bridge::control::SdkRefusal;
@@ -55,8 +66,67 @@ use std::time::{Duration, Instant};
 pub const PER_STORE: usize = 4;
 /// Sessions one process keeps across its Stores (owner, 2026-11-27).
 pub const PER_PROCESS: usize = 8;
+/// Write slots one Store lends at once: half of [`PER_STORE`].
+pub const WRITES_PER_STORE: usize = PER_STORE / 2;
+/// Write slots one process lends at once: half of [`PER_PROCESS`].
+pub const WRITES_PER_PROCESS: usize = PER_PROCESS / 2;
 
-type Idle = Vec<(StoreService, Instant)>;
+/// What a session serves.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Kind {
+    /// `fs.read`, `fs.stat` and `fs.list` on a read service.
+    Read,
+    /// File writes on a writable service.
+    Write,
+}
+
+/// One held session. A write session closes its service and removes its
+/// private overlay directory when dropped.
+pub struct Session {
+    service: Option<StoreService>,
+    /// A write session's private overlay directory.
+    overlay: Option<PathBuf>,
+}
+
+impl Session {
+    fn kind(&self) -> Kind {
+        match self.overlay {
+            Some(_) => Kind::Write,
+            None => Kind::Read,
+        }
+    }
+
+    fn open(kind: Kind, open: &OpenArgs) -> Result<Self, SdkRefusal> {
+        Ok(match kind {
+            Kind::Read => Self {
+                service: Some(crate::service::open_postgres_read(open)?),
+                overlay: None,
+            },
+            Kind::Write => {
+                let (service, overlay) = crate::service::open_postgres_write(open)?;
+                Self {
+                    service: Some(service),
+                    overlay: Some(overlay),
+                }
+            }
+        })
+    }
+}
+
+impl Drop for Session {
+    fn drop(&mut self) {
+        if let Some(service) = self.service.take() {
+            // a write session's overlay owner stops; one attempt, and its
+            // failure leaves nothing a later call meets
+            let _ = service.close();
+        }
+        if let Some(overlay) = self.overlay.take() {
+            let _ = std::fs::remove_dir_all(overlay);
+        }
+    }
+}
+
+type Idle = Vec<(Session, Instant)>;
 
 /// One Store's sessions and identity. No `Debug`: `dial` holds the
 /// password.
@@ -71,6 +141,8 @@ struct Pool {
     idle: Idle,
     /// Slots reserved or lent.
     lent: usize,
+    /// Of `lent`, the write slots.
+    writes: usize,
 }
 
 impl Pool {
@@ -96,6 +168,10 @@ impl Pools {
         held.sum()
     }
 
+    fn writes(&self) -> usize {
+        self.stores.values().map(|pool| pool.writes).sum()
+    }
+
     fn next_epoch(&mut self) -> u64 {
         self.epochs += 1;
         self.epochs
@@ -111,10 +187,12 @@ impl Pools {
         }
     }
 
-    /// The least recently used idle session of a Store other than `key`.
-    fn evict(&mut self, key: &Path) -> Option<StoreService> {
+    /// The least recently used idle session of Store `key` alone (`own`),
+    /// or of any Store; `key`'s own idle sessions are all of the other kind
+    /// here, since one of the call's kind would have been taken.
+    fn evict(&mut self, key: &Path, own: bool) -> Option<Session> {
         let (other, at) = (self.stores.iter())
-            .filter(|(other, _)| other.as_path() != key)
+            .filter(|(other, _)| !own || other.as_path() == key)
             .filter_map(|(other, pool)| {
                 let oldest = (0..pool.idle.len()).min_by_key(|&at| pool.idle[at].1)?;
                 Some((other, oldest, pool.idle[oldest].1))
@@ -122,7 +200,10 @@ impl Pools {
             .min_by_key(|(_, _, last)| *last)
             .map(|(other, at, _)| (other.clone(), at))?;
         let (evicted, _) = self.stores.get_mut(&other)?.idle.swap_remove(at);
-        self.tidy(&other);
+        // `key` keeps its identity: the caller lends it a slot now
+        if other != key {
+            self.tidy(&other);
+        }
         Some(evicted)
     }
 }
@@ -141,12 +222,20 @@ fn pools() -> MutexGuard<'static, Pools> {
 /// Store's idle ones while their identity stands.
 pub struct Reservation {
     key: PathBuf,
+    kind: Kind,
     /// The idle session this slot took, with the epoch it was kept in.
-    session: Option<(StoreService, u64)>,
-    /// An idle session of another Store, closed to make room, past the
-    /// locks.
-    evicted: Option<StoreService>,
+    session: Option<(Session, u64)>,
+    /// An idle session of the other kind or of another Store, closed to
+    /// make room, past the locks.
+    evicted: Option<Session>,
     armed: bool,
+}
+
+impl Reservation {
+    /// What the slot serves.
+    pub fn kind(&self) -> Kind {
+        self.kind
+    }
 }
 
 impl Drop for Reservation {
@@ -157,6 +246,7 @@ impl Drop for Reservation {
             let mut all = pools();
             if let Some(pool) = all.stores.get_mut(&self.key) {
                 pool.lent -= 1;
+                pool.writes -= usize::from(self.kind == Kind::Write);
                 if let Some((service, epoch)) = unused.take() {
                     match epoch == pool.epoch {
                         true => pool.idle.push((service, Instant::now())),
@@ -170,49 +260,63 @@ impl Drop for Reservation {
     }
 }
 
-/// A session slot of Store `store` of `home`, if one is free now: an idle
-/// session, taken now, room under both bounds, or room made by closing
-/// another Store's least recently used idle session. Never waits.
+/// A read session slot of Store `store` of `home`, if one is free now: an
+/// idle read session, taken now, room under both bounds, or room made by
+/// closing the least recently used idle session of the other kind or of
+/// another Store. Never waits.
 ///
-/// The slot is taken before the read's record is checked (a file read
+/// The slot is taken before the call's record is checked (a file read
 /// under the Store's lock, not done while the worker's queue is locked): a
-/// read then refused there may have closed another Store's idle session,
-/// which that Store's next read replaces with one login.
+/// call then refused there may have closed another idle session, which its
+/// Store's next call replaces with one login.
 pub fn reserve(home: &Path, store: &str) -> Option<Reservation> {
+    reserve_kind(home, store, Kind::Read)
+}
+
+/// [`reserve`] for a write: also refused (`None`) while the Store lends
+/// [`WRITES_PER_STORE`] write slots or the process [`WRITES_PER_PROCESS`].
+pub fn reserve_write(home: &Path, store: &str) -> Option<Reservation> {
+    reserve_kind(home, store, Kind::Write)
+}
+
+/// A slot of `kind` of Store `store` of `home`, if one is free now.
+pub fn reserve_kind(home: &Path, store: &str, kind: Kind) -> Option<Reservation> {
     let key = layerfs_home::home::paths::store_dir(home, store);
     let mut all = pools();
-    let held = all.held();
+    let (held, writes) = (all.held(), all.writes());
     let pool = all.stores.entry(key.clone()).or_default();
-    if let Some((service, _)) = pool.idle.pop() {
-        pool.lent += 1;
-        return Some(Reservation {
-            key,
-            session: Some((service, pool.epoch)),
-            evicted: None,
-            armed: true,
-        });
+    let write = kind == Kind::Write;
+    if write && (pool.writes >= WRITES_PER_STORE || writes >= WRITES_PER_PROCESS) {
+        all.tidy(&key);
+        return None;
     }
-    let room = pool.lent < PER_STORE;
-    if room && held < PER_PROCESS {
+    let slot = |pool: &mut Pool, session, evicted| {
         pool.lent += 1;
-        return Some(Reservation {
-            key,
-            session: None,
-            evicted: None,
+        pool.writes += usize::from(write);
+        Some(Reservation {
+            key: key.clone(),
+            kind,
+            session,
+            evicted,
             armed: true,
-        });
+        })
+    };
+    let same = (pool.idle.iter()).rposition(|(session, _)| session.kind() == kind);
+    if let Some(at) = same {
+        let (session, _) = pool.idle.remove(at);
+        let epoch = pool.epoch;
+        return slot(pool, Some((session, epoch)), None);
     }
-    let evicted = room.then(|| all.evict(&key)).flatten();
+    let stored = pool.lent + pool.idle.len();
+    if stored < PER_STORE && held < PER_PROCESS {
+        return slot(pool, None, None);
+    }
+    // the Store at its bound frees one of its own idle sessions (of the
+    // other kind); one under it, any Store's least recently used
+    let own = stored >= PER_STORE;
+    let evicted = (pool.lent < PER_STORE).then(|| all.evict(&key, own)).flatten();
     match (evicted, all.stores.get_mut(&key)) {
-        (Some(evicted), Some(pool)) => {
-            pool.lent += 1;
-            Some(Reservation {
-                key,
-                session: None,
-                evicted: Some(evicted),
-                armed: true,
-            })
-        }
+        (Some(evicted), Some(pool)) => slot(pool, None, Some(evicted)),
         (evicted, _) => {
             all.tidy(&key);
             drop(all);
@@ -246,7 +350,7 @@ pub fn release_held() {
 struct Lent {
     reservation: Reservation,
     epoch: u64,
-    service: Option<StoreService>,
+    service: Option<Session>,
     keep: bool,
 }
 
@@ -258,6 +362,7 @@ impl Drop for Lent {
         let mut dropped = self.service.take();
         if let Some(pool) = all.stores.get_mut(&key) {
             pool.lent -= 1;
+            pool.writes -= usize::from(self.reservation.kind == Kind::Write);
             if self.keep && pool.epoch == self.epoch {
                 if let Some(service) = dropped.take() {
                     pool.idle.push((service, Instant::now()));
@@ -270,10 +375,10 @@ impl Drop for Lent {
     }
 }
 
-/// Runs `call` once on a session of Store `store` of `home` (the address
-/// `open` names), admitted at login revision `revision`, in the slot this
-/// thread holds ([`hold`]) or one free now; with none, the call is refused
-/// `Unavailable` with nothing run.
+/// Runs read `call` once on a read session of Store `store` of `home` (the
+/// address `open` names), admitted at login revision `revision`, in the
+/// slot this thread holds ([`hold`]) or one free now; with none, the call
+/// is refused `Unavailable` with nothing run.
 pub fn run(
     home: &Path,
     store: &str,
@@ -281,14 +386,40 @@ pub fn run(
     open: &OpenArgs,
     call: impl FnOnce(&StoreService) -> Outcome,
 ) -> Outcome {
+    run_kind(home, store, revision, (Kind::Read, open), call)
+}
+
+/// [`run`] for a write, on a write session.
+pub fn run_write(
+    home: &Path,
+    store: &str,
+    revision: &str,
+    open: &OpenArgs,
+    call: impl FnOnce(&StoreService) -> Outcome,
+) -> Outcome {
+    run_kind(home, store, revision, (Kind::Write, open), call)
+}
+
+fn run_kind(
+    home: &Path,
+    store: &str,
+    revision: &str,
+    (kind, open): (Kind, &OpenArgs),
+    call: impl FnOnce(&StoreService) -> Outcome,
+) -> Outcome {
     let key = layerfs_home::home::paths::store_dir(home, store);
     let dial = (open.postgresql.as_ref())
         .and_then(|postgresql| postgresql.url.as_deref())
-        .ok_or_else(|| refused("InvalidInput", "a held read session needs its address"))?;
+        .ok_or_else(|| refused("InvalidInput", "a held session needs its address"))?;
     let held = HELD.with(|held| held.borrow_mut().take());
     let reservation = match held {
-        Some(reservation) if reservation.key == key => Some(reservation),
-        _ => reserve(home, store),
+        Some(reservation) if reservation.key == key && reservation.kind == kind => {
+            Some(reservation)
+        }
+        other => {
+            drop(other);
+            reserve_kind(home, store, kind)
+        }
     }
     .ok_or_else(|| {
         refused(
@@ -299,9 +430,9 @@ pub fn run(
     let mut lent = checkout(home, store, reservation, revision, dial, open)?;
     crate::open::reaper();
     layerfs_home::trace::step("store_open");
-    let outcome = match &lent.service {
+    let outcome = match lent.service.as_ref().and_then(|held| held.service.as_ref()) {
         Some(service) => call(service),
-        None => Err(refused("Failed", "a held read session was not lent")),
+        None => Err(refused("Failed", "a held session was not lent")),
     };
     layerfs_home::trace::step("call");
     lent.keep =
@@ -319,7 +450,7 @@ fn checkout(
     open: &OpenArgs,
 ) -> Result<Lent, SdkRefusal> {
     drop(reservation.evicted.take());
-    let key = reservation.key.clone();
+    let (key, kind) = (reservation.key.clone(), reservation.kind);
     let mut taken = reservation.session.take();
     let (epoch, idle) = loop {
         let mut all = pools();
@@ -347,7 +478,9 @@ fn checkout(
         let stale = taken.take_if(|(_, epoch)| *epoch != pool.epoch);
         let idle = match taken.take() {
             Some(kept) => Some(kept),
-            None => pool.idle.pop().map(|(service, _)| (service, pool.epoch)),
+            None => (pool.idle.iter())
+                .rposition(|(session, _)| session.kind() == kind)
+                .map(|at| (pool.idle.remove(at).0, pool.epoch)),
         };
         let epoch = pool.epoch;
         drop(all);
@@ -360,7 +493,9 @@ fn checkout(
         service: idle.map(|(service, _)| service),
         keep: false,
     };
-    let probed = (lent.service.as_ref()).map(|service| service.opened.read_session_current());
+    let probed = (lent.service.as_ref())
+        .and_then(|held| held.service.as_ref())
+        .map(|service| service.opened.postgres_session_current());
     match probed {
         Some(Some(true)) => return Ok(lent),
         Some(_) => {
@@ -372,7 +507,7 @@ fn checkout(
         }
         None => {}
     }
-    lent.service = Some(crate::service::open_postgres_read(open)?);
+    lent.service = Some(Session::open(kind, open)?);
     Ok(lent)
 }
 
@@ -460,6 +595,8 @@ pub struct Counts {
     pub idle: usize,
     /// Slots reserved or lent.
     pub lent: usize,
+    /// Of `lent`, the write slots.
+    pub writes: usize,
 }
 
 /// The held sessions now.
@@ -469,5 +606,6 @@ pub fn counts() -> Counts {
         stores: all.stores.len(),
         idle: all.stores.values().map(|pool| pool.idle.len()).sum(),
         lent: all.stores.values().map(|pool| pool.lent).sum(),
+        writes: all.writes(),
     }
 }

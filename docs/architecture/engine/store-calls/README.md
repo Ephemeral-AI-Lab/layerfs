@@ -76,10 +76,13 @@ since another opener can retain WAL frames.
 
 A PostgreSQL read service (`StoreService::open_postgres_read_only`) holds
 one Full-checked read-only session and no writer. The host worker may keep
-it open between CLI reads (#819 P-B); `OpenedStore::read_session_current`
+it open between CLI reads (#819 P-B); `OpenedStore::postgres_session_current`
 runs the Light check in one round trip and answers whether the session
 still serves the Store it opened (binding, catalog id, schema version,
-generation and policy) before it serves another call.
+generation and policy) before it serves another call. The host worker also
+keeps writable PostgreSQL services (`StoreService::open_postgres`) open
+between CLI writes (#819 P-B writes); for one of those the same check runs
+on its writer session, and its readers check themselves when used.
 
 ```text
 StoreService::open_direct(store, binding, cursor_key, template)

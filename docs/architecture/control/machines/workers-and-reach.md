@@ -431,7 +431,17 @@ proves its cleared environment); macOS has no such flag. `store.postgresql_retir
 `{ closed }`) retires that login revision's held sessions unless it is the
 record's current one; `store connect` and `store disconnect` send it, past
 their locks, to a running worker only, never starting one. The ping
-answers `postgresql { stores, idle, lent, reads, queued }`.
+answers `postgresql { stores, idle, lent, writes, reads, queued }`.
+
+A PostgreSQL Store's `store.write` (#819 P-B writes) is the SQLite route's
+request with exactly two more envelope fields, `login_revision` and
+`password`; the worker serves a write that carries them only on a
+PostgreSQL Store and one without them only on a host SQLite Store. A
+single-change PostgreSQL write is handed to the PostgreSQL lane as a read
+is; a streamed one comes in on the write socket. Each runs on a held write
+session, at most 2 write slots per Store and 4 per process, so writes never
+take the session slots or lane threads reads keep
+([held write sessions](../stores-and-projects/sqlite-and-postgresql.md#held-write-sessions-819-p-b-writes)).
 
 The v1 host request and answer bodies are plain JSON with byte ceilings of
 64 KiB and 1 MiB respectively. Hello and management requests are limited to
@@ -560,24 +570,31 @@ at most 64 KiB, `HOST_MAX_REQUEST`, and a hello or management frame 4 KiB):
 | --- | --- | --- |
 | ordinary | one request per accepted connection, 16 slots (`ORDINARY.slots`) | 16 × B = 64 MiB |
 | management | 2 slots of 4 KiB frames | 2 × B = 8 MiB (the frame budget; such a frame decodes to far less) |
-| PostgreSQL | reads handed over and not yet answered, 64 (`POSTGRES.slots`), each with its request | 64 × B = 256 MiB |
-| write | 2 intake threads reading a request (2 × B = 8 MiB); held headers, at most `HOST_HELD_WRITES` = 32, each checked before it is held: 5 envelope fields and at most 12 named fields, all scalar, so at most 3 × 65,536 + 256 × 34 = 205,312 bytes (32 × 205,312 = 6,569,984 bytes, 6.3 MiB); one change being built per write thread, framed or spilled (4 × B = 16 MiB) | 31,735,808 bytes, 30.3 MiB |
+| PostgreSQL | reads and single-change writes handed over and not yet answered, 64 (`POSTGRES.slots`), each with its request (and a write's held copy of its header, within the write row's per-header bound) | 64 × B = 256 MiB |
+| write | 2 intake threads reading a request (2 × B = 8 MiB); held headers, at most `HOST_HELD_WRITES` = 32, each checked before it is held: 5 envelope fields (7 for a PostgreSQL write) and at most 12 named fields, all scalar, so at most 3 × 65,536 + 256 × 38 = 206,336 bytes (32 × 206,336 = 6,602,752 bytes, 6.3 MiB); one change being built per write thread, framed or spilled (4 × B = 16 MiB) | 31,768,576 bytes, 30.3 MiB |
 | total | | 358.3 MiB |
 
 These bound the requests and changes the worker decodes, not a call's own
 work (an answer up to 1 MiB, a Store's pages). S2.2 does not change the
-PostgreSQL lane; its 256 MiB is its bound as it stands, since a read is
-handed over before its request's shape is checked.
+PostgreSQL lane; its 256 MiB is its bound as it stands, since a call is
+handed over before its request's shape is checked. A held PostgreSQL
+session's own memory (a write session's caches and a running call's
+private overlay) is bounded by the session bounds, not by this table.
 
 A write needs a Commit per call, not a held connection. The CLI knows a
 write's route before it dials. A single-change write (`body` none) goes
 to the ordinary socket and runs on the ordinary thread that read it, as a
-read does. A streamed write goes to the write socket, `writes.sock`
+read does; a PostgreSQL one is handed to the PostgreSQL lane instead, so
+a write waiting on a held Store writer never holds an ordinary thread
+(it holds one of at most 4 lane threads its write share allows). A streamed write goes to the write socket, `writes.sock`
 (same run folder, same peer UID check and hello as the others): one of 2
 intake threads reads its request and checks its request ID, generation
 and header (method, body, field names and scalar values) there, and then
 holds it, with its connection, for a separate write lane: 4 write threads
-(`WRITE_THREADS`). So however many writes are held, they take no ordinary
+(`WRITE_THREADS`). A write thread takes the oldest held write that can
+start: any SQLite write, or a PostgreSQL write whose Store has a free
+write slot, which it takes then; a PostgreSQL write waiting for a slot
+holds no thread, and later writes start meanwhile. So however many writes are held, they take no ordinary
 place or thread, and small reads keep all 8 ordinary threads. Calls wait
 (§11): the write socket accepts only while its connections and held
 writes together are below `HOST_HELD_WRITES` (32), so further writers
