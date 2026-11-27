@@ -11,7 +11,7 @@ pub use crate::backend::postgresql::probe::{
     reads as postgresql_reads, Outcome as PostgresReadOutcome, Read as PostgresRead,
 };
 pub use crate::backend::postgresql::session::pipeline::{
-    Refusal as PipelineRefusal, Reply as PipelineReply, Request as PipelineRequest,
+    Refusal as PipelineRefusal, Reply as PipelineReply, Request as PipelineRequest, UnitStatements,
 };
 pub use crate::backend::postgresql::session::rows::sqlstate;
 pub use crate::backend::records::BackendError;
@@ -85,6 +85,72 @@ pub fn postgresql_pipeline(
     requests: &[PipelineRequest<'_>],
 ) -> Result<Vec<Result<PipelineReply, PipelineRefusal>>, BackendError> {
     handles.storage.session.pipeline(requests)
+}
+
+/// The replies of one flight, and whether the session is still trusted.
+pub type FlightReplies = (Vec<Result<PipelineReply, PipelineRefusal>>, bool);
+
+/// One writer turn of the session of `handles` for a write unit (#818 I3b,
+/// `DecidedTurn::prepare_unit` / `send_in_unit`): the test drives the
+/// unit's flights through [`UnitTurn`]; the turn's end rolls back a unit
+/// still open.
+pub fn postgresql_unit<T>(
+    handles: &crate::PostgresHandles,
+    run: impl FnOnce(&mut UnitTurn<'_, '_>) -> Result<T, BackendError>,
+) -> Result<T, BackendError> {
+    let session = &handles.storage.session;
+    let begin = session.settings.write_begin(true);
+    let release =
+        crate::backend::postgresql::session::profile::barrier_leftover(&session.settings.schema);
+    session.decided_turn(|turn| {
+        turn.ready()?;
+        run(&mut UnitTurn {
+            turn,
+            begin,
+            release,
+        })
+    })
+}
+
+/// A writer turn [`postgresql_unit`] holds.
+pub struct UnitTurn<'a, 's> {
+    turn: &'a mut crate::backend::postgresql::session::pipeline::DecidedTurn<'s>,
+    /// The unit's `BEGIN`: a write that takes the lane row and barrier.
+    pub begin: String,
+    /// The failure path's release of a leftover barrier key.
+    pub release: String,
+}
+
+impl UnitTurn<'_, '_> {
+    /// `DecidedTurn::prepare_unit`.
+    pub fn prepare(&mut self, texts: &[&str]) -> Result<UnitStatements, BackendError> {
+        self.turn.prepare_unit(texts)
+    }
+    /// `DecidedTurn::send_in_unit` with [`Self::release`]; the judge
+    /// returns the replies and never answers unknown.
+    pub fn send(
+        &mut self,
+        prepared: &UnitStatements,
+        requests: &[PipelineRequest<'_>],
+        open: bool,
+    ) -> Result<FlightReplies, BackendError> {
+        let release = self.release.clone();
+        let judge = |replies, trusted| ((replies, trusted), false);
+        self.turn
+            .send_in_unit(prepared, requests, open, &release, judge)
+    }
+    /// `DecidedTurn::send`: an ordinary flight of the turn.
+    pub fn send_plain(
+        &mut self,
+        requests: &[PipelineRequest<'_>],
+    ) -> Result<FlightReplies, BackendError> {
+        self.turn
+            .send(requests, |replies, trusted| ((replies, trusted), false))
+    }
+    /// `DecidedTurn::count_unit`.
+    pub fn count(&mut self, committed: bool) {
+        self.turn.count_unit(committed);
+    }
 }
 
 /// One write transaction on the session of `handles` whose body runs

@@ -19,6 +19,7 @@ use crate::backend::records::BackendError;
 use layerfs_telemetry::timer::waits::Wait;
 use postgres::{error::SqlState, types::ToSql, Row, SimpleQueryMessage, Statement};
 use std::{
+    collections::HashMap,
     future::Future,
     pin::Pin,
     task::{Context, Poll},
@@ -234,12 +235,16 @@ impl Session {
         }
         let turn = self.admission.enter(Wait::Writer)?;
         let mut guard = self.state.lock().map_err(|_| BackendError::Unknown)?;
-        run(&mut DecidedTurn {
+        let mut decided = DecidedTurn {
             session: self,
             state: &mut guard,
             nested: turn.nested,
             ready: false,
-        })
+            unit: None,
+        };
+        let answer = run(&mut decided);
+        decided.end_unit();
+        answer
     }
 
     fn pipeline_turn<T>(
@@ -302,7 +307,32 @@ impl Session {
                 Request::Simple(sql) => Bound::Simple(sql),
             });
         }
-        let flight = state.client.pipeline(&bound);
+        let ending = |sent: usize, partial: bool, failed: bool| match (
+            partial,
+            release.filter(|_| failed),
+        ) {
+            _ if sent == 0 => None,
+            (true, release) => Some(format!("ROLLBACK{}", release.unwrap_or_default())),
+            (false, Some(release)) => Some(release.trim_start_matches("; ").to_owned()),
+            (false, None) => None,
+        };
+        self.fly(state, requests, &bound, start, ending, judge)
+    }
+
+    /// Sends one bound flight on `state` and judges it: the accounting, the
+    /// lost-reply quarantine and, when no reply was lost, the failure path
+    /// `ending` gives (`sent`, partly sent, any request failed), run in one
+    /// more round trip before `judge`.
+    fn fly<T>(
+        &self,
+        state: &mut State,
+        requests: &[Request<'_>],
+        bound: &[Bound<'_>],
+        start: Instant,
+        ending: impl FnOnce(usize, bool, bool) -> Option<String>,
+        judge: impl FnOnce(Vec<Result<Reply, Refusal>>, bool) -> (T, bool),
+    ) -> Result<T, BackendError> {
+        let flight = state.client.pipeline(bound);
         let flight = match flight {
             Ok(flight) => flight,
             Err(e) => return Err(lost(state, e.backend())),
@@ -352,11 +382,9 @@ impl Session {
             .sum::<u64>();
         let partial = flight.sent < requests.len();
         let failed = replies.iter().any(Result::is_err);
-        let ending = match (partial, release.filter(|_| failed)) {
-            _ if lost_reply || flight.sent == 0 => None,
-            (true, release) => Some(format!("ROLLBACK{}", release.unwrap_or_default())),
-            (false, Some(release)) => Some(release.trim_start_matches("; ").to_owned()),
-            (false, None) => None,
+        let ending = match lost_reply {
+            true => None,
+            false => ending(flight.sent, partial, failed),
         };
         if let Some(ending) = ending {
             work.round_trips += 1;
@@ -380,6 +408,29 @@ pub(crate) struct DecidedTurn<'s> {
     state: &'s mut State,
     nested: bool,
     ready: bool,
+    /// The release of the write unit whose transaction a flight of this
+    /// turn left open ([`Self::send_in_unit`]), until a flight closes it.
+    unit: Option<String>,
+}
+
+/// The statements of one write unit (#818 I3b), prepared before its
+/// transaction opens ([`DecidedTurn::prepare_unit`]) and held for the turn,
+/// so a statement-cache clear cannot drop one between the unit's flights.
+pub struct UnitStatements {
+    statements: HashMap<String, Statement>,
+}
+
+/// A turn that ends with a unit's transaction open never commits it: the
+/// turn's end rolls it back ([`DecidedTurn::end_unit`]). Only a panic
+/// between the unit's flights reaches this drop with it open; the
+/// connection may then be mid-message, so it is closed instead, which ends
+/// the transaction and every session-level lock on the server.
+impl Drop for DecidedTurn<'_> {
+    fn drop(&mut self) {
+        if self.unit.take().is_some() {
+            self.state.quarantine();
+        }
+    }
 }
 
 impl DecidedTurn<'_> {
@@ -405,13 +456,154 @@ impl DecidedTurn<'_> {
 
     /// Sends one flight in this turn (see [`Session::decided_turn`]), once
     /// [`Self::ready`] succeeded.
+    ///
+    /// Refused (`Integrity`, nothing sent) while a unit's transaction is
+    /// open: its scoped prepares would send `BEGIN` and `COMMIT` inside it.
+    /// No caller of this flight opens one (only [`Self::send_in_unit`]
+    /// does), so this is a guard.
     pub(crate) fn send<T>(
         &mut self,
         requests: &[Request<'_>],
         judge: impl FnOnce(Vec<Result<Reply, Refusal>>, bool) -> (T, bool),
     ) -> Result<T, BackendError> {
+        if self.unit.is_some() {
+            return Err(BackendError::Integrity);
+        }
         self.ready()?;
         self.session.flight(self.state, requests, true, None, judge)
+    }
+
+    /// Prepares every one of `texts` (a write unit's statements, #818 I3b)
+    /// not yet prepared on the connection, in one flight before the unit's
+    /// transaction opens, outside any transaction: the texts name their
+    /// tables with the schema. Counted as [`Session::prepare`] counts (one
+    /// round trip, none when all are cached; each in `prepares`); a refused
+    /// prepare is the caller's definite failure and a lost reply
+    /// quarantines. The answer holds the handles for the rest of the turn.
+    /// Refused (`Integrity`, nothing sent) while a unit's transaction is
+    /// open, and inside this thread's held lane (a unit takes the lane row
+    /// in its `BEGIN`); `Unknown` on a session this turn quarantined.
+    pub(crate) fn prepare_unit(&mut self, texts: &[&str]) -> Result<UnitStatements, BackendError> {
+        if self.unit.is_some() || self.nested {
+            return Err(BackendError::Integrity);
+        }
+        self.ready()?;
+        if self.state.quarantined {
+            return Err(BackendError::Unknown);
+        }
+        match self.state.statements_in(texts, None) {
+            Ok(statements) => Ok(UnitStatements {
+                statements: (texts.iter().map(|text| (*text).to_owned()))
+                    .zip(statements)
+                    .collect(),
+            }),
+            Err(e) => Err(lost(self.state, e.backend())),
+        }
+    }
+
+    /// Sends one flight of a write unit (#818 I3b): a transaction that
+    /// spans several flights of this turn, each sent once its predecessor's
+    /// replies are read. Its statements bind only `prepared` handles; one
+    /// whose text is not there, or whose parameter count differs, refuses
+    /// the flight (`Integrity`) before anything is sent. Nothing is
+    /// prepared, and no other text goes out between the unit's `BEGIN` and
+    /// its own `COMMIT`. The first flight carries the `BEGIN` (with the
+    /// lane row, `write_begin(true)`); `open` says the flight leaves the
+    /// transaction open (it ends with neither `COMMIT` nor `ROLLBACK`); the
+    /// last ends with the unit's `COMMIT`, its own request.
+    ///
+    /// Counted as [`Session::pipeline_judged`] counts a flight; the unit's
+    /// one transaction is the caller's ([`Self::count_unit`]). A lost reply
+    /// quarantines before `judge`, which then sees the session untrusted;
+    /// `judge` answering unknown quarantines too. When a request was
+    /// refused or not sent and no reply was lost, `ROLLBACK` and `release`
+    /// (as [`Session::pipeline_judged`]'s) go in one more round trip
+    /// before `judge` (only `release` after a last flight whose `COMMIT`
+    /// was sent and ended the transaction); if that fails the session is
+    /// quarantined. The transaction is then closed. Nothing is resent.
+    /// Refused (`Integrity`) inside this thread's held lane, and `Unknown`
+    /// on a session this turn quarantined.
+    pub(crate) fn send_in_unit<T>(
+        &mut self,
+        prepared: &UnitStatements,
+        requests: &[Request<'_>],
+        open: bool,
+        release: &str,
+        judge: impl FnOnce(Vec<Result<Reply, Refusal>>, bool) -> (T, bool),
+    ) -> Result<T, BackendError> {
+        if self.nested {
+            return Err(BackendError::Integrity);
+        }
+        self.ready()?;
+        if self.state.quarantined {
+            return Err(BackendError::Unknown);
+        }
+        let start = Instant::now();
+        let mut bound = Vec::with_capacity(requests.len());
+        for request in requests {
+            bound.push(match request {
+                Request::Statement { sql, params, .. } => {
+                    let statement = prepared.statements.get(*sql);
+                    let statement = statement.ok_or(BackendError::Integrity)?;
+                    if statement.params().len() != params.len() {
+                        return Err(BackendError::Integrity);
+                    }
+                    Bound::Prepared(statement, params)
+                }
+                Request::Simple(sql) => Bound::Simple(sql),
+            });
+        }
+        let was_open = self.unit.is_some();
+        let mut failed_flight = false;
+        let ending = |sent: usize, partial: bool, failed: bool| {
+            failed_flight = failed;
+            match failed {
+                false => None,
+                true if partial || open || (sent == 0 && was_open) => {
+                    Some(format!("ROLLBACK{release}"))
+                }
+                true if sent > 0 && !release.is_empty() => {
+                    Some(release.trim_start_matches("; ").to_owned())
+                }
+                true => None,
+            }
+        };
+        let answer = (self.session).fly(self.state, requests, &bound, start, ending, judge);
+        // Open only after a whole flight that left it open: a failed one
+        // was rolled back (or ended by its `COMMIT`), a lost one closed the
+        // connection.
+        let still_open = answer.is_ok() && open && !failed_flight && !self.state.quarantined;
+        self.unit = still_open.then(|| release.to_owned());
+        answer
+    }
+
+    /// Counts the write unit's one transaction, committed or rolled back,
+    /// once a flight of it closed it (its `COMMIT`, or the `ROLLBACK` the
+    /// session sent after a refusal). A unit the turn's end rolls back is
+    /// counted there instead.
+    pub(crate) fn count_unit(&mut self, committed: bool) {
+        count_transaction(self.state, committed);
+    }
+
+    /// The turn's end: a unit's transaction still open is rolled back with
+    /// its release, in one round trip, and counted as a rolled-back write;
+    /// that failing quarantines the session. Never a `COMMIT`.
+    fn end_unit(&mut self) {
+        let Some(release) = self.unit.take() else {
+            return;
+        };
+        if self.state.quarantined {
+            return;
+        }
+        self.state.work.round_trips += 1;
+        let rolled_back = self
+            .state
+            .client
+            .batch_execute(&format!("ROLLBACK{release}"));
+        if rolled_back.is_err() {
+            self.state.quarantine();
+        }
+        count_transaction(self.state, false);
     }
 }
 
@@ -422,15 +614,20 @@ impl Session {
         let Ok(mut state) = self.state.lock() else {
             return;
         };
-        let work = &mut state.work;
-        work.transactions += 1;
-        work.write_transactions += 1;
-        if committed {
-            work.commits += 1;
-            work.write_commits += 1;
-        } else {
-            work.rollbacks += 1;
-        }
+        count_transaction(&mut state, committed);
+    }
+}
+
+/// One write transaction, committed or rolled back.
+fn count_transaction(state: &mut State, committed: bool) {
+    let work = &mut state.work;
+    work.transactions += 1;
+    work.write_transactions += 1;
+    if committed {
+        work.commits += 1;
+        work.write_commits += 1;
+    } else {
+        work.rollbacks += 1;
     }
 }
 

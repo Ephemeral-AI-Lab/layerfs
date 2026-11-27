@@ -1,0 +1,28 @@
+
+running 10 tests
+test sqlite_fused_commit ... ok
+test postgresql_missing_epoch_row_is_a_conflict ... ok
+test postgresql_generation_change_is_stale ... ok
+test postgresql_cancelled_barrier_is_released ... FAILED
+test postgresql_lost_reply_is_unknown ... ok
+test postgresql_lost_backend_without_start_is_not_terminated ... ok
+test postgresql_removal_during_the_message_is_a_conflict ... ok
+test postgresql_fused_commit_splits_a_wide_tail ... ok
+test postgresql_fused_commit_is_one_round_trip ... ok
+test postgresql_lane_wait_is_busy ... ok
+
+failures:
+
+---- postgresql_cancelled_barrier_is_released stdout ----
+
+thread 'postgresql_cancelled_barrier_is_released' panicked at engine/crates/layerfs-persistence/tests/fused_commit.rs:210:50:
+called `Result::unwrap()` on an `Err` value: UnknownOutcome
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    postgresql_cancelled_barrier_is_released
+
+test result: FAILED. 9 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.55s
+
+run_bounded: exit 101 after 1.2 s

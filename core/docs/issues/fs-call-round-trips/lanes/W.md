@@ -453,3 +453,98 @@ unchanged. PG is as in W6 (`apply.10_dirs` [1,34,32,1] / [0,8,8,0],
 - Production LOC: 228,641 -> 228,671 (delta +30), engine layerfs-store-service
   +30 (`stat_walk` and the shared `missing` refusal). W6 with this fix:
   228,436 -> 228,671 (+235).
+
+## I3b — a write unit in a writer turn (session capability for lane I)
+
+This change is additive. A `DecidedTurn` (`Session::decided_turn`) can now
+carry one write unit: one transaction spread over several flights of the
+turn. Each flight is sent once the previous flight's replies are read
+(`session/pipeline.rs`). No product path opens a unit yet. Lane I builds on
+these entry points:
+
+```rust
+pub struct UnitStatements { /* text -> Statement, held for the turn */ }
+impl DecidedTurn<'_> {
+    pub(crate) fn prepare_unit(&mut self, texts: &[&str]) -> Result<UnitStatements, BackendError>;
+    pub(crate) fn send_in_unit<T>(&mut self, prepared: &UnitStatements, requests: &[Request<'_>],
+        open: bool, release: &str,
+        judge: impl FnOnce(Vec<Result<Reply, Refusal>>, bool) -> (T, bool)) -> Result<T, BackendError>;
+    pub(crate) fn count_unit(&mut self, committed: bool);
+}
+```
+
+- **`prepare_unit`** prepares the unit's texts before `BEGIN`, unscoped,
+  in one flight. It costs one round trip, or none when every text is
+  cached. A refused prepare is the caller's definite failure, and a lost
+  reply quarantines the session. The handles are held for the turn, so a
+  cache clear cannot drop one between flights.
+- **`send_in_unit`** binds only `prepared` handles. An unknown text or a
+  parameter-count mismatch returns `Integrity` before anything is sent.
+  - The first flight starts with `write_begin(true)`, the lane row and the
+    barrier; the caller sends it as `Request::Simple`.
+  - `open` leaves the transaction open after the flight. The last flight
+    ends with the unit's own `COMMIT`.
+  - On failure, when no reply was lost: `ROLLBACK` plus the release in one
+    more round trip, or the release alone after a sent `COMMIT` that ended
+    the transaction.
+  - A lost reply quarantines the session. Nothing is resent, and no
+    `COMMIT` is ever implicit.
+- **`count_unit`** counts the unit's one write transaction. Flights are
+  counted as ordinary flights.
+- **The turn's end** rolls back a unit still open: `ROLLBACK` plus the
+  release, one round trip, counted as a rolled-back write. A panic between
+  flights quarantines the session (`Drop`).
+- **Guards**, all `Integrity` with nothing sent:
+  - the turn's ordinary `send` while a unit is open (that is the only
+    behaviour change to an existing entry point, and no current caller
+    opens a unit);
+  - `prepare_unit` while a unit is open;
+  - either call inside this thread's held lane.
+- **Refactor:** `Session::flight`'s post-send code became `Session::fly`,
+  with the failure ending passed in. This is the same ending for every
+  existing flight (lost reply or nothing sent: none; partial: `ROLLBACK`
+  plus the release; failed: the release). `count_fused` shares
+  `count_transaction`.
+- **Test hook:** `internals::postgresql_unit` / `UnitTurn`.
+
+Predicted (from the design) vs measured on PG, test
+`postgresql_session_unit` (a two-flight unit: `BEGIN` + insert + count with
+the transaction left open, then an insert of the count + `COMMIT`):
+
+| Unit | predicted round trips | measured |
+|---|---|---|
+| first unit (2 texts to prepare) | 1 prepare + 2 flights = 3 | 3 (2 prepares, 5 statements, 1 write commit) |
+| same texts again | 2 | 2 (no prepare) |
+| second flight refused (duplicate key) | 2 + 1 release = 3 | 3, rows untouched, rollbacks +1, no barrier key left |
+| unit left open at turn end | 1 flight + 1 `ROLLBACK` = 2 | 2 (2 statements), rollbacks +1, no commit, no barrier key left |
+
+Sweeps across the two-flight unit, 31 client messages:
+- **Drop:** 31 of 31 answer `Unknown`. The rows are the committed result at
+  messages 26–30 (after the `COMMIT` was sent) and empty before that.
+- **HoldKill:** `Unknown` with empty rows at 0–25, and `Ok` with the
+  committed rows at 26–30.
+- **Both:** no reconnect, no replay, and every outcome is atomic.
+
+Existing tests the diff reaches, run once each:
+- **Green:** `postgresql_pipeline`, `postgresql_mount_pipeline`,
+  `mount_fault_drop`, `mount_fault_kill`, `commit_fault_drop`,
+  `commit_fault_kill`, `verify768y_release_faults`.
+- **`fused_commit` 9/10:** `postgresql_cancelled_barrier_is_released`
+  failed (`bindings_of` answered `UnknownOutcome`). Diagnosed once: run
+  alone, it passes (`fused_commit_cancel_alone.log`). Two tests in that file
+  pick their target backend server-wide (`wait_event = 'PgSleep' AND query
+  LIKE '%pg_advisory_lock(%'`): this one cancels it, and
+  `postgresql_lost_backend_without_start_is_not_terminated` cuts its proxy
+  when it sees one. Run in parallel, either can act on the other's paused
+  backend. Those paths are unchanged by this diff (same ending), so this is
+  a pre-existing test-isolation follow-up, not fixed here.
+
+Other checks:
+- Clippy `-D warnings` on `layerfs-persistence` (all targets) is clean.
+  rustfmt is clean on the touched files. `history/admission.rs` has a
+  pre-existing fmt diff from the merged base, left alone.
+- Deleted tests: none.
+- Receipts: `receipts/I3b-session/`.
+- Production LOC: 229,872 -> 230,048 (delta +176), engine
+  layerfs-persistence +176. This includes the test hook in
+  `src/internals.rs`, which the counter counts as product source.

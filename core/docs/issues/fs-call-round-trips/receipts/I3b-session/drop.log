@@ -1,0 +1,39 @@
+
+running 1 test
+unit_clean_messages 31
+unit Drop at 0: Err(Unknown), rows []
+unit Drop at 1: Err(Unknown), rows []
+unit Drop at 2: Err(Unknown), rows []
+unit Drop at 3: Err(Unknown), rows []
+unit Drop at 4: Err(Unknown), rows []
+unit Drop at 5: Err(Unknown), rows []
+unit Drop at 6: Err(Unknown), rows []
+unit Drop at 7: Err(Unknown), rows []
+unit Drop at 8: Err(Unknown), rows []
+unit Drop at 9: Err(Unknown), rows []
+unit Drop at 10: Err(Unknown), rows []
+unit Drop at 11: Err(Unknown), rows []
+unit Drop at 12: Err(Unknown), rows []
+unit Drop at 13: Err(Unknown), rows []
+unit Drop at 14: Err(Unknown), rows []
+unit Drop at 15: Err(Unknown), rows []
+unit Drop at 16: Err(Unknown), rows []
+unit Drop at 17: Err(Unknown), rows []
+unit Drop at 18: Err(Unknown), rows []
+unit Drop at 19: Err(Unknown), rows []
+unit Drop at 20: Err(Unknown), rows []
+unit Drop at 21: Err(Unknown), rows []
+unit Drop at 22: Err(Unknown), rows []
+unit Drop at 23: Err(Unknown), rows []
+unit Drop at 24: Err(Unknown), rows []
+unit Drop at 25: Err(Unknown), rows []
+unit Drop at 26: Err(Unknown), rows [(1, 10), (2, 1)]
+unit Drop at 27: Err(Unknown), rows [(1, 10), (2, 1)]
+unit Drop at 28: Err(Unknown), rows [(1, 10), (2, 1)]
+unit Drop at 29: Err(Unknown), rows [(1, 10), (2, 1)]
+unit Drop at 30: Err(Unknown), rows [(1, 10), (2, 1)]
+test unit_drop_at_every_message ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 2.22s
+
+run_bounded: exit 0 after 2.3 s

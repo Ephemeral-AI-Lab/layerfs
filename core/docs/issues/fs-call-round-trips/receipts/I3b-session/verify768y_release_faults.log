@@ -1,0 +1,11 @@
+
+running 5 tests
+test slot_release_held_while_another_service_reserves ... ok
+test slot_release_lost_reply_in_order ... ok
+test slot_release_lost_reply_reverse ... ok
+test slot_release_backend_killed_reverse ... ok
+test slot_release_backend_killed_in_order ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 47.56s
+
+run_bounded: exit 0 after 48.2 s

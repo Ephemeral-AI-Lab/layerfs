@@ -1,0 +1,16 @@
+
+running 10 tests
+test a_refused_release_keeps_its_row_and_its_keys ... ok
+test a_release_whose_generation_moves_after_its_delete_gives_its_keys_back ... ok
+test a_backend_terminated_while_the_insert_waits_is_an_unknown_outcome ... ok
+test two_sessions_mounting_one_branch_are_both_admitted ... ok
+test edge_cases_reach_the_same_final_decision ... ok
+test a_lock_timeout_of_the_one_message_answers_busy ... ok
+test a_mount_and_an_exclusive_operation_racing_are_never_both_admitted ... ok
+test a_definite_refusal_of_the_one_message_falls_back_once ... ok
+test an_insert_reaching_the_lock_timeout_gives_its_keys_back ... ok
+test the_one_message_admits_exactly_what_the_shared_checks_admit ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.39s
+
+run_bounded: exit 0 after 1.9 s
