@@ -17,7 +17,7 @@ use std::net::{TcpListener, TcpStream};
 use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
 use std::sync::Arc;
 
-#[path = "../../../layerfs-persistence/tests/pg_doctor/conninfo.rs"]
+#[path = "../../../layerfs-persistence/tests/support/pg/conninfo.rs"]
 mod conninfo;
 
 const BINDING: &[u8] = b"store-service-open-cost";
