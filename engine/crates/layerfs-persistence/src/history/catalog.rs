@@ -122,6 +122,23 @@ impl HistoryCatalog for HistoryProvider {
         self.read_statement(|tx| branch::branch_snapshot_named(tx, stack, branch))
     }
 
+    fn read_context(
+        &self,
+        project: &HistoryName,
+        target: &ContextTarget,
+    ) -> HistoryResult<ReadContext> {
+        match &self.engine {
+            // One fenced statement (#818 R5).
+            crate::backend::Engine::Postgres(_) => {
+                self.read_statement(|tx| branch::read_context(tx, project, target))
+            }
+            // Today's statements in today's order: the default's body.
+            crate::backend::Engine::Sqlite(_) => {
+                layerfs_history::catalog::read_context_serial(self, project, target)
+            }
+        }
+    }
+
     fn branches(
         &self,
         stack: LayerStackId,

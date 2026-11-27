@@ -1,0 +1,11 @@
+ 8:07  up 3 days,  6:40, 1 user, load averages: 6.48 6.98 6.53
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.09s
+     Running tests/fused_refusal_ids.rs (target/debug/deps/fused_refusal_ids-1e79e84793218492)
+
+running 2 tests
+test a_definite_fused_refusal_returns_the_unused_block ... ok
+test an_unknown_fused_outcome_loses_the_block_and_never_reuses_it ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.78s
+
+run_bounded: exit 0 after 1.7 s

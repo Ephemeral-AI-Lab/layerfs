@@ -338,13 +338,7 @@ pub fn commit(store: &Arc<Store>, id: CommitId) -> Result<CommitRecord, SdkRefus
     store
         .published(|h| h.commit(id))
         .map_err(published)?
-        .ok_or_else(|| {
-            refuse(
-                "NoSuchCommit",
-                format!("Commit {id} does not exist"),
-                SdkValue::Null,
-            )
-        })
+        .ok_or_else(|| absent(NodeId::Commit(id)))
 }
 
 /// One Layer.
@@ -352,13 +346,23 @@ pub fn layer(store: &Arc<Store>, id: LayerId) -> Result<LayerRecord, SdkRefusal>
     store
         .published(|h| h.layer(id))
         .map_err(published)?
-        .ok_or_else(|| {
-            refuse(
-                "NotFound",
-                format!("Layer {id} does not exist"),
-                SdkValue::Null,
-            )
-        })
+        .ok_or_else(|| absent(NodeId::Layer(id)))
+}
+
+/// The refusal of a Commit or Layer that has no row.
+pub fn absent(node: NodeId) -> SdkRefusal {
+    match node {
+        NodeId::Commit(id) => refuse(
+            "NoSuchCommit",
+            format!("Commit {id} does not exist"),
+            SdkValue::Null,
+        ),
+        NodeId::Layer(id) => refuse(
+            "NotFound",
+            format!("Layer {id} does not exist"),
+            SdkValue::Null,
+        ),
+    }
 }
 
 /// The root a node records.
@@ -368,28 +372,8 @@ pub fn root(store: &Arc<Store>, node: NodeId) -> Result<ObjectId, SdkRefusal> {
 
 /// A saved node's record, read once and kept for the call's later steps
 /// (#818 R2): its project, its root and, for a Commit, its recorded Branch.
-pub enum NodeRecord {
-    Commit(Box<CommitRecord>),
-    Layer(LayerRecord),
-}
-
-impl NodeRecord {
-    /// The project the node belongs to.
-    pub fn stack(&self) -> layerfs_history::LayerStackId {
-        match self {
-            Self::Commit(record) => record.stack,
-            Self::Layer(record) => record.stack,
-        }
-    }
-
-    /// The root the node records.
-    pub fn root(&self) -> ObjectId {
-        match self {
-            Self::Commit(record) => record.root,
-            Self::Layer(record) => record.root,
-        }
-    }
-}
+/// The history contract holds it since its context read returns it (R5).
+pub use layerfs_history::NodeRecord;
 
 /// One Commit or Layer, refused as [`commit`] and [`layer`] refuse.
 pub fn node_record(store: &Arc<Store>, node: NodeId) -> Result<NodeRecord, SdkRefusal> {

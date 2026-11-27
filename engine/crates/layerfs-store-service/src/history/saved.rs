@@ -11,27 +11,32 @@ pub const LOOKUP_WORK: usize = 10_000;
 
 /// A full immutable reference, with its recorded originating branch when known.
 pub fn reference(store: &Arc<Store>, node: NodeId) -> Result<SdkValue> {
-    reference_of(store, node, &args::node_record(store, node)?)
+    reference_of(store, node, &args::node_record(store, node)?, None)
 }
 
 /// [`reference`] from the node's record the caller already read (#818 R2):
-/// only a Commit's recorded Branch name is read.
+/// only a Commit's recorded Branch name is read, unless `recorded` holds it
+/// already (the read call's context, #818 R5).
 pub fn reference_of(
     store: &Arc<Store>,
     node: NodeId,
     record: &args::NodeRecord,
+    recorded: Option<&Option<String>>,
 ) -> Result<SdkValue> {
     let (root, branch) = match record {
         args::NodeRecord::Layer(record) => (record.root, Some(MAIN.to_owned())),
         args::NodeRecord::Commit(record) => {
-            let branch = record
-                .meta
-                .branch
-                .map(|id| store.published(|history| history.branch_any(id)))
-                .transpose()
-                .map_err(args::published)?
-                .flatten()
-                .map(|b| b.name.as_str().to_owned());
+            let branch = match recorded {
+                Some(name) => name.clone(),
+                None => record
+                    .meta
+                    .branch
+                    .map(|id| store.published(|history| history.branch_any(id)))
+                    .transpose()
+                    .map_err(args::published)?
+                    .flatten()
+                    .map(|b| b.name.as_str().to_owned()),
+            };
             (record.root, branch)
         }
     };

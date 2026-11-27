@@ -13,7 +13,7 @@ pub fn glob(service: &StoreService, args: &SdkValue) -> Answer {
     let (stack, reader, name) = snapshot_target(service, args)?;
     // The call's caches, from the root's open on (#818 R4).
     let cached = Cached::new(&reader)?;
-    let (snap, saved) = snapshot_in(service, &stack, &cached, &name)?;
+    let (snap, saved) = snapshot_in(service, &stack, &cached, name)?;
     let pattern = text(args, "pattern")?;
     let path = optional_path(args)?;
     let seen = visibility::Visibility::load(&service.store, &stack, &snap, saved.removals)?;
@@ -34,6 +34,7 @@ pub fn glob(service: &StoreService, args: &SdkValue) -> Answer {
             &service.store,
             &snap,
             &saved.record,
+            &saved.recorded,
             paged_reads::glob(
                 &service.store,
                 &reader,
@@ -51,6 +52,7 @@ pub fn glob(service: &StoreService, args: &SdkValue) -> Answer {
         &service.store,
         &snap,
         &saved.record,
+        &saved.recorded,
         reads::glob(
             memo, &snap, pattern, &path, entry, &seen, &filters, limit, pos,
         )

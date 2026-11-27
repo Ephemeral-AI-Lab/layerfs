@@ -317,3 +317,87 @@ message: no sweep. `method_refusal_order`, `sdk_round_trip_equivalence_seeded`,
 `sdk_text_scan`, `sdk_path_reads`, `stat_symlink`, `sdk_grep_reads`,
 `sdk_large_file_budget` green. `sdk_text_scan.rs` follows `reads::read`'s
 signature (no reader argument). Deleted tests: none.
+
+### R3 review fix — caches made at the first demand (`4cc9974dd3`)
+
+The M1 review found `Cached::new` (decode-arena allocation) ahead of the
+hidden-path check. `Cached` now makes its caches at the call's first demand
+(the root's open, where the parent's reader made its arena). Read pins
+unchanged; `method_refusal_order`, `sdk_text_scan` green. `Cached::new` keeps
+its `Result` shape (control's `project/export/walk.rs` calls it).
+
+### R5 — one context statement per read call (PostgreSQL; SQLite default)
+
+**Prediction (written before the code).**
+
+- Mechanism: `HistoryCatalog::read_context(project, target)` with target
+  `main`, a Branch name or a full node id. Persistence overrides it: on
+  PostgreSQL one fenced `read_statement` (`read_context_named` /
+  `read_context_node`) returns the stack, the Branch, the head node's record
+  with its `history_serial`, the Commit's recorded Branch (`branch_any`) and
+  the stack's markers (UNION ALL rows; PG records carry no arrays). SQLite
+  calls `layerfs_history::catalog::read_context_serial`: today's
+  `layer_stack_named`, `branch_named`, `commit`/`layer` in today's order, and
+  leaves the markers and the recorded Branch unread, so the store service
+  reads them where it does today (statement counts and order unchanged,
+  refusal cases included). The commit-prefix path, invalid names and
+  unparsable ids keep today's flow.
+- PostgreSQL warm, every successful read case: −4 trips and −4 statements
+  (project, Branch, Commit row, serial+markers, recorded name → 1):
+  `stat.root` 8 → 4, `stat.depth3` 9 → 5, `stat.depth7` 9 → 5,
+  `read.small_depth3` 10 → 6, `read.2000_lines`/`lines_100_200` 9 → 5,
+  `list.root` 8 → 4, `list.dir_100` 10 → 6, `glob.dir_100` 9 → 5,
+  `glob.tree` 10 → 6, `grep.one_file_dir` 9 → 5, `grep.tree_1k` 28 → 24.
+- PostgreSQL cold: −4 executes and −4 first-use prepares (5 statements
+  prepared today, 1 after): −8 trips, −4 statements, e.g. `stat.root`
+  24 → 16, `stat.depth3` 30 → 22, `grep.tree_1k` 100 → 92;
+  `hidden.stat.depth3`/`hidden.list.dir_100` −8; `hidden.stat.removed`
+  (refused, no recorded name read today) −3 executes −3 prepares = −6.
+- Targets (RECORD rule): warm `stat /` 4 = SPEC 4; cold `stat /` 16 =
+  4 + (24 − 8 − 4 = 12 cold overhead) — on target if measured.
+- History pins: `blame` resolves through the same path: −3 executes
+  (project, Branch, Commit, markers → 1; blame reads no recorded name there),
+  warm −3; cold −3 executes and −2 prepares (the Commit statement stays in
+  use) = −5. `revision`, `diff_files` unchanged.
+- SQLite: every pin unchanged (read and history).
+- Memory: the stack's markers, as `path_removals` loads them today; the row
+  count is one context row plus one row per marker of the stack (no cap: the
+  marker set is what today's statement already loads).
+- New messages `read_context_named`, `read_context_node`: drop and kill sweeps.
+
+**Measured (receipts `receipts/R5/`).**
+
+| Case (PG control) | before warm / cold | predicted | measured warm / cold |
+|---|---|---|---|
+| `stat.root` | 8 / 24 | 4 / 16 | 4 / 16 |
+| `stat.depth3` | 9 / 30 | 5 / 22 | 5 / 22 |
+| `stat.depth7` | 9 / 34 | 5 / 26 | 5 / 26 |
+| `read.small_depth3` | 10 / 31 | 6 / 23 | 6 / 23 |
+| `list.dir_100` | 10 / 31 | 6 / 23 | 6 / 23 |
+| `grep.tree_1k` | 28 / 100 | 24 / 92 | 24 / 92 |
+| `hidden.stat.removed` | — / 27 | — / 21 | — / 21 |
+| `blame.h10` | 223 / 263 | 220 / 258 | 221 / 260 |
+| `blame.h100` | 2,024 / 2,264 | 2,021 / 2,259 | 2,021 / 2,259 |
+
+- Every read case −4 warm, −8 cold, as predicted (all 27 pins); statements
+  −4 each. `blame.h10` names a full Commit id (no Branch read): −2 warm,
+  −3 cold, one fewer than predicted (within 15%). `revision`, `diff_files`
+  unchanged. SQLite: every read and history pin unchanged.
+- Targets (RECORD rule): warm `stat /` 4 = 4; `stat.depth7` cold 26 ≤ 30 +
+  18; `grep.tree_1k` warm 24 ≤ 64, cold 92 ≤ 64 + 33.
+- Sweeps (the two new statements): `sdk_read_fault_rh_{drop,kill}` now run
+  the cold `fs.stat` twice, by Branch (`read_context_named`) and by the head
+  Commit's full id (`read_context_node`): K 102 → 75 each; drop 70
+  `Unknown`, 5 `Failed`; kill 46 exact answers, 29 `Unknown`; both shapes
+  alike; invariants held.
+- Equivalence: `postgresql_statement_schema` (guard pins `read_context`;
+  runtime evidence compares the one statement with the default's reads plus
+  `node_path_removals` and `branch_any` for main, a Branch, a missing
+  Branch, a Commit, a Layer, a missing Commit and a missing project).
+  New `sdk_read_context_rh.rs`: 18 `fs.stat` shapes (no project, no Branch,
+  identity-shaped names, missing Commit/Layer, path refusals after them,
+  prefixes, answers' `at`) give the same outcomes in the same order on
+  SQLite and PostgreSQL.
+- `method_refusal_order`, `sdk_round_trip_equivalence_seeded` and the tests
+  the diff reaches green, one run each.
+- Deleted tests: none.

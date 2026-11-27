@@ -1,0 +1,17 @@
+ 8:06  up 3 days,  6:39, 1 user, load averages: 6.72 7.09 6.55
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.09s
+     Running tests/sdk_path_whiteouts.rs (target/debug/deps/sdk_path_whiteouts-ba06ab2ae1979512)
+
+running 8 tests
+test a_marker_under_a_live_mount_is_refused_and_materializes_after_it_closes ... ok
+test a_merge_keeps_a_post_frontier_re_creation ... ok
+test a_merge_of_two_hidden_sides_keeps_the_path_absent ... ok
+test a_mount_keeps_its_markers_for_every_commit_it_makes ... ok
+test a_one_shot_commit_after_remove_stays_absent ... ok
+test a_removed_directory_is_absent_and_can_be_recreated ... ok
+test a_workspace_commit_keeps_a_re_creation_above_the_marker ... ok
+test one_shot_creators_see_a_removed_path_as_absent_and_recreate_it_visibly ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.42s
+
+run_bounded: exit 0 after 1.3 s

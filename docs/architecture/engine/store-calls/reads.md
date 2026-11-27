@@ -34,6 +34,20 @@ without a second read; the markers reach the visibility filter at the place
 the marker read used to be, so its failure still refuses there. A node with
 no row, or a provider without the combined read, reads the markers alone.
 
+A read naming `main`, a valid Branch name or a full Commit or Layer identity
+reads its history context with one catalog call, `read_context` (#818 R5):
+the project's stack, the Branch, the node's record and, on PostgreSQL, the
+node's serial, the project's markers and a Commit's recorded Branch, all in
+one fenced statement (`read_context_named`, `read_context_node`). The store
+service decodes it in the order the reads ran one by one: `NoSuchProject`,
+then the Branch (with the identity-shaped rule), `NoSuchCommit`/`NotFound`,
+another project's node, the root's tree, then the path. SQLite's provider
+answers with the default, `read_context_serial`: the stack, Branch and node
+reads one after another, with the markers and the recorded Branch read later
+where they always were, so its statements do not change. A `commit` prefix,
+an invalid name or an identity that does not parse keeps the reads one by
+one.
+
 | Rule | Detail | Source |
 | --- | --- | --- |
 | Header | Every answer starts with `kind`, `snapshot` (label such as `feat@<short id>`), `root`, `path`. | [`snapshot.rs`](../../../../engine/crates/layerfs-store-service/src/read/snapshot.rs) |

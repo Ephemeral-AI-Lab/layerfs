@@ -14,7 +14,7 @@ pub fn blame(service: &StoreService, args: &SdkValue) -> Answer {
         // The root opens through caches of its own until blame's reads share
         // one (#818 H3).
         let cached = Cached::new(&reader)?;
-        snapshot_in(service, &stack, &cached, &name)?
+        snapshot_in(service, &stack, &cached, name)?
     };
     let path = path(args, "path")?;
     let seen = visibility::Visibility::load(&service.store, &stack, &snap, saved.removals)?;

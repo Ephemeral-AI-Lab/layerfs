@@ -85,21 +85,26 @@ const SQLITE: &[Pin] = &[
 ///   `diff_files` −4 (one marker read per side); statements unchanged.
 /// - #818 R2: `blame` and `diff_files` −2 round trips and −2 statements
 ///   (see SQLITE), cold and warm; `revision` unchanged.
+/// - #818 R5: `blame` resolves through the one context statement:
+///   `blame.h10` (a full Commit id: project, Commit, markers) −2 warm, −3
+///   cold; `blame.h100` (a Branch: project, Branch, Commit, markers) −3
+///   warm, −5 cold (prepares of the statements it no longer sends);
+///   `revision` and `diff_files` unchanged.
 const POSTGRESQL: &[Pin] = &[
     // probe blame.h10: 267 trips
-    pin("blame.h10.cold", [0, 20, 19, 0], [1, 263, 253, 0], NONE),
-    pin("blame.h10.warm", [0, 19, 19, 0], [0, 223, 223, 0], NONE),
+    pin("blame.h10.cold", [0, 20, 19, 0], [1, 260, 251, 0], NONE),
+    pin("blame.h10.warm", [0, 19, 19, 0], [0, 221, 221, 0], NONE),
     // probe blame.h100: 2,325
     pin(
         "blame.h100.cold",
         [0, 200, 199, 0],
-        [1, 2264, 2253, 0],
+        [1, 2259, 2250, 0],
         NONE,
     ),
     pin(
         "blame.h100.warm",
         [0, 199, 199, 0],
-        [0, 2024, 2024, 0],
+        [0, 2021, 2021, 0],
         NONE,
     ),
     // probe revision.h10 (appended at P0)

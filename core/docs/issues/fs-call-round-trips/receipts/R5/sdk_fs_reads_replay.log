@@ -1,0 +1,18 @@
+ 8:06  up 3 days,  6:39, 1 user, load averages: 6.74 7.09 6.55
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.09s
+     Running tests/sdk_fs_reads_replay.rs (target/debug/deps/sdk_fs_reads_replay-b19e172a1057293a)
+
+running 9 tests
+test calls ... ok
+test chain ... ok
+test dump ... ok
+test export ... ok
+test fixed ... ok
+test paging ... ok
+test reuse ... ok
+test split ... ok
+test time ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+run_bounded: exit 0 after 0.9 s

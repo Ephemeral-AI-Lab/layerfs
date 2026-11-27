@@ -13,7 +13,7 @@ pub fn list(service: &StoreService, args: &SdkValue) -> Answer {
     let (stack, reader, name) = snapshot_target(service, args)?;
     // The call's caches, from the root's open on (#818 R4).
     let cached = Cached::new(&reader)?;
-    let (snap, saved) = snapshot_in(service, &stack, &cached, &name)?;
+    let (snap, saved) = snapshot_in(service, &stack, &cached, name)?;
     let path = optional_path(args)?;
     let seen = visibility::Visibility::load(&service.store, &stack, &snap, saved.removals)?;
     // One path walk for the call (#818 R3), through its caches and memo.
@@ -33,5 +33,11 @@ pub fn list(service: &StoreService, args: &SdkValue) -> Answer {
         reads::list(&memo, &snap, &path, entry, &seen, paging(args))
     }
     .map(|value| visibility::settle(value, &seen, removed));
-    paged_reads::pin(&service.store, &snap, &saved.record, answer)
+    paged_reads::pin(
+        &service.store,
+        &snap,
+        &saved.record,
+        &saved.recorded,
+        answer,
+    )
 }
