@@ -1,11 +1,9 @@
 //! Read budgets are checked before any BLOB is acquired into the result buffer.
 use crate::backend::sqlite::session::rows;
-use crate::{
-    backend::metadata_locations::info,
-    backend::{
-        records::{BackendError, Param},
-        Transaction,
-    },
+use crate::backend::{
+    error::{BackendError, Param},
+    metadata_locations::info,
+    Transaction,
 };
 use layerfs_storage::{policy, port::*};
 use std::collections::BTreeSet;
@@ -51,7 +49,7 @@ pub(crate) fn read(
     }
     for info in descriptors {
         if tx.layout().uses_units() {
-            out.push(super::units_read::whole(tx, info)?);
+            out.push(super::units::whole(tx, info)?);
             continue;
         }
         let mut rows = tx.query(

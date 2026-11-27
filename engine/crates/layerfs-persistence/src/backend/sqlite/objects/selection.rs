@@ -1,7 +1,7 @@
 //! Exact incremental BLOB I/O; C2 plans and authenticates selected acquisition.
 use crate::backend::sqlite::session::rows;
 use crate::backend::sqlite::session::transaction::Transaction;
-use crate::backend::{metadata_locations::info, records::Param};
+use crate::backend::{error::Param, metadata_locations::info};
 use layerfs_storage::{
     location::PackInfo,
     port::{AcquiredPackRead, PackReadPlan, PersistedPackRead, PersistenceError},
@@ -14,7 +14,7 @@ pub(crate) fn read(
     plan: &mut dyn PackReadPlan,
 ) -> Result<PersistedPackRead, PersistenceError> {
     if tx.layout().uses_units() {
-        return super::units_read::strict(tx, id, plan);
+        return super::units::strict(tx, id, plan);
     }
     read_with(tx, id, |descriptor, read_at| {
         PersistedPackRead::acquire(descriptor, plan, read_at)
@@ -26,7 +26,7 @@ pub(crate) fn read_scoped(
     plan: &mut dyn PackReadPlan,
 ) -> Result<AcquiredPackRead, PersistenceError> {
     if tx.layout().uses_units() {
-        return super::units_read::scoped(tx, id, plan);
+        return super::units::scoped(tx, id, plan);
     }
     read_with(tx, id, |descriptor, read_at| {
         AcquiredPackRead::acquire(descriptor, plan, read_at)

@@ -14,11 +14,11 @@
 //! a sizing read and a second read did before. Rows are put in key order
 //! here, whatever order the joined statement returns them in.
 use crate::backend::{
+    error::BackendError,
     postgresql::{
         history::statements,
         session::{rows, transaction::Transaction},
     },
-    records::BackendError,
     sqlite::acquisition::{
         metadata_parse,
         statements::{signed, Failure},

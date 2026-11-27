@@ -4,7 +4,7 @@
 //! plainly bound LIMIT, which re-prepares the statement on each execution and
 //! lets the plan follow the value. The expression keeps one generic plan: the
 //! one `explain` reports.
-use crate::backend::records::{BackendError, OutcomeError};
+use crate::backend::error::{BackendError, OutcomeError};
 use layerfs_storage::port::{acquisition::AcquisitionError, PersistenceError};
 
 macro_rules! statement {

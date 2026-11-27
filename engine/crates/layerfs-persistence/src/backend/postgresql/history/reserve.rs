@@ -9,12 +9,12 @@
 //! resent.
 use super::fused::nonce;
 use crate::backend::{
+    error::BackendError,
     postgresql::session::{
         connection::Session,
         pipeline::{Refusal, Reply, Request},
         profile::barrier_leftover,
     },
-    records::BackendError,
 };
 use layerfs_history::error::{HistoryError, HistoryResult};
 use layerfs_history::identity::CatalogId;
@@ -23,7 +23,7 @@ use postgres::{error::SqlState, SimpleQueryMessage};
 use std::sync::atomic::Ordering;
 
 const RESERVE: &str =
-    include_str!("../../../../sql/postgresql/queries/history/allocation_reserve.sql");
+    include_str!("../../../../sql/postgresql/history/node/allocation_reserve.sql");
 
 /// The reservation's statement for the Store's `schema`.
 pub(crate) fn text(schema: &str) -> String {

@@ -15,21 +15,21 @@
 //! A merge's records live in the writer connection's temporary tables
 //! (`merge_records.rs`), not here.
 use super::session::{connection::Session, transaction::Transaction};
-use crate::backend::records::{BackendError, Param};
+use crate::backend::error::{BackendError, Param};
 use crate::PostgresCheck;
 use layerfs_history::{CatalogId, HistoryCatalogConfig};
 use layerfs_storage::{port::PersistenceError, StoragePolicy};
 use postgres::SimpleQueryRow;
 
-#[path = "schema_diagnostic.rs"]
+#[path = "diagnostic/schema.rs"]
 mod diagnostic;
 
 pub(crate) const SCHEMA: &str = concat!(
-    include_str!("../../../sql/postgresql/schema.sql"),
-    include_str!("../../../sql/postgresql/gc.sql")
+    include_str!("../../../sql/postgresql/schema/store.sql"),
+    include_str!("../../../sql/postgresql/schema/gc.sql")
 );
 /// Init's acquisition tables, created after [`SCHEMA`] in a new schema.
-const ACQUISITION: &str = include_str!("../../../sql/postgresql/acquisition.sql");
+const ACQUISITION: &str = include_str!("../../../sql/postgresql/schema/acquisition.sql");
 /// The acquisition tables, in name order.
 const ACQUISITION_TABLES: [&str; 3] = ["init_entry", "init_host_file", "init_operation"];
 /// The engine-scoped schema version in `store_policy` and `history_meta`.

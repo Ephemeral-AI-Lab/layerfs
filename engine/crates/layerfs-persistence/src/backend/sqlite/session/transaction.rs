@@ -1,7 +1,7 @@
 //! One-attempt transaction ownership and quarantine on uncertain outcomes.
 use super::connection::{Session, SqlWork};
 use super::query;
-use crate::backend::records::{BackendError, OutcomeError, Param, Record};
+use crate::backend::error::{BackendError, OutcomeError, Param, Record};
 use rusqlite::Connection;
 use std::{
     cell::{Cell, RefCell},

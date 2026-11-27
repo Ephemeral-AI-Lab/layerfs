@@ -13,8 +13,8 @@ use super::session::{
     rows,
     transaction::{Mode, Transaction},
 };
-use crate::backend::records::{BackendError, Param};
-use crate::backend::sqlite::storage::merge_records::Window;
+use crate::backend::error::{BackendError, Param};
+use crate::backend::sqlite::merge_records::Window;
 use layerfs_content::EditRecordKey;
 use layerfs_storage::port::PersistenceError;
 use std::collections::BTreeMap;

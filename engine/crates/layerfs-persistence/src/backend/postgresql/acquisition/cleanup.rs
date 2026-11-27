@@ -18,8 +18,8 @@
 use super::reads::get;
 use super::writes::credit;
 use crate::backend::{
+    error::BackendError,
     postgresql::session::transaction::Transaction,
-    records::BackendError,
     sqlite::acquisition::statements::{signed, unsigned, Failure},
 };
 use layerfs_storage::port::acquisition::{

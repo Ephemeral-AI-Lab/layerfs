@@ -7,7 +7,7 @@ use super::statements::{
     signed, Failure, BINDINGS_FIRST, BINDINGS_NEXT, DIRECTORIES, DIRECTORY_PATH, DIRECTORY_SIZES,
     ENTRIES_FIRST, ENTRIES_NEXT, FILE_ROOTS, JOB, JOBS, JOB_SIZES, UNPLACED_FIRST, UNPLACED_NEXT,
 };
-use crate::backend::{records::BackendError, Session, Transaction};
+use crate::backend::{error::BackendError, Session, Transaction};
 use layerfs_content::{inode_leaf::InodeKind, ObjectId};
 use layerfs_storage::port::acquisition::{
     Binding, Directory, Entry, EntryKey, FileRoot, HostIdentity, Job, Limits, Owner, Phase,

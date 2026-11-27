@@ -2,9 +2,9 @@
 //! body's statements, then `COMMIT`. A lost reply quarantines the session.
 use super::{
     connection::{Session, State},
-    query, rows,
+    rows::{self, self},
 };
-use crate::backend::records::{BackendError, OutcomeError, Param, Record};
+use crate::backend::error::{BackendError, OutcomeError, Param, Record};
 use layerfs_telemetry::timer::waits::Wait;
 use postgres::{types::ToSql, types::Type, Row, SimpleQueryMessage};
 use std::{
@@ -75,10 +75,10 @@ pub(crate) struct Transaction<'a> {
     pub(crate) packs: RefCell<super::super::objects::read::HeldPacks>,
     /// Inode value blocks this transaction has read
     /// (`metadata::reads::inode_values_ahead`).
-    pub(crate) values: RefCell<super::super::metadata::reads::HeldBlocks>,
+    pub(crate) values: RefCell<super::super::metadata::locations::HeldBlocks>,
     /// Locators this transaction was told to expect lookups of
     /// (`metadata::reads::expect_locations`).
-    pub(crate) located: RefCell<super::super::metadata::reads::HeldLocations>,
+    pub(crate) located: RefCell<super::super::metadata::locations::HeldLocations>,
 }
 
 impl Transaction<'_> {
@@ -689,7 +689,7 @@ impl Transaction<'_> {
         };
         for row in rows.iter_mut() {
             let actual = match row.cells.pop() {
-                Some(crate::backend::records::Value::Integer(generation)) if generation > 0 => {
+                Some(crate::backend::error::Value::Integer(generation)) if generation > 0 => {
                     generation as u64
                 }
                 _ => return Err(BackendError::Integrity),

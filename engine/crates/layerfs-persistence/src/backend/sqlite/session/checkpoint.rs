@@ -5,7 +5,7 @@
 //! nothing is closed or sealed here.
 use super::connection::Session;
 use super::query;
-use crate::backend::records::BackendError;
+use crate::backend::error::BackendError;
 
 impl Session {
     /// Runs `PRAGMA wal_checkpoint(TRUNCATE)` once. `Ok(true)`: the log is

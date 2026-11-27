@@ -35,9 +35,9 @@ use super::verify::live_tuple;
 use super::verify::sealed_state;
 use super::verify::verify;
 use super::verify::VerifyInput;
-use crate::backend::records::Param;
-use crate::compact_metrics::CompactPhase;
-use crate::compact_metrics::RunMetrics;
+use crate::backend::error::Param;
+use crate::gc::metrics::CompactPhase;
+use crate::gc::metrics::RunMetrics;
 use crate::SqliteHandles;
 use layerfs_history::error::HistoryError;
 use layerfs_history::error::HistoryResult;
@@ -130,7 +130,7 @@ impl SqliteHandles {
             // and leaves no artifact or op record. A crash remnant has no
             // description and is not refused; the next clean seal removes it
             // as before.
-            if crate::backend::sqlite::exclusion::held_by_other_process(&store) {
+            if crate::backend::sqlite::lane::exclusion::held_by_other_process(&store) {
                 return Err(HistoryError::Busy);
             }
 
@@ -192,7 +192,7 @@ impl SqliteHandles {
                 owner_pid_start: request.owner_pid_start,
                 owner_pid_boot: request.owner_pid_boot,
                 // This process writes the record, so this is its namespace.
-                owner_pid_namespace: crate::history::admission::current_namespace(),
+                owner_pid_namespace: crate::gc::admission::intents::current_namespace(),
                 tuple: live.clone(),
                 live_heads_digest: [0u8; 32],
                 returned: false,

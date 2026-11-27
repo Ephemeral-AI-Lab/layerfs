@@ -1,15 +1,15 @@
 //! §8 Phase M: the `gc_op` row, the mark tuple, the scratch helpers and the run metrics.
 
-use super::report::decode_kept_waste;
-use super::report::encode_kept_waste;
+use super::receipt::decode_kept_waste;
+use super::receipt::encode_kept_waste;
 use super::types::takes_rebuild_path;
 use super::types::DeadTotals;
 use super::types::OpRow;
 use super::types::SCRATCH_PREFIX;
+use crate::backend::error::Param;
 use crate::backend::postgresql::session::connection::Session;
 use crate::backend::postgresql::session::transaction::Mode;
 use crate::backend::postgresql::session::transaction::Transaction;
-use crate::backend::records::Param;
 use crate::backend::sqlite::compact::CompactFailpoint;
 use crate::backend::sqlite::compact::CompactKeptWaste;
 use crate::backend::sqlite::compact::CompactRequest;

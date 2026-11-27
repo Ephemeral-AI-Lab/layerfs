@@ -13,7 +13,7 @@
 //!
 //! A holder that unwinds still releases its turn (`Turn`'s drop), so a gone
 //! owner hands the turn on rather than stranding the queue.
-use crate::backend::records::BackendError;
+use crate::backend::error::BackendError;
 use layerfs_telemetry::timer::waits::{self, Wait};
 use std::{
     collections::VecDeque,

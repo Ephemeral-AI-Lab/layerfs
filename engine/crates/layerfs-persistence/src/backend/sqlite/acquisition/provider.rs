@@ -21,7 +21,7 @@ pub struct AcquisitionProvider {
     session: Arc<Session>,
     /// Identity of this session among all that ever began an operation: the
     /// identity of its own first acquired operation, zero until then.
-    epoch: crate::backend::epoch::Epoch,
+    epoch: crate::acquisition::epoch::Epoch,
     directory: Option<PathBuf>,
 }
 

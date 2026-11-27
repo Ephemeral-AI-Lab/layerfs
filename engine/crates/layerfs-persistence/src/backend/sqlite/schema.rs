@@ -2,22 +2,22 @@
 use super::session::connection::SqlWork;
 use super::session::query;
 use super::session::transaction::Transaction;
-use crate::backend::records::{BackendError, Param, Record};
+use crate::backend::error::{BackendError, Param, Record};
 use rusqlite::Connection;
 use std::cell::RefCell;
 pub(crate) const APPLICATION_ID: i64 = 1279677264;
-pub(crate) const OBJECTS: &str = include_str!("../../../sql/sqlite/objects.sql");
-pub(crate) const METADATA: &str = include_str!("../../../sql/sqlite/metadata.sql");
-pub(crate) const HISTORY: &str = include_str!("../../../sql/sqlite/history.sql");
+pub(crate) const OBJECTS: &str = include_str!("../../../sql/sqlite/schema/objects.sql");
+pub(crate) const METADATA: &str = include_str!("../../../sql/sqlite/schema/metadata.sql");
+pub(crate) const HISTORY: &str = include_str!("../../../sql/sqlite/schema/history.sql");
 /// Lineage tables (#353); a Store written before them gains them at open.
-pub(crate) const LINEAGE: &str = include_str!("../../../sql/sqlite/lineage.sql");
+pub(crate) const LINEAGE: &str = include_str!("../../../sql/sqlite/schema/lineage.sql");
 /// Merge build records (#355); a Store written before them gains them at open.
-pub(crate) const SCRATCH: &str = include_str!("../../../sql/sqlite/merge_scratch.sql");
+pub(crate) const SCRATCH: &str = include_str!("../../../sql/sqlite/schema/merge_scratch.sql");
 /// Whole-content file digests (#364); a Store written before them gains them at open.
-pub(crate) const DIGESTS: &str = include_str!("../../../sql/sqlite/file_digest.sql");
+pub(crate) const DIGESTS: &str = include_str!("../../../sql/sqlite/schema/file_digest.sql");
 /// GC markers, positions and admission records; a Store written before them
 /// gains them at open.
-pub(crate) const GC: &str = include_str!("../../../sql/sqlite/gc.sql");
+pub(crate) const GC: &str = include_str!("../../../sql/sqlite/schema/gc.sql");
 /// The position columns T1.2a/T1.4 append, as `("table", "column", ALTER)`;
 /// a Store written before them gains them at open.
 pub(crate) const POSITION_COLUMNS: [(&str, &str, &str); 4] = [
@@ -42,9 +42,10 @@ pub(crate) const POSITION_COLUMNS: [(&str, &str, &str); 4] = [
         "ALTER TABLE history_meta ADD COLUMN next_history_serial INTEGER NOT NULL DEFAULT 1",
     ),
 ];
-pub(crate) const UNIT_INDEX: &str = include_str!("../../../sql/sqlite/objects_units_index.sql");
-pub(crate) const UNITS: &str = include_str!("../../../sql/sqlite/objects_units.sql");
-pub(crate) const ACQUISITION: &str = include_str!("../../../sql/sqlite/acquisition/schema.sql");
+pub(crate) const UNIT_INDEX: &str =
+    include_str!("../../../sql/sqlite/schema/objects_units_index.sql");
+pub(crate) const UNITS: &str = include_str!("../../../sql/sqlite/schema/objects_units.sql");
+pub(crate) const ACQUISITION: &str = include_str!("../../../sql/sqlite/schema/acquisition.sql");
 type Selection = (crate::SqlitePackLayout, crate::SqliteAcquisitionSchema);
 pub(crate) fn scripts((layout, acquisition): Selection) -> Vec<String> {
     let objects = match layout {
@@ -587,7 +588,7 @@ impl super::session::connection::Session {
     ) -> Result<(u64, u64, [u8; 32]), BackendError> {
         self.run::<_,BackendError>(false,|tx| {
    let selection=(self.layout,self.acquisition);
-   if self.diagnostic { super::schema_diagnostic::check(tx,self.acquisition)?; }
+   if self.diagnostic { super::diagnostic::schema::check(tx,self.acquisition)?; }
    check(tx.connection,tx.work,selection)?;
    let rows=tx.query("SELECT catalog_id,catalog_incarnation,binding_key,identity_format,schema_version,schema_source,schema_definition FROM history_meta WHERE id=1",vec![])?;
    let r=rows.first().filter(|_|rows.len()==1).ok_or(BackendError::Integrity)?;

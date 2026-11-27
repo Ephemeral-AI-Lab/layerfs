@@ -20,6 +20,7 @@
 //! convert to signed runs today's transaction instead (`writes`, `cleanup`).
 use super::{reads::get, writes::Roots};
 use crate::backend::{
+    error::BackendError,
     postgresql::{
         history::fused::nonce,
         session::{
@@ -28,7 +29,6 @@ use crate::backend::{
             profile::barrier_leftover,
         },
     },
-    records::BackendError,
     sqlite::acquisition::{
         accounting::ROOT_BYTES,
         statements::{signed, unsigned, Failure},

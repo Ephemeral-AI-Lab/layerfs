@@ -30,7 +30,7 @@ pub struct PostgresAcquisition {
     session: Arc<Session>,
     /// Identity of this session among all that ever began an operation: the
     /// identity of its own first acquired operation, zero until then.
-    epoch: crate::backend::epoch::Epoch,
+    epoch: crate::acquisition::epoch::Epoch,
     /// The schema has the acquisition tables.
     tables: bool,
 }
@@ -188,8 +188,7 @@ impl Acquisition for PostgresAcquisition {
                 let state = std::cell::RefCell::new(Default::default());
                 Some(unit::run(session, id, |unit| {
                     placement::place(unit, id.0, signed_parent, placed, &state)?;
-                    let state: &crate::backend::sqlite::acquisition::placement::Placement =
-                        &state.borrow();
+                    let state: &crate::acquisition::placement::Placement = &state.borrow();
                     Ok((state.canonical.clone(), state.rows, state.bytes))
                 }))
             },

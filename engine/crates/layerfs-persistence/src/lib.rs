@@ -3,48 +3,57 @@
 #![deny(unsafe_code)]
 #![deny(missing_docs)]
 mod backend;
-pub mod compact_metrics;
+pub(crate) mod config;
 pub mod diagnostic;
 /// Test-only re-exports for unit checks that live outside product source.
 #[doc(hidden)]
 pub mod internals;
 mod storage;
-mod store;
-pub(crate) use store::config;
+pub(crate) use config::postgresql_options as config;
+pub(crate) mod acquisition;
+pub mod gc;
 mod history;
-mod report;
 pub mod upgrade;
-pub use backend::postgresql::access::{access as postgresql_access, PostgresAccess};
-pub use backend::postgresql::session::connection::HANDSHAKE as POSTGRESQL_HANDSHAKE;
-pub use backend::postgresql::session::reopen::one_call;
-pub use backend::postgresql::status::{
+pub use backend::error::{outdated_store, upgradable_store};
+pub use backend::postgresql::server::access::{access as postgresql_access, PostgresAccess};
+pub use backend::postgresql::server::status::{
     compact_status as postgresql_compact_status, status as postgresql_status,
     PostgresCompactOpStatus, PostgresStatus, PostgresStatusError,
 };
-pub use backend::records::{outdated_store, upgradable_store};
+pub use backend::postgresql::session::connection::HANDSHAKE as POSTGRESQL_HANDSHAKE;
+pub use backend::postgresql::session::reopen::one_call;
 pub use backend::sqlite::acquisition::AcquisitionProvider;
 pub use backend::sqlite::compact::{
     compact_op_status, CompactFailpoint, CompactKeptWaste, CompactOpStatus, CompactPath,
     CompactReceipt, CompactRequest, CompactResidue, CompactZeroReason, OwnerLiveness,
     DELTA_BASE_REFERENCES_CAP,
 };
-pub use backend::sqlite::heads::{heads_digest, read_heads};
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 pub use backend::sqlite::lifecycle::headroom::STORE_HEADROOM_BYTES;
+pub use backend::sqlite::lifecycle::heads::{heads_digest, read_heads};
 pub use backend::sqlite::lifecycle::reclamation::{SpaceReclamation, RECLAMATION_PAGE_LIMIT};
+pub use backend::sqlite::merge_records::{
+    MergeRecords, MergeRecordsWork, MergeScratch, BUFFER_BYTES, MERGE_LEASE, RESIDENT_BYTES,
+};
+pub(crate) use backend::sqlite::objects::provider as storage_provider;
 pub use backend::sqlite::session::connection::{ConnectionProfile, SqlWork};
 pub use backend::sqlite::session::statement_work::StatementPhaseWork;
 pub use backend::sqlite::session::thread_work::{
     profile_statements, take_statement_profile, thread_work, StatementCost,
 };
-pub use backend::sqlite::storage::merge_records::{
-    MergeRecords, MergeRecordsWork, MergeScratch, BUFFER_BYTES, MERGE_LEASE, RESIDENT_BYTES,
+pub use config::postgresql::{
+    PostgresAcquisition, PostgresHandles, PostgresLaneHold, PostgresStorage,
 };
+pub use config::selection::{Handles, StoreFile, StoreSelection};
+pub use config::sqlite::SealedStore;
+pub use config::sqlite::SqliteHandles;
+pub use config::sqlite::{DeferredSqliteWriter, SqliteWriter};
 pub use config::{
     PersistenceConfig, PostgresCheck, PostgresSelection, SqliteAcquisitionSchema, SqlitePackLayout,
     SqlitePersistenceProfile, SynchronousCommit, READER_CHECK_TIMEOUT, READER_IDLE_CHECK_MS,
 };
-pub use history::admission::{has_place_view, with_place_view};
+pub use gc::admission::intents::{has_place_view, with_place_view};
+pub use gc::compact::{CompactStatus, POSTGRES_COMPACT_PHASES, SQLITE_COMPACT_PHASES};
 pub use history::{
     Committer, Fused, HistoryProvider, KeptHistory, KeptNode, KeptNodeId, KeptObjects, KeptWaste,
     MarkResult, Sequence, Spans, FIXED_ROWS as FUSED_FIXED_ROWS, HINT_BATCH_ROWS,
@@ -53,18 +62,9 @@ pub use history::{
 /// is tokio-postgres's `UrlParser`), the one every Store session dials
 /// with: control reads a Store's URL with it, never with a parser of its own.
 pub use postgres::config::{Config as PostgresConfig, Host as PostgresHost};
-pub use report::{CompactStatus, POSTGRES_COMPACT_PHASES, SQLITE_COMPACT_PHASES};
-pub(crate) use storage::provider as storage_provider;
 pub(crate) use storage::publication;
 pub use storage_provider::StorageProvider;
-pub use store::handles::SqliteHandles;
-pub use store::open::{DeferredSqliteWriter, SqliteWriter};
-pub use store::postgresql::{
-    PostgresAcquisition, PostgresHandles, PostgresLaneHold, PostgresStorage,
-};
-pub use store::seal::SealedStore;
-pub use store::selection::{Handles, StoreFile, StoreSelection};
 
-mod blocks;
-mod metadata;
-mod objects;
+// #828 compat: old public module paths, removed in wave 3.
+#[doc(hidden)]
+pub use crate::gc::metrics as compact_metrics; // #828 compat

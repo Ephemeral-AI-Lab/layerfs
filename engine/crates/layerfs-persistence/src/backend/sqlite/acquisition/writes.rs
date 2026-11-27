@@ -5,7 +5,7 @@ use super::statements::{
     signed, unsigned, Failure, ADVANCE, BEGIN, CLAIM_EPOCH, COMPLETE_FILE, SET_DIRECTORY_ROOT,
 };
 use crate::backend::sqlite::session::prepared::Prepared;
-use crate::backend::{records::BackendError, Transaction};
+use crate::backend::{error::BackendError, Transaction};
 use layerfs_content::{inode_leaf::InodeKind, ObjectId};
 use layerfs_storage::port::acquisition::{Begin, HostIdentity, NewEntry, Owner, Phase, Placed};
 
@@ -171,7 +171,7 @@ pub(crate) fn place_children(
     parent: u64,
     placed: &[Placed],
 ) -> Result<Vec<u64>, Failure> {
-    super::child_windows::place_children(tx, owner, parent, placed)
+    super::placement::place_children(tx, owner, parent, placed)
 }
 
 pub(crate) fn complete_files(

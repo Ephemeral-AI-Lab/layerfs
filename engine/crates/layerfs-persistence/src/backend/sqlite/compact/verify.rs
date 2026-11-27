@@ -16,7 +16,7 @@ use super::types::CompactRequest;
 use super::types::MarkTuple;
 use super::window::staged_windows;
 use super::window::ReadAhead;
-use crate::backend::records::BackendError;
+use crate::backend::error::BackendError;
 use crate::backend::sqlite::schema;
 use crate::backend::sqlite::session::connection::Session;
 use crate::backend::sqlite::session::connection::SqlWork;

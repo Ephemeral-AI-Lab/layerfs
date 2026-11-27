@@ -22,13 +22,13 @@ use super::{
     placement, writes,
 };
 use crate::backend::{
+    error::BackendError,
     postgresql::session::{
         connection::Session,
         pipeline::{DecidedTurn, Refusal, Reply, Request, UnitStatements},
         profile::barrier_leftover,
         transaction::Transaction,
     },
-    records::BackendError,
     sqlite::acquisition::statements::Failure,
 };
 use postgres::{types::ToSql, Row};

@@ -1,5 +1,5 @@
 //! Existing Storage reconstruction over borrowed snapshot mechanics.
-use super::{transaction::View, Options};
+use super::{view::View, Options};
 use layerfs_content::{AuthenticatedObjects, ContentError, ContentResult, ObjectId};
 use layerfs_storage::{
     encoding::{

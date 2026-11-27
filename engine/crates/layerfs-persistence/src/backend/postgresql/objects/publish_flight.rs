@@ -7,7 +7,7 @@ use super::super::{
         profile::{barrier_leftover, Settings},
     },
 };
-use crate::backend::records::BackendError;
+use crate::backend::error::BackendError;
 use layerfs_content::ObjectId;
 use layerfs_storage::port::{Publication, Published};
 use postgres::{error::SqlState, types::ToSql};

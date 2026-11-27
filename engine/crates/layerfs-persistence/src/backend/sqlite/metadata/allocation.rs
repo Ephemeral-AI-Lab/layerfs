@@ -1,6 +1,6 @@
 //! Acknowledged pack/ordinal blocks in one bounded transaction.
 use crate::backend::{
-    records::{BackendError, Param},
+    error::{BackendError, Param},
     Transaction,
 };
 pub(crate) fn cursor(tx: &Transaction<'_>) -> Result<(i64, i64), BackendError> {

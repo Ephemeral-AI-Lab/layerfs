@@ -5,7 +5,7 @@ use super::{
     pipeline::{self, Bound, Flight},
     rows,
 };
-use crate::backend::records::BackendError;
+use crate::backend::error::BackendError;
 use crate::PostgresSelection;
 use postgres::{types::ToSql, Row, SimpleQueryMessage, SimpleQueryRow, Statement};
 use postgres_native_tls::MakeTlsConnector;

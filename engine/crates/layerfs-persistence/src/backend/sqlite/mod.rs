@@ -2,17 +2,13 @@
 //! grouped by role (#506 A1).
 pub(crate) mod acquisition;
 pub(crate) mod compact;
-pub(crate) mod compact_visit;
-pub(crate) mod exclusion;
-pub(crate) mod heads;
+pub(crate) mod diagnostic;
 pub(crate) mod lane;
 pub(crate) mod lifecycle;
 mod mechanics;
+pub(crate) mod merge_records;
 pub(crate) mod metadata;
 pub(crate) mod objects;
 pub(crate) mod schema;
-pub(crate) mod schema_diagnostic;
 pub(crate) mod session;
-pub(crate) mod snapshot;
-pub(crate) mod storage;
 pub(crate) mod upgrade;

@@ -42,7 +42,7 @@
 mod gc_fixture;
 
 use gc_fixture::{FixtureSpec, PackStats};
-use layerfs_persistence::compact_metrics::{CompactMetrics, CompactMetricsCapture};
+use layerfs_persistence::gc::metrics::{CompactMetrics, CompactMetricsCapture};
 use layerfs_persistence::{CompactPath, CompactRequest};
 use std::error::Error;
 use std::fmt;

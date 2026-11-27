@@ -1,6 +1,6 @@
 //! The engine seam (#506): the opened engine behind a history provider and
 //! the two traits through which shared semantics reach an engine.
-use super::records::{BackendError, Param, Record};
+use super::error::{BackendError, Param, Record};
 use layerfs_content::ObjectId;
 use layerfs_storage::{
     location::PackInfo,

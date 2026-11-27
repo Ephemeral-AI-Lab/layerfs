@@ -5,7 +5,7 @@
 //! adjusted when it changes and read back from the engine when it is removed,
 //! so an operation whose rows are all gone holds exactly zero.
 use super::statements::{unsigned, Failure, CHARGE, CREDIT, OWNER};
-use crate::backend::{records::BackendError, Transaction};
+use crate::backend::{error::BackendError, Transaction};
 use layerfs_storage::port::acquisition::{AcquisitionWork, NewEntry, Owner, Phase};
 
 /// Bytes of one stored object identity.

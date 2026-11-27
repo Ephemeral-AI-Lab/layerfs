@@ -27,12 +27,12 @@
 //! Nothing is resent: an unknown outcome quarantines the session while its
 //! lock is still held (`Session::decided_turn`).
 use super::{fused::nonce, statements};
+use crate::backend::error::BackendError;
 use crate::backend::postgresql::session::{
     connection::{Session, SessionKey},
     pipeline::{Refusal, Reply, Request},
     rows,
 };
-use crate::backend::records::BackendError;
 use layerfs_history::error::HistoryError;
 use postgres::types::ToSql;
 use std::sync::atomic::Ordering;

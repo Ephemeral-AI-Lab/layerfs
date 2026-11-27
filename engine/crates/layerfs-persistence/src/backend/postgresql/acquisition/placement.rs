@@ -10,12 +10,12 @@ use super::{
     unit::{values, Writes},
     writes::{bind, charge},
 };
-use crate::backend::{
-    postgresql::session::transaction::Transaction,
-    records::BackendError,
-    sqlite::acquisition::{
-        placement::{plan, Placement},
-        statements::{signed, Failure},
+use crate::{
+    acquisition::placement::{plan, Placement},
+    backend::{
+        error::BackendError,
+        postgresql::session::transaction::Transaction,
+        sqlite::acquisition::statements::{signed, Failure},
     },
 };
 use layerfs_storage::port::acquisition::{HostIdentity, Owner, Placed};

@@ -23,7 +23,7 @@ use super::verify::file_tuple;
 use super::verify::open_immutable;
 use crate::backend::sqlite::lane::writer_admission::Writer;
 use crate::backend::sqlite::lifecycle::seal::SealedFacts;
-use crate::compact_metrics::RunMetrics;
+use crate::gc::metrics::RunMetrics;
 use layerfs_history::error::HistoryError;
 use layerfs_history::error::HistoryResult;
 use layerfs_history::error::OpConflict;

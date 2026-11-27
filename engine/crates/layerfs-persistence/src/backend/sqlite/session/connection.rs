@@ -2,7 +2,7 @@
 use super::profile;
 use super::query;
 use super::rows;
-use crate::backend::records::BackendError;
+use crate::backend::error::BackendError;
 use crate::backend::sqlite::lane::writer_admission::Writer;
 use crate::backend::sqlite::lifecycle::identity::FileIdentity;
 use crate::SqlitePersistenceProfile;
@@ -161,7 +161,7 @@ pub struct SqlWork {
     pub last_reopen_ms: u64,
 }
 pub(crate) struct State {
-    pub(crate) connection: super::lifecycle::ConnectionSlot,
+    pub(crate) connection: super::close::ConnectionSlot,
     /// The Store path whose lane a writable session takes around its last
     /// close; `None` for read-only and diagnostic sessions, whose close cannot
     /// checkpoint or remove `-wal`/`-shm` and so takes no lane.
@@ -174,7 +174,7 @@ pub(crate) struct Session {
     pub(crate) diagnostic: bool,
     /// A writable Normal session's checkpoint thread; dropped first, so
     /// it ends before the session's own connection closes.
-    pub(crate) background: Option<super::background::Checkpointer>,
+    pub(crate) background: Option<super::checkpointer::Checkpointer>,
     pub(crate) admission: crate::backend::admission::Admission,
     pub(crate) state: Mutex<State>,
     pub(crate) writable: bool,
@@ -431,7 +431,7 @@ impl Session {
         }
         super::thread_work::add(&work.borrow());
         let background = match (writable && selected.background_checkpoint())
-            .then(|| super::background::Checkpointer::start(path, selected.synchronous()))
+            .then(|| super::checkpointer::Checkpointer::start(path, selected.synchronous()))
             .transpose()?
         {
             Some((background, checkpoint_fullfsync)) => {
@@ -458,7 +458,7 @@ impl Session {
             admission: crate::backend::admission::Admission::default(),
             path: path.to_path_buf(),
             state: Mutex::new(State {
-                connection: super::lifecycle::ConnectionSlot::new(connection),
+                connection: super::close::ConnectionSlot::new(connection),
                 close_lane: writable.then(|| path.to_path_buf()),
                 quarantined: false,
                 work,

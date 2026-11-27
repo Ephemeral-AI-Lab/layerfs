@@ -57,15 +57,15 @@
 //! on the failure path only, before the verdict and any fallback, the
 //! session releases such a leftover (`barrier_leftover`, one more round
 //! trip). An accepted message runs no such scan.
+use crate::backend::error::BackendError;
 use crate::backend::postgresql::session::{
     connection::Session,
     pipeline::{Reply, Request},
     profile::barrier_leftover,
     rows,
 };
-use crate::backend::records::BackendError;
-use crate::blocks::hints::Block;
 use crate::history::Fused;
+use crate::storage::blocks::hints::Block;
 use layerfs_history::error::HistoryError;
 use layerfs_history::records::{CommitOutcome, CommitRecord, CommitRequest};
 use layerfs_storage::{
@@ -333,8 +333,8 @@ fn with<'a>(mut values: Vec<Value<'a>>, nonce: &str) -> Vec<Value<'a>> {
     values
 }
 
-fn boxed(param: crate::backend::records::Param) -> Value<'static> {
-    use crate::backend::records::Param;
+fn boxed(param: crate::backend::error::Param) -> Value<'static> {
+    use crate::backend::error::Param;
     match param {
         Param::I64(value) => Box::new(value),
         Param::Text(value) => Box::new(value),
@@ -438,7 +438,7 @@ pub(crate) fn row_values(batch: &Publication) -> Result<(Vec<Value<'static>>, u6
         .map(|pack| pack.info().length as i64)
         .sum();
     let stored: i64 = batch.packs.iter().map(|p| p.info().length as i64).sum();
-    let values = crate::blocks::values::encode(&batch.inode_values)
+    let values = crate::storage::blocks::values::encode(&batch.inode_values)
         .map_err(|_| HistoryError::Integrity("inode value block"))?;
     let (release, first, count) = match batch.release_ordinals {
         Some((first, count)) => (true, i64::from(first), count as i64),

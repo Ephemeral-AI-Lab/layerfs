@@ -3,16 +3,14 @@
 //! Every function runs inside one caller-owned transaction and reaches rows
 //! only through the operation-prefixed keys of the shipped statements.
 pub(crate) mod accounting;
-mod child_windows;
 pub(crate) mod cleanup;
 mod entry_windows;
-mod metadata;
 pub(crate) mod placement;
 pub(crate) mod reads;
 mod root_windows;
 pub(crate) mod statements;
 pub(crate) mod writes;
 
-pub(crate) use metadata::{metadata_blob, metadata_parse};
+pub(crate) use crate::acquisition::payload::{metadata_blob, metadata_parse};
 mod provider;
 pub use provider::AcquisitionProvider;

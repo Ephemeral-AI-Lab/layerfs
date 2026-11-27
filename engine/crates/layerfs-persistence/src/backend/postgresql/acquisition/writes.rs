@@ -11,8 +11,8 @@ use super::{
     unit::{values, Writes},
 };
 use crate::backend::{
+    error::BackendError,
     postgresql::session::transaction::Transaction,
-    records::BackendError,
     sqlite::acquisition::{
         accounting::{entry_bytes, host_bytes, HOST_BYTES, ROOT_BYTES},
         metadata_blob,

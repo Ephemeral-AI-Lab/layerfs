@@ -18,12 +18,12 @@
 mod build;
 mod cleanup;
 mod op;
-mod report;
+pub(crate) mod receipt;
 mod run;
 mod swap;
 mod sync;
 mod types;
 
-pub use report::{decode_kept_waste, encode_kept_waste, report};
+pub use receipt::{decode_kept_waste, encode_kept_waste, report};
 pub use sync::{effective_rank, standby_satisfied, sync_name, sync_rank, Replica};
 pub use types::takes_rebuild_path;
