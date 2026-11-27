@@ -759,3 +759,28 @@ run to run on the same code and Store (SQLite cold 289–293, warm 257–267; PG
 248/249); not diagnosed (bounded reader caches suspected); its pin holds round
 trips and statements within ±8 (other cases and fields exact). Recorded as a
 weak pin, not a guard loosening of an existing pin.
+
+### M3 independent review (fresh subagent + a sub-review of Init/session; diff `2c440193d5..5af53d4667`)
+
+Healthy-Store answers hold; existing storage callers unchanged (no-ops without
+the per-object guard); H4 CTE correct and re-checked in Rust; W2/W6
+`refused_unread` correct; Init/session: lost reply quarantines before judge,
+open unit rolls back, no implicit COMMIT, no resend; server-side assertions
+cannot fire on valid data; W4 authority then Capacity, refusal writes nothing;
+every production file ≤ 999 lines. Findings, sent to the owning lanes:
+1. **Bug (damaged Store, order):** `store/ports.rs` `object_owned` rejects the
+   per-object kinds lane S reports (refused pack `Io(Missing/Malformed)`,
+   `MissingDependency`, …), so a refused pack fails a whole history window at a
+   version the lone walk never reaches → RH (match storage's `call_failure`
+   complement; SDK test deleting a pack row).
+2. `Cached::read_canonical_each` duplicate ids misattribute errors (latent) → RH.
+3. `Cached.failed` unbounded by a named bound (damaged Store only) → RH.
+4. `layerfs-history/src/lib.rs:34` fails rustfmt → RH.
+5. Init/session nits: uncounted ROLLBACK (`unit.rs:342`) → lane I / W;
+   `send_in_unit` lacks a post-rollback guard → W; empty first flight still
+   sends ROLLBACK (+1 trip) → W; I3a joined reads stopped decoding the owner row
+   (corrupt owner no longer `Integrity`) → lane I restores the decode.
+Recorded, no change: a whole-pack cohort read refuses every object of a pack on
+a frame failure where a lone point read might take a ranged read; `chains_each`
+base dedupe can let an over-depth chain escape the depth refusal (as batched
+`read` did before).
