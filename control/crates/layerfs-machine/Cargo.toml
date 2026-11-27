@@ -27,18 +27,17 @@ nix = { version = "=0.31.3", optional = true, features = [
 # without it, so no machine adapter runs inside a machine.
 machine = ["dep:nix"]
 
-# The platform tests (from layerfs-platform, which always built its adapters)
-# run with the machine calls on.
-[dev-dependencies]
-layerfs-machine = { path = ".", features = ["machine"] }
-
+# The platform-origin tests (from layerfs-platform, which always built its
+# adapters) need the machine calls: `cargo test -p layerfs-machine --features machine`.
 [[test]]
 name = "docker_socket"
 path = "tests/standalone/docker_socket.rs"
+required-features = ["machine"]
 
 [[test]]
 name = "setup_tool_deadline"
 path = "tests/standalone/setup_tool_deadline.rs"
+required-features = ["machine"]
 
 [[test]]
 name = "bundle_preflight"
@@ -67,3 +66,18 @@ path = "tests/standalone/start_compatibility.rs"
 [[test]]
 name = "start_ordered"
 path = "tests/standalone/start_ordered.rs"
+
+[[test]]
+name = "platform"
+path = "tests/platform/main.rs"
+required-features = ["machine"]
+
+[[test]]
+name = "setup"
+path = "tests/setup/main.rs"
+required-features = ["machine"]
+
+[[test]]
+name = "table"
+path = "tests/table/main.rs"
+required-features = ["machine"]

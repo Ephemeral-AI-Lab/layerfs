@@ -829,7 +829,6 @@ name = "layerfs-machine"
 version = "2.0.0"
 dependencies = [
  "layerfs-home",
- "layerfs-machine",
  "layerfs-protocol",
  "libc",
  "nix",
