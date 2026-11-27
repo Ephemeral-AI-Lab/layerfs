@@ -372,8 +372,8 @@ fn replace_chunked(
 ) -> ContentResult<ConstructedFile> {
     // One read of the base root per edit, not two: the state the view decoded is
     // the state this route starts from, and the summary is derived from it.
-    let mut summary = super::super::draft::node::Summary {
-        id: super::super::draft::node::EditRef::Stored(state.mapping_root),
+    let mut summary = crate::file::draft::node::Summary {
+        id: crate::file::draft::node::EditRef::Stored(state.mapping_root),
         bytes: state.logical_len,
         extents: state.extent_count,
         level: state.tree_level,
@@ -384,9 +384,9 @@ fn replace_chunked(
     let mut result_len = state.logical_len;
     let base = state;
     let state = match backing {
-        Some(backing) => super::super::draft::state::State::Backed(backing),
+        Some(backing) => crate::file::draft::state::State::Backed(backing),
         None => {
-            super::super::draft::state::State::Memory(super::super::draft::state::Memory::default())
+            crate::file::draft::state::State::Memory(crate::file::draft::state::Memory::default())
         }
     };
     let mut objects = crate::file::edit::tree::EditObjects::new(reader, consumer, pages, state);
@@ -448,7 +448,7 @@ fn replace_chunked(
                     crate::file::chunk_runs::build(capacities, &mut source, &mut hint, &mut sink)?;
                 Ok(build
                     .root
-                    .map(|root| super::super::draft::node::Summary::from_canonical(root, true)))
+                    .map(|root| crate::file::draft::node::Summary::from_canonical(root, true)))
             })?
         };
         shift = shift + i128::from(replacement_len) - i128::from(declared.removed_len());

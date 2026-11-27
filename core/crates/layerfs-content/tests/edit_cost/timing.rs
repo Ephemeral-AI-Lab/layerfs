@@ -6,8 +6,7 @@
 //! and return the same result, and a failing edit must return its original error
 //! unchanged.
 
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::{
     apply_edits, construct_bytes, ConstructionPolicy, ContentError, Edit, EditRequest, ObjectId,

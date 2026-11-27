@@ -1,3 +1,7 @@
+//! Filesystem construction: checked inputs, validation, reference effects and the operation.
+//!
+//! Entry module: declarations only.
+
 pub mod captured_bindings;
 pub mod input;
 pub mod operation;

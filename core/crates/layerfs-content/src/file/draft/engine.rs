@@ -14,7 +14,7 @@ use crate::{
 };
 use std::collections::BTreeMap;
 
-pub(super) struct Engine<'a> {
+pub(crate) struct Engine<'a> {
     pub reader: &'a dyn AuthenticatedObjects,
     pub consumer: &'a mut dyn FinalizedConsumer,
     pub pages: &'a mut PageCache,
@@ -30,7 +30,7 @@ pub(super) struct Engine<'a> {
     /// delta base (#92). Never part of an identity.
     hints: Option<crate::file::mapping::FileState>,
 }
-pub(super) fn key(id: EditRef, offset: u32) -> ContentResult<EditRecordKey> {
+pub(crate) fn key(id: EditRef, offset: u32) -> ContentResult<EditRecordKey> {
     Ok(EditRecordKey {
         kind: id.draft_kind().ok_or(ContentError::InvalidRecord(
             "stored operation record reference",
@@ -180,7 +180,7 @@ impl<'a> Engine<'a> {
         &mut self,
         node: &Node,
         retain: bool,
-        changes: &mut Vec<super::super::edit::backing::EditRecordChange>,
+        changes: &mut Vec<crate::file::edit::backing::EditRecordChange>,
     ) -> ContentResult<()> {
         let mut multiplicity = BTreeMap::<EditRef, usize>::new();
         if let Node::Branch { children, .. } = node {
@@ -558,7 +558,7 @@ impl<'a, 'b> DeferredSink<'a, 'b> {
 }
 /// A [`DeferredSink`] over an engine that the same scan also reads mapping
 /// pages through: each use borrows the engine only for its own call.
-pub(super) struct SharedSink<'c, 'a, 'b>(pub &'c std::cell::RefCell<&'b mut Engine<'a>>);
+pub(crate) struct SharedSink<'c, 'a, 'b>(pub &'c std::cell::RefCell<&'b mut Engine<'a>>);
 impl FinalizedConsumer for SharedSink<'_, '_, '_> {
     fn accept(&mut self, object: FinalizedObject) -> ContentResult<()> {
         let mut engine = self.0.borrow_mut();

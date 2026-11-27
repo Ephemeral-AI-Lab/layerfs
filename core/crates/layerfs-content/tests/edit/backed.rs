@@ -1,6 +1,5 @@
 //! Public indexed edit port tests; the fixture is external, not a product store.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 use layerfs_content::{
     apply_edits, apply_edits_backed, ConstructionPolicy, ContentError, ContentResult, Edit,
     EditRecordApply, EditRecordChange, EditRecordExpected, EditRecordKey, EditRequest,

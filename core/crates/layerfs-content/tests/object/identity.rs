@@ -5,8 +5,7 @@
 //! and the frozen mapping descriptor) by a separate program; they are recorded
 //! here so any framing or hashing change fails loudly.
 
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::file::mapping::{decode_chunk_payload, profile_id, CHUNK_MAGIC};
 use layerfs_content::object::codec::{

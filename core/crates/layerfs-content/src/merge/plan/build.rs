@@ -12,30 +12,30 @@
 
 use layerfs_telemetry::timer::{Active, TimingScope};
 
-use super::super::decide::entries::Resolver;
 use super::rows::{PlanCounts, PlanRows};
 use super::spill::{single, Spill, ASSIGNED, FRESH, VALUE};
 use crate::compare::tree::{same_value, EntryFacts};
 use crate::error::{ContentError, ContentResult};
 use crate::filesystem::construction::operation::update_filesystem_streamed_backed;
 use crate::filesystem::{FilesystemObjects, FilesystemRootId};
+use crate::merge::decide::entries::Resolver;
 use crate::object::inode_leaf::{
     decode_inode_value, encode_inode_value, InodeValue, INODE_VALUE_BYTES,
 };
 use crate::policy::{ConstructionCapacities, ConstructionPolicy};
 
 /// Construction inputs of the merged files and root.
-pub(super) struct Writer<'a> {
-    pub(super) policy: ConstructionPolicy,
-    pub(super) capacities: &'a ConstructionCapacities,
-    pub(super) fresh: &'a mut dyn FnMut() -> ContentResult<u64>,
-    pub(super) timing: &'a TimingScope<'a, Active>,
+pub(crate) struct Writer<'a> {
+    pub(crate) policy: ConstructionPolicy,
+    pub(crate) capacities: &'a ConstructionCapacities,
+    pub(crate) fresh: &'a mut dyn FnMut() -> ContentResult<u64>,
+    pub(crate) timing: &'a TimingScope<'a, Active>,
 }
 
 /// The plan's point records and totals.
-pub(super) struct Plan<'s, 'r> {
+pub(crate) struct Plan<'s, 'r> {
     spill: &'s Spill<'r>,
-    pub(super) counts: PlanCounts,
+    pub(crate) counts: PlanCounts,
     /// Source serials with an assignment record, approximately: a serial it
     /// does not hold has none, so most lookups need no read.
     assigned: Filter,
@@ -78,7 +78,7 @@ impl Filter {
 }
 
 impl<'s, 'r> Plan<'s, 'r> {
-    pub(super) fn new(spill: &'s Spill<'r>) -> Self {
+    pub(crate) fn new(spill: &'s Spill<'r>) -> Self {
         Self {
             spill,
             counts: PlanCounts::default(),
@@ -89,7 +89,7 @@ impl<'s, 'r> Plan<'s, 'r> {
 
 /// The merged root: the plan applied to the `into` side, or that side itself
 /// when the plan is empty.
-pub(super) fn finish(
+pub(crate) fn finish(
     objects: &mut FilesystemObjects<'_>,
     resolver: &Resolver<'_>,
     into: usize,
@@ -131,7 +131,7 @@ fn assigned_entries(bytes: &[u8]) -> ContentResult<Vec<(InodeValue, u64)>> {
 
 impl Plan<'_, '_> {
     /// Final value of a serial.
-    pub(super) fn value(&mut self, serial: u64, value: InodeValue) -> ContentResult<()> {
+    pub(crate) fn value(&mut self, serial: u64, value: InodeValue) -> ContentResult<()> {
         let key = single(serial);
         let bytes = encode_inode_value(value).to_vec();
         match self.spill.get(VALUE, key)? {
@@ -144,7 +144,7 @@ impl Plan<'_, '_> {
     }
 
     /// A serial new to the `into` side; its rank is written by [`Self::rank`].
-    pub(super) fn fresh(&mut self, serial: u64) -> ContentResult<()> {
+    pub(crate) fn fresh(&mut self, serial: u64) -> ContentResult<()> {
         if self.spill.get(FRESH, single(serial))?.is_none() {
             self.counts.fresh += 1;
             self.spill.insert(FRESH, single(serial), Vec::new())?;
@@ -171,7 +171,7 @@ impl Plan<'_, '_> {
     }
 
     /// The serial that carries `value` for the entry `like`.
-    pub(super) fn assign(
+    pub(crate) fn assign(
         &mut self,
         resolver: &Resolver<'_>,
         into: usize,
@@ -235,7 +235,7 @@ impl Plan<'_, '_> {
     }
 
     /// True when the plan holds a final value for `serial`.
-    pub(super) fn valued(&self, serial: u64) -> ContentResult<bool> {
+    pub(crate) fn valued(&self, serial: u64) -> ContentResult<bool> {
         Ok(self.spill.get(VALUE, single(serial))?.is_some())
     }
 

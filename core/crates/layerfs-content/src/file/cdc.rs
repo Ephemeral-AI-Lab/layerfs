@@ -307,7 +307,7 @@ impl Scanner {
         self.emit(on_chunk, counters)
     }
 }
-pub const GEAR: [u64; 256] = [
+pub(crate) const GEAR: [u64; 256] = [
     0x3b5d3c7d207e37dc,
     0x784d68ba91123086,
     0xcd52880f882e7298,
@@ -566,12 +566,7 @@ pub const GEAR: [u64; 256] = [
     0xaabd2b2a451504e1,
 ];
 
-// Frozen content-defined chunking.
-//
-// Entry module: declarations and re-exports only.
-
 // Zero periods in the frozen scanner, preserving both boundary alignments.
-
 impl Scanner {
     /// Processes one hole, handing full interior zero chunks to the callback as
     /// a repeat count. Returns actual zero bytes scanned. One maximum chunk

@@ -1,7 +1,6 @@
 //! Bounded parent batches share acquisitions and preserve canonical results.
 
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::filesystem::{
     update_filesystem, DirectoryUpdate, FilesystemInput, FilesystemObjects, FilesystemRead,

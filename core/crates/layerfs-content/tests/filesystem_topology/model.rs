@@ -17,8 +17,7 @@
 //! refusal must offer nothing, and an accepted result is read back binding by
 //! binding.
 
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use std::collections::{BTreeMap, BTreeSet};
 

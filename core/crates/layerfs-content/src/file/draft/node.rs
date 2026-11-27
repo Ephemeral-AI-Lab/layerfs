@@ -3,7 +3,7 @@ use crate::file::mapping::{ChildDescriptor, ExtentNode, ExtentSlice, NodeSummary
 use crate::{ContentError, ContentResult, ObjectId};
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub(super) enum EditRef {
+pub(crate) enum EditRef {
     Stored(ObjectId),
     Node(usize),
     Page(ObjectId),
@@ -42,7 +42,7 @@ impl EditRef {
     }
 }
 #[derive(Clone, Copy, Debug)]
-pub(super) struct Summary {
+pub(crate) struct Summary {
     pub id: EditRef,
     pub bytes: u64,
     pub extents: u64,
@@ -63,13 +63,13 @@ impl Summary {
     }
 }
 #[derive(Clone, Copy, Debug)]
-pub(super) struct Child {
+pub(crate) struct Child {
     pub cumulative_logical_end: u64,
     pub cumulative_extent_end: u64,
     pub child_object_id: EditRef,
 }
 #[derive(Clone, Debug)]
-pub(super) enum Node {
+pub(crate) enum Node {
     Leaf {
         subtree_logical_bytes: u64,
         extents: Vec<ExtentSlice>,

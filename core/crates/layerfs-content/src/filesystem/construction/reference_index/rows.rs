@@ -1,10 +1,10 @@
 //! Non-destructive sealed membership passes; final rows restart after release.
-use super::super::reference::reduce::{FinalChange, ReferenceWork};
 use super::{
     super::reference::{meaning, record::Row},
     reduce::{IndexedReducer, PASS_ROWS},
     wire,
 };
+use crate::filesystem::construction::reference::reduce::{FinalChange, ReferenceWork};
 use crate::filesystem::tree::inode::read::{lookup_many, InodeReadWork, InodeTable};
 use crate::{AuthenticatedObjects, ContentError, ContentResult};
 use std::collections::VecDeque;
@@ -106,7 +106,7 @@ impl RowCursor {
     }
 }
 
-pub(super) struct IndexedRows<'s, 'b, 'r> {
+pub(crate) struct IndexedRows<'s, 'b, 'r> {
     reducer: &'s IndexedReducer<'s, 'b>,
     cursor: RowCursor,
     reader: &'r dyn AuthenticatedObjects,

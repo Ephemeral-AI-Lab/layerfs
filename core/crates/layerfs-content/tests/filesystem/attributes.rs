@@ -7,8 +7,7 @@
 
 #![allow(dead_code)]
 
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::filesystem::limits::{
     MAXIMUM_ATTRIBUTE_DOMAIN_BYTES, MAXIMUM_ATTRIBUTE_KEY_BYTES, MAXIMUM_PAGE_BYTES,

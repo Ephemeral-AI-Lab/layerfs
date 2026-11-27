@@ -6,8 +6,7 @@
 
 #![allow(dead_code)]
 
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::filesystem::name::path::PathName;
 use layerfs_content::filesystem::name::symlink::SymlinkTarget;

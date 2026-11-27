@@ -7,8 +7,6 @@ use std::collections::HashMap;
 
 use layerfs_telemetry::timer::{Active, TimingScope};
 
-use super::super::rule::lww::Rules;
-use super::super::{Conflict, ConflictKind, LwwDecision};
 use super::text::{deletion_markers, merge3, Hunk};
 use crate::compare::bytes::same_content;
 use crate::compare::text::{as_text, MAXIMUM_TEXT_BYTES};
@@ -19,6 +17,8 @@ use crate::filesystem::root::FilesystemRootId;
 use crate::filesystem::tree::attribute::{read_portable, AttributeReadWork};
 use crate::filesystem::tree::directory::read::lookup;
 use crate::filesystem::tree::pages::DirectoryRoot;
+use crate::merge::rule::lww::Rules;
+use crate::merge::{Conflict, ConflictKind, LwwDecision};
 use crate::object::inode_leaf::{InodeKind, InodeValue};
 use crate::object::AuthenticatedObjects;
 
@@ -27,13 +27,13 @@ use crate::object::AuthenticatedObjects;
 const RESOLVED: usize = 1 << 16;
 
 /// Base, ours and theirs, in that order.
-pub(super) const BASE: usize = 0;
-pub(super) const OURS: usize = 1;
-pub(super) const THEIRS: usize = 2;
+pub(crate) const BASE: usize = 0;
+pub(crate) const OURS: usize = 1;
+pub(crate) const THEIRS: usize = 2;
 
 /// The result at one decided path.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(super) enum Pick {
+pub(crate) enum Pick {
     /// Whatever theirs holds (possibly nothing).
     Keep,
     /// Nothing.
@@ -46,15 +46,15 @@ pub(super) enum Pick {
 }
 
 /// Path resolution in the three trees, with a bounded cache per side.
-pub(super) struct Resolver<'r> {
+pub(crate) struct Resolver<'r> {
     pub(super) reader: &'r dyn AuthenticatedObjects,
-    pub(super) roots: [FilesystemRootId; 3],
-    pub(super) trees: [TreeTable; 3],
+    pub(crate) roots: [FilesystemRootId; 3],
+    pub(crate) trees: [TreeTable; 3],
     cache: [HashMap<String, Option<EntryFacts>>; 3],
 }
 
 /// Parent path and last name of an absolute path other than the root.
-pub(super) fn split(path: &str) -> (&str, &str) {
+pub(crate) fn split(path: &str) -> (&str, &str) {
     match path.rfind('/') {
         Some(0) => ("/", &path[1..]),
         Some(index) => (&path[..index], &path[index + 1..]),
@@ -63,7 +63,7 @@ pub(super) fn split(path: &str) -> (&str, &str) {
 }
 
 impl<'r> Resolver<'r> {
-    pub(super) fn new(
+    pub(crate) fn new(
         reader: &'r dyn AuthenticatedObjects,
         roots: [FilesystemRootId; 3],
     ) -> ContentResult<Self> {
@@ -77,7 +77,7 @@ impl<'r> Resolver<'r> {
     }
 
     /// The entry at `path` in one tree.
-    pub(super) fn entry(&mut self, side: usize, path: &str) -> ContentResult<Option<EntryFacts>> {
+    pub(crate) fn entry(&mut self, side: usize, path: &str) -> ContentResult<Option<EntryFacts>> {
         if let Some(hit) = self.cache[side].get(path) {
             return Ok(*hit);
         }
@@ -112,22 +112,22 @@ impl<'r> Resolver<'r> {
     }
 
     /// The serial's value in one tree.
-    pub(super) fn value(&self, side: usize, serial: u64) -> ContentResult<Option<InodeValue>> {
+    pub(crate) fn value(&self, side: usize, serial: u64) -> ContentResult<Option<InodeValue>> {
         self.trees[side].value(self.reader, serial)
     }
 }
 
 /// Everything one decision pass needs besides the resolver.
-pub(super) struct Decider<'a> {
-    pub(super) labels: [&'a str; 2],
-    pub(super) rules: &'a Rules,
-    pub(super) timing: &'a TimingScope<'a, Active>,
-    pub(super) conflicts: Vec<Conflict>,
-    pub(super) lww: Vec<LwwDecision>,
+pub(crate) struct Decider<'a> {
+    pub(crate) labels: [&'a str; 2],
+    pub(crate) rules: &'a Rules,
+    pub(crate) timing: &'a TimingScope<'a, Active>,
+    pub(crate) conflicts: Vec<Conflict>,
+    pub(crate) lww: Vec<LwwDecision>,
     /// The largest file whose bytes [`Self::same`] compares when the roots
     /// differ: unbounded before the lane; in the publication lane the text
     /// bound, which the lane's text merge already reads per side.
-    pub(super) compared: u64,
+    pub(crate) compared: u64,
 }
 
 fn is_file(entry: Option<EntryFacts>) -> bool {
@@ -161,7 +161,7 @@ impl Decider<'_> {
     }
 
     /// Text of a regular file within the text bound, else `None`.
-    pub(super) fn text(
+    pub(crate) fn text(
         &self,
         reader: &dyn AuthenticatedObjects,
         entry: Option<EntryFacts>,
@@ -211,7 +211,7 @@ impl Decider<'_> {
     /// The pick between the base, ours and theirs entries `[b, o, t]`
     /// reported at `path`: one serial on every side, or the entries one name
     /// binds. `write` spills a merged file's bytes and returns their number.
-    pub(super) fn decide(
+    pub(crate) fn decide(
         &mut self,
         resolver: &mut Resolver<'_>,
         path: &str,

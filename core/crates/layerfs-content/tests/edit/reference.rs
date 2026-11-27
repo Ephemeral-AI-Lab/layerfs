@@ -19,8 +19,7 @@
 //!
 //! Equal final bytes or a valid canonical tree are explicitly not the oracle.
 
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;

@@ -1,6 +1,5 @@
 //! Real public edits with stable sparse runs, authenticated evidence and errors.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 use layerfs_content::file::mapping::{
     emit_file_state, encode_chunk_object, encode_node, ChildDescriptor, ExtentBuilder, ExtentNode,
     ExtentSlice, NodeSummary,

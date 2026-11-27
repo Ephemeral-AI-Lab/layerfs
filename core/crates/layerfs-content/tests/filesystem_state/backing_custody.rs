@@ -5,8 +5,7 @@
 //! retained path's bytes back because another path was dropped.
 #![cfg(unix)]
 
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};

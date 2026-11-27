@@ -21,17 +21,17 @@
 
 use layerfs_telemetry::timer::{Active, TimingScope};
 
-use super::super::decide::entries::{Decider, Pick, Resolver, BASE, OURS, THEIRS};
-use super::super::plan::build::{Plan, Writer};
-use super::super::plan::codec::{put_entry, Cursor};
-use super::super::plan::spill::{
-    single, Run, RunReader, RunWriter, Spill, DROP, REVIVE, REVIVE_ALL, SURVIVE,
-};
 use super::names::{Listing, Mode, PathSlot};
 use crate::compare::tree::{inode_changes, same_value, EntryFacts};
 use crate::compare::{BindingHints, DifferenceWork, NamingWork};
 use crate::error::{ContentError, ContentResult};
 use crate::filesystem::FilesystemObjects;
+use crate::merge::decide::entries::{Decider, Pick, Resolver, BASE, OURS, THEIRS};
+use crate::merge::plan::build::{Plan, Writer};
+use crate::merge::plan::codec::{put_entry, Cursor};
+use crate::merge::plan::spill::{
+    single, Run, RunReader, RunWriter, Spill, DROP, REVIVE, REVIVE_ALL, SURVIVE,
+};
 use crate::object::inode_leaf::{InodeKind, InodeValue};
 use crate::object::{AuthenticatedObjects, FinalizedConsumer, FinalizedObject, ObjectId};
 
@@ -68,7 +68,7 @@ pub(super) fn listing(value: Option<InodeValue>) -> Option<ObjectId> {
 }
 
 /// A new directory's value: the update builds its page from its bindings.
-pub(super) fn built(value: InodeValue) -> ContentResult<InodeValue> {
+pub(crate) fn built(value: InodeValue) -> ContentResult<InodeValue> {
     Ok(InodeValue {
         content_root: ObjectId::from_bytes(&[0; 32])?,
         namespace_ref_count: 1,
@@ -77,25 +77,25 @@ pub(super) fn built(value: InodeValue) -> ContentResult<InodeValue> {
 }
 
 /// One merge's state.
-pub(super) struct Ctx<'a, 'r> {
-    pub(super) reader: &'a dyn AuthenticatedObjects,
-    pub(super) resolver: Resolver<'a>,
-    pub(super) from: usize,
-    pub(super) into: usize,
-    pub(super) spill: &'a Spill<'r>,
-    pub(super) decider: Decider<'a>,
-    pub(super) hints: Option<&'a dyn BindingHints>,
-    pub(super) naming: NamingWork,
+pub(crate) struct Ctx<'a, 'r> {
+    pub(crate) reader: &'a dyn AuthenticatedObjects,
+    pub(crate) resolver: Resolver<'a>,
+    pub(crate) from: usize,
+    pub(crate) into: usize,
+    pub(crate) spill: &'a Spill<'r>,
+    pub(crate) decider: Decider<'a>,
+    pub(crate) hints: Option<&'a dyn BindingHints>,
+    pub(crate) naming: NamingWork,
     /// True while every path was named from recorded bindings.
-    pub(super) hinted: bool,
-    pub(super) work: DifferenceWork,
-    pub(super) plan: Plan<'a, 'r>,
-    pub(super) writer: Writer<'a>,
-    pub(super) objects: &'a mut FilesystemObjects<'a>,
-    pub(super) paths: std::collections::HashMap<(usize, u64), String>,
+    pub(crate) hinted: bool,
+    pub(crate) work: DifferenceWork,
+    pub(crate) plan: Plan<'a, 'r>,
+    pub(crate) writer: Writer<'a>,
+    pub(crate) objects: &'a mut FilesystemObjects<'a>,
+    pub(crate) paths: std::collections::HashMap<(usize, u64), String>,
     /// Changed serials decided, and the caller's bound on them.
-    pub(super) decided: usize,
-    pub(super) bound: Option<usize>,
+    pub(crate) decided: usize,
+    pub(crate) bound: Option<usize>,
 }
 
 /// Emits constructed file objects through the operation's own boundary.
@@ -187,7 +187,7 @@ impl Ctx<'_, '_> {
     }
 
     /// Both passes, then the plan is complete.
-    pub(super) fn run(&mut self, timing: &TimingScope<'_, Active>) -> ContentResult<()> {
+    pub(crate) fn run(&mut self, timing: &TimingScope<'_, Active>) -> ContentResult<()> {
         let deferred = timing
             .child("merge.decide")
             .run(|_| self.changes(Mode::Decide))?
@@ -526,7 +526,7 @@ impl Ctx<'_, '_> {
         let result = self.decide(path, [Some(b), Some(f), Some(there)])?;
         let carrier = self.carrier(result, Some(there))?;
         if carrier != Some(there.serial) {
-            let (parent, name) = super::super::decide::entries::split(path);
+            let (parent, name) = crate::merge::decide::entries::split(path);
             let parent = self
                 .resolver
                 .entry(self.into, parent)?

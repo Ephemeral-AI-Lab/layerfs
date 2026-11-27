@@ -1,8 +1,7 @@
 //! The extent cursor over a committed file, chunk identity from raw bytes,
 //! and the cut-candidate scan, against the tree a real construction emitted.
 
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::file::cdc::{cut_candidates, MAXIMUM_CHUNK_BYTES, MINIMUM_CHUNK_BYTES};
 use layerfs_content::file::mapping::{chunk_id, encode_chunk_object, ChunkIdentity, Extent};

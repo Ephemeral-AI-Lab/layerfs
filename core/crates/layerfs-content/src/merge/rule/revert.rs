@@ -11,11 +11,6 @@
 
 use layerfs_telemetry::timer::{Active, TimingScope};
 
-use super::super::decide::entries::Resolver;
-use super::super::plan::build::{self, Writer};
-use super::super::plan::rows::ChangeWriter;
-use super::super::plan::spill::{Resident, Spill};
-use super::super::serial::walk::built;
 use super::units::{below, is_directory, Units};
 use crate::compare::changes::{ChangeWalk, Pair, Plan};
 use crate::compare::tree::same_value;
@@ -23,6 +18,11 @@ use crate::compare::BindingHints;
 use crate::error::{ContentError, ContentResult};
 use crate::filesystem::name::path::PathName;
 use crate::filesystem::{FilesystemObjects, FilesystemRootId};
+use crate::merge::decide::entries::Resolver;
+use crate::merge::plan::build::{self, Writer};
+use crate::merge::plan::rows::ChangeWriter;
+use crate::merge::plan::spill::{Resident, Spill};
+use crate::merge::serial::walk::built;
 use crate::object::{AuthenticatedObjects, FinalizedConsumer};
 use crate::policy::{ConstructionCapacities, ConstructionPolicy};
 use crate::IndexedConstructionBacking;

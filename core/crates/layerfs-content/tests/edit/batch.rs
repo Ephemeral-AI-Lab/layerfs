@@ -6,8 +6,7 @@
 //! construction of them, so a result that depended on the caller's segmentation
 //! or on an internal reordering would not match.
 
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::{
     apply_edits, construct_bytes, ConstructionPolicy, ContentError, Edit, EditRequest, EditSource,

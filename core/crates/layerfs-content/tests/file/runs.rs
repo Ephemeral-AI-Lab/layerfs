@@ -1,5 +1,4 @@
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 use layerfs_content::{
     construct_runs, construct_stream, read_range, ConstructionPolicy, ContentError, ContentResult,
     FileRun, FileRuns, FinalizedConsumer, FinalizedObject,

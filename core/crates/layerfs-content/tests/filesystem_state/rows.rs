@@ -18,8 +18,7 @@
 //! declared, a row beyond the declared totals or beyond the charged capacity, and
 //! a key that does not rise inside its run.
 
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::filesystem::construction::input::{
     PreparedUpdate, RowSource, RowSpool, SPOOL_SLOT_BYTES,

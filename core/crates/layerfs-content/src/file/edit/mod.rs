@@ -3,12 +3,12 @@
 //! Entry module: declarations and re-exports only.
 
 mod apply;
-mod backing;
+pub(crate) mod backing;
 pub(crate) mod coalesce;
 mod finish;
 mod input;
 pub(crate) mod noop;
-mod objects;
+pub(crate) mod objects;
 mod runs;
 mod source;
 mod tree;

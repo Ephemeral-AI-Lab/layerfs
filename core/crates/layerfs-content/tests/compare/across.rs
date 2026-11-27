@@ -2,8 +2,7 @@
 //! window gives each version exactly the answer of walking it alone, and a
 //! window costs one roots demand, one demand per inode level and one per
 //! directory page level of its memo misses, whatever its width.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use std::cell::Cell;
 use std::collections::BTreeMap;

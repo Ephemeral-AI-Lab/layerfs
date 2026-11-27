@@ -1,7 +1,6 @@
 //! Complete-file construction: representation choice, frozen partitions, readback.
 
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::file::cdc::{FastCdc, MAXIMUM_CHUNK_BYTES, MINIMUM_CHUNK_BYTES};
 use layerfs_content::file::mapping::{decode_file_state, decode_node, ExtentNode};

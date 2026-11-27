@@ -5,8 +5,7 @@
 //! record fixture. Where both routes accept, the root is compared with the
 //! resident route's; every refusal states what the consumer had been offered.
 
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::filesystem::construction::validate::checked::CLASSIFICATION_WINDOW_ROWS;
 use layerfs_content::filesystem::{FilesystemRead, FilesystemResources, FilesystemResult};

@@ -4,8 +4,7 @@
 //! another in a second directory must reach the same count without a journal
 //! replay, and a move must not transiently drop an inode to zero.
 
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::filesystem::construction::reference::ReferenceReducer;
 use layerfs_content::filesystem::{

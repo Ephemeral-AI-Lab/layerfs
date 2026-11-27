@@ -1,6 +1,6 @@
 //! The GC admission record vocabulary: intents, retained done rows and the
 //! results reconciliation reports. The same bounded, portable-data rule as
-//! [`super::records`] applies.
+//! [`crate::records`] applies.
 
 use super::authority::PlaceAuthority;
 

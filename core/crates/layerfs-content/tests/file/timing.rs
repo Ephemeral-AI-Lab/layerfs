@@ -4,8 +4,7 @@
 //! database, pack, file or store is opened, so the measured operations are the
 //! real complete-file constructor and nothing else.
 
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::{
     construct_bytes, construct_stream, read_all, ConstructionPolicy, ContentError,

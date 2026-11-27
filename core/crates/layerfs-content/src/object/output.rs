@@ -138,14 +138,8 @@ impl FinalizedObject {
         inode_scope: crate::filesystem::InodeScope,
         timing: layerfs_telemetry::timer::TimingScope<'_>,
     ) -> ContentResult<Self> {
-        let references = super::super::verify::decode::references(
-            id,
-            role,
-            &canonical,
-            policy,
-            inode_scope,
-            timing,
-        )?;
+        let references =
+            crate::verify::decode::references(id, role, &canonical, policy, inode_scope, timing)?;
         Ok(Self {
             id,
             role,
@@ -178,7 +172,7 @@ impl FinalizedObject {
         root_serial: u64,
         timing: layerfs_telemetry::timer::TimingScope<'_>,
     ) -> ContentResult<()> {
-        super::super::verify::validate(self, provider, policy, inode_scope, root_serial, timing)
+        crate::verify::validate(self, provider, policy, inode_scope, root_serial, timing)
     }
 
     /// Validates direct stored children even when no owning history survives.
@@ -191,7 +185,7 @@ impl FinalizedObject {
         policy: crate::policy::ConstructionPolicy,
         timing: layerfs_telemetry::timer::TimingScope<'_>,
     ) -> ContentResult<()> {
-        super::super::verify::validate_unbound(self, provider, policy, timing)
+        crate::verify::validate_unbound(self, provider, policy, timing)
     }
 
     /// Attaches the direct logical references this object was built from.

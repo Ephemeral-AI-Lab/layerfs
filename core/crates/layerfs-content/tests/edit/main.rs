@@ -7,4 +7,6 @@ mod noop;
 mod reference;
 mod runs;
 mod single;
+#[path = "../support/mod.rs"]
+mod support;
 mod transitions;

@@ -8,8 +8,7 @@ use layerfs_content::filesystem::construction::reference::runs::RunStore;
 use layerfs_content::object::inode_leaf::InodeKind;
 use support::filesystem::{synthetic, value, RecordingBacking, TempDir};
 
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 fn row(serial: u64) -> Row {
     Row::Effect {

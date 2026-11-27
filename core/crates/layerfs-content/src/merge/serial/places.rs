@@ -14,17 +14,17 @@
 
 use std::collections::BTreeSet;
 
-use super::super::decide::entries::{split, BASE};
-use super::super::plan::spill::{
-    single, Spill, SpillStack, CANCEL_MOVE, CANCEL_REMOVE, DONE, DROP, EXTRA, LOST, MOVED, REVIVE,
-    REVIVE_ALL, SURVIVE, TARGET,
-};
-use super::super::{Conflict, ConflictKind};
 use super::names::{Listing, Mode, PathSlot};
 use super::walk::{built, is_directory, listing, Ctx};
 use crate::compare::tree::{join, list_directory, locate};
 use crate::error::{ContentError, ContentResult};
 use crate::filesystem::name::path::PathName;
+use crate::merge::decide::entries::{split, BASE};
+use crate::merge::plan::spill::{
+    single, Spill, SpillStack, CANCEL_MOVE, CANCEL_REMOVE, DONE, DROP, EXTRA, LOST, MOVED, REVIVE,
+    REVIVE_ALL, SURVIVE, TARGET,
+};
+use crate::merge::{Conflict, ConflictKind};
 use crate::object::inode_leaf::InodeValue;
 use crate::object::ObjectId;
 
@@ -54,7 +54,7 @@ fn each_key(
 }
 
 fn serial_of(key: &[u8; 32]) -> u64 {
-    super::super::plan::spill::first(key)
+    crate::merge::plan::spill::first(key)
 }
 
 impl Ctx<'_, '_> {
@@ -402,7 +402,7 @@ impl Ctx<'_, '_> {
     pub(super) fn emit_resurrected(&mut self, serial: u64, from: InodeValue) -> ContentResult<()> {
         self.plan.fresh(serial)?;
         self.plan.value(serial, built(from)?)?;
-        let mut writer = super::super::plan::rows::ChangeWriter::new(serial);
+        let mut writer = crate::merge::plan::rows::ChangeWriter::new(serial);
         let mut children = Vec::new();
         list_directory(self.reader, from.content_root, |name, child| {
             children.push((name.clone(), child));
@@ -416,7 +416,7 @@ impl Ctx<'_, '_> {
                 if (i.is_some() && is_directory(f))
                     || self
                         .spill
-                        .get(super::super::plan::spill::DROP, single(*child))?
+                        .get(crate::merge::plan::spill::DROP, single(*child))?
                         .is_some()
                 {
                     continue;
@@ -475,7 +475,7 @@ impl Ctx<'_, '_> {
                 }
             } else if self
                 .spill
-                .get(super::super::plan::spill::DROP, single(serial))?
+                .get(crate::merge::plan::spill::DROP, single(serial))?
                 .is_none()
             {
                 self.plan.fresh(serial)?;

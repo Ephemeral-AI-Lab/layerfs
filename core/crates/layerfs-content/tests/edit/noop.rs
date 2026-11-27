@@ -6,8 +6,7 @@
 //! same edits are replayed for construction, and both passes plus every base read
 //! stay charged to the operation.
 
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::{
     apply_edits, construct_bytes, ConstructionPolicy, ContentError, Edit, EditRequest, ObjectId,

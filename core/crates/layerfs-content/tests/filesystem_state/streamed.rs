@@ -1,6 +1,5 @@
 //! Stable generated directory streams exercise the shared public constructor.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::filesystem::construction::input::RowSource;
 use layerfs_content::filesystem::{

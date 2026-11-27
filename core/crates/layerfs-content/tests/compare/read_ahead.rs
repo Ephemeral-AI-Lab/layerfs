@@ -5,8 +5,7 @@
 //! pages after the one it opens, on the same side and level, that it will
 //! certainly expand, in the same demand: no page is read that the walk does
 //! not expand, none twice, and at most `READ_AHEAD_PAGES` are held.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::compare::pages::READ_AHEAD_PAGES;
 use layerfs_content::compare::{binding_changes, inode_differences, DifferenceWork, TreeTable};

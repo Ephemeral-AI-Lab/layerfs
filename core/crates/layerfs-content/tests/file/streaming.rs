@@ -1,7 +1,6 @@
 //! Streaming construction: bounded sources, dependency order and late failures.
 
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::{
     construct_stream, read_all_bounded, ConstructionPolicy, ContentError, DiscardingConsumer,

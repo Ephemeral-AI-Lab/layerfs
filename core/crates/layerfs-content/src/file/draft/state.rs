@@ -12,7 +12,7 @@ use std::collections::BTreeMap;
 pub(super) const WINDOW: usize = 65_536;
 
 #[derive(Clone)]
-pub(super) enum Draft {
+pub(crate) enum Draft {
     Node(Node),
     Page(FinalizedObject),
 }
@@ -40,15 +40,15 @@ impl Draft {
     }
 }
 #[derive(Default)]
-pub(super) struct Memory {
+pub(crate) struct Memory {
     records: BTreeMap<EditRecordKey, Vec<u8>>,
     drafts: BTreeMap<EditRecordKey, Draft>,
 }
-pub(super) struct Observed {
+pub(crate) struct Observed {
     pub draft: Draft,
     pub raw: Option<Vec<u8>>,
 }
-pub(super) enum DraftChange {
+pub(crate) enum DraftChange {
     Put {
         key: EditRecordKey,
         draft: Draft,
@@ -58,7 +58,7 @@ pub(super) enum DraftChange {
         raw: Option<Vec<u8>>,
     },
 }
-pub(super) enum State<'a> {
+pub(crate) enum State<'a> {
     Memory(Memory),
     Backed(&'a mut dyn IndexedEditBacking),
 }

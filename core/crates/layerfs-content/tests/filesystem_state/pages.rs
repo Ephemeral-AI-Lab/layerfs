@@ -1,7 +1,6 @@
 //! The sorted engine at its boundaries: optional base, fill rules, tiny budgets.
 
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::filesystem::name::path::PathName;
 use layerfs_content::filesystem::tree::directory::read::lookup;

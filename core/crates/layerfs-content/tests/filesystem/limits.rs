@@ -5,8 +5,7 @@
 //! `UNBOUNDED` note with the arithmetic that shows why a fixture cannot reach it,
 //! so a reader can tell a checked bound from a quoted one.
 
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::filesystem::limits::{
     MAXIMUM_ATTRIBUTE_DOMAIN_BYTES, MAXIMUM_ATTRIBUTE_KEY_BYTES, MAXIMUM_NAME_BYTES,

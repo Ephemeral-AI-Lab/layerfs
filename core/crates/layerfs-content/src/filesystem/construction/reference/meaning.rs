@@ -6,7 +6,7 @@ use super::{
 use crate::object::inode_leaf::{InodeKind, InodeValue};
 use crate::{ContentError, ContentResult};
 
-pub(super) fn retained(row: &mut Row) -> ContentResult<()> {
+pub(crate) fn retained(row: &mut Row) -> ContentResult<()> {
     match row {
         Row::Count { count, .. } => {
             *count = count.checked_add(1).ok_or(ContentError::LengthOverflow)?
@@ -17,7 +17,7 @@ pub(super) fn retained(row: &mut Row) -> ContentResult<()> {
     }
     Ok(())
 }
-pub(super) fn removed(row: &mut Row) -> ContentResult<()> {
+pub(crate) fn removed(row: &mut Row) -> ContentResult<()> {
     match row {
         Row::Count { .. } => return Err(ContentError::InvalidRecord("new inode loses a binding")),
         Row::Effect { delta, .. } => {
@@ -26,7 +26,7 @@ pub(super) fn removed(row: &mut Row) -> ContentResult<()> {
     }
     Ok(())
 }
-pub(super) fn value(row: &mut Row, value: InodeValue) {
+pub(crate) fn value(row: &mut Row, value: InodeValue) {
     match row {
         Row::Count { value: before, .. } | Row::Effect { value: before, .. } => {
             *before = Some(value)
@@ -39,7 +39,7 @@ pub(super) fn state(row: Row) -> PendingState {
         Row::Effect { value, delta, .. } => PendingState::Existing { value, delta },
     }
 }
-pub(super) fn with_base(row: Row, base: Option<InodeValue>) -> ContentResult<Row> {
+pub(crate) fn with_base(row: Row, base: Option<InodeValue>) -> ContentResult<Row> {
     match row {
         Row::Effect {
             serial,
@@ -65,7 +65,7 @@ pub(crate) fn derived_count(base: u64, delta: i64) -> ContentResult<u64> {
     let count = (i128::from(base) + i128::from(delta)).max(0);
     u64::try_from(count).map_err(|_| ContentError::LengthOverflow)
 }
-pub(super) fn count(row: Row, base: Option<InodeValue>) -> ContentResult<u64> {
+pub(crate) fn count(row: Row, base: Option<InodeValue>) -> ContentResult<u64> {
     match row {
         Row::Count { count, .. } => Ok(count),
         Row::Effect { delta, .. } => {
@@ -74,7 +74,7 @@ pub(super) fn count(row: Row, base: Option<InodeValue>) -> ContentResult<u64> {
         }
     }
 }
-pub(super) fn finish(row: Row, root: u64, work: &mut ReferenceWork) -> ContentResult<FinalChange> {
+pub(crate) fn finish(row: Row, root: u64, work: &mut ReferenceWork) -> ContentResult<FinalChange> {
     let serial = row.serial();
     let value = match row {
         Row::Count { value, count, .. } => {

@@ -1,7 +1,6 @@
 //! Logical file and range reads, including repeated demands of one payload.
 
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::file::mapping::{decode_file_state, emit_file_state, ExtentBuilder};
 use layerfs_content::{read_all, read_range, ConstructionPolicy, ContentError, ObjectRole};

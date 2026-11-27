@@ -4,8 +4,7 @@
 //! reference cases: what changes, what must not change, and what the rooted result
 //! reads back as.
 
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::filesystem::{DirectoryUpdate, InodeUpdate, LogicalPath, PathName};
 use layerfs_content::object::inode_leaf::{InodeKind, InodeValue};

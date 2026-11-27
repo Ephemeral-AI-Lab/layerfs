@@ -55,7 +55,7 @@ pub use crate::filesystem::construction::reference as references; // #828 compat
 #[doc(hidden)]
 pub use crate::filesystem::construction::statistics; // #828 compat
 #[doc(hidden)]
-pub use crate::filesystem::construction::validate::checked as validate;
+pub use crate::filesystem::construction::validate::checked as validate; // #828 compat
 #[doc(hidden)]
 pub use crate::filesystem::name::identity; // #828 compat
 #[doc(hidden)]
@@ -73,4 +73,4 @@ pub use crate::filesystem::tree::inode; // #828 compat
 #[doc(hidden)]
 pub use crate::filesystem::tree::pages as sorted; // #828 compat
 #[doc(hidden)]
-pub use crate::filesystem::tree::pages::decoded; // #828 compat // #828 compat
+pub use crate::filesystem::tree::pages::decoded; // #828 compat

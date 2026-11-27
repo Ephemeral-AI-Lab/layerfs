@@ -7,8 +7,7 @@
 //! relink-over-relink verify of range 16 paid 1.3 ms an entry. A resumed walk
 //! lists the same pairs as the uninterrupted one, and the reads a page makes
 //! before its first listed pair do not follow how far the cursor is.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::compare::{ChangeWalk, Pair, TreeTable};
 use layerfs_content::filesystem::name::path::PathName;

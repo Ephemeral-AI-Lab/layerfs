@@ -36,31 +36,31 @@ pub(super) const FRESH: u32 = 0x4D47_0008;
 /// Source serial to the values given to it and the serial each received.
 pub(super) const ASSIGNED: u32 = 0x4D47_0009;
 /// A deleted `from` serial whose binding the merge keeps.
-pub(super) const CANCEL_REMOVE: u32 = 0x4D47_000B;
+pub(crate) const CANCEL_REMOVE: u32 = 0x4D47_000B;
 /// A directory whose `from` move the merge cancels.
-pub(super) const CANCEL_MOVE: u32 = 0x4D47_000C;
+pub(crate) const CANCEL_MOVE: u32 = 0x4D47_000C;
 /// A directory `from` deleted that keeps some of its names.
-pub(super) const SURVIVE: u32 = 0x4D47_000D;
+pub(crate) const SURVIVE: u32 = 0x4D47_000D;
 /// A serial `into` lacks, revived with only what it keeps.
-pub(super) const REVIVE: u32 = 0x4D47_000E;
+pub(crate) const REVIVE: u32 = 0x4D47_000E;
 /// A serial `into` deleted that `from` bound: resurrected as `from` holds it.
-pub(super) const REVIVE_ALL: u32 = 0x4D47_000F;
+pub(crate) const REVIVE_ALL: u32 = 0x4D47_000F;
 /// Bindings of one directory outside its name points.
-pub(super) const EXTRA: u32 = 0x4D47_0010;
+pub(crate) const EXTRA: u32 = 0x4D47_0010;
 /// A directory `from` moved: its new parent and name.
-pub(super) const MOVED: u32 = 0x4D47_0011;
+pub(crate) const MOVED: u32 = 0x4D47_0011;
 /// A directory merged into another at one name.
-pub(super) const ABSORB: u32 = 0x4D47_0012;
+pub(crate) const ABSORB: u32 = 0x4D47_0012;
 /// A directory that absorbed another: the absorbed one and the base's.
-pub(super) const TARGET: u32 = 0x4D47_0013;
+pub(crate) const TARGET: u32 = 0x4D47_0013;
 /// One name's decided binding.
-pub(super) const NAMED: u32 = 0x4D47_0014;
+pub(crate) const NAMED: u32 = 0x4D47_0014;
 /// A directory whose header is written.
-pub(super) const DONE: u32 = 0x4D47_0015;
+pub(crate) const DONE: u32 = 0x4D47_0015;
 /// A serial new on `from` that the merge leaves unbound.
-pub(super) const DROP: u32 = 0x4D47_0016;
+pub(crate) const DROP: u32 = 0x4D47_0016;
 /// A file new on `from` with several links: how many the merge lost.
-pub(super) const LOST: u32 = 0x4D47_0017;
+pub(crate) const LOST: u32 = 0x4D47_0017;
 
 /// Bytes of one chunk record.
 pub(super) const CHUNK_BYTES: usize = 60 * 1024;
@@ -79,12 +79,12 @@ pub(super) fn pair(a: u64, b: u64) -> [u8; 32] {
 }
 
 /// One number as an order-preserving record key.
-pub(super) fn single(a: u64) -> [u8; 32] {
+pub(crate) fn single(a: u64) -> [u8; 32] {
     pair(a, 0)
 }
 
 /// The first number of a key.
-pub(super) fn first(key: &[u8; 32]) -> u64 {
+pub(crate) fn first(key: &[u8; 32]) -> u64 {
     u64::from_be_bytes(key[..8].try_into().expect("eight bytes"))
 }
 
@@ -94,7 +94,7 @@ fn malformed() -> ContentError {
 
 /// The merge's records, shared by its passes and the update it feeds. Each
 /// call borrows them for that call only.
-pub(super) struct Spill<'r> {
+pub(crate) struct Spill<'r> {
     records: RefCell<&'r mut dyn IndexedEditBacking>,
     next: std::cell::Cell<u64>,
     held: RefCell<Held>,
@@ -110,7 +110,7 @@ struct Held {
 }
 
 impl<'r> Spill<'r> {
-    pub(super) fn new(records: &'r mut dyn IndexedEditBacking) -> Self {
+    pub(crate) fn new(records: &'r mut dyn IndexedEditBacking) -> Self {
         Self {
             records: RefCell::new(records),
             next: std::cell::Cell::new(0),
@@ -125,7 +125,7 @@ impl<'r> Spill<'r> {
         id
     }
 
-    pub(super) fn get(&self, kind: u32, key: [u8; 32]) -> ContentResult<Option<Vec<u8>>> {
+    pub(crate) fn get(&self, kind: u32, key: [u8; 32]) -> ContentResult<Option<Vec<u8>>> {
         let key = EditRecordKey { kind, key };
         let held = self.held.borrow();
         if let Some(value) = held.rows.get(&key) {
@@ -156,7 +156,7 @@ impl<'r> Spill<'r> {
 
     /// Writes a record the caller knows does not exist yet in either place:
     /// a new number's chunk, or a key the caller has just found absent.
-    pub(super) fn insert(&self, kind: u32, key: [u8; 32], value: Vec<u8>) -> ContentResult<()> {
+    pub(crate) fn insert(&self, kind: u32, key: [u8; 32], value: Vec<u8>) -> ContentResult<()> {
         let key = EditRecordKey { kind, key };
         let mut held = self.held.borrow_mut();
         if held.bytes + HELD_ENTRY + value.len() <= HELD_BYTES {
@@ -172,7 +172,7 @@ impl<'r> Spill<'r> {
     }
 
     /// Replaces a record whose current bytes are `old`.
-    pub(super) fn replace(
+    pub(crate) fn replace(
         &self,
         kind: u32,
         key: [u8; 32],
@@ -212,7 +212,7 @@ impl<'r> Spill<'r> {
     }
 
     /// At most 64 keys of one kind after `after`, held and spilled together.
-    pub(super) fn keys_after(
+    pub(crate) fn keys_after(
         &self,
         kind: u32,
         after: Option<[u8; 32]>,
@@ -283,7 +283,7 @@ impl IndexedEditBacking for Shared<'_, '_> {
 
 /// Records kept in memory, for a merge its caller bounds.
 #[derive(Default)]
-pub(super) struct Resident(BTreeMap<EditRecordKey, Vec<u8>>);
+pub(crate) struct Resident(BTreeMap<EditRecordKey, Vec<u8>>);
 
 impl IndexedEditBacking for Resident {
     fn contains(&mut self, key: EditRecordKey) -> ContentResult<bool> {
@@ -370,20 +370,20 @@ fn decode_chunk(bytes: &[u8]) -> ContentResult<Vec<Vec<u8>>> {
 
 /// One written run: its number and chunk count.
 #[derive(Clone, Copy, Debug)]
-pub(super) struct Run {
+pub(crate) struct Run {
     id: u64,
     chunks: u64,
 }
 
 /// Writes entries, in the caller's order, as one run.
-pub(super) struct RunWriter {
+pub(crate) struct RunWriter {
     id: u64,
     chunks: u64,
     chunk: Vec<u8>,
 }
 
 impl RunWriter {
-    pub(super) fn new(spill: &Spill<'_>) -> Self {
+    pub(crate) fn new(spill: &Spill<'_>) -> Self {
         Self {
             id: spill.allocate(),
             chunks: 0,
@@ -391,7 +391,7 @@ impl RunWriter {
         }
     }
 
-    pub(super) fn push(&mut self, spill: &Spill<'_>, entry: &[u8]) -> ContentResult<()> {
+    pub(crate) fn push(&mut self, spill: &Spill<'_>, entry: &[u8]) -> ContentResult<()> {
         if 4 + entry.len() > CHUNK_BYTES {
             return Err(malformed());
         }
@@ -416,7 +416,7 @@ impl RunWriter {
         Ok(())
     }
 
-    pub(super) fn finish(mut self, spill: &Spill<'_>) -> ContentResult<Run> {
+    pub(crate) fn finish(mut self, spill: &Spill<'_>) -> ContentResult<Run> {
         self.flush(spill)?;
         Ok(Run {
             id: self.id,
@@ -426,7 +426,7 @@ impl RunWriter {
 }
 
 /// Reads one run in order.
-pub(super) struct RunReader {
+pub(crate) struct RunReader {
     run: Run,
     /// Chunks read so far.
     read: u64,
@@ -435,7 +435,7 @@ pub(super) struct RunReader {
 
 impl RunReader {
     /// Reads the run once, releasing each chunk as it goes.
-    pub(super) fn new(run: Run) -> Self {
+    pub(crate) fn new(run: Run) -> Self {
         Self {
             run,
             read: 0,
@@ -443,7 +443,7 @@ impl RunReader {
         }
     }
 
-    pub(super) fn next(&mut self, spill: &Spill<'_>) -> ContentResult<Option<Vec<u8>>> {
+    pub(crate) fn next(&mut self, spill: &Spill<'_>) -> ContentResult<Option<Vec<u8>>> {
         while self.entries.is_empty() {
             if self.read == self.run.chunks {
                 return Ok(None);
@@ -460,7 +460,7 @@ impl RunReader {
 }
 
 /// A last-in first-out stack whose older entries spill to chunks.
-pub(super) struct SpillStack {
+pub(crate) struct SpillStack {
     id: u64,
     top: Vec<Vec<u8>>,
     bytes: usize,
@@ -470,7 +470,7 @@ pub(super) struct SpillStack {
 }
 
 impl SpillStack {
-    pub(super) fn new(spill: &Spill<'_>) -> Self {
+    pub(crate) fn new(spill: &Spill<'_>) -> Self {
         Self {
             id: spill.allocate(),
             top: Vec::new(),
@@ -480,7 +480,7 @@ impl SpillStack {
         }
     }
 
-    pub(super) fn push(&mut self, spill: &Spill<'_>, entry: Vec<u8>) -> ContentResult<()> {
+    pub(crate) fn push(&mut self, spill: &Spill<'_>, entry: Vec<u8>) -> ContentResult<()> {
         if self.bytes + 4 + entry.len() > CHUNK_BYTES {
             let mut chunk = Vec::with_capacity(self.bytes);
             for entry in self.top.drain(..) {
@@ -497,7 +497,7 @@ impl SpillStack {
         Ok(())
     }
 
-    pub(super) fn pop(&mut self, spill: &Spill<'_>) -> ContentResult<Option<Vec<u8>>> {
+    pub(crate) fn pop(&mut self, spill: &Spill<'_>) -> ContentResult<Option<Vec<u8>>> {
         if self.top.is_empty() {
             if let Some(slot) = self.slots.pop() {
                 let bytes = spill

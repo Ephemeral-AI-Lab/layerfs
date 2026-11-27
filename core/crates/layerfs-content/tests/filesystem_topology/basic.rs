@@ -4,8 +4,7 @@
 //! reuse, multiple parents, effective-tree cycles, disconnected new records and
 //! caller-asserted counts that disagree with the bindings the merge retained.
 
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::filesystem::{
     build_filesystem, DirectoryUpdate, FilesystemInput, FilesystemRoot, InodeUpdate, LogicalPath,

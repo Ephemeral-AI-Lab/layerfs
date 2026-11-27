@@ -4,7 +4,7 @@
 //! facts about a holder: its operation identity, the names and place it
 //! recorded, and the authority state the Store keeps. This module names that
 //! view once, built from a [`GcIntent`]; it never changes an intent.
-use super::super::records::GcIntent;
+use crate::records::GcIntent;
 
 /// One mount admission as an operator reads it, including the place
 /// authority the Store recorded. The view is read-only: building or reading

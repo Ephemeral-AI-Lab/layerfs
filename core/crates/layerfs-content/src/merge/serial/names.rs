@@ -14,11 +14,6 @@
 
 use std::collections::HashMap;
 
-use super::super::decide::entries::split;
-use super::super::plan::rows::ChangeWriter;
-use super::super::plan::spill::{
-    single, ABSORB, CANCEL_MOVE, CANCEL_REMOVE, DONE, DROP, EXTRA, MOVED, NAMED, REVIVE_ALL, TARGET,
-};
 use super::walk::{is_directory, listing, same, Ctx};
 use crate::compare::tree::{binding_changes, join, EntryFacts};
 use crate::compare::DifferenceWork;
@@ -26,6 +21,11 @@ use crate::error::{ContentError, ContentResult};
 use crate::filesystem::name::path::PathName;
 use crate::filesystem::tree::directory::read::lookup;
 use crate::filesystem::tree::pages::DirectoryRoot;
+use crate::merge::decide::entries::split;
+use crate::merge::plan::rows::ChangeWriter;
+use crate::merge::plan::spill::{
+    single, ABSORB, CANCEL_MOVE, CANCEL_REMOVE, DONE, DROP, EXTRA, MOVED, NAMED, REVIVE_ALL, TARGET,
+};
 use crate::object::inode_leaf::InodeValue;
 use crate::object::ObjectId;
 
@@ -111,7 +111,7 @@ fn read_binding(bytes: &[u8]) -> ContentResult<Option<u64>> {
 
 /// Bindings added to a directory outside its name points, by name.
 pub(super) fn read_extras(bytes: &[u8]) -> ContentResult<Vec<(PathName, Option<u64>)>> {
-    let mut cursor = super::super::plan::codec::Cursor(bytes);
+    let mut cursor = crate::merge::plan::codec::Cursor(bytes);
     let mut out = Vec::new();
     while !cursor.0.is_empty() {
         let name = PathName::new(&cursor.text()?)?;
@@ -205,7 +205,7 @@ impl Ctx<'_, '_> {
         serials.dedup();
         let mut values = Values::default();
         for (side, map) in [
-            (super::super::decide::entries::BASE, &mut values.b),
+            (crate::merge::decide::entries::BASE, &mut values.b),
             (self.from, &mut values.f),
             (self.into, &mut values.i),
         ] {
@@ -505,7 +505,7 @@ impl Ctx<'_, '_> {
             }
         }
         let mut bytes = old.clone().unwrap_or_default();
-        super::super::plan::codec::put_text(&mut bytes, name)?;
+        crate::merge::plan::codec::put_text(&mut bytes, name)?;
         match binding {
             None => bytes.push(0),
             Some(serial) => {

@@ -5,8 +5,7 @@
 //! boundary lengths, all four conversion directions and both complete-length
 //! entry points are checked against an independent fresh construction.
 
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::file::classify;
 use layerfs_content::{

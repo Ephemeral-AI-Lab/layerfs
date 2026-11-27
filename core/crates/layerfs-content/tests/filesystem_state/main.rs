@@ -5,3 +5,5 @@ mod references_backed;
 mod rows;
 mod state_backed;
 mod streamed;
+#[path = "../support/mod.rs"]
+mod support;

@@ -11,7 +11,7 @@ use crate::filesystem::{FilesystemRoot, InodeScope, SymlinkTarget};
 use crate::object::{codec, InodeKind, ObjectId, ObjectRole};
 use crate::policy::ConstructionPolicy;
 
-pub(super) fn references(
+pub(crate) fn references(
     id: ObjectId,
     role: ObjectRole,
     canonical: &[u8],

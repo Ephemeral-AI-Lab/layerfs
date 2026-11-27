@@ -5,8 +5,7 @@
 //! through the public read path. A candidate round trip alone is not an oracle:
 //! the fresh construction is.
 
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::{apply_edits, construct_bytes, Edit, EditRequest, ObjectId};
 use support::{

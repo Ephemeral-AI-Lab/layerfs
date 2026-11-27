@@ -10,8 +10,7 @@
 //! The two larger sizes are ignored by default so an ordinary package run does
 //! not build half a gibibyte of fixtures; select them explicitly.
 
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use std::cell::Cell;
 use std::collections::{BTreeMap, BTreeSet};

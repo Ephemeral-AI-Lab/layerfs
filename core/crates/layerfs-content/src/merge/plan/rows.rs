@@ -27,14 +27,14 @@ fn malformed() -> ContentError {
 
 /// Rows the plan declares.
 #[derive(Clone, Copy, Default)]
-pub(super) struct PlanCounts {
+pub(crate) struct PlanCounts {
     pub(super) headers: usize,
     pub(super) values: usize,
     pub(super) fresh: usize,
 }
 
 /// Writes one directory's changed names, in name order, as chunks.
-pub(super) struct ChangeWriter {
+pub(crate) struct ChangeWriter {
     parent: u64,
     count: u64,
     chunks: u64,
@@ -43,7 +43,7 @@ pub(super) struct ChangeWriter {
 }
 
 impl ChangeWriter {
-    pub(super) fn new(parent: u64) -> Self {
+    pub(crate) fn new(parent: u64) -> Self {
         Self {
             parent,
             count: 0,
@@ -53,7 +53,7 @@ impl ChangeWriter {
         }
     }
 
-    pub(super) fn push(
+    pub(crate) fn push(
         &mut self,
         spill: &Spill<'_>,
         name: &PathName,
@@ -81,7 +81,7 @@ impl ChangeWriter {
     }
 
     /// True when no name was pushed.
-    pub(super) fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.count == 0
     }
 
@@ -97,7 +97,7 @@ impl ChangeWriter {
     }
 
     /// Writes the last chunk and the header; a parent written twice is refused.
-    pub(super) fn finish(
+    pub(crate) fn finish(
         mut self,
         spill: &Spill<'_>,
         counts: &mut PlanCounts,

@@ -1,8 +1,7 @@
 //! Record jobs of the backed edit engine against the number of edits and the
 //! length of the file: counts only, no timing. Kinds below 100 in the printed
 //! histogram are `get` by record kind; 100 and above are `contains`.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 use layerfs_content::{
     apply_edits_backed, ConstructionPolicy, ContentResult, Edit, EditRecordApply, EditRecordChange,
     EditRecordExpected, EditRecordKey, EditRequest, IndexedEditBacking,

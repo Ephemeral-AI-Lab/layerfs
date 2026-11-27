@@ -1,5 +1,5 @@
 //! Public memory-profile compatibility over the shared fallible tagged engine.
-use super::super::draft::{
+use crate::file::draft::{
     engine::Engine,
     node::{EditRef, Node, Summary},
     state::{Memory, State},
@@ -102,11 +102,11 @@ impl<'a> EditObjects<'a> {
             if self
                 .core
                 .state
-                .contains(super::super::draft::engine::key(draft, 0)?)?
+                .contains(crate::file::draft::engine::key(draft, 0)?)?
                 || self
                     .core
                     .state
-                    .contains(super::super::draft::engine::key(draft, 6)?)?
+                    .contains(crate::file::draft::engine::key(draft, 6)?)?
             {
                 return Ok(draft);
             }
@@ -115,11 +115,11 @@ impl<'a> EditObjects<'a> {
         if self
             .core
             .state
-            .contains(super::super::draft::engine::key(page, 0)?)?
+            .contains(crate::file::draft::engine::key(page, 0)?)?
             || self
                 .core
                 .state
-                .contains(super::super::draft::engine::key(page, 6)?)?
+                .contains(crate::file::draft::engine::key(page, 6)?)?
         {
             return Ok(page);
         }

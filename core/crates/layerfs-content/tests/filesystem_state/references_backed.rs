@@ -1,7 +1,6 @@
 //! Public backed reference/release operations. Providers here are explicit
 //! external memory fixtures; this does not qualify the real Save owner wiring.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 use layerfs_content::filesystem::construction::reference::record::Row;
 use layerfs_content::filesystem::{
     build_filesystem, scope_for_seed, update_filesystem, update_filesystem_streamed_backed,

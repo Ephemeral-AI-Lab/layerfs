@@ -115,7 +115,7 @@ pub struct ValidationReadSites {
 /// maintains, so an instrument added here cannot invent a read: the sites sum
 /// to `inode_pages_read` or the difference is a read outside every region, which
 /// is itself visible in the row.
-fn charge_site(
+pub(crate) fn charge_site(
     work: &mut ValidationWork,
     before: u64,
     site: fn(&mut ValidationReadSites) -> &mut u64,
@@ -153,7 +153,7 @@ pub const ALLOCATION_CHECK_BATCH: usize = 64;
 pub const CLASSIFICATION_WINDOW_ROWS: usize = 64;
 /// Base records the memo holds on the backed route: one window's parents and
 /// children, never a figure derived from the change.
-const BACKED_MEMO_RECORDS: usize = 2 * CLASSIFICATION_WINDOW_ROWS;
+pub(crate) const BACKED_MEMO_RECORDS: usize = 2 * CLASSIFICATION_WINDOW_ROWS;
 
 /// The checked state one operation starts from.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -374,7 +374,7 @@ pub(crate) fn check_operation(
 /// the resident allowance without a backing, one classification window's
 /// records with one. Eviction changes physical reads, never the logical demand
 /// charge.
-struct ValidationState {
+pub(crate) struct ValidationState {
     records: BTreeMap<u64, InodeValue>,
     absent: BTreeSet<u64>,
     limit: usize,
@@ -391,7 +391,7 @@ impl ValidationState {
         }
     }
 
-    fn verified_fresh(&self, serial: u64) -> bool {
+    pub(crate) fn verified_fresh(&self, serial: u64) -> bool {
         self.verified_fresh
             .is_some_and(|(first, last)| first <= serial && serial <= last)
     }
@@ -408,7 +408,7 @@ impl ValidationState {
     /// The batch pays the pages and waves it reads; the **demand** charge is paid
     /// where the demand is made ([`Self::lookup_optional`]), so `inode_demands`
     /// stays the number of logical demands rather than the batch size.
-    fn prefetch(
+    pub(crate) fn prefetch(
         &mut self,
         reader: &dyn AuthenticatedObjects,
         table: InodeTable,
@@ -458,7 +458,7 @@ impl ValidationState {
     }
 
     /// One base record, answered from the memo when it is known.
-    fn lookup_optional(
+    pub(crate) fn lookup_optional(
         &mut self,
         reader: &dyn AuthenticatedObjects,
         table: InodeTable,
@@ -498,7 +498,7 @@ impl ValidationState {
     }
 
     /// One base record that must exist.
-    fn lookup_one(
+    pub(crate) fn lookup_one(
         &mut self,
         reader: &dyn AuthenticatedObjects,
         table: InodeTable,
@@ -511,7 +511,7 @@ impl ValidationState {
 }
 
 /// Charges one inode lookup's work.
-fn charge_inode(work: &mut ValidationWork, inode: InodeReadWork) {
+pub(crate) fn charge_inode(work: &mut ValidationWork, inode: InodeReadWork) {
     work.objects_read = work.objects_read.saturating_add(inode.demands);
     work.read_waves = work.read_waves.saturating_add(inode.read_waves);
     work.inode_demands = work.inode_demands.saturating_add(inode.demands);
@@ -519,7 +519,7 @@ fn charge_inode(work: &mut ValidationWork, inode: InodeReadWork) {
 }
 
 /// Charges one directory listing's work.
-fn charge_directory(work: &mut ValidationWork, directory: DirectoryReadWork) {
+pub(crate) fn charge_directory(work: &mut ValidationWork, directory: DirectoryReadWork) {
     work.objects_read = work.objects_read.saturating_add(directory.pages_read);
     work.read_waves = work.read_waves.saturating_add(directory.read_waves);
     work.directory_pages_read = work

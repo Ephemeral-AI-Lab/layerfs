@@ -8,13 +8,13 @@
 //! conflict. Values are compared decoded, so #360's root and inline forms of
 //! equal metadata are no change.
 
-use super::super::serial::walk::Ctx;
-use super::super::{Conflict, ConflictKind};
 use crate::compare::tree::same_inode;
 use crate::error::ContentResult;
 use crate::filesystem::tree::attribute::{
     portable_root, read_portable, AttributeReadWork, PortableMetadata,
 };
+use crate::merge::serial::walk::Ctx;
+use crate::merge::{Conflict, ConflictKind};
 use crate::object::inode_leaf::{InodeKind, InodeMetadata, InodeValue};
 
 /// The value one field takes: one side's change, else the decided entry's.
@@ -31,7 +31,7 @@ fn field<T: PartialEq>(base: T, from: T, into: T, decided: T) -> T {
 impl Ctx<'_, '_> {
     /// The metadata a serial gets from base `b`, `from`'s `f` and `into`'s
     /// `i`, when the decision gave it `value`.
-    pub(super) fn merged_metadata(
+    pub(crate) fn merged_metadata(
         &mut self,
         [b, f, i]: [InodeValue; 3],
         value: InodeValue,

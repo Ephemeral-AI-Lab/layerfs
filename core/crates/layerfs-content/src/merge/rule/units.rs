@@ -12,7 +12,6 @@
 //! so inside a decided unit no text merge, conflict or `/.lww` rule applies.
 //! The state is a count and a time per unit and side, never a path list.
 
-use super::super::Side;
 use super::lww::Rules;
 use crate::compare::bytes::same_content;
 use crate::compare::changes::{ChangeWalk, Pair, Plan};
@@ -21,6 +20,7 @@ use crate::compare::BindingHints;
 use crate::error::ContentResult;
 use crate::filesystem::tree::attribute::{read_portable, AttributeReadWork};
 use crate::filesystem::FilesystemRootId;
+use crate::merge::Side;
 use crate::object::inode_leaf::InodeKind;
 use crate::object::AuthenticatedObjects;
 use layerfs_telemetry::timer::Timing;

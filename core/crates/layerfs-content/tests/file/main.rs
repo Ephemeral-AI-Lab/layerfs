@@ -5,4 +5,6 @@ mod extent_cursor;
 mod read;
 mod runs;
 mod streaming;
+#[path = "../support/mod.rs"]
+mod support;
 mod timing;

@@ -1,7 +1,7 @@
 //! Reference effects: bounded ordering records, runs and final inode rows.
 
 pub mod backing;
-mod meaning;
+pub(crate) mod meaning;
 pub mod merge;
 mod operation;
 pub mod record;

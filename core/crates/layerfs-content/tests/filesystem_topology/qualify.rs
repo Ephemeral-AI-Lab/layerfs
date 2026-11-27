@@ -4,8 +4,7 @@
 //! root is real canonical bytes the operations would never emit: its pages are
 //! encoded by the public codecs and stored under their true identities, so the
 //! refusal comes from the graph and not from a damaged object.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::filesystem::tree::directory::{encode_directory_page, DirectoryPage};
 use layerfs_content::filesystem::tree::inode::{encode_inode_page, InodePage};

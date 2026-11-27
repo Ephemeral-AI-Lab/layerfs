@@ -5,8 +5,7 @@
 //! is cross-checked against what the backing itself observed, and every failure
 //! assertion requires that the operation reports the failure instead of a root.
 
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use std::collections::BTreeMap;
 

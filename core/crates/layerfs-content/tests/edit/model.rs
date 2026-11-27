@@ -7,8 +7,7 @@
 //! oracle; `edit_reference` is the separate sealed-reference tree oracle and is the
 //! only one that can establish reference partition equivalence.
 
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::{
     apply_edits, construct_bytes, ConstructionPolicy, Edit, EditRequest, EditSource, ObjectId,

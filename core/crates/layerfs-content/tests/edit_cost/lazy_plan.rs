@@ -1,7 +1,6 @@
 //! Generated public edit inputs exercise streaming small-result assembly.
 
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use std::cell::{Cell, RefCell};
 use std::collections::BTreeMap;

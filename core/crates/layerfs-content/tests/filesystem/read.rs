@@ -1,7 +1,6 @@
 //! Logical reads: resolve, stat, list, readlink and bounded pagination.
 
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::filesystem::name::symlink::SymlinkTarget;
 use layerfs_content::filesystem::root::{

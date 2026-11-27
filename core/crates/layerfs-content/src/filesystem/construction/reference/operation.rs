@@ -1,7 +1,9 @@
 //! Private routing of one canonical reducer meaning to resident or indexed state.
-use super::super::reference_index::{reduce::IndexedReducer, release, rows::IndexedRows};
 use super::{
     FinalChange, FinalRows, OrderingBacking, ReferenceReducer, ReferenceWork, ReleaseWork,
+};
+use crate::filesystem::construction::reference_index::{
+    reduce::IndexedReducer, release, rows::IndexedRows,
 };
 use crate::filesystem::{
     construction::{

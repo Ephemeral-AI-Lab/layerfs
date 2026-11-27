@@ -1,6 +1,5 @@
 //! Public serial-state construction through the existing neutral raw port.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 use layerfs_content::filesystem::construction::input::RowSource;
 use layerfs_content::filesystem::construction::operation::update_filesystem_streamed_backed_counted;
 use layerfs_content::filesystem::construction::statistics::{

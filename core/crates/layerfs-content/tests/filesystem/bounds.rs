@@ -6,8 +6,7 @@
 //! declared ceilings cover every owner the operation reports. Internal scratch
 //! counters are not presented as a whole-operation memory bound.
 
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use std::collections::BTreeSet;
 

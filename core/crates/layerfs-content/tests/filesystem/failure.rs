@@ -5,8 +5,7 @@
 //! ordering resources afterwards. A late failure may have emitted private pages;
 //! it may not have emitted a root and it may not have retried.
 
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::filesystem::tree::attribute::value::emit_value;
 use layerfs_content::filesystem::{

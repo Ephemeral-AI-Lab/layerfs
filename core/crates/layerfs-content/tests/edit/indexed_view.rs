@@ -1,6 +1,5 @@
 //! Fallible indexed replacements over a retained authenticated public FileView.
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 use layerfs_content::file::{
     apply_indexed_edits_view_backed, IndexedEditRequest, IndexedEditSource,
 };

@@ -18,7 +18,7 @@ pub(super) const PASS_ROWS: usize = 21;
 /// each, inside the 64 keys of one read job.
 pub(super) const RELEASE_ROWS: usize = 16;
 
-pub(super) struct IndexedReducer<'s, 'b> {
+pub(crate) struct IndexedReducer<'s, 'b> {
     pub state: &'s SerialState<'b>,
     input: &'s dyn OperationInput,
     dropped: &'s dyn DroppedParents,
@@ -26,7 +26,7 @@ pub(super) struct IndexedReducer<'s, 'b> {
     pub touched: u64,
     pub(super) window: Window,
 }
-pub(super) struct Transition {
+pub(crate) struct Transition {
     pub before: Row,
     pub row: Row,
     pub changes: Vec<ConstructionRecordChange>,

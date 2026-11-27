@@ -21,6 +21,6 @@ pub use rule::units::{decide_units, unit_changes, MergeUnit, UnitChange, UnitRep
 #[doc(hidden)]
 pub use crate::merge::decide::markers; // #828 compat
 #[doc(hidden)]
-pub use crate::merge::decide::text;
+pub use crate::merge::decide::text; // #828 compat
 #[doc(hidden)]
-pub use crate::merge::rule::lww; // #828 compat // #828 compat
+pub use crate::merge::rule::lww; // #828 compat

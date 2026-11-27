@@ -4,8 +4,7 @@
 //! same inputs. Both produce the same root and the same emitted bytes; only the
 //! report differs. Phases are coarse and bounded: no trace node per inode.
 
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::filesystem::{
     build_filesystem_timed, update_filesystem_timed, DirectoryUpdate, FilesystemInput,

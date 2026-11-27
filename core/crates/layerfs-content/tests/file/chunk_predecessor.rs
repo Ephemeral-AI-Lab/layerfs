@@ -5,8 +5,7 @@
 //! construction with no base must be unchanged. The cases below check both against
 //! the mapping trees the two constructions actually emitted.
 
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use std::collections::BTreeMap;
 

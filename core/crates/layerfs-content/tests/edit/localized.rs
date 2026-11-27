@@ -18,8 +18,7 @@
 //! emitted set grows by one page: the read set is the path to the boundary plus the
 //! replaced extents, never the retained mapping.
 
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use std::cell::RefCell;
 use std::collections::BTreeSet;

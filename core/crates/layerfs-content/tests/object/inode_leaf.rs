@@ -4,9 +4,6 @@
 //! derived physical width, pooled body round trip and every rejected malformation.
 //! A malformed row, order, count or length must fail rather than be repaired.
 
-#[path = "../support/mod.rs"]
-mod support;
-
 use layerfs_content::filesystem::tree::attribute::PortableMetadata;
 use layerfs_content::inode_leaf::{
     decode_inode_value, decode_pooled_body, decode_pooled_value, encode_inode_value,

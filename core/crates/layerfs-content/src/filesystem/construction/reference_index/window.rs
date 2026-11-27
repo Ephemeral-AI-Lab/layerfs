@@ -66,7 +66,7 @@ impl IndexedReducer<'_, '_> {
     /// meaning in arrival order — a later meaning of a serial to the result
     /// of its earlier one — and writes all rows in one guarded job. A refusal
     /// writes nothing of the window.
-    pub(super) fn flush(&mut self) -> ContentResult<()> {
+    pub(crate) fn flush(&mut self) -> ContentResult<()> {
         if self.window.is_empty() {
             return Ok(());
         }

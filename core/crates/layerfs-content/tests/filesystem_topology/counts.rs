@@ -16,8 +16,7 @@
 //! where the sorted merge's reads stop following the base. Nothing here is
 //! timed.
 
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use std::sync::OnceLock;
 

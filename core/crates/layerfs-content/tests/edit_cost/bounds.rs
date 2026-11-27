@@ -7,8 +7,7 @@
 //! boundaries at 192/193 extents use the exact deterministic inputs captured from
 //! the original search. Their extent counts are still checked on every run.
 
-#[path = "../support/mod.rs"]
-mod support;
+use crate::support;
 
 use layerfs_content::FinalizedConsumer;
 use layerfs_content::{

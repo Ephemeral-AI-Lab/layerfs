@@ -7,4 +7,6 @@ mod hardlinks;
 mod limits;
 mod profile;
 mod read;
+#[path = "../support/mod.rs"]
+mod support;
 mod timing;

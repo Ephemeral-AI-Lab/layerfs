@@ -17,19 +17,23 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
-pub(crate) mod admission;
-pub(crate) mod catalog;
+mod admission;
+pub mod catalog;
 pub mod error;
 pub mod identity;
 pub mod records;
+
 pub use admission::authority::{
     compare_place, ordered_token_parts, Liveness, PlaceAuthority, PlaceOrder, PlaceRecord,
     PlaceView, SandboxPlace, ORDERED_TOKEN_PREFIX,
 };
 pub use admission::holder::MountHolderView;
-pub use catalog::contract as catalog;
-pub use catalog::path;
-pub use catalog::query;
+
+// #828 compat: old public module paths, removed in wave 3.
+#[doc(hidden)]
+pub use catalog::path; // #828 compat
+#[doc(hidden)]
+pub use catalog::query; // #828 compat
 
 pub use catalog::{
     ChainRow, ContextTarget, HistoryCatalog, HistoryCatalogConfig, MountMarkers, NamedSnapshot,
