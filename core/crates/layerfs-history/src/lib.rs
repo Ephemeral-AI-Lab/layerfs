@@ -29,12 +29,6 @@ pub use admission::authority::{
 };
 pub use admission::holder::MountHolderView;
 
-// #828 compat: old public module paths, removed in wave 3.
-#[doc(hidden)]
-pub use catalog::path; // #828 compat
-#[doc(hidden)]
-pub use catalog::query; // #828 compat
-
 pub use catalog::{
     ChainRow, ContextTarget, HistoryCatalog, HistoryCatalogConfig, MountMarkers, NamedSnapshot,
     NodeRecord, PublishLane, ReadContext,

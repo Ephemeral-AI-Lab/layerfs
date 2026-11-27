@@ -4,7 +4,7 @@
 //! Store calls take ([`StoreUsers`]). Each runs at the point it ran before,
 //! under the same locks.
 use crate::admin::open::lease::Owner;
-use layerfs_home::state::State;
+use layerfs_home::reply::state::State;
 use layerfs_protocol::sdk::SdkRefusal;
 use std::path::Path;
 

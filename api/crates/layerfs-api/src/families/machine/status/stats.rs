@@ -4,11 +4,11 @@ use crate::dispatch::table::Kind::Name;
 use crate::dispatch::table::{a, call, Call};
 use crate::dispatch::{Context, Form, Section};
 use layerfs_home::names::MachineName;
-use layerfs_home::outcome::Outcome;
-use layerfs_home::time::iso;
+use layerfs_home::reply::outcome::Outcome;
+use layerfs_home::reply::time::iso;
 use layerfs_inspect::{machine_space, machine_stats};
 use layerfs_protocol::sdk::SdkValue;
-use layerfs_sandbox::inspect::process::shown_usage;
+use layerfs_sandbox::status::stats::shown_usage;
 
 /// Its answer: the machine's processors, memory and data disk.
 const FORM: Form = Form::of(
@@ -89,7 +89,7 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let mut answer = stats(&read);
     if context.with("space") {
         let walked = machine_space(&context.home, &machine)?;
-        answer = layerfs_home::home::with_field(answer, "space", space(&walked));
+        answer = layerfs_home::disk::with_field(answer, "space", space(&walked));
     }
     Ok(answer)
 }
@@ -206,7 +206,7 @@ pub(in crate::families::machine) fn cut(value: SdkValue) -> (SdkValue, SdkValue)
         SdkValue::List(items) => items,
         _ => Vec::new(),
     };
-    layerfs_home::helpers::shown(items, 0, false)
+    layerfs_home::reply::values::shown(items, 0, false)
 }
 
 /// Each row of the list `value`, as `row` answers it; an empty list when

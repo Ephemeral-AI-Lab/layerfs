@@ -7,7 +7,7 @@
 //! the entry [`the_worker_process`]. The same can be done to a machine's
 //! real worker: `prlimit --nofile=64:64 --pid <its pid>`, then more idle
 //! connections than that to its port.
-use layerfs_machine::worker::{self, Endpoint};
+use layerfs_machine::route::{self, Endpoint};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -91,7 +91,7 @@ fn a_worker_out_of_descriptors_keeps_serving() {
         address,
         secret: "k".to_owned(),
     };
-    worker::ping(&endpoint).unwrap();
+    route::ping(&endpoint).unwrap();
     assert!(accept_lines(&log).is_empty());
 
     // more connections than the worker has descriptors: each one it accepts
@@ -112,7 +112,7 @@ fn a_worker_out_of_descriptors_keeps_serving() {
     // connections close and their descriptors are free
     let waiting = std::thread::spawn({
         let endpoint = endpoint.clone();
-        move || worker::ping(&endpoint)
+        move || route::ping(&endpoint)
     });
     std::thread::sleep(Duration::from_millis(300));
     assert!(!waiting.is_finished(), "answered with no descriptor free");
@@ -120,7 +120,7 @@ fn a_worker_out_of_descriptors_keeps_serving() {
     let answer = waiting.join().unwrap().unwrap();
     assert_eq!(answer.get_text("kind"), Some("worker"));
     assert_eq!(answer.get_int("pid"), Some(i64::from(child.0.id())));
-    worker::ping(&endpoint).unwrap();
+    route::ping(&endpoint).unwrap();
     assert!(child.0.try_wait().unwrap().is_none(), "the worker stopped");
     // the failures of these few seconds are one line of their kind
     let lines = accept_lines(&log);

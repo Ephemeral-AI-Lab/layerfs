@@ -5,9 +5,9 @@ use crate::dispatch::table::Kind::{Int, Name, Text};
 use crate::dispatch::table::{a, call, opt, Call};
 use crate::dispatch::{Context, Form, Paging, Part};
 use crate::families::sandbox::files::{self, LIMIT};
-use layerfs_home::home::with_field;
+use layerfs_home::disk::with_field;
 use layerfs_home::names::MachineName;
-use layerfs_home::outcome::Outcome;
+use layerfs_home::reply::outcome::Outcome;
 use layerfs_inspect::{machine_files, FilesRequest};
 use layerfs_protocol::sdk::SdkValue;
 

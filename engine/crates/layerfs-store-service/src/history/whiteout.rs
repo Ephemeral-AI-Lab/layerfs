@@ -32,8 +32,8 @@ use layerfs_content::filesystem::{
 };
 use layerfs_content::object::inode_leaf::InodeKind;
 use layerfs_content::{AuthenticatedObjects, ContentError};
+use layerfs_history::catalog::path::governs;
 use layerfs_history::error::{RemovedPath, RemovedState};
-use layerfs_history::path::governs;
 use layerfs_history::{BranchSnapshot, HistoryError, LayerStackId, NodeId, PathRemovalRecord};
 use layerfs_protocol::sdk::SdkRefusal;
 use layerfs_storage::Save;
@@ -138,7 +138,7 @@ pub(crate) struct KnownRemovals {
 /// published-value bound a Commit's Storage handle already keeps
 /// (`layerfs_storage::policy::POOLED_VALUE_CACHE_BYTES`): about 2,600 markers
 /// of 60-byte paths, and at least 63 of the longest paths
-/// (`layerfs_history::path::MAXIMUM_PATH_BYTES`). A larger set costs each
+/// (`layerfs_history::catalog::path::MAXIMUM_PATH_BYTES`). A larger set costs each
 /// Commit the control read it had before #768 and never correctness.
 pub const KEPT_REMOVAL_BYTES: usize = 256 * 1024;
 

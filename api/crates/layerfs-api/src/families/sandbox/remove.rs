@@ -4,7 +4,7 @@ use crate::dispatch::table::Kind::{Bool, Name};
 use crate::dispatch::table::{a, call, opt, Call, PROGRESS};
 use crate::dispatch::Context;
 use crate::dispatch::Form;
-use layerfs_home::outcome::Outcome;
+use layerfs_home::reply::outcome::Outcome;
 use layerfs_protocol::sdk::SdkValue;
 use layerfs_sandbox::family::{remove, RemoveRequest, Removed};
 

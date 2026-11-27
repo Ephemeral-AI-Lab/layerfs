@@ -8,7 +8,7 @@ use crate::dispatch::Form;
 #[cfg(feature = "machine")]
 use layerfs_home::names::MachineName;
 #[cfg(feature = "machine")]
-use layerfs_home::outcome::Outcome;
+use layerfs_home::reply::outcome::Outcome;
 #[cfg(feature = "machine")]
 use layerfs_protocol::sdk::SdkValue;
 

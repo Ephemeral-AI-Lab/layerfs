@@ -3,7 +3,7 @@
 //! and settling those of a machine incarnation proven dead.
 use crate::admin::open::args::OpenArgs;
 use crate::admin::open::service::with_service;
-use layerfs_home::outcome::failed;
+use layerfs_home::reply::outcome::failed;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 
@@ -31,7 +31,7 @@ pub fn end_mount(
         });
         let mut ended = 0;
         for intent in left {
-            layerfs_store_service::history::admission::release_or_mark(catalog, &intent.op_id)
+            layerfs_store_service::history::gc_admission::release_or_mark(catalog, &intent.op_id)
                 .map_err(failed)?;
             ended += 1;
         }
@@ -60,15 +60,15 @@ pub fn reconcile_machine(
             // the reconcile compares placed mount intents: it reads the view
             crate::admin::route::place_view::scoped(&args, || {
                 with_service(&args, |service| {
-                    layerfs_store_service::history::admission::reconcile_machine(
+                    layerfs_store_service::history::gc_admission::reconcile_machine(
                         service.store.history(),
                         machine,
                         incarnation,
                     )
                     .map(|reconcile| {
-                        layerfs_store_service::history::admission::reconcile_value(&reconcile)
+                        layerfs_store_service::history::gc_admission::reconcile_value(&reconcile)
                     })
-                    .map_err(layerfs_store_service::history::lookup::history)
+                    .map_err(layerfs_store_service::lookup::history)
                 })
             })
         }

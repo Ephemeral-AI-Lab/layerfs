@@ -6,11 +6,12 @@ use crate::platform::{self as adapters, Code};
 use crate::record::adapter_spec::{self as record, refusal};
 use crate::record::machine::{MachineRecord, REMOVE};
 use crate::Related;
+use layerfs_home::disk::paths;
+use layerfs_home::lock::home;
 use layerfs_home::names::MachineName;
 use layerfs_home::record::intent::Op;
 use layerfs_home::reply::events::Events;
 use layerfs_home::reply::outcome::{failed, refused, Outcome};
-use layerfs_home::{disk::paths, lock::home};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 

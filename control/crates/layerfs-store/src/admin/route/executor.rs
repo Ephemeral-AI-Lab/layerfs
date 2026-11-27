@@ -7,9 +7,9 @@
 //! A Sandbox's daemon reached directly (G4) is not an executor here: its
 //! Workspace calls take that route in `sandbox/direct.rs`.
 use crate::admin::record::store::StoreRef;
-use layerfs_home::outcome::shell_word;
-use layerfs_home::outcome::{refused, with_fix, with_next, Outcome, FIX};
-use layerfs_machine::worker::{self, Budget, Endpoint, EventSink, Unreached};
+use layerfs_home::reply::outcome::shell_word;
+use layerfs_home::reply::outcome::{refused, with_fix, with_next, Outcome, FIX};
+use layerfs_machine::route::{self, Budget, Endpoint, EventSink, Unreached};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -56,8 +56,8 @@ pub fn plan(home: &Path, store: &StoreRef) -> Result<Executor> {
 /// call boundary widens to the chain of what is on it (UI2-8). Any other
 /// refusal is kept.
 pub(crate) fn blocked(store: &str, machine: &str, refusal: SdkRefusal) -> SdkRefusal {
-    use layerfs_home::state::{BlockedBy, Reason};
-    use layerfs_machine::record::{no_vm_name_fix, Holders};
+    use layerfs_home::reply::state::{BlockedBy, Reason};
+    use layerfs_machine::record::machine::{no_vm_name_fix, Holders};
     let bare = no_vm_name_fix(machine, Holders::default());
     if refusal.code != "Failed" || refusal.detail.get_text(FIX) != Some(bare.as_str()) {
         return refusal;
@@ -93,7 +93,7 @@ pub(crate) fn blocked(store: &str, machine: &str, refusal: SdkRefusal) -> SdkRef
 /// Where a call on machine `machine` runs: its Sandboxes' host operations,
 /// and the Store calls of the sqlite Stores on it.
 pub fn on_machine(home: &Path, machine: &str) -> Result<Executor> {
-    if let Some(record) = layerfs_machine::record::MachineRecord::read(home, machine)? {
+    if let Some(record) = layerfs_machine::record::machine::MachineRecord::read(home, machine)? {
         record.not_held()?;
     }
     on_machine_read(home, machine)
@@ -122,7 +122,7 @@ pub fn on_machine_read(home: &Path, machine: &str) -> Result<Executor> {
     // its remove as the fix, which the call boundary widens to the chain
     // of what is on it (UI2-8; RC-B F3); a Store call answers it
     // `Unavailable` with the Store's `blocked_by` ([`plan`], LF10)
-    if let Some(record) = layerfs_machine::record::MachineRecord::read(home, machine)? {
+    if let Some(record) = layerfs_machine::record::machine::MachineRecord::read(home, machine)? {
         if record.nameless() {
             record.provider_name()?;
         }
@@ -166,12 +166,12 @@ impl Worker {
     /// not answer or does not answer in time is `Unavailable`: the
     /// operation changes nothing, so a lost answer is not `Unknown`.
     pub fn read(&mut self, op: &str, request: SdkValue, budget: Budget) -> Outcome {
-        let request = worker::request(op, request)?;
+        let request = route::request(op, request)?;
         let endpoint = match &self.endpoint {
             Some(endpoint) => endpoint.clone(),
             None => recorded(&self.home, &self.machine)?,
         };
-        let outcome = worker::send_within(&endpoint, op, &request, budget)
+        let outcome = route::send_within(&endpoint, op, &request, budget)
             .map_err(|Unreached(why)| stopped(&self.machine, why))?;
         self.endpoint = Some(endpoint);
         outcome.map_err(|refusal| match refusal.code.as_str() {
@@ -195,7 +195,7 @@ impl Worker {
         request: SdkValue,
         events: &mut EventSink<'_>,
     ) -> Outcome {
-        let request = worker::request(op, request)?;
+        let request = route::request(op, request)?;
         self.attempt_framed(op, &request, events)
             .unwrap_or_else(|Unreached(refusal)| Err(refusal))
     }
@@ -211,7 +211,7 @@ impl Worker {
         request: SdkValue,
         events: &mut dyn FnMut(SdkValue),
     ) -> std::result::Result<Outcome, Unreached> {
-        let request = match worker::request(op, request) {
+        let request = match route::request(op, request) {
             Ok(request) => request,
             Err(refusal) => return Ok(Err(refusal)),
         };
@@ -232,11 +232,11 @@ impl Worker {
         events: &mut EventSink<'_>,
     ) -> std::result::Result<Outcome, Unreached> {
         if let Some(endpoint) = &self.endpoint {
-            return worker::send(endpoint, op, request, events, None)
+            return route::send(endpoint, op, request, events, None)
                 .map_err(|Unreached(why)| Unreached(stopped(&self.machine, why)));
         }
         let endpoint = recorded(&self.home, &self.machine).map_err(Unreached)?;
-        match worker::send(&endpoint, op, request, events, None) {
+        match route::send(&endpoint, op, request, events, None) {
             Ok(outcome) => {
                 self.endpoint = Some(endpoint);
                 Ok(outcome)
@@ -250,11 +250,11 @@ impl Worker {
 /// machine is stopped, or its worker ended. A worker of another build is
 /// replaced by stopping and starting its machine. Nothing was sent.
 fn stopped(machine: &str, why: SdkRefusal) -> SdkRefusal {
-    if worker::is_mismatch(&why) {
+    if route::is_mismatch(&why) {
         let message = format!(
             "machine {machine}: {}; replace its worker with this build's: {}",
             why.message,
-            worker::replace_with(machine)
+            route::replace_with(machine)
         );
         let fix = format!(
             "layerfs machine stop {machine} && layerfs machine start {machine}",
@@ -282,7 +282,7 @@ fn stopped(machine: &str, why: SdkRefusal) -> SdkRefusal {
 /// `Unavailable` when it records none. A recorded worker that is gone
 /// fails when called.
 fn recorded(home: &Path, machine: &str) -> Result<Endpoint> {
-    let Some(worker) = layerfs_home::secrets::worker_secret(home, machine)? else {
+    let Some(worker) = layerfs_home::secret::keys::worker_secret(home, machine)? else {
         let refusal = refused(
             "Unavailable",
             format!(

@@ -20,9 +20,9 @@
 //! table and what LayerFS keeps private from `roots::kept`, both before
 //! any `stat`.
 use super::roots::{self, Kept};
-use layerfs_home::home::with_field;
-use layerfs_home::outcome::{failed, refused, Outcome};
-use layerfs_home::tail;
+use layerfs_home::disk::with_field;
+use layerfs_home::log::tail;
+use layerfs_home::reply::outcome::{failed, refused, Outcome};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_sandbox::backend::confined::{self, Base, Kind, Mount, Opened, Refused, Stat, View};
 use layerfs_sandbox::deploy::Side;
@@ -154,7 +154,7 @@ pub fn sandbox_files(home: &Path, name: &str, request: &FilesRequest) -> Outcome
     // directly are here, and its run folder is in its machine: they go
     // with the request, for the roots and for a listing that meets a
     // Workspace mount
-    if layerfs_sandbox::direct::forwarded(&record) {
+    if layerfs_sandbox::route::direct::forwarded(&record) {
         args = with_field(args, "workspaces", roots::recorded(&record.dir(home))?);
     }
     crate::ask(home, record.machine(), SANDBOX_FILES, args)
@@ -167,7 +167,7 @@ pub fn sandbox_page(side: &Side<'_>, args: &SdkValue, spent: &dyn Fn() -> bool) 
     let request = FilesRequest::of(args);
     request.check(CALL)?;
     let name = args.get_text("sandbox").unwrap_or("");
-    let run = layerfs_sandbox::inspect::route::run_folder(side, name)?;
+    let run = layerfs_sandbox::route::inspect::run_folder(side, name)?;
     let sent = args.get("workspaces");
     // a namespaces Sandbox has a root of its own, which is a second view
     let daemon = roots::daemon(side, name);

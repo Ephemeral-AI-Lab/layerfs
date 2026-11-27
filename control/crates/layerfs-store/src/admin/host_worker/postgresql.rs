@@ -12,7 +12,7 @@
 //! reads no secret itself, from its environment or the home, and writes
 //! none: it puts the password into the record's own address for the
 //! Store's sessions and drops it when the Store's last session closes
-//! ([`crate::postgresql::pool`]).
+//! ([`crate::backend::postgresql::pool`]).
 //!
 //! Under the Store's lock the worker re-reads the record: a Store that is
 //! gone, blocked by an operation, or at another login revision is refused
@@ -20,7 +20,7 @@
 //! route does, and holds it for the call alone: no lease is held between
 //! calls, so `store disconnect`, compaction and upgrade see a warm worker
 //! as idle. The call then runs once on a held session
-//! ([`crate::postgresql::pool`]). Only [`READS`] are served by [`serve`],
+//! ([`crate::backend::postgresql::pool`]). Only [`READS`] are served by [`serve`],
 //! never a method the SQLite host route may add.
 //!
 //! A write (`store.write` with the same `login_revision` and `password`,
@@ -33,7 +33,7 @@ use crate::admin::open::lease;
 use crate::admin::record::store::{self, StoreRecord, StoreRef};
 use crate::admin::route::resolve::{self, Target};
 use layerfs_home::names::{ProjectName, StoreName};
-use layerfs_home::outcome::{refused, Outcome};
+use layerfs_home::reply::outcome::{refused, Outcome};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 
@@ -81,7 +81,7 @@ pub(crate) fn routed(
     method: &str,
     fields: &[(String, SdkValue)],
 ) -> Option<Outcome> {
-    use layerfs_machine::worker::HostPaths;
+    use layerfs_machine::route::HostPaths;
 
     if !crate::admin::host_worker::read::cli() || layerfs_machine::in_process().is_none() {
         return None;
@@ -94,7 +94,7 @@ pub(crate) fn routed(
     // a record connected before login revisions stays direct
     let revision = target.record.login_revision()?;
     if !checked.accepts(&fields)
-        || layerfs_machine::record::MachineRecord::admit_host(
+        || layerfs_machine::record::machine::MachineRecord::admit_host(
             home,
             layerfs_home::names::HOST_MACHINE,
         )
@@ -118,13 +118,13 @@ pub(crate) fn routed(
     let paths = match HostPaths::new(home) {
         Ok(paths) => paths,
         Err(error) => {
-            layerfs_home::wipe::value(args);
+            layerfs_home::secret::wipe::value(args);
             return Some(Err(error));
         }
     };
     if !paths.request_fits(OP, &args) {
         // it goes direct: the copy of the password it carries goes now
-        layerfs_home::wipe::value(args);
+        layerfs_home::secret::wipe::value(args);
         return None;
     }
     Some(paths.call_validated(OP, args, |value| checked.valid_answer(value)))
@@ -178,7 +178,7 @@ pub fn serve(home: &Path, request: &SdkValue) -> Outcome {
 
 /// Runs one authenticated PostgreSQL write request (#819 P-B writes) on
 /// the host worker, its header already checked
-/// ([`crate::host_write::header`]): `method` with `fields`, its content or
+/// ([`crate::admin::host_worker::write::header`]): `method` with `fields`, its content or
 /// changes read from `source` when the request streams them. It is
 /// admitted as a read is, on a held write session, and runs once.
 pub(crate) fn serve_write(
@@ -247,7 +247,7 @@ fn wipe_dial(open: &mut OpenArgs) {
         .as_mut()
         .and_then(|selection| selection.url.take())
     {
-        layerfs_home::wipe::text(url);
+        layerfs_home::secret::wipe::text(url);
     }
 }
 
@@ -282,7 +282,10 @@ fn checked(
             format!("Store {store}'s login changed after this call read it; nothing was run"),
         ));
     }
-    layerfs_machine::record::MachineRecord::admit_host(home, layerfs_home::names::HOST_MACHINE)?;
+    layerfs_machine::record::machine::MachineRecord::admit_host(
+        home,
+        layerfs_home::names::HOST_MACHINE,
+    )?;
     Ok(record)
 }
 
@@ -303,7 +306,7 @@ fn admit(
 /// Overwrites a PostgreSQL read `request`, which carries a password, once
 /// its answer is written or it is dropped unrun.
 pub fn wipe_request(request: SdkValue) {
-    layerfs_home::wipe::value(request);
+    layerfs_home::secret::wipe::value(request);
 }
 
 /// Answers the management request that retires login revision `revision`
@@ -330,7 +333,7 @@ pub fn retire_request(home: &Path, request: &SdkValue) -> Outcome {
 pub fn retire(home: &Path, store: &str, revision: Option<&str>) {
     #[cfg(any(target_os = "macos", target_os = "linux"))]
     if let (Some(revision), Some(_)) = (revision, layerfs_machine::in_process()) {
-        if let Ok(paths) = layerfs_machine::worker::HostPaths::new(home) {
+        if let Ok(paths) = layerfs_machine::route::HostPaths::new(home) {
             let args = SdkValue::map([
                 ("store", SdkValue::text(store)),
                 ("revision", SdkValue::text(revision)),

@@ -19,14 +19,12 @@ use crate::record::machine::{MachineRecord, CREATE};
 use crate::setup::bundle::bundle;
 use crate::status::list::changed;
 use crate::Related;
+use layerfs_home::disk::{self, paths};
+use layerfs_home::lock::home as lock;
 use layerfs_home::record::intent::Op;
 use layerfs_home::reply::events::Events;
 use layerfs_home::reply::outcome::{failed, refused, Outcome};
 use layerfs_home::reply::state::Reason;
-use layerfs_home::{
-    disk::{self, paths},
-    lock::home as lock,
-};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 

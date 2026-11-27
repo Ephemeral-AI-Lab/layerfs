@@ -12,11 +12,12 @@ use crate::producer;
 use common::{file, metadata, name, Fixture, Store};
 use harness::Bench;
 use layerfs_content::filesystem::{
-    attributes::{
+    build_filesystem, scope_for_seed,
+    tree::attribute::{
         build_attribute_tree, emit_value, AttributeEntry, AttributeKey, PortableMetadata,
     },
-    build_filesystem, scope_for_seed, DirectoryUpdate, FilesystemInput, FilesystemObjects,
-    FilesystemResources, FilesystemRootId, InodeUpdate,
+    DirectoryUpdate, FilesystemInput, FilesystemObjects, FilesystemResources, FilesystemRootId,
+    InodeUpdate,
 };
 use layerfs_content::object::inode_leaf::{InodeKind, InodeMetadata, InodeValue};
 use layerfs_content::ObjectId;

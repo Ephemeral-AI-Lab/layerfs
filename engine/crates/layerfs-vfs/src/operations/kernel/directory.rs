@@ -17,7 +17,7 @@
 //! reply and a publishing visit records exactly the accepted names. Nothing
 //! is held between the two visits or after the reply.
 use crate::{BaseView, SourceView, ViewStat, Workspace, WorkspaceError, WorkspaceResult};
-use layerfs_content::filesystem::inode::{lookup_many, InodeReadWork};
+use layerfs_content::filesystem::tree::inode::{lookup_many, InodeReadWork};
 use layerfs_content::filesystem::Resolved;
 use layerfs_content::object::inode_leaf::{InodeKind, InodeValue};
 use layerfs_content::{ContentError, ObjectId};

@@ -5,10 +5,10 @@ use layerfs_api::Kind;
 use layerfs_history::records::{GcIntent, GcIntentKind, GcScopeKind};
 use layerfs_history::PlaceAuthority;
 use layerfs_protocol::sdk::SdkValue;
-use layerfs_store::open_args::OpenArgs;
-use layerfs_store::record::StoreRecord;
-use layerfs_store::service::with_service;
-use layerfs_store_service::history::lookup;
+use layerfs_store::admin::open::args::OpenArgs;
+use layerfs_store::admin::open::service::with_service;
+use layerfs_store::admin::record::store::StoreRecord;
+use layerfs_store_service::lookup;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -353,7 +353,7 @@ fn store_compact_sends_each_phase_as_a_progress_event() {
 /// live process, as a daemon's mount registers one.
 fn plant_mount(home: &Path, sandbox: &str) {
     use layerfs_history::{GcIntent, GcIntentKind, GcScopeKind};
-    use layerfs_store_service::history::admission;
+    use layerfs_store_service::history::gc_admission;
     ok(home, "branch.fork", &[p(), ("name", t(sandbox))]);
     let got = ok(
         home,
@@ -366,14 +366,17 @@ fn plant_mount(home: &Path, sandbox: &str) {
     );
     let id = got.get_text("id").expect("the Branch's id");
     let branch = layerfs_protocol::sdk::unhex(id).expect("hex");
-    let record = layerfs_store::record::StoreRecord::read(home, "shop")
+    let record = layerfs_store::admin::record::store::StoreRecord::read(home, "shop")
         .unwrap()
         .unwrap();
-    let args =
-        layerfs_store::open_args::OpenArgs::in_root(home, "shop", Some(record.to_record().clone()));
-    let (runtime, boot) = admission::owner_tokens(&format!("ws:{sandbox}"));
+    let args = layerfs_store::admin::open::args::OpenArgs::in_root(
+        home,
+        "shop",
+        Some(record.to_record().clone()),
+    );
+    let (runtime, boot) = gc_admission::owner_tokens(&format!("ws:{sandbox}"));
     let intent = GcIntent::shared(
-        admission::op_id(),
+        gc_admission::op_id(),
         GcIntentKind::Mount,
         GcScopeKind::Branch,
         branch,
@@ -385,11 +388,11 @@ fn plant_mount(home: &Path, sandbox: &str) {
         Some(layerfs_home::names::HOST_MACHINE),
     )
     .owned(Some(&runtime), Some(&boot));
-    layerfs_store::service::with_service(&args, |service| {
+    layerfs_store::admin::open::service::with_service(&args, |service| {
         let catalog = service.store.history();
         catalog
             .gc_register(&intent)
-            .map_err(|error| layerfs_home::outcome::failed(error.to_string()))
+            .map_err(|error| layerfs_home::reply::outcome::failed(error.to_string()))
     })
     .unwrap();
 }
@@ -427,7 +430,7 @@ fn a_live_mount_intent_of_a_forgotten_sandbox_keeps_holding_the_store() {
 /// `/w/sb1`.
 #[cfg(target_os = "macos")]
 fn ended_native_sandbox(home: &Path, project: &str) {
-    use layerfs_home::home::{paths, write_record};
+    use layerfs_home::disk::{paths, write_record};
     use layerfs_sandbox::record::{DaemonRecord, Local, WorkspaceRecord};
     let mut child = std::process::Command::new("sleep")
         .arg("30")
@@ -436,7 +439,7 @@ fn ended_native_sandbox(home: &Path, project: &str) {
     let process = layerfs_os::process::LocalProcess::observe(child.id()).unwrap();
     child.kill().unwrap();
     child.wait().unwrap();
-    let id = layerfs_home::home::opened(home).unwrap().id;
+    let id = layerfs_home::disk::opened(home).unwrap().id;
     let name = format!("{}sb1", layerfs_home::names::provider_prefix(&id));
     let run = paths::run_root(home).join(&name);
     std::fs::create_dir_all(&run).unwrap();
@@ -445,8 +448,8 @@ fn ended_native_sandbox(home: &Path, project: &str) {
         name,
         container: "ab".repeat(32),
         runtime: "process",
-        uid: layerfs_home::home::flock::euid(),
-        gid: layerfs_home::home::flock::egid(),
+        uid: layerfs_home::lock::flock::euid(),
+        gid: layerfs_home::lock::flock::egid(),
         directory: run.display().to_string(),
         process: (
             process.pid,
@@ -482,7 +485,7 @@ fn ended_native_sandbox(home: &Path, project: &str) {
 #[cfg(target_os = "macos")]
 fn force_removed(home: &Path) -> (Vec<String>, Vec<String>) {
     let mut sink = |_| {};
-    let mut events = layerfs_home::events::Events::new(&mut sink);
+    let mut events = layerfs_home::reply::events::Events::new(&mut sink);
     let request = layerfs_sandbox::family::RemoveRequest {
         name: "sb1".to_owned(),
         force: true,
@@ -548,9 +551,9 @@ static HANDED_BRANCH: std::sync::OnceLock<String> = std::sync::OnceLock::new();
 /// Workspace's kernel path and its bound Workspace and Branch ids).
 #[cfg(all(target_os = "macos", feature = "machine"))]
 fn handed_back(
-    _host: layerfs_sandbox::host::Host,
-    _call: layerfs_sandbox::host::Call,
-) -> layerfs_home::outcome::Outcome {
+    _host: layerfs_sandbox::route::machine::Host,
+    _call: layerfs_sandbox::route::machine::Call,
+) -> layerfs_home::reply::outcome::Outcome {
     let branch = HANDED_BRANCH.get().expect("the Branch id").clone();
     Ok(map(&[
         ("kind", t("Closed")),
@@ -638,16 +641,16 @@ fn a_close_without_a_store_url_has_its_caller_end_the_mount_intents() {
     // the mount intent Workspace [7; 32]'s daemon registered on Branch sb1
     {
         use layerfs_history::{GcIntent, GcIntentKind, GcScopeKind};
-        use layerfs_store_service::history::admission;
-        let record = layerfs_store::record::StoreRecord::read(&home, "pg")
+        use layerfs_store_service::history::gc_admission;
+        let record = layerfs_store::admin::record::store::StoreRecord::read(&home, "pg")
             .unwrap()
             .unwrap();
-        let args = layerfs_store::open_args::OpenArgs::of_record(&home, "pg", &record)
+        let args = layerfs_store::admin::open::args::OpenArgs::of_record(&home, "pg", &record)
             .unwrap()
             .with_project("api");
-        let (runtime, boot) = admission::owner_tokens("ws:sb1");
+        let (runtime, boot) = gc_admission::owner_tokens("ws:sb1");
         let intent = GcIntent::shared(
-            admission::op_id(),
+            gc_admission::op_id(),
             GcIntentKind::Mount,
             GcScopeKind::Branch,
             layerfs_protocol::sdk::unhex(&branch).unwrap(),
@@ -659,9 +662,9 @@ fn a_close_without_a_store_url_has_its_caller_end_the_mount_intents() {
             Some(layerfs_home::names::HOST_MACHINE),
         )
         .owned(Some(&runtime), Some(&boot));
-        layerfs_store::service::with_service(&args, |service| {
+        layerfs_store::admin::open::service::with_service(&args, |service| {
             (service.store.history().gc_register(&intent))
-                .map_err(|error| layerfs_home::outcome::failed(error.to_string()))
+                .map_err(|error| layerfs_home::reply::outcome::failed(error.to_string()))
         })
         .unwrap();
     }
@@ -678,8 +681,8 @@ fn a_close_without_a_store_url_has_its_caller_end_the_mount_intents() {
             ("daemon", t(&daemon.display().to_string())),
         ],
     );
-    layerfs_home::home::write_record(
-        &layerfs_home::home::paths::sandbox_record(&home, "sb1"),
+    layerfs_home::disk::write_record(
+        &layerfs_home::disk::paths::sandbox_record(&home, "sb1"),
         &map(&[
             ("v", SdkValue::Int(1)),
             ("name", t("sb1")),
@@ -694,14 +697,19 @@ fn a_close_without_a_store_url_has_its_caller_end_the_mount_intents() {
         .unwrap()
         .unwrap();
     let mut sink = |_| {};
-    let mut events = layerfs_home::events::Events::new(&mut sink);
-    let close = layerfs_sandbox::host::Call::Close {
+    let mut events = layerfs_home::reply::events::Events::new(&mut sink);
+    let close = layerfs_sandbox::route::machine::Call::Close {
         force: true,
         held: None,
     };
-    let answer =
-        layerfs_sandbox::route::on_machine(&home, &mut events, &record, close, handed_back)
-            .unwrap();
+    let answer = layerfs_sandbox::route::machine::send::on_machine(
+        &home,
+        &mut events,
+        &record,
+        close,
+        handed_back,
+    )
+    .unwrap();
     ok(&home, "branch.remove", &[pg.clone(), ("branch", t("sb1"))]);
     ok(&home, "store.compact", &[("store", t("pg"))]);
     // the caller's answer: nothing left, and the handed-back field consumed

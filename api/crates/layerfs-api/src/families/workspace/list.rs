@@ -3,7 +3,7 @@
 use crate::dispatch::table::Kind::{Int, Name, Text};
 use crate::dispatch::table::{call, opt, Call};
 use crate::dispatch::{Context, Form, Paging, Part};
-use layerfs_home::outcome::Outcome;
+use layerfs_home::reply::outcome::Outcome;
 use layerfs_protocol::sdk::SdkValue;
 use layerfs_workspace::list::{list, ListRequest};
 

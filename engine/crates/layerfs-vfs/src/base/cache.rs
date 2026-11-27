@@ -1,5 +1,5 @@
 //! Bounded immutable-object cache. Eviction never changes authoritative state.
-use layerfs_content::filesystem::attributes::PortableMetadata;
+use layerfs_content::filesystem::tree::attribute::PortableMetadata;
 use layerfs_content::object::inode_leaf::InodeKind;
 use layerfs_content::policy::WHOLE_FILE_CANONICAL_OVERHEAD;
 use layerfs_content::{ContentError, ContentResult, FinalizedObject, ObjectId, ObjectRole};
@@ -26,14 +26,15 @@ pub struct CanonicalCache {
     pub(crate) state: Mutex<State>,
     /// Decoded pages of objects this cache's clients authenticated, within
     /// their own fixed budget (#364).
-    pub(crate) decoded: layerfs_content::filesystem::decoded::DecodedPages,
+    pub(crate) decoded: layerfs_content::filesystem::tree::pages::decoded::DecodedPages,
 }
 impl CanonicalCache {
     /// Selects one allowance, shared across all clients retaining this owner.
     /// Oversized objects bypass retention instead of refusing valid demand.
     /// Decoded pages get their own budget, never more than this allowance.
     pub fn new(bytes: usize) -> Self {
-        let decoded = layerfs_content::filesystem::decoded::DECODED_PAGE_BYTES.min(bytes);
+        let decoded =
+            layerfs_content::filesystem::tree::pages::decoded::DECODED_PAGE_BYTES.min(bytes);
         Self::with_decoded(bytes, decoded)
     }
     /// [`Self::new`] with an explicit decoded-page budget; zero keeps none.
@@ -45,7 +46,7 @@ impl CanonicalCache {
                 streams: Default::default(),
                 work: crate::ClientWork::default(),
             }),
-            decoded: layerfs_content::filesystem::decoded::DecodedPages::new(decoded),
+            decoded: layerfs_content::filesystem::tree::pages::decoded::DecodedPages::new(decoded),
         }
     }
     /// Cumulative shared-owner counters and current logical cache charge.

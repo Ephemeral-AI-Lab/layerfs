@@ -471,7 +471,7 @@ fn settle(
 ) -> InitOutcome {
     let layer = history.layer(done.stack.head_layer).unwrap().unwrap();
     let reader = storage.reader().unwrap();
-    let walked = layerfs_content::filesystem::statistics::logical_size(
+    let walked = layerfs_content::filesystem::construction::statistics::logical_size(
         &reader,
         layerfs_content::filesystem::FilesystemRootId(layer.root),
     )

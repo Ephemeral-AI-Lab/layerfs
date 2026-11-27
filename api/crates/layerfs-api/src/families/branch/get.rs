@@ -3,9 +3,9 @@ use crate::dispatch::guard::scope::Rule;
 use crate::dispatch::table::Kind::{Name, Project};
 use crate::dispatch::table::{a, call, Call};
 use crate::dispatch::{Context, Form};
-use layerfs_home::outcome::Outcome;
+use layerfs_home::reply::outcome::Outcome;
 use layerfs_protocol::sdk::SdkValue;
-use layerfs_store::calls::branch::{get, BranchGet};
+use layerfs_store::data::branch::{get, BranchGet};
 
 /// The head to pass as `--expected`; `forked_from` is the Commit the
 /// Branch was forked at.

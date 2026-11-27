@@ -9,11 +9,14 @@ use layerfs_content::{
     encode_whole_file_payload,
     file::mapping::{self, ExtentNode, ExtentSlice, FileState},
     filesystem::{
-        attributes::PortableMetadata,
-        directory::{encode_directory_page, DirectoryPage},
-        inode::{encode_inode_page, InodePage},
         root::profile_id,
-        scope_for_seed, FilesystemRoot, PathName,
+        scope_for_seed,
+        tree::{
+            attribute::PortableMetadata,
+            directory::{encode_directory_page, DirectoryPage},
+            inode::{encode_inode_page, InodePage},
+        },
+        FilesystemRoot, PathName,
     },
     inode_leaf::{
         encode_inode_value, pooled_body, InodeKind, InodeLeaf, InodeLeafRow, InodeMetadata,

@@ -11,13 +11,13 @@ use layerfs_content::{
 };
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_store_service::{
-    history::lookup::{self as args, Answer},
-    operator::args::{paging, text},
-    read::{
-        snapshot::{self, Kind, Snap},
-        visibility::Visibility,
-        window::Walker,
+    families::args::{paging, text},
+    filesystem::text::window::Walker,
+    filesystem::{
+        root::{self, Kind, Snap},
+        tree::visibility::Visibility,
     },
+    lookup::{self as args, Answer},
 };
 use layerfs_vfs::{OverlayRead, SourceView, ViewStat};
 use std::sync::Arc;
@@ -234,7 +234,7 @@ fn scan(
         seen: &seen,
     };
     let mut live = Live::new(view, op);
-    let mut work = layerfs_content::filesystem::attributes::AttributeReadWork::default();
+    let mut work = layerfs_content::filesystem::tree::attribute::AttributeReadWork::default();
     let (mut a, mut b) = (base.next()?, live.next_visible(&seen)?);
     while a.is_some() || b.is_some() {
         let order = match (&a, &b) {
@@ -269,7 +269,7 @@ fn scan(
                     .overlay()
                     .inode(view.source(), new.serial)
                     .map_err(args::failed)?;
-                let local_content = match snapshot::entry(
+                let local_content = match root::entry(
                     op.ports(),
                     &TreeTable::open(
                         op.ports(),
@@ -332,7 +332,7 @@ pub fn changes_of(service: &Service, workspace: &BoundWorkspace, args: &SdkValue
                 return Ok(true);
             }
             if items.len() == limit
-                || spent + path.len() + 96 > layerfs_store_service::read::window::BYTES
+                || spent + path.len() + 96 > layerfs_store_service::filesystem::text::window::BYTES
             {
                 more = true;
                 return Ok(false);

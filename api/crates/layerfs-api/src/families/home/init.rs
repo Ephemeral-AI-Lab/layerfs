@@ -3,7 +3,7 @@
 //! moves it aside.
 use crate::dispatch::table::{call, Call};
 use crate::dispatch::{Context, Form};
-use layerfs_home::outcome::Outcome;
+use layerfs_home::reply::outcome::Outcome;
 use layerfs_protocol::sdk::SdkValue;
 
 /// Its answer: the home, and whether it was there already.
@@ -27,5 +27,5 @@ pub(crate) const CALL: Call = call(
 
 /// Runs `home.init`.
 fn run(context: &mut Context<'_>, _args: &SdkValue) -> Outcome {
-    layerfs_inspect::home::get::init(&context.home)
+    layerfs_inspect::home::init::init(&context.home)
 }

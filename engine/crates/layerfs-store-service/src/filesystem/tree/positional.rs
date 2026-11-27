@@ -12,10 +12,10 @@ use super::{
 use crate::lookup::{self as args, invalid, Answer, Arg};
 use layerfs_content::{
     compare::{memo::Memo, EntryFacts},
-    filesystem::{
-        attributes::{read_portable, AttributeReadWork},
+    filesystem::tree::{
+        attribute::{read_portable, AttributeReadWork},
         directory::read::{list_after, DirectoryReadWork},
-        sorted::DirectoryRoot,
+        pages::DirectoryRoot,
     },
     merge::Rule,
     object::inode_leaf::InodeKind,

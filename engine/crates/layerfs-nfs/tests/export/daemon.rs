@@ -9,7 +9,7 @@
 use crate::client;
 use crate::rig;
 use client::{Client, NOENT};
-use layerfs_daemon::control::{
+use layerfs_daemon::workspace::{
     ExportServing, ExportServingConfig, Failure, Helper, Mounter, Service,
 };
 use layerfs_history::WorkspaceId;

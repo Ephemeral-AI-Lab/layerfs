@@ -357,7 +357,7 @@ impl<'a> FilesystemRead<'a> {
     ///
     /// A serial the table does not hold is a **logical** absence, not provider
     /// absence: the lookup miss is `Ok(None)` from
-    /// [`inode_lookup`](crate::filesystem::inode::read::lookup), whose own contract
+    /// [`inode_lookup`](crate::filesystem::tree::inode::read::lookup), whose own contract
     /// is that *"an absent serial is reported as absent rather than as a missing
     /// object"*. `MissingObject` is the provider's answer and for nothing else —
     /// `object::access`, `cas::provider` and `error.rs` all say so — and a provider

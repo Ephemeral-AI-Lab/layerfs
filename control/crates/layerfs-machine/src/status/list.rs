@@ -4,10 +4,11 @@
 use super::live::{self, Seen};
 use crate::record::machine::{Holders, MachineRecord};
 use crate::Related;
+use layerfs_home::disk::paths;
+use layerfs_home::record::observed;
 use layerfs_home::reply::outcome::{failed, Outcome};
 use layerfs_home::reply::state::{Reason, State};
 use layerfs_home::reply::time::iso;
-use layerfs_home::{disk::paths, record::observed};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 

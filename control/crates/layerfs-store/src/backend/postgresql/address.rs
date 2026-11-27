@@ -8,7 +8,7 @@
 //! the Store's login put in and read back by the client ([`with_login`]):
 //! tokio-postgres 0.7, [`layerfs_persistence::PostgresConfig`], the reading
 //! every Store session dials with.
-use layerfs_home::outcome::refused;
+use layerfs_home::reply::outcome::refused;
 use layerfs_persistence::{PostgresConfig as Config, PostgresHost as Host};
 use layerfs_protocol::sdk::SdkRefusal;
 use std::net::IpAddr;
@@ -399,7 +399,7 @@ pub fn with_login(url: &str, user: &str, password: &str) -> Result<String> {
             Ok(dialled)
         }
         _ => Err({
-            layerfs_home::wipe::text(dialled);
+            layerfs_home::secret::wipe::text(dialled);
             refused(
             "InvalidInput",
             "the saved login cannot be put into the URL so that its client reads it and the address as given; nothing was dialled",

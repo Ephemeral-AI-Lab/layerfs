@@ -9,10 +9,10 @@
 //! payload route `logical_size_after` was removed by #364.)
 use crate::metadata;
 
-use layerfs_content::filesystem::attributes::portable::PortableMetadata;
-use layerfs_content::filesystem::statistics::{
+use layerfs_content::filesystem::construction::statistics::{
     logical_size, logical_size_after_with, LENGTH_WINDOW,
 };
+use layerfs_content::filesystem::tree::attribute::portable::PortableMetadata;
 use layerfs_content::filesystem::{
     build_filesystem, scope_for_seed, update_filesystem, DirectoryUpdate, FilesystemInput,
     FilesystemObjects, FilesystemResources, FilesystemRootId, InodeScope, InodeUpdate, PathName,

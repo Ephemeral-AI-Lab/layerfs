@@ -16,10 +16,10 @@ use crate::data::project::init::postgresql::PgProjectAdd;
 use crate::data::project::init::sqlite::{add_project, ProjectAdd};
 use crate::data::project::record::project::ProjectRecord;
 use crate::data::project::{record::intent, status::live};
-use layerfs_home::events::Events;
 use layerfs_home::names::{ProjectRef, StoreName};
-use layerfs_home::op::FIELD;
-use layerfs_home::outcome::{refused, Outcome};
+use layerfs_home::record::intent::FIELD;
+use layerfs_home::reply::events::Events;
+use layerfs_home::reply::outcome::{refused, Outcome};
 use layerfs_protocol::sdk::SdkValue;
 use std::path::Path;
 
@@ -53,7 +53,9 @@ pub fn get(home: &Path, project: &ProjectRef) -> Outcome {
     if live::find(&record, &target.project, &live).is_none() {
         return Err(refused("NoSuchProject", format!("no project {project}")));
     }
-    Ok(layerfs_home::helpers::map_of(record.answer(&target.record)))
+    Ok(layerfs_home::reply::values::map_of(
+        record.answer(&target.record),
+    ))
 }
 
 /// `project.init`'s answer: the project's record fields, `commit` (main's
@@ -111,7 +113,7 @@ fn project_add(
 /// (bytes, to a worker only), `install` (Init adds the folder to the
 /// Store) and `record` (the home's project record), whatever the route.
 /// The project's entry is claimed with the Init's `op` before the first
-/// effect and settled by the outcome ([`crate::project::op`]): while it
+/// effect and settled by the outcome ([`crate::data::project::record::intent`]): while it
 /// runs the project is listed `busy`, and an Init whose outcome is not
 /// known leaves it `broken` `unresolved`.
 pub fn init(home: &Path, events: &mut Events<'_>, request: &ProjectInit) -> Outcome {
@@ -188,7 +190,7 @@ fn route(
     // the project's record keeps when it was made, and the Init's `op` ends
     progress(events, "record", None);
     {
-        let _lock = layerfs_home::home::lock::take(&home)?;
+        let _lock = layerfs_home::lock::home::take(&home)?;
         if let Some(project) = ProjectRecord::read(&home, store, name)? {
             project.created_now().without(FIELD).write(&home)?;
         }
@@ -208,7 +210,7 @@ struct InitCall<'a> {
 /// `project.init` into a sqlite Store on another machine (H11, H11a): this
 /// process walks the folder on its own host (refusing what Init would
 /// before the machine is reached), checks the machine has room for a copy,
-/// copies it to the machine's worker ([`crate::project::send`]), and the
+/// copies it to the machine's worker ([`crate::data::project::init::send`]), and the
 /// worker adds the copy under its own lease and removes the copy. This process holds the Store's lease meanwhile, as for
 /// any call it sends there, then records the project in the home. One
 /// attempt per request: a lost answer is `Unknown`, and the claimed entry
@@ -260,7 +262,7 @@ fn init_on_worker(
     .encode();
     progress(events, "install", None);
     intent::phase(&home, store.as_str(), name, "install")?;
-    let sent_ms = layerfs_home::home::now_ms();
+    let sent_ms = layerfs_home::disk::now_ms();
     let added = worker.call("project.init", request, &mut |event| events.event(event));
     drop(lease);
     let added = added.map_err(|refusal| {
@@ -305,11 +307,11 @@ fn init_on_worker(
             if crate::data::project::record::restored::complete(&full) {
                 full
             } else {
-                let _ = layerfs_home::home::log_line(
+                let _ = layerfs_home::disk::log_line(
                     &home,
                     "repair.jsonl",
                     &SdkValue::map([
-                        ("at", SdkValue::Int(layerfs_home::home::now_ms())),
+                        ("at", SdkValue::Int(layerfs_home::disk::now_ms())),
                         ("call", SdkValue::text("project.init")),
                         ("store", SdkValue::text(store.as_str())),
                         ("project", SdkValue::text(name)),
@@ -327,7 +329,7 @@ fn init_on_worker(
     };
     progress(events, "record", None);
     {
-        let _lock = layerfs_home::home::lock::take(&home)?;
+        let _lock = layerfs_home::lock::home::take(&home)?;
         project.write(&home)?;
     }
     created(&home, store, name, &record, &added)

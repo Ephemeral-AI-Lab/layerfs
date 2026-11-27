@@ -6,7 +6,7 @@
 //! already resident passes [`FilesystemInput`] instead, which implements the same
 //! contract over its own slices.
 //!
-//! [`FilesystemInput`]: crate::filesystem::input::FilesystemInput
+//! [`FilesystemInput`]: crate::filesystem::construction::input::resident::FilesystemInput
 
 use super::{DirectoryRowSource, InodeRowSource, PreparedRows, RowSource, SerialRowSource};
 use crate::error::ContentResult;

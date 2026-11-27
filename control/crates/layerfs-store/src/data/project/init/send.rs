@@ -20,10 +20,10 @@ use super::parts::Parts;
 use super::tree::{header, Record};
 use crate::admin::route::executor::Worker;
 use crate::backend::sqlite::step_run::CHUNK;
-use layerfs_content::filesystem::symlink::SymlinkTarget;
+use layerfs_content::filesystem::name::symlink::SymlinkTarget;
 use layerfs_content::PathName;
-use layerfs_home::events::Events;
-use layerfs_home::outcome::refused;
+use layerfs_home::reply::events::Events;
+use layerfs_home::reply::outcome::refused;
 use layerfs_project::SourceRefusal;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::ffi::{OsStr, OsString};
@@ -79,11 +79,11 @@ pub struct Left<'a> {
 /// settles the Init (`project delete`, which reads it from the Init's `op`;
 /// spec v20). A log that cannot be written changes no outcome.
 pub fn log_left(home: &Path, left: &Left<'_>, message: &str) {
-    let _ = layerfs_home::home::log_line(
+    let _ = layerfs_home::disk::log_line(
         home,
         "uncertain.jsonl",
         &SdkValue::map([
-            ("at", SdkValue::Int(layerfs_home::home::now_ms())),
+            ("at", SdkValue::Int(layerfs_home::disk::now_ms())),
             ("call", SdkValue::text("project.init")),
             ("store", SdkValue::text(left.store)),
             ("project", SdkValue::text(left.project)),
@@ -101,7 +101,7 @@ pub fn log_left(home: &Path, left: &Left<'_>, message: &str) {
 
 /// A fresh copy id: 16 hex digits.
 pub fn new_id() -> Result<String> {
-    let bytes = layerfs_home::helpers::random()?;
+    let bytes = layerfs_home::record::token::random()?;
     Ok(layerfs_protocol::sdk::hex(&bytes[..8]))
 }
 

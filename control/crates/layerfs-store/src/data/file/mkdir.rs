@@ -1,8 +1,8 @@
 //! `file.mkdir`: a folder and its missing parents made, as one Commit.
 use super::requests::FileMkdir;
 use super::write::{base, commit, mode};
-use layerfs_home::events::Events;
-use layerfs_home::outcome::Outcome;
+use layerfs_home::reply::events::Events;
+use layerfs_home::reply::outcome::Outcome;
 use std::path::Path;
 
 /// `file.mkdir`: a folder and its missing parents made, as one Commit.

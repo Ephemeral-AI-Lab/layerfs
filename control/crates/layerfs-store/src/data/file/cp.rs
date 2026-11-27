@@ -1,8 +1,8 @@
 //! `file.cp`: a path copied, as one Commit.
 use super::requests::FileMv;
 use super::write::{base, commit};
-use layerfs_home::events::Events;
-use layerfs_home::outcome::Outcome;
+use layerfs_home::reply::events::Events;
+use layerfs_home::reply::outcome::Outcome;
 use std::path::Path;
 
 /// `file.cp`: a path copied, a folder with everything in it, as one Commit.

@@ -17,7 +17,7 @@
 //! the connection is ready.
 use crate::internal::Control;
 use crate::route::daemon::channel::fence::Fence;
-use layerfs_home::outcome::{failed, refused};
+use layerfs_home::reply::outcome::{failed, refused};
 use layerfs_protocol::daemon::{DaemonPhase, HelloRequest, Reply, Request};
 use layerfs_protocol::duplex::{
     admission::{AdmissionNotice, AdmissionReason},
@@ -30,7 +30,7 @@ use std::sync::{Condvar, Mutex};
 use std::time::{Duration, Instant};
 
 /// Most control connections one process keeps to one Sandbox. A Sandbox this
-/// binding creates admits [`crate::lifecycle::DAEMON_CONNECTIONS`]; the rest
+/// binding creates admits [`crate::lifecycle::serve::DAEMON_CONNECTIONS`]; the rest
 /// stay for other processes.
 pub const CONNECTIONS: usize = 6;
 

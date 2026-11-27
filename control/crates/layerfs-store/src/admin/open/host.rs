@@ -7,8 +7,8 @@ use crate::admin::open::args::OpenArgs;
 use crate::admin::open::lease::{self};
 use crate::admin::open::service::{Route, Slot};
 use crate::admin::record::store::{self, StoreRecord, StoreRef};
-use layerfs_home::home::paths;
-use layerfs_home::outcome::{refused, with_next, Outcome};
+use layerfs_home::disk::paths;
+use layerfs_home::reply::outcome::{refused, with_next, Outcome};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 
@@ -56,7 +56,7 @@ pub fn run_host_streamed(
     let (open, running) = enter_host(home, store, project)?;
     fields.retain(|(name, _)| name != "project");
     fields.push(("project".to_owned(), SdkValue::text(project)));
-    layerfs_home::trace::step("store_open");
+    layerfs_home::log::trace::step("store_open");
     let outcome = crate::admin::open::service::call_streamed(
         method,
         &open,
@@ -64,7 +64,7 @@ pub fn run_host_streamed(
         running.owner,
         source,
     );
-    layerfs_home::trace::step("call");
+    layerfs_home::log::trace::step("call");
     drop(running);
     outcome
 }
@@ -100,7 +100,7 @@ pub(super) fn enter_host(
                 "host worker Store calls require local SQLite",
             ));
         };
-        layerfs_machine::record::MachineRecord::admit_host(home, machine)?;
+        layerfs_machine::record::machine::MachineRecord::admit_host(home, machine)?;
         if layerfs_machine::in_process() != Some(machine) {
             return Err(refused(
                 "Unavailable",

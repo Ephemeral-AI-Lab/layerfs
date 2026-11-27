@@ -3,13 +3,13 @@
 //! that just started. With no clock left to simulate, this checks the
 //! observable part: after its connections close the server keeps serving,
 //! and `serve` takes no idle period.
-use layerfs_machine::worker::{self, Endpoint};
+use layerfs_machine::route::{self, Endpoint};
 use layerfs_protocol::sdk::SdkValue;
 use std::net::TcpListener;
 
 /// One ping of `endpoint`, or why it did not answer yet.
 fn ping(endpoint: &Endpoint) -> Result<SdkValue, layerfs_protocol::sdk::SdkRefusal> {
-    worker::call(
+    route::call(
         endpoint,
         "worker.ping",
         SdkValue::Map(Vec::new()),
@@ -51,7 +51,7 @@ fn a_worker_serves_with_the_incarnation_the_host_persisted() {
     let answered = answered.expect("the worker answers");
     assert_eq!(answered.get_text("incarnation"), Some(token));
     // the same value was durable before the first request was served
-    let recorded = layerfs_home::home::read_record(&root.join("worker-incarnation.json"))
+    let recorded = layerfs_home::disk::read_record(&root.join("worker-incarnation.json"))
         .expect("the worker's incarnation record is readable")
         .expect("the worker recorded its incarnation");
     assert_eq!(recorded.get_text("incarnation"), Some(token));
@@ -84,7 +84,7 @@ fn a_worker_without_a_supplied_incarnation_mints_and_records_one() {
     let answered = answered.expect("the worker answers");
     let reported = answered.get_text("incarnation").expect("an incarnation");
     assert!(reported.starts_with("p1:worker:"), "{reported}");
-    let recorded = layerfs_home::home::read_record(&root.join("worker-incarnation.json"))
+    let recorded = layerfs_home::disk::read_record(&root.join("worker-incarnation.json"))
         .expect("the worker's incarnation record is readable")
         .expect("the worker recorded its incarnation");
     assert_eq!(recorded.get_text("incarnation"), Some(reported));
@@ -107,7 +107,7 @@ fn a_worker_with_no_requests_keeps_serving() {
         secret: "s".to_owned(),
     };
     let ping = || {
-        worker::call(
+        route::call(
             &endpoint,
             "worker.ping",
             SdkValue::Map(Vec::new()),
@@ -120,7 +120,7 @@ fn a_worker_with_no_requests_keeps_serving() {
         address,
         secret: "wrong".to_owned(),
     };
-    let denied = worker::call(
+    let denied = route::call(
         &wrong,
         "worker.ping",
         SdkValue::Map(Vec::new()),

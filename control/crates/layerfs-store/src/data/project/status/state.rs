@@ -16,10 +16,10 @@ use crate::data::project::delete::run::Intent;
 use crate::data::project::frame::ListedProject;
 use crate::data::project::record::intent::{DELETE, INIT};
 use crate::data::project::record::project::ProjectRecord;
-use layerfs_home::op::Standing;
-use layerfs_home::outcome::refused;
-use layerfs_home::outcome::shell_word;
-use layerfs_home::state::{Reason, State};
+use layerfs_home::record::intent::Standing;
+use layerfs_home::reply::outcome::refused;
+use layerfs_home::reply::outcome::shell_word;
+use layerfs_home::reply::state::{Reason, State};
 use layerfs_protocol::sdk::SdkRefusal;
 use std::path::Path;
 

@@ -17,11 +17,12 @@ use crate::backend::sqlite::move_leftover::{note_incoming, retired};
 use crate::backend::sqlite::step_request::{StepFrame, StoreStep};
 use crate::backend::sqlite::step_run::CHUNK;
 use crate::Related;
-use layerfs_home::events::Events;
-use layerfs_home::home::{self, with_field};
-use layerfs_home::op::{self, Op};
-use layerfs_home::outcome::shell_word;
-use layerfs_home::outcome::{refused, with_fix, Outcome};
+use layerfs_home::disk;
+use layerfs_home::disk::with_field;
+use layerfs_home::record::intent::{self as op, Op};
+use layerfs_home::reply::events::Events;
+use layerfs_home::reply::outcome::shell_word;
+use layerfs_home::reply::outcome::{refused, with_fix, Outcome};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 
@@ -164,7 +165,7 @@ fn run(
 /// read under the Store's lock (stale leases are dropped there). The
 /// check is repeated where `op` is written.
 fn held_now(home: &Path, name: &str, related: Related, worker: Option<&Worker>) -> Result<()> {
-    let _home = layerfs_home::home::lock::take(home)?;
+    let _home = layerfs_home::lock::home::take(home)?;
     let _store = crate::admin::record::store::lock(home, name)?;
     let record = StoreRecord::of(home, name)?;
     related.check_idle(home, name, Worker::holder(worker, home, name, &record)?)
@@ -256,16 +257,16 @@ fn complete_records(home: &Path, name: &str, call: &str) {
             home,
             name,
             &record,
-            &home::paths::store_file(home, name),
+            &disk::paths::store_file(home, name),
         ),
         Err(refusal) => vec![(String::new(), refusal.message)],
     };
     for (project, why) in left {
-        let _ = home::log_line(
+        let _ = disk::log_line(
             home,
             "repair.jsonl",
             &SdkValue::map([
-                ("at", SdkValue::Int(home::now_ms())),
+                ("at", SdkValue::Int(disk::now_ms())),
                 ("call", SdkValue::text(call)),
                 ("store", SdkValue::text(name)),
                 (
@@ -393,7 +394,7 @@ fn phases(
         ("call", SdkValue::text(op.name())),
         ("from", SdkValue::text(from)),
         ("to", SdkValue::text(to)),
-        ("at", SdkValue::Int(home::now_ms())),
+        ("at", SdkValue::Int(disk::now_ms())),
         ("bytes", SdkValue::Int(total as i64)),
         (
             "sha256",

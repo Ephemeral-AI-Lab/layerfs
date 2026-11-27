@@ -15,14 +15,14 @@
 //! (`broken` `failed` when unreadable), and an unreadable Sandbox or
 //! Workspace record, whose place is not known, is left out. Each kind's
 //! own `.record` doctor check names the record; the others are listed.
-use layerfs_home::home::paths;
-use layerfs_home::outcome::{failed, Outcome};
-use layerfs_home::state::{Reason, State};
-use layerfs_machine::record::MachineRecord;
+use layerfs_home::disk::paths;
+use layerfs_home::reply::outcome::{failed, Outcome};
+use layerfs_home::reply::state::{Reason, State};
+use layerfs_machine::record::machine::MachineRecord;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_sandbox::record::{SandboxRecord, WorkspaceRecord};
 use layerfs_sandbox::status::inventory;
-use layerfs_store::record::{StoreKind, StoreRecord, StoreRef};
+use layerfs_store::admin::record::store::{StoreKind, StoreRecord, StoreRef};
 use std::collections::BTreeSet;
 use std::path::Path;
 
@@ -45,15 +45,16 @@ fn unreadable() -> State {
 /// One Store: `{ store, engine, projects, machines, state.. }`. `under`
 /// is its machine's name and state, for a sqlite Store; a PostgreSQL
 /// Store's `machines` are the names of the machines attached to it
-/// (`layerfs_store::postgresql::connect::machines`; `store get` answers
+/// (`layerfs_store::backend::postgresql::connect::machines`; `store get` answers
 /// each with its reach); a sqlite Store has none (null). Its state is the Store's one records-only derivation;
 /// `engine` is null for a kind it does not read.
 fn store(home: &Path, record: &StoreRecord, under: Option<(&str, &State)>) -> SdkValue {
-    let state = layerfs_store::state::recorded_under(record, under.map(|(_, state)| state))
-        .unwrap_or_else(|_| unreadable());
+    let state =
+        layerfs_store::admin::status::state::recorded_under(record, under.map(|(_, state)| state))
+            .unwrap_or_else(|_| unreadable());
     let machines = match (under, record.kind()) {
         (None, Ok(StoreKind::Postgresql)) => {
-            layerfs_store::postgresql::connect::machines(record, false)
+            layerfs_store::backend::postgresql::connect::machines(record, false)
         }
         _ => SdkValue::Null,
     };
@@ -121,7 +122,7 @@ fn sandbox(home: &Path, record: &SandboxRecord, machine: &State) -> SdkValue {
     // only a machine whose calls run in this process and a Sandbox reached
     // directly record them here
     let recorded = layerfs_machine::runs_here(home, record.machine()).unwrap_or(false)
-        || layerfs_sandbox::direct::forwarded(record);
+        || layerfs_sandbox::route::direct::forwarded(record);
     let (listed, not_listed) = match state {
         State::Blocked(_) => (SdkValue::Null, false),
         _ if !recorded => (SdkValue::Null, true),
@@ -141,7 +142,7 @@ fn sandbox(home: &Path, record: &SandboxRecord, machine: &State) -> SdkValue {
 fn buckets(home: &Path) -> Result<Vec<SdkValue>> {
     let mut found = Vec::new();
     for bucket in paths::names(&home.join("backup")).map_err(failed)? {
-        let provider = match layerfs_home::home::read_record(&paths::bucket_record(home, &bucket)) {
+        let provider = match layerfs_home::disk::read_record(&paths::bucket_record(home, &bucket)) {
             Ok(None) => continue,
             Ok(Some(record)) => record.get_text("provider").map(str::to_owned),
             Err(_) => None,

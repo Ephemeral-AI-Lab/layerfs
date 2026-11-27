@@ -15,10 +15,10 @@ use super::super::route::direct;
 use super::state::machine_state;
 use crate::route::machine::send::reach;
 use crate::route::machine::Call;
-use layerfs_home::events::Events;
-use layerfs_home::home::observed;
-use layerfs_home::state::{Reason, State};
-use layerfs_machine::worker::Unreached;
+use layerfs_home::record::observed;
+use layerfs_home::reply::events::Events;
+use layerfs_home::reply::state::{Reason, State};
+use layerfs_machine::route::Unreached;
 use layerfs_protocol::daemon::CapacityModel;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
@@ -270,7 +270,7 @@ fn settle(home: &Path, record: &SandboxRecord, broken: Option<(Reason, &str)>) {
     }
     let file = record.dir(home).join("record.json");
     if file.exists() {
-        let _ = observed::write(&file, layerfs_home::home::now_ms());
+        let _ = observed::write(&file, layerfs_home::disk::now_ms());
     }
 }
 

@@ -2,8 +2,8 @@
 use super::read::run;
 use super::requests::FileRm;
 use super::write::{answer, base, on_main, word};
-use layerfs_home::events::Events;
-use layerfs_home::outcome::{with_fix, Outcome};
+use layerfs_home::reply::events::Events;
+use layerfs_home::reply::outcome::{with_fix, Outcome};
 use std::path::Path;
 
 /// `file.rm`: a path removed, as one Commit; a folder that is not empty

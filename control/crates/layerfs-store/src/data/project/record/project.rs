@@ -4,8 +4,8 @@
 //! `sandbox/files.rs` reads and writes with the rest kept.
 use crate::admin::record::store::StoreRecord;
 use layerfs_history::LayerStackId;
-use layerfs_home::home::{now_ms, paths, read_record, with_field, write_entity};
-use layerfs_home::op::Op;
+use layerfs_home::disk::{now_ms, paths, read_record, with_field, write_entity};
+use layerfs_home::record::intent::Op;
 use layerfs_protocol::provision::manifest::StoreManifest;
 use layerfs_protocol::sdk::unhex;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
@@ -138,7 +138,10 @@ impl ProjectRecord {
     pub fn answer(&self, store: &StoreRecord) -> Vec<(&'static str, SdkValue)> {
         let engine = store.kind().ok().map(|kind| kind.as_str().to_owned());
         let machine = crate::admin::status::state::placed(store).map(str::to_owned);
-        let created = self.fields.get_int("created").map(layerfs_home::time::iso);
+        let created = self
+            .fields
+            .get_int("created")
+            .map(layerfs_home::reply::time::iso);
         vec![
             (
                 "project",

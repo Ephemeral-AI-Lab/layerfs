@@ -2,8 +2,8 @@
 use crate::dispatch::table::Kind::{Int, Name, Project, Text};
 use crate::dispatch::table::{call, opt, Call};
 use crate::dispatch::{Context, Form, Paging, Part};
-use layerfs_home::logs::Filter;
-use layerfs_home::outcome::Outcome;
+use layerfs_home::log::calls::Filter;
+use layerfs_home::reply::outcome::Outcome;
 use layerfs_protocol::sdk::SdkValue;
 
 /// One logged call.
@@ -63,7 +63,7 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         outcome: text("outcome"),
         since: args.get_int("since"),
     };
-    layerfs_home::logs::page(
+    layerfs_home::log::calls::page(
         &context.home,
         &filter,
         args.get_text("cursor"),

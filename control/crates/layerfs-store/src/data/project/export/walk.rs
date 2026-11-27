@@ -4,24 +4,28 @@ use crate::data::project::init::tree::{header, Record};
 use layerfs_content::compare::{memo::Memo, tree::TreeTable, EntryFacts};
 use layerfs_content::file::FileView;
 use layerfs_content::filesystem::{
-    attributes::{read_portable, AttributeReadWork},
-    directory::read::{list_after, DirectoryReadWork},
-    path::PathName,
-    sorted::DirectoryRoot,
-    symlink::SymlinkTarget,
+    name::{path::PathName, symlink::SymlinkTarget},
+    tree::{
+        attribute::{read_portable, AttributeReadWork},
+        directory::read::{list_after, DirectoryReadWork},
+        pages::DirectoryRoot,
+    },
     FilesystemRootId,
 };
 use layerfs_content::object::inode_leaf::{InodeKind, InodeValue};
 use layerfs_content::{AuthenticatedObjects, ContentError};
 use layerfs_history::NodeId;
-use layerfs_home::outcome::refused;
+use layerfs_home::reply::outcome::refused;
 use layerfs_protocol::sdk::SdkRefusal;
 use layerfs_protocol::sdk::{hex, node_text, short};
-use layerfs_store_service::history::{lookup, resolve, saved, MAIN};
-use layerfs_store_service::read::cached::Cached;
-use layerfs_store_service::read::visibility::Visibility;
+use layerfs_store_service::filesystem::cache::Cached;
+use layerfs_store_service::filesystem::tree::visibility::Visibility;
 use layerfs_store_service::store::StorePorts;
 use layerfs_store_service::StoreService;
+use layerfs_store_service::{
+    history::{resolve, saved, MAIN},
+    lookup,
+};
 use layerfs_telemetry::timer::Timing;
 use std::io::Write;
 

@@ -18,12 +18,12 @@
 //! written back is the same JSON.
 use super::daemon::DaemonRecord;
 use crate::route::machine::Started;
-use layerfs_home::home::entity_lock::{self, EntityLock};
-use layerfs_home::home::fields::{self, Fields};
-use layerfs_home::home::{self, paths, read_record, write_entity};
-use layerfs_home::op::{self, Op};
-use layerfs_home::outcome::{failed, with_fix, with_next};
-use layerfs_machine::record::MachineRecord;
+use layerfs_home::disk::{self, paths, read_record, write_entity};
+use layerfs_home::lock::entity::{self, EntityLock};
+use layerfs_home::record::fields::{self, Fields};
+use layerfs_home::record::intent::{self, Op};
+use layerfs_home::reply::outcome::{failed, with_fix, with_next};
+use layerfs_machine::record::machine::MachineRecord;
 use layerfs_protocol::daemon::MountPlace;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::{Path, PathBuf};
@@ -41,7 +41,7 @@ pub fn lock(home: &Path, name: &str) -> Result<EntityLock> {
 /// machine the worker's own), named `name` in its refusal.
 pub fn lock_in(dir: &Path, name: &str) -> Result<EntityLock> {
     let held = format!("Sandbox {name}'s record was being changed by another process");
-    entity_lock::take(&dir.join("lock"), entity_lock::WAIT, &held)
+    entity::take(&dir.join("lock"), entity::WAIT, &held)
 }
 
 /// One fresh, ordered Sandbox generation of `home`'s Sandbox `name` on
@@ -55,7 +55,7 @@ pub fn lock_in(dir: &Path, name: &str) -> Result<EntityLock> {
 /// than refusing the create (a tombstone newer than the live record is
 /// uncertain, never dead, in admission).
 fn generation(home: &Path, name: &str, machine: &str) -> Result<String> {
-    let id = home::opened(home)?.id;
+    let id = disk::opened(home)?.id;
     let previous = SandboxRecord::read(home, name)
         .ok()
         .flatten()
@@ -66,7 +66,7 @@ fn generation(home: &Path, name: &str, machine: &str) -> Result<String> {
         .flatten()
         .map(|tombstone| tombstone.generation)
         .unwrap_or_default();
-    Ok(layerfs_home::helpers::ordered_token(
+    Ok(layerfs_home::record::token::ordered_token(
         &id,
         "sandbox",
         &[&previous, &retired],
@@ -109,7 +109,7 @@ impl fields::Field for Field {
             "machine" => Self::Machine(text()?),
             "created" => Self::Created(fields::int(value)?),
             "generation" => Self::Generation(text()?),
-            op::FIELD => Self::Op(Op::decode(value)?),
+            intent::FIELD => Self::Op(Op::decode(value)?),
             "id" => Self::Id(text()?),
             "platform" => Self::Platform(text()?),
             "runtime" => Self::Runtime(text()?),
@@ -141,7 +141,7 @@ impl fields::Field for Field {
             Self::Machine(_) => "machine",
             Self::Created(_) => "created",
             Self::Generation(_) => "generation",
-            Self::Op(_) => op::FIELD,
+            Self::Op(_) => intent::FIELD,
             Self::Id(_) => "id",
             Self::Platform(_) => "platform",
             Self::Runtime(_) => "runtime",
@@ -223,7 +223,7 @@ impl SandboxRecord {
             Field::Name(name.to_owned()),
             Field::Project(project.to_owned()),
             Field::Machine(machine.to_owned()),
-            Field::Created(home::now_ms()),
+            Field::Created(disk::now_ms()),
             Field::Generation(generation(home, name, machine)?),
             Field::Op(op.clone()),
         ]);
@@ -236,7 +236,7 @@ impl SandboxRecord {
     /// The record of a started Sandbox: what its create answered
     /// (`started`), with its intent dropped.
     pub fn started(mut self, started: &Started) -> Self {
-        self.fields.remove(op::FIELD);
+        self.fields.remove(intent::FIELD);
         for (field, value) in [
             ("id", &started.sandbox),
             ("platform", &started.platform),
@@ -307,7 +307,7 @@ impl SandboxRecord {
 
     /// The record with no intent.
     pub fn without_op(mut self) -> Self {
-        self.fields.remove(op::FIELD);
+        self.fields.remove(intent::FIELD);
         self
     }
 

@@ -1,7 +1,7 @@
 //! `layerfs.json` and the layout version (#533 step 3): an empty home, the
 //! current layout, a foreign or unparsable `layerfs.json` (MIG, RC-8) and one
 //! the system refuses to read, each in its own test.
-use layerfs_home::home::{detect, ensure, open, Layout, LAYOUT_VERSION};
+use layerfs_home::disk::{detect, ensure, open, Layout, LAYOUT_VERSION};
 use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 
@@ -40,8 +40,8 @@ fn a_missing_or_empty_home_is_empty_and_gets_a_layout_and_id() {
     assert_eq!(ensure(&home).unwrap(), file);
     assert_eq!(detect(&home).unwrap(), Layout::Current(file));
     // a home of this layout keeps the call log
-    layerfs_home::logs::append(&home, &line());
-    assert!(layerfs_home::home::paths::calls_file(&home).is_file());
+    layerfs_home::log::calls::append(&home, &line());
+    assert!(layerfs_home::disk::paths::calls_file(&home).is_file());
     std::fs::remove_dir_all(root).unwrap();
 }
 
@@ -99,7 +99,7 @@ fn integration_folders_and_ds_store_read_as_empty_and_init_leaves_them() {
     std::fs::write(home.join(".DS_Store"), "finder").unwrap();
     let before = snapshot(&home);
     assert_eq!(detect(&home).unwrap(), Layout::Empty);
-    let created = layerfs_inspect::home::get::init(&home).unwrap();
+    let created = layerfs_inspect::home::init::init(&home).unwrap();
     assert_eq!(created.get_text("outcome"), Some("created"));
     assert!(matches!(detect(&home).unwrap(), Layout::Current(_)));
     let after = snapshot(&home);
@@ -136,7 +136,7 @@ fn a_folder_with_a_stray_file_and_no_layerfs_json_is_foreign_and_left_as_it_was(
         );
     }
     // a call refused there writes no call log into it
-    layerfs_home::logs::append(&home, &line());
+    layerfs_home::log::calls::append(&home, &line());
     assert_eq!(before, snapshot(&home), "the folder was written");
     std::fs::remove_dir_all(home).unwrap();
 }
@@ -152,7 +152,7 @@ fn a_layerfs_json_of_another_layout_or_unparsable_is_foreign() {
         std::fs::write(home.join("layerfs.json"), &text).unwrap();
         let before = snapshot(&home);
         assert_eq!(detect(&home).unwrap(), Layout::Foreign, "layout {layout}");
-        layerfs_home::logs::append(&home, &line());
+        layerfs_home::log::calls::append(&home, &line());
         let refused = open(&home).unwrap_err();
         assert_eq!(refused.code, "Unsupported");
         assert!(fix(&refused).is_some_and(|fix| fix.ends_with("&& layerfs home init")));
@@ -171,12 +171,12 @@ fn a_layerfs_json_of_another_layout_or_unparsable_is_foreign() {
         std::fs::write(home.join("layerfs.json"), &broken).unwrap();
         let before = snapshot(&home);
         assert_eq!(detect(&home).unwrap(), Layout::Foreign, "{broken}");
-        layerfs_home::logs::append(&home, &line());
+        layerfs_home::log::calls::append(&home, &line());
         let refused = open(&home).unwrap_err();
         assert_eq!(refused.code, "Unsupported", "{broken}");
         assert_eq!(
             fix(&refused),
-            Some(layerfs_home::home::layout::foreign_fix(&home).as_str())
+            Some(layerfs_home::disk::layout::foreign_fix(&home).as_str())
         );
         assert_eq!(before, snapshot(&home), "{broken} was written");
     }

@@ -35,17 +35,17 @@ use crate::admin::route::executor::{self, Executor};
 use crate::backend::postgresql;
 use crate::backend::sqlite::family::progress;
 use layerfs_history::GcScopeKind;
-use layerfs_home::events::Events;
-use layerfs_home::home::paths;
-use layerfs_home::op::Op;
-use layerfs_home::outcome::{failed, refused, Outcome};
-use layerfs_persistence::compact_metrics::{self, CompactRefusal};
+use layerfs_home::disk::paths;
+use layerfs_home::record::intent::Op;
+use layerfs_home::reply::events::Events;
+use layerfs_home::reply::outcome::{failed, refused, Outcome};
+use layerfs_persistence::gc::metrics::{self, CompactRefusal};
 use layerfs_persistence::PostgresHandles;
 use layerfs_persistence::{
     CompactFailpoint, CompactRequest, PersistenceConfig, SqliteHandles, SqlitePersistenceProfile,
 };
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
-use layerfs_store_service::history::{admission, lookup};
+use layerfs_store_service::{history::gc_admission, lookup};
 use std::path::Path;
 
 /// The T-G65 crash harness's gate: the real `layerfs store compact` process it
@@ -135,7 +135,7 @@ impl<'a> Marker<'a> {
 }
 
 /// `store.compact(store)`: reclaim one Store's dead bytes, answering
-/// the report ([`crate::report::compact_report`]). Each phase is sent to
+/// the report ([`crate::admin::maintenance::compact_report::compact_report`]). Each phase is sent to
 /// `events` as it starts, as `{ phase, done, total }` with null counts (the
 /// shape `store.move` sends) and written to the Store's `op`; the run's own
 /// record, which a live read shows, is written by the run, not from here.
@@ -230,7 +230,7 @@ fn prepare_compaction(
         let previous = record.op();
         if previous
             .as_ref()
-            .is_some_and(|op| op.standing() == layerfs_home::op::Standing::Running)
+            .is_some_and(|op| op.standing() == layerfs_home::record::intent::Standing::Running)
         {
             record.unheld()?;
         }
@@ -252,7 +252,7 @@ fn prepare_compaction(
                 .into_iter()
                 .map(|pid| SdkValue::Int(i64::from(pid)))
                 .collect();
-            return Err(layerfs_home::outcome::with_next(
+            return Err(layerfs_home::reply::outcome::with_next(
                 error,
                 "worker_pids",
                 SdkValue::List(pids),
@@ -262,7 +262,10 @@ fn prepare_compaction(
         let op = Op::begin(intent::COMPACT, "mark", SdkValue::Null)?.as_uncertain();
         let close_worker = worker.as_ref().filter(|_| verified.is_some());
         let fenced = close_worker.map_or_else(|| op.clone(), |worker| worker.fence(&op));
-        let record = record.with(layerfs_home::op::FIELD, fenced.to_record().clone());
+        let record = record.with(
+            layerfs_home::record::intent::FIELD,
+            fenced.to_record().clone(),
+        );
         record.write(home)?;
         (lease, record, op, previous, close_worker)
     };
@@ -280,11 +283,11 @@ pub fn owner_alive(op: &layerfs_persistence::CompactOpStatus) -> bool {
     let Some(pid) = op.owner_pid else {
         return false;
     };
-    layerfs_home::process::alive_as(pid, op.owner_pid_start, op.owner_pid_boot)
+    layerfs_home::record::process::alive_as(pid, op.owner_pid_start, op.owner_pid_boot)
 }
 
 /// The run `<store>.compact-op` beside Store file `file` records, as
-/// [`crate::report::compact_status`] projects it (`state` `busy` while it is
+/// [`crate::admin::maintenance::compact_report::compact_status`] projects it (`state` `busy` while it is
 /// live on this machine, else `unresolved`); `None` when there is none. It
 /// reads that record only, never the Store or an artifact.
 pub fn recorded_run(file: &Path) -> Option<SdkValue> {
@@ -311,7 +314,7 @@ pub fn refuse_while_running(file: &Path, store: &str) -> Result<(), SdkRefusal> 
              or removed once that run ends"
         ),
     );
-    Err(layerfs_home::outcome::with_next(refusal, "op", op))
+    Err(layerfs_home::reply::outcome::with_next(refusal, "op", op))
 }
 
 /// The run `<store>.compact-op` beside Store file `file` names, while it is
@@ -330,12 +333,13 @@ fn live_run(file: &Path) -> Option<(String, SdkValue)> {
 /// A `Busy` refusal of a run, naming the run live beside Store file `file`
 /// as its `op` when it names none yet.
 fn naming_live_run(refusal: SdkRefusal, file: &Path) -> SdkRefusal {
-    let named = (refusal.detail.get(layerfs_home::outcome::NEXT)).and_then(|next| next.get("op"));
+    let named =
+        (refusal.detail.get(layerfs_home::reply::outcome::NEXT)).and_then(|next| next.get("op"));
     if refusal.code != "Busy" || named.is_some() {
         return refusal;
     }
     match live_run(file) {
-        Some((_, op)) => layerfs_home::outcome::with_next(refusal, "op", op),
+        Some((_, op)) => layerfs_home::reply::outcome::with_next(refusal, "op", op),
         None => refusal,
     }
 }
@@ -425,13 +429,13 @@ fn compact_sqlite(
         identity.cursor_key,
     )
     .map_err(open_refusal)?;
-    let (owner_pid_start, owner_pid_boot) = match layerfs_home::process::me() {
+    let (owner_pid_start, owner_pid_boot) = match layerfs_home::record::process::me() {
         Some((start, boot)) => (Some(start), Some(boot)),
         None => (None, None),
     };
-    let op_id = admission::op_id();
+    let op_id = gc_admission::op_id();
     let (owner_runtime, owner_boot) =
-        admission::owner_tokens(&format!("compact:{}", layerfs_protocol::sdk::hex(&op_id)));
+        gc_admission::owner_tokens(&format!("compact:{}", layerfs_protocol::sdk::hex(&op_id)));
     let receipt = handles
         .compact_observed(
             &CompactRequest {
@@ -441,7 +445,7 @@ fn compact_sqlite(
                 owner_pid_boot,
                 owner_runtime: Some(owner_runtime),
                 owner_boot: Some(owner_boot),
-                owner_live: Some(layerfs_home::process::recorded_owner_alive),
+                owner_live: Some(layerfs_home::record::process::recorded_owner_alive),
                 failpoint: crash_failpoint(),
                 ..CompactRequest::default()
             },
@@ -492,13 +496,13 @@ fn compact_postgresql(
     let outcome: Outcome = (|| {
         let handles = PostgresHandles::open_writable(&selection, &id.binding, id.cursor_key)
             .map_err(open_refusal)?;
-        let (owner_pid_start, owner_pid_boot) = match layerfs_home::process::me() {
+        let (owner_pid_start, owner_pid_boot) = match layerfs_home::record::process::me() {
             Some((start, boot)) => (Some(start), Some(boot)),
             None => (None, None),
         };
-        let op_id = admission::op_id();
+        let op_id = gc_admission::op_id();
         let (owner_runtime, owner_boot) =
-            admission::owner_tokens(&format!("compact:{}", layerfs_protocol::sdk::hex(&op_id)));
+            gc_admission::owner_tokens(&format!("compact:{}", layerfs_protocol::sdk::hex(&op_id)));
         let receipt = handles
             .compact_observed(
                 &CompactRequest {
@@ -553,8 +557,8 @@ fn open_refusal(error: layerfs_storage::port::PersistenceError) -> SdkRefusal {
 /// measured SQLite run records the refusals it produces itself.
 fn note_refusal(refusal: &SdkRefusal) {
     match refusal.code.as_str() {
-        "Busy" => compact_metrics::record_refusal(CompactRefusal::Busy),
-        "Unresolved" => compact_metrics::record_refusal(CompactRefusal::Unresolved),
+        "Busy" => metrics::record_refusal(CompactRefusal::Busy),
+        "Unresolved" => metrics::record_refusal(CompactRefusal::Unresolved),
         _ => {}
     }
 }

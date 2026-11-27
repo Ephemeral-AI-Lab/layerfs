@@ -3,7 +3,7 @@ use crate::dispatch::guard::scope::Rule;
 use crate::dispatch::table::Kind::{Bool, Content, Function, Json, Text};
 use crate::dispatch::table::{a, call, opt, Call, PROGRESS};
 use crate::dispatch::{Context, Form, Policy};
-use layerfs_home::outcome::{refused, Outcome};
+use layerfs_home::reply::outcome::{refused, Outcome};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_workspace::exec::call::{exec, ExecRequest};
 

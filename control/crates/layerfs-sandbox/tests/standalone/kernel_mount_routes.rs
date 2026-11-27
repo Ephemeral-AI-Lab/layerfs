@@ -9,9 +9,11 @@ mod mounted;
 #[path = "../../../../../engine/crates/layerfs-daemon/tests/support/install/host.rs"]
 mod support;
 use layerfs_daemon::{
-    control::{Failure, Success},
-    install::receive_install,
-    install_types::{InstalledStore, StoreSettings},
+    install::{
+        outcome::{InstalledStore, StoreSettings},
+        receive_install,
+    },
+    workspace::{Failure, Success},
 };
 use layerfs_history::{BranchId, WorkspaceId};
 use layerfs_protocol::daemon::{

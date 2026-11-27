@@ -4,7 +4,7 @@ use crate::dispatch::guard::scope::Rule;
 use crate::dispatch::table::Kind::Text;
 use crate::dispatch::table::{a, call, opt, Call};
 use crate::dispatch::{Context, Form};
-use layerfs_home::outcome::Outcome;
+use layerfs_home::reply::outcome::Outcome;
 use layerfs_protocol::sdk::SdkValue;
 use layerfs_workspace::exec::call::{cancel_call, CancelRequest};
 

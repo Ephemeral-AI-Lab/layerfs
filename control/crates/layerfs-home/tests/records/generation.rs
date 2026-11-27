@@ -2,10 +2,8 @@
 //! a home moves it once, through the one shared writer (`write_entity`),
 //! and nothing else does: a command's records, an observation file, a
 //! plain record file and any record under a folder that is not a home.
-use layerfs_home::{
-    disk::{write_entity, write_record},
-    record::{generation, observed},
-};
+use layerfs_home::disk::{write_entity, write_record};
+use layerfs_home::record::{generation, observed};
 use layerfs_protocol::sdk::SdkValue;
 use std::path::{Path, PathBuf};
 

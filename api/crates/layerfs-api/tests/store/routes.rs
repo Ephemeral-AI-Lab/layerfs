@@ -3,7 +3,7 @@
 //! are held, read and cleaned.
 use layerfs_api::home::{self, paths, write_record};
 use layerfs_protocol::sdk::SdkValue;
-use layerfs_store::lease;
+use layerfs_store::admin::open::lease;
 use std::net::TcpListener;
 use std::path::PathBuf;
 
@@ -164,7 +164,7 @@ fn leases_are_held_counted_and_stale_ones_removed() {
     // a lease of a process that is gone is stale: removed and logged
     let dead = paths::lease_dir(&home, "shop").join("2147483646");
     std::fs::write(&dead, "1\n").unwrap();
-    assert!(!layerfs_home::process::alive(2147483646));
+    assert!(!layerfs_home::record::process::alive(2147483646));
     assert_eq!(lease::holders(&home, "shop").unwrap(), Vec::<u32>::new());
     assert!(!dead.exists());
     let log = std::fs::read_to_string(home.join("log/leases.jsonl")).unwrap();
@@ -176,7 +176,7 @@ fn leases_are_held_counted_and_stale_ones_removed() {
 fn a_lease_names_its_process_so_a_reused_or_group_pid_never_holds() {
     // ids 0 and above i32::MAX are process groups to kill(2): never alive
     for pid in [0, i32::MAX as u32 + 1, u32::MAX] {
-        assert!(!layerfs_home::process::alive(pid), "{pid}");
+        assert!(!layerfs_home::record::process::alive(pid), "{pid}");
     }
     let home = home_with(sqlite_record(t(layerfs_home::names::HOST_MACHINE)));
     let dir = paths::lease_dir(&home, "shop");

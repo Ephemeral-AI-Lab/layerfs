@@ -4,7 +4,7 @@ use crate::dispatch::table::Kind::Name;
 use crate::dispatch::table::{a, call, opt, Call};
 use crate::dispatch::{Context, Form};
 use layerfs_home::names::{MachineName, StoreName};
-use layerfs_home::outcome::Outcome;
+use layerfs_home::reply::outcome::Outcome;
 use layerfs_protocol::sdk::SdkValue;
 
 /// Its answer: nothing to say in the short form.
@@ -41,7 +41,7 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         .get_text("machine")
         .map(MachineName::parse)
         .transpose()?;
-    layerfs_store::sqlite::create::create(
+    layerfs_store::backend::sqlite::create::create(
         &context.home,
         &name,
         machine.as_ref().map(|m| m.as_str()),

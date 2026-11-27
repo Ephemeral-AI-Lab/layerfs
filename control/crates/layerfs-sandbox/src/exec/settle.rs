@@ -13,8 +13,8 @@
 use crate::record::exec::{self, ExecRecord, Route};
 use crate::record::lock_in;
 use crate::{Cancelled, Stop};
-use layerfs_home::home::{log_line, now_ms, write_entity};
-use layerfs_home::outcome::{failed, refused};
+use layerfs_home::disk::{log_line, now_ms, write_entity};
+use layerfs_home::reply::outcome::{failed, refused};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 use std::time::Duration;

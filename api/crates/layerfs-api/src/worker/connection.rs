@@ -11,8 +11,8 @@
 //! reports `Unknown`; a read-only operation that wrote nothing yet answers
 //! `Failed`.
 use super::{ops, serve::Server};
-use layerfs_home::outcome::refused;
-use layerfs_machine::worker::{read_frame, read_frame_within, write_frame, MAX_HELLO};
+use layerfs_home::reply::outcome::refused;
+use layerfs_machine::route::{read_frame, read_frame_within, write_frame, MAX_HELLO};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::io::Read;
 use std::net::{Shutdown, TcpStream};
@@ -174,9 +174,9 @@ fn exchange(server: &Server, wire: &mut Wire, served: &mut Option<String>) {
     let _ = wire.stream.set_read_timeout(None);
     let stepped = request.get("trace_step") == Some(&SdkValue::Bool(true));
     if stepped {
-        layerfs_home::trace::steps_begin();
+        layerfs_home::log::trace::steps_begin();
     }
-    let _home = layerfs_home::home::guest::sent(request.get_text("home_id"));
+    let _home = layerfs_home::disk::guest::sent(request.get_text("home_id"));
     let (op, args) = op_and_args(request);
     let op = served.insert(op).as_str();
     #[cfg(feature = "worker-fault")]
@@ -187,9 +187,9 @@ fn exchange(server: &Server, wire: &mut Wire, served: &mut Option<String>) {
         Err(refusal) => refusal_frame(refusal),
     };
     if stepped {
-        layerfs_home::trace::step("result");
-        let steps = layerfs_home::trace::steps_value(layerfs_home::trace::steps_take());
-        frame = layerfs_home::home::with_field(frame, "steps", steps);
+        layerfs_home::log::trace::step("result");
+        let steps = layerfs_home::log::trace::steps_value(layerfs_home::log::trace::steps_take());
+        frame = layerfs_home::disk::with_field(frame, "steps", steps);
     }
     wire.answer(&frame, waits.close);
 }

@@ -69,11 +69,3 @@ pub use users::{MachineUsers, Related};
 pub use lifecycle::boot::start_lock as force_stop_lock;
 #[cfg(feature = "machine")]
 pub use lifecycle::force_stop::force_record;
-
-// #828 compat: old public module paths, removed in wave 3.
-#[doc(hidden)]
-pub use crate::route as worker; // #828 compat
-#[doc(hidden)]
-pub use crate::setup::bundle; // #828 compat
-#[doc(hidden)]
-pub use crate::status::state; // #828 compat

@@ -25,10 +25,10 @@ use crate::admin::route::executor::{self, Executor};
 use crate::backend::sqlite::family::{begin, ended, step_on};
 use crate::backend::sqlite::step_request::StoreStep;
 use crate::Related;
-use layerfs_home::op::{Op, Standing};
-use layerfs_home::outcome::shell_word;
-use layerfs_home::outcome::{refused, with_fix};
-use layerfs_machine::record::MachineRecord;
+use layerfs_home::record::intent::{Op, Standing};
+use layerfs_home::reply::outcome::shell_word;
+use layerfs_home::reply::outcome::{refused, with_fix};
+use layerfs_machine::record::machine::MachineRecord;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 
@@ -228,7 +228,7 @@ pub fn retired(home: &Path, name: &str, id: &str) -> Result<()> {
     let _store = store::lock(home, name)?;
     let mut now = StoreRecord::of(home, name)?;
     if now.op().is_some_and(|held| held.id() == id) {
-        now = now.without(layerfs_home::op::FIELD);
+        now = now.without(layerfs_home::record::intent::FIELD);
     }
     // the copy this call cleared or replaced is no longer on that machine
     if now.field("incoming_on").is_some() {
@@ -236,7 +236,7 @@ pub fn retired(home: &Path, name: &str, id: &str) -> Result<()> {
     }
     if let Some(last) = now.field("last_transfer").cloned() {
         if last.get("retired") == Some(&SdkValue::Bool(false)) {
-            let last = layerfs_home::home::with_field(last, "retired", SdkValue::Bool(true));
+            let last = layerfs_home::disk::with_field(last, "retired", SdkValue::Bool(true));
             now = now.with("last_transfer", last);
         }
     }

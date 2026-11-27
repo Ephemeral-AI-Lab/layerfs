@@ -18,7 +18,7 @@ use super::close::{in_use, reaper, release_lease, CloseReport};
 use crate::admin::open::args::OpenArgs;
 use crate::admin::open::lease::Lease;
 use crate::admin::open::service::{self as direct, Completion, Route, Slot};
-use layerfs_home::outcome::{failed, with_next, Outcome};
+use layerfs_home::reply::outcome::{failed, with_next, Outcome};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::cell::Cell;
 use std::collections::BTreeMap;
@@ -109,7 +109,7 @@ pub fn run(op: &str, open: &OpenArgs, args: SdkValue, lease: Option<Lease>) -> O
 }
 
 pub(super) fn call(op: &str, open: &OpenArgs, args: SdkValue, running: Running) -> Outcome {
-    layerfs_home::trace::step("store_open");
+    layerfs_home::log::trace::step("store_open");
     // An admitting call reads the bounded places this home can speak for,
     // once; no other call reads the home (`place_view::admits`). The engine
     // never opens a home record; a worker call installs its own view before
@@ -120,7 +120,7 @@ pub(super) fn call(op: &str, open: &OpenArgs, args: SdkValue, running: Running) 
         }),
         false => direct::call_owned(op, open, args, running.owner),
     };
-    layerfs_home::trace::step("call");
+    layerfs_home::log::trace::step("call");
     drop(running);
     outcome
 }

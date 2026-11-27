@@ -9,8 +9,8 @@
 //! branch page reconstructs exactly one chain (`branch_requests` equals the
 //! branch pages demanded), each chain at most the depth cap long, and the
 //! merged tree holds both changes.
-use layerfs_content::filesystem::attributes::portable::PortableMetadata;
-use layerfs_content::filesystem::inode::{lookup_many, InodeReadWork, InodeTable};
+use layerfs_content::filesystem::tree::attribute::portable::PortableMetadata;
+use layerfs_content::filesystem::tree::inode::{lookup_many, InodeReadWork, InodeTable};
 use layerfs_content::filesystem::{
     build_filesystem, scope_for_seed, update_filesystem, DirectoryUpdate, FilesystemInput,
     FilesystemObjects, FilesystemResources, FilesystemRootId, InodeScope, InodeUpdate, PathName,

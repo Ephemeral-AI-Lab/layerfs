@@ -1,10 +1,10 @@
 //! Demand reads through current public content APIs, without a base-tree mirror.
 use crate::{CanonicalClient, WorkspaceResult};
-use layerfs_content::filesystem::attributes::PortableMetadata;
-use layerfs_content::filesystem::directory::read::{
+use layerfs_content::filesystem::tree::attribute::PortableMetadata;
+use layerfs_content::filesystem::tree::directory::read::{
     list_after, lookup_counted, lookup_many as names_in, root_shapes, DirectoryReadWork,
 };
-use layerfs_content::filesystem::inode::{lookup, lookup_many, InodeReadWork, InodeTable};
+use layerfs_content::filesystem::tree::inode::{lookup, lookup_many, InodeReadWork, InodeTable};
 use layerfs_content::filesystem::{
     DirectoryListing, DirectoryRoot, FilesystemRead, FilesystemRoot, FilesystemRootId, InodeScope,
     PathName, Resolved, SymlinkTarget,
@@ -281,7 +281,7 @@ impl BaseView {
         if value.kind != InodeKind::Directory {
             return Err(ContentError::WrongLogicalRole);
         }
-        layerfs_content::filesystem::directory::read::list_after_bytes(
+        layerfs_content::filesystem::tree::directory::read::list_after_bytes(
             self.client.as_ref(),
             DirectoryRoot(value.content_root),
             after,
@@ -296,7 +296,7 @@ impl BaseView {
         if value.kind != InodeKind::Directory {
             return Err(ContentError::WrongLogicalRole);
         }
-        Ok(layerfs_content::filesystem::directory::root_shape(
+        Ok(layerfs_content::filesystem::tree::directory::root_shape(
             self.client.as_ref(),
             layerfs_content::filesystem::DirectoryRoot(value.content_root),
         )?

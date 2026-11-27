@@ -9,7 +9,7 @@ use layerfs_protocol::{
     },
 };
 use layerfs_storage::{ReservationBlocks, StorageError};
-use layerfs_store_service::{bootstrap::OpenedStore, store::PortError};
+use layerfs_store_service::store::{open::OpenedStore, PortError};
 use std::{fmt, io, path::PathBuf, sync::Arc};
 
 /// Fixed startup resources; none is a total Store/namespace/file size limit.

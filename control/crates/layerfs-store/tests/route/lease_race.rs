@@ -1,6 +1,7 @@
 //! A holder can release its lease after stale inspection and before removal.
 #![cfg(unix)]
-use layerfs_home::home::{self, paths};
+use layerfs_home::disk;
+use layerfs_home::disk::paths;
 use layerfs_store::admin::{open::lease, record::store};
 use nix::sys::stat::Mode;
 use std::fs::OpenOptions;
@@ -13,7 +14,7 @@ use std::time::{Duration, Instant};
 fn stale_lease_released_after_inspection_is_already_gone() {
     let home = std::env::temp_dir().join(format!("layerfs-lease-race-{}", std::process::id()));
     let directory = paths::lease_dir(&home, "shop");
-    home::private_dir(&directory).unwrap();
+    disk::private_dir(&directory).unwrap();
     let path = directory.join("4294967295");
     nix::unistd::mkfifo(&path, Mode::S_IRUSR | Mode::S_IWUSR).unwrap();
     let (send, recv) = mpsc::channel();

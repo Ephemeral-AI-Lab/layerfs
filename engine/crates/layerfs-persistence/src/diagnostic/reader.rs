@@ -7,8 +7,7 @@ use layerfs_storage::{
         pool::PoolReader,
         DecompressionWorkspace, GroupCache, PackCache,
     },
-    location::{ObjectLocation, SignatureRow},
-    source::Source,
+    location::{ObjectLocation, SignatureRow, Source},
     StorageCapacities, StorageError, StorageResult,
 };
 use std::cell::RefCell;

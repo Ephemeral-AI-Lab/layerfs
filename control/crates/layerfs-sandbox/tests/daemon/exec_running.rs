@@ -4,7 +4,7 @@
 //! record from before those fields still decodes; and `running` lists the
 //! commands whose owner process still runs, oldest first, leaving a stale
 //! record out and untouched.
-use layerfs_home::home::write_entity;
+use layerfs_home::disk::write_entity;
 use layerfs_protocol::sdk::SdkValue;
 use layerfs_sandbox::exec::id::ExecId;
 use layerfs_sandbox::exec::settle::unreached;

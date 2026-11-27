@@ -30,8 +30,8 @@
 #![cfg(any(target_os = "macos", target_os = "linux"))]
 use crate::admin::host_worker::write::{header, InputKind};
 use layerfs_home::json;
-use layerfs_home::outcome::{refused, Outcome};
-use layerfs_machine::worker::{
+use layerfs_home::reply::outcome::{refused, Outcome};
+use layerfs_machine::route::{
     StreamFrame, StreamReader, StreamSender, FRAME_LIMITS, STREAM_KEEPALIVE, STREAM_PIECE,
 };
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
@@ -184,7 +184,7 @@ pub(crate) fn fits_worker(file: &mut std::fs::File) -> bool {
         let _ = each_element(&mut input, &mut |change| {
             let (change, content) = split_content(change)?;
             drop(content);
-            fits = layerfs_machine::worker::value_within_budget(&change);
+            fits = layerfs_machine::route::value_within_budget(&change);
             Ok(fits)
         });
         fits && !input.get_ref().failed
@@ -264,13 +264,13 @@ fn spool_file(home: &Path) -> Option<std::fs::File> {
     use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
     use std::sync::atomic::{AtomicU64, Ordering};
     static NEXT: AtomicU64 = AtomicU64::new(0);
-    let dir = layerfs_home::home::paths::machine_dir(home, layerfs_home::names::HOST_MACHINE)
+    let dir = layerfs_home::disk::paths::machine_dir(home, layerfs_home::names::HOST_MACHINE)
         .join("spool");
-    layerfs_home::home::private_dir(&dir).ok()?;
+    layerfs_home::disk::private_dir(&dir).ok()?;
     // an existing folder is used only when it is this user's and private
     let folder = std::fs::symlink_metadata(&dir).ok()?;
     if !folder.is_dir()
-        || folder.uid() != layerfs_home::home::flock::euid()
+        || folder.uid() != layerfs_home::lock::flock::euid()
         || folder.mode() & 0o077 != 0
     {
         return None;
@@ -308,7 +308,7 @@ fn remove_stale(dir: &Path) {
             .to_str()
             .and_then(|name| name.split('-').next())
             .and_then(|pid| pid.parse::<u32>().ok());
-        if pid.is_some_and(|pid| !layerfs_home::process::alive(pid)) {
+        if pid.is_some_and(|pid| !layerfs_home::record::process::alive(pid)) {
             let _ = std::fs::remove_file(entry.path());
         }
     }
@@ -590,7 +590,7 @@ impl Source for Body<'_, '_> {
 /// Runs one authenticated write request on the worker, its streamed input
 /// read from `reader`. Commits only after the input's end was read. A
 /// request that carries a login is a PostgreSQL Store's
-/// ([`crate::host_postgresql::serve_write`]); any other runs on a host
+/// ([`crate::admin::host_worker::postgresql::serve_write`]); any other runs on a host
 /// SQLite Store.
 pub fn serve(home: &Path, request: &SdkValue, reader: &mut StreamReader<'_>) -> Outcome {
     let (method, store, project, body, fields) = header(request)?;

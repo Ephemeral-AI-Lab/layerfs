@@ -9,7 +9,7 @@
 //! Nothing is started, stopped or written.
 //!
 //! What a probe finds is read as `machine get --with live` reads it (its
-//! state words, reasons and fixes from `layerfs_machine::state`): the
+//! state words, reasons and fixes from `layerfs_machine::status::state`): the
 //! provider is asked of the VM alone; a Docker Engine that does not answer
 //! is `engine_down`, whose fix starts Docker; a VM the provider does not
 //! hold is `missing`; one it reports broken `failed`; a running machine's
@@ -26,7 +26,9 @@
 //! reason), or `Err(None)` when a check gave no verdict.
 use super::super::doctor::budget::{Budget, Checks};
 #[cfg(feature = "machine")]
-use layerfs_home::outcome::shell_word;
+use layerfs_home::disk;
+#[cfg(feature = "machine")]
+use layerfs_home::reply::outcome::shell_word;
 use layerfs_protocol::sdk::SdkValue;
 use std::path::Path;
 
@@ -37,7 +39,7 @@ pub(crate) fn diagnose(
     _budget: &Budget,
     checks: &mut Checks,
 ) -> Result<(), Option<&'static str>> {
-    match layerfs_machine::record::MachineRecord::read(home, name) {
+    match layerfs_machine::record::machine::MachineRecord::read(home, name) {
         Ok(Some(_)) => checks.pass("machine.record", "its record reads"),
         Ok(None) => {
             checks.fail("machine.record", "it has no record");
@@ -131,20 +133,19 @@ fn record(
     checks: &mut Checks,
 ) -> Result<
     (
-        layerfs_machine::record::MachineRecord,
+        layerfs_machine::record::machine::MachineRecord,
         layerfs_machine::platform::Platform,
     ),
     &'static str,
 > {
-    use layerfs_home::home;
-    use layerfs_machine::record::MachineRecord;
+    use layerfs_machine::record::machine::MachineRecord;
     const ID: &str = "machine.record";
-    let file = home::paths::machine_record(home, name);
+    let file = disk::paths::machine_record(home, name);
     // a built-in machine with no record yet is the one its first write makes
     let mut written = true;
     let record = match MachineRecord::read(home, name) {
         Ok(Some(record)) => record,
-        Ok(None) if layerfs_home::names::BUILT_IN.contains(&name) => match home::opened(home) {
+        Ok(None) if layerfs_home::names::BUILT_IN.contains(&name) => match disk::opened(home) {
             Ok(file) => {
                 written = false;
                 MachineRecord::built_in(name, &file.id)
@@ -182,7 +183,7 @@ fn record(
             return Err("failed");
         }
     };
-    if (written && record.int("v") != Some(home::RECORD_VERSION))
+    if (written && record.int("v") != Some(disk::RECORD_VERSION))
         || record.text("name") != Some(name)
         || !valid_saved_fields(&record)
         || (record.field("op").is_some() && record.op().is_none())
@@ -259,10 +260,10 @@ fn record(
 /// certain operation a gone owner left holds nothing, as every read says.
 #[cfg(feature = "machine")]
 fn operation(
-    record: &layerfs_machine::record::MachineRecord,
+    record: &layerfs_machine::record::machine::MachineRecord,
     checks: &mut Checks,
 ) -> Option<&'static str> {
-    use layerfs_home::op::Standing;
+    use layerfs_home::record::intent::Standing;
     const ID: &str = "machine.operation";
     let Some(op) = record.op() else {
         checks.pass(ID, "no operation is on it");
@@ -282,7 +283,10 @@ fn operation(
         }
         Standing::Unresolved => {
             checks.fail(ID, format!("the outcome of its {what} is not known"));
-            checks.fix(ID, layerfs_machine::state::settle(record.name(), &op));
+            checks.fix(
+                ID,
+                layerfs_machine::status::state::settle(record.name(), &op),
+            );
             Some("unresolved")
         }
         Standing::Stale => {
@@ -300,8 +304,8 @@ fn operation(
 /// The operations a machine's record may hold, and their phases.
 #[cfg(feature = "machine")]
 const NAMES: [&str; 4] = [
-    layerfs_machine::record::CREATE,
-    layerfs_machine::record::REMOVE,
+    layerfs_machine::record::machine::CREATE,
+    layerfs_machine::record::machine::REMOVE,
     "machine.start",
     "machine.stop",
 ];
@@ -329,7 +333,7 @@ impl Machine<'_> {
     /// verdict (the records then say).
     fn probe(
         &mut self,
-        record: &layerfs_machine::record::MachineRecord,
+        record: &layerfs_machine::record::machine::MachineRecord,
     ) -> Result<(), Option<&'static str>> {
         use layerfs_machine::platform::State;
         let spec = self.configuration(record)?;
@@ -347,7 +351,7 @@ impl Machine<'_> {
     /// provider (the home's id included).
     fn configuration(
         &mut self,
-        record: &layerfs_machine::record::MachineRecord,
+        record: &layerfs_machine::record::machine::MachineRecord,
     ) -> Result<layerfs_machine::platform::Spec, Option<&'static str>> {
         const ID: &str = "machine.configuration";
         let made = layerfs_machine::machine_provider_spec(self.home, record);
@@ -365,7 +369,7 @@ impl Machine<'_> {
                     if let Ok(held) =
                         layerfs_sandbox::status::inventory::Held::read(self.home, self.name)
                     {
-                        let chain = layerfs_machine::record::no_vm_name_fix;
+                        let chain = layerfs_machine::record::machine::no_vm_name_fix;
                         fix = Some(chain(self.name, held.holders()));
                     }
                 }
@@ -397,7 +401,7 @@ impl Machine<'_> {
         spec: &layerfs_machine::platform::Spec,
     ) -> Result<Option<layerfs_machine::platform::Status>, Option<&'static str>> {
         use layerfs_machine::platform::{self, Code, State};
-        use layerfs_machine::state::start_docker;
+        use layerfs_machine::status::state::start_docker;
         use layerfs_protocol::sdk::SdkValue;
         use std::time::{Duration, Instant};
         const ID: &str = "machine.provider";
@@ -463,7 +467,9 @@ impl Machine<'_> {
                 // remove's `InUse` refusal carries (area 10)
                 let held = layerfs_sandbox::status::inventory::Held::read(self.home, name);
                 let fix = match held {
-                    Ok(held) => layerfs_machine::record::no_vm_name_fix(name, held.holders()),
+                    Ok(held) => {
+                        layerfs_machine::record::machine::no_vm_name_fix(name, held.holders())
+                    }
                     Err(_) => format!("layerfs machine remove {name}", name = shell_word(name)),
                 };
                 self.checks.fix(ID, fix);
@@ -498,10 +504,10 @@ impl Machine<'_> {
     /// whose fix is that read.
     fn state(
         &mut self,
-        record: &layerfs_machine::record::MachineRecord,
+        record: &layerfs_machine::record::machine::MachineRecord,
         kernel: Option<layerfs_machine::platform::State>,
     ) {
-        use layerfs_home::state::{Reason, State};
+        use layerfs_home::reply::state::{Reason, State};
         const ID: &str = "machine.state";
         let name = self.name;
         let recorded = record.recorded(self.sandboxes);
@@ -553,13 +559,13 @@ impl Machine<'_> {
     /// build and one ping. Answers the data disk's free bytes, from the
     /// provider (`free`) or the worker's ping.
     fn worker(&mut self, free: Option<u64>) -> Result<Option<u64>, Option<&'static str>> {
-        use layerfs_machine::state::replace_worker;
-        use layerfs_machine::worker::{diagnostic_connect, Endpoint};
+        use layerfs_machine::route::{diagnostic_connect, Endpoint};
+        use layerfs_machine::status::state::replace_worker;
         use std::time::{Duration, Instant};
         let name = self.name;
         let start = format!("layerfs machine start {name}", name = shell_word(name));
         let replace = replace_worker(name, self.sandboxes);
-        let endpoint = match layerfs_home::secrets::worker_secret(self.home, name) {
+        let endpoint = match layerfs_home::secret::keys::worker_secret(self.home, name) {
             Ok(Some(value))
                 if !value.secret.is_empty()
                     && value.address.ip().is_loopback()
@@ -645,8 +651,8 @@ impl Machine<'_> {
     /// `machine.network`: its worker reads its Sandbox network
     /// (`network.inspect`), on a connection of its own. A worker that does
     /// not answer leaves the check without a verdict.
-    fn network(&mut self, endpoint: &layerfs_machine::worker::Endpoint, stop: std::time::Instant) {
-        use layerfs_machine::worker::{diagnostic_connect, DiagnosticOperation};
+    fn network(&mut self, endpoint: &layerfs_machine::route::Endpoint, stop: std::time::Instant) {
+        use layerfs_machine::route::{diagnostic_connect, DiagnosticOperation};
         const ID: &str = "machine.network";
         let answer = diagnostic_connect(endpoint, stop).and_then(|worker| {
             worker.diagnose(
@@ -680,7 +686,7 @@ impl Machine<'_> {
     /// its process and this build's version.
     fn ping(
         &mut self,
-        worker: layerfs_machine::worker::DiagnosticWorker,
+        worker: layerfs_machine::route::DiagnosticWorker,
         free: Option<u64>,
         start: &str,
         replace: &str,
@@ -739,8 +745,8 @@ impl Machine<'_> {
         const ID: &str = "machine.capacity";
         let reclaimable = layerfs_home::names::MachineName::parse(self.name)
             .ok()
-            .and_then(|machine| layerfs_sandbox::images::list(self.home, &machine, false).ok())
-            .map(|listed| layerfs_sandbox::images::reclaimable(&listed));
+            .and_then(|machine| layerfs_sandbox::image::list::list(self.home, &machine, false).ok())
+            .map(|listed| layerfs_sandbox::image::list::reclaimable(&listed));
         let fix = reclaimable
             .filter(|bytes| *bytes > 0)
             .map(|_| format!("layerfs machine prune {} --unused", shell_word(self.name)));
@@ -795,7 +801,7 @@ fn provider_failed(
 }
 
 #[cfg(feature = "machine")]
-fn valid_saved_fields(record: &layerfs_machine::record::MachineRecord) -> bool {
+fn valid_saved_fields(record: &layerfs_machine::record::machine::MachineRecord) -> bool {
     if record.field("state").is_some()
         && !matches!(
             record.recorded_state(),
@@ -830,10 +836,10 @@ fn valid_saved_fields(record: &layerfs_machine::record::MachineRecord) -> bool {
 
 #[cfg(feature = "machine")]
 fn operation_evidence(
-    op: &layerfs_home::op::Op,
-    standing: layerfs_home::op::Standing,
+    op: &layerfs_home::record::intent::Op,
+    standing: layerfs_home::record::intent::Standing,
 ) -> layerfs_protocol::sdk::SdkValue {
-    use layerfs_home::op::Standing;
+    use layerfs_home::record::intent::Standing;
     use layerfs_protocol::sdk::SdkValue;
     let id = op.id();
     let valid_id = id.len() == 19

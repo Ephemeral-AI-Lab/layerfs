@@ -6,7 +6,9 @@ use layerfs_content::compare::{
     directory_bindings, new_bindings, BindingHints, ChangedDirectories, TreeTable,
 };
 use layerfs_content::filesystem::FilesystemRootId;
-use layerfs_content::filesystem::{binding_changes::BindingChanges, path::PathName};
+use layerfs_content::filesystem::{
+    construction::captured_bindings::BindingChanges, name::path::PathName,
+};
 use layerfs_content::{AuthenticatedObjects, ContentError, ContentResult};
 use layerfs_history::{BindingHint, HistoryCatalog, HistoryError};
 use layerfs_overlay::IndexedOperationRecordScope;

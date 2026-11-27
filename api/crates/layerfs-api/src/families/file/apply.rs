@@ -5,10 +5,10 @@ use crate::dispatch::guard::scope::Rule;
 use crate::dispatch::table::Kind::{Json, Name, Project};
 use crate::dispatch::table::{a, call, Call, MESSAGE};
 use crate::dispatch::{Context, Policy};
-use layerfs_home::outcome::{refused, Outcome};
+use layerfs_home::reply::outcome::{refused, Outcome};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
-use layerfs_store::calls::file::{apply, FileApply};
-use layerfs_store::calls::Change;
+use layerfs_store::data::file::{apply, FileApply};
+use layerfs_store::data::Change;
 
 /// Its table entry.
 pub(crate) const CALL: Call = call(

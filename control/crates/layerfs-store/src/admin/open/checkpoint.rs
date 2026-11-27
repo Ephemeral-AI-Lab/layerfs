@@ -4,7 +4,7 @@
 use super::cache::*;
 use crate::admin::open::args::OpenArgs;
 use crate::admin::open::service as direct;
-use layerfs_home::outcome::failed;
+use layerfs_home::reply::outcome::failed;
 use layerfs_protocol::sdk::SdkRefusal;
 use std::path::Path;
 

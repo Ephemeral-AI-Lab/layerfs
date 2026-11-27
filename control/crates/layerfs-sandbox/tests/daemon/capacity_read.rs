@@ -6,8 +6,8 @@
 //!
 //! Nothing runs: a stand-in daemon answers the query on the connections it
 //! accepts, and counts what it saw.
-use layerfs_home::home::paths;
-use layerfs_home::secrets;
+use layerfs_home::disk::paths;
+use layerfs_home::secret::keys;
 use layerfs_protocol::daemon::{
     AdmissionModel, Answer, Call, CapacityModel, DaemonPhase, DaemonStatus, Reply, Request,
     RetainedModel, OPERATION,
@@ -209,7 +209,7 @@ fn sandbox_folder(home: &Path, endpoint: SocketAddr, forward: bool) {
         ),
         ("instance", SdkValue::Bytes(DAEMON_INSTANCE.to_vec())),
     ]);
-    secrets::save_daemon_keys(&dir, &keys).unwrap();
+    keys::save_daemon_keys(&dir, &keys).unwrap();
     if forward {
         let record = SdkValue::map([
             ("name", t("s1")),
@@ -227,8 +227,8 @@ fn sandbox_folder(home: &Path, endpoint: SocketAddr, forward: bool) {
                 )]),
             ),
         ]);
-        layerfs_home::home::records::write_record(&dir.join("record.json"), &record).unwrap();
-        layerfs_home::home::records::write_record(
+        layerfs_home::record::file::write_record(&dir.join("record.json"), &record).unwrap();
+        layerfs_home::record::file::write_record(
             &paths::worker_record(home, layerfs_home::names::HOST_MACHINE),
             &SdkValue::map([("address", t("127.0.0.1:1")), ("secret", t("5e"))]),
         )

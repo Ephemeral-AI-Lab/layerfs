@@ -8,12 +8,12 @@ use crate::image::cache;
 use crate::image::copy::lock::{ImageLock, PruneGate};
 use crate::rootfs::{self, Temporary};
 use crate::Image;
-use layerfs_home::home;
+use layerfs_home::disk;
 use layerfs_home::names::MachineName;
-use layerfs_home::outcome::{failed, refused, with_next, Outcome};
-use layerfs_home::state::State;
+use layerfs_home::reply::outcome::{failed, refused, with_next, Outcome};
+use layerfs_home::reply::state::State;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
-use layerfs_store::place::{self, Executor};
+use layerfs_store::admin::route::executor::{self, Executor};
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::ErrorKind;
 use std::os::unix::fs::OpenOptionsExt;
@@ -79,7 +79,7 @@ pub fn prune(home: &Path, name: &MachineName, image: Option<&str>, unused: bool)
         ));
     }
     let choice = deploy::choose(home, machine, None)?;
-    let executor = place::on_machine(home, machine)?;
+    let executor = executor::on_machine(home, machine)?;
     if host_mode(&executor) {
         return Err(host_only(machine));
     }
@@ -102,15 +102,15 @@ pub fn prune(home: &Path, name: &MachineName, image: Option<&str>, unused: bool)
         None
     };
     let mut args = request(machine, &choice);
-    args = home::with_field(args, "target", image.map_or(SdkValue::Null, SdkValue::text));
-    args = home::with_field(args, "unused", SdkValue::Bool(unused));
-    args = home::with_field(
+    args = disk::with_field(args, "target", image.map_or(SdkValue::Null, SdkValue::text));
+    args = disk::with_field(args, "unused", SdkValue::Bool(unused));
+    args = disk::with_field(
         args,
         "locked",
         SdkValue::List(locked.into_iter().map(SdkValue::Text).collect()),
     );
     if !lock_errors.is_empty() {
-        args = home::with_field(
+        args = disk::with_field(
             args,
             "lock_errors",
             SdkValue::List(
@@ -127,7 +127,7 @@ pub fn prune(home: &Path, name: &MachineName, image: Option<&str>, unused: bool)
         );
     }
     if image.is_some() {
-        args = home::with_field(args, "target_guarded", SdkValue::Bool(true));
+        args = disk::with_field(args, "target_guarded", SdkValue::Bool(true));
     }
     match executor {
         Executor::Local => pruning(&Side::Home(home), &args),
@@ -392,9 +392,9 @@ fn is_flock_held(path: &Path) -> Result<bool> {
         Err(e) if e.kind() == ErrorKind::NotFound => return Ok(false),
         Err(e) => return Err(failed(e)),
     };
-    let acquired = home::flock::try_lock(&file, true).map_err(failed)?;
+    let acquired = layerfs_home::lock::flock::try_lock(&file, true).map_err(failed)?;
     if acquired {
-        home::flock::unlock(&file);
+        layerfs_home::lock::flock::unlock(&file);
         Ok(false)
     } else {
         Ok(true)

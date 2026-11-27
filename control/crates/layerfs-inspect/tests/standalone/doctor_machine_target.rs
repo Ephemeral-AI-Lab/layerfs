@@ -10,10 +10,10 @@
 #[path = "../support/doctor_own.rs"]
 mod doctor_own;
 use doctor_own::{outcome, own_within, row};
-use layerfs_home::home::{self, paths, write_entity, write_record};
+use layerfs_home::disk::{self, paths, write_entity, write_record};
 use layerfs_inspect::{Kind, Options};
-use layerfs_machine::record::MachineRecord;
-use layerfs_machine::worker::{read_frame_within, write_frame, MAX_HELLO, PROTOCOL};
+use layerfs_machine::record::machine::MachineRecord;
+use layerfs_machine::route::{read_frame_within, write_frame, MAX_HELLO, PROTOCOL};
 use layerfs_protocol::sdk::SdkValue;
 use std::collections::BTreeMap;
 use std::net::TcpListener;
@@ -41,7 +41,7 @@ impl Fixture {
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(root.join("bin")).unwrap();
         let home = root.join("home");
-        let id = home::ensure(&home).unwrap().id;
+        let id = disk::ensure(&home).unwrap().id;
         let previous = std::env::var_os("PATH");
         std::env::set_var("PATH", root.join("bin"));
         // only the stand-ins: no fallback folder after PATH
@@ -205,7 +205,7 @@ fn machine_checks_report_in_order_and_preserve_the_home() {
     let down = f.report("docker", SECOND);
     let (severity, _, fix) = finding(&down, "machine.provider");
     assert_eq!(severity, "error");
-    assert_eq!(fix, layerfs_machine::state::start_docker());
+    assert_eq!(fix, layerfs_machine::status::state::start_docker());
     assert_eq!(
         ids(&down),
         [
@@ -376,7 +376,8 @@ fn machine_checks_report_in_order_and_preserve_the_home() {
     }
     // a live operation holds it: busy, and its provider is not asked
     let record = MachineRecord::of(&f.home, "docker").unwrap();
-    let op = layerfs_home::op::Op::begin("machine.create", "prepare", SdkValue::Null).unwrap();
+    let op = layerfs_home::record::intent::Op::begin("machine.create", "prepare", SdkValue::Null)
+        .unwrap();
     record.with_op(&op).write(&f.home).unwrap();
     let asked = f.calls();
     let active = f.report("docker", SECOND);

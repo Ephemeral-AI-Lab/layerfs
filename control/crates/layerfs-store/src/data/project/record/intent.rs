@@ -1,5 +1,5 @@
 //! The operation a project's record holds while an Init or a delete of the
-//! project runs (call surface 2.0): the `op` of `layerfs_home::op`, in
+//! project runs (call surface 2.0): the `op` of `layerfs_home::record::intent`, in
 //! `store/<store>/project/<name>/record.json`, so `project list` and
 //! `project get` can answer `busy` while it runs and `broken` `unresolved`
 //! once its owner is gone with its outcome unknown.
@@ -14,8 +14,9 @@
 //! the `op`, an uncertain one keeps it marked uncertain.
 use crate::data::project::init::sqlite::make_entry;
 use crate::data::project::record::project::ProjectRecord;
-use layerfs_home::home::{lock, paths};
-use layerfs_home::op::{Op, Standing, FIELD};
+use layerfs_home::disk::paths;
+use layerfs_home::lock::home;
+use layerfs_home::record::intent::{Op, Standing, FIELD};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 
@@ -45,7 +46,7 @@ pub fn claimed(home: &Path, store: &str, name: &str) -> Result<bool> {
 /// holding the Init's `op` at `phase`. An entry already there is
 /// `NameTaken` with its `home` source.
 pub fn claim(home: &Path, store: &str, name: &str, phase: &str) -> Result<()> {
-    let _lock = lock::take(home)?;
+    let _lock = home::take(home)?;
     make_entry(home, store, name)?;
     let op = Op::begin(INIT, phase, SdkValue::Null)?;
     let fields = SdkValue::map([("name", SdkValue::text(name))]);
@@ -59,7 +60,7 @@ pub fn claim(home: &Path, store: &str, name: &str, phase: &str) -> Result<()> {
 /// replaced (running the delete again is what clears it). Answers whether
 /// a record now holds it.
 pub fn begin(home: &Path, store: &str, name: &str, call: &str, phase: &str) -> Result<bool> {
-    let _lock = lock::take(home)?;
+    let _lock = home::take(home)?;
     let Some(record) = ProjectRecord::read(home, store, name)? else {
         return Ok(false);
     };
@@ -75,7 +76,7 @@ pub fn begin(home: &Path, store: &str, name: &str, call: &str, phase: &str) -> R
 
 /// Moves the operation this process holds on the project to `phase`.
 pub fn phase(home: &Path, store: &str, name: &str, phase: &str) -> Result<()> {
-    let _lock = lock::take(home)?;
+    let _lock = home::take(home)?;
     let Some(record) = ProjectRecord::read(home, store, name)? else {
         return Ok(());
     };
@@ -89,7 +90,7 @@ pub fn phase(home: &Path, store: &str, name: &str, phase: &str) -> Result<()> {
 /// recording `args` with it: what settling it needs once its owner is gone
 /// (an Init's folder copy on a machine, `{ copy, machine }`).
 pub fn phase_with(home: &Path, store: &str, name: &str, phase: &str, args: SdkValue) -> Result<()> {
-    let _lock = lock::take(home)?;
+    let _lock = home::take(home)?;
     let Some(record) = ProjectRecord::read(home, store, name)? else {
         return Ok(());
     };
@@ -102,7 +103,7 @@ pub fn phase_with(home: &Path, store: &str, name: &str, phase: &str, args: SdkVa
 /// Drops the operation this process holds from the project's record, when
 /// the record is still there.
 pub fn end(home: &Path, store: &str, name: &str) -> Result<()> {
-    let _lock = lock::take(home)?;
+    let _lock = home::take(home)?;
     let Some(record) = ProjectRecord::read(home, store, name)? else {
         return Ok(());
     };
@@ -117,7 +118,7 @@ pub fn end(home: &Path, store: &str, name: &str) -> Result<()> {
 /// has logged its copy's line already): its owner's end leaves the project
 /// `broken` `unresolved`, fixed by `project delete`.
 pub fn uncertain(home: &Path, store: &str, name: &str, message: &str, log: bool) -> Result<()> {
-    let _lock = lock::take(home)?;
+    let _lock = home::take(home)?;
     let Some(record) = ProjectRecord::read(home, store, name)? else {
         return Ok(());
     };
@@ -136,7 +137,7 @@ pub fn uncertain(home: &Path, store: &str, name: &str, message: &str, log: bool)
 /// Removes the entry an Init of this process claimed, after a certain
 /// failure: only while its record still holds that Init's `op`.
 pub fn abandon(home: &Path, store: &str, name: &str) -> Result<()> {
-    let _lock = lock::take(home)?;
+    let _lock = home::take(home)?;
     match claimed(home, store, name)? {
         true => remove_entry(home, store, name),
         false => Ok(()),
@@ -147,15 +148,15 @@ pub fn abandon(home: &Path, store: &str, name: &str) -> Result<()> {
 /// what `project delete` does to the entry of an Init that never reached
 /// the Store. An entry already gone is removed.
 pub fn remove_entry(home: &Path, store: &str, name: &str) -> Result<()> {
-    let _lock = lock::take(home)?;
+    let _lock = home::take(home)?;
     let entry = paths::project_dir(home, store, name);
     match std::fs::remove_dir_all(&entry) {
         Ok(()) => {
-            layerfs_home::home::generation::moved_above(&entry);
+            layerfs_home::record::generation::moved_above(&entry);
             Ok(())
         }
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(layerfs_home::outcome::failed(error)),
+        Err(error) => Err(layerfs_home::reply::outcome::failed(error)),
     }
 }
 

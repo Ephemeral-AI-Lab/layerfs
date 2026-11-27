@@ -17,16 +17,15 @@ use crate::LocalRecord;
 #[cfg(target_os = "linux")]
 use crate::SandboxRecord;
 use crate::{ContainerId, Sandbox, WireFailure};
-use layerfs_home::helpers;
-use layerfs_home::outcome::shell_word;
-use layerfs_home::outcome::{failed, refused, with_fix};
+use layerfs_home::reply::outcome::shell_word;
+use layerfs_home::reply::outcome::{failed, refused, with_fix};
 use layerfs_os::process::LocalProcess;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::PathBuf;
 
 /// A daemon record's runtime id, required.
 fn container(value: &DaemonRecord) -> Result<&str> {
-    helpers::required(value.container(), "container")
+    layerfs_home::reply::values::required(value.container(), "container")
 }
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -154,8 +153,8 @@ pub fn unread(value: &DaemonRecord) -> Option<String> {
         return None;
     }
     let checked = || -> Result<()> {
-        helpers::required(value.directory(), "directory")?;
-        helpers::required(value.name(), "name")?;
+        layerfs_home::reply::values::required(value.directory(), "directory")?;
+        layerfs_home::reply::values::required(value.name(), "name")?;
         ContainerId::parse(container(value)?).map_err(failed)?;
         recorded_process(value)?;
         let port = value
@@ -164,7 +163,7 @@ pub fn unread(value: &DaemonRecord) -> Option<String> {
         u16::try_from(port).map_err(failed)?;
         value.labels()?;
         if runtime == crate::backend::select::NAMESPACES {
-            let image = helpers::required(value.image(), "image")?;
+            let image = layerfs_home::reply::values::required(value.image(), "image")?;
             crate::Image::parse(image).map_err(failed)?;
         }
         Ok(())
@@ -173,7 +172,7 @@ pub fn unread(value: &DaemonRecord) -> Option<String> {
 }
 /// A local record is used only where this deployment puts that Sandbox:
 /// its own `name` must be exactly the one this deployment gives Sandbox `id`
-/// (`<prefix><id>`, [`crate::lifecycle::sandbox_name`]) and its
+/// (`<prefix><id>`, [`crate::lifecycle::serve::sandbox_name`]) and its
 /// directory exactly `<LAYERFS_LOCAL_DIR>/<that name>`, so a damaged,
 /// edited or stale record (another
 /// LAYERFS_LOCAL_DIR or prefix) never points a delete elsewhere.
@@ -202,14 +201,17 @@ fn local(directory: PathBuf, record: LocalRecord, value: &DaemonRecord) -> Resul
 /// one, else (#529: the record decides, so a caller of another backend has
 /// none) beside the record's own directory, which must still carry a
 /// name this deployment gives Sandbox `id`
-/// ([`crate::lifecycle::sandbox_name`]) and be owned by this record
+/// ([`crate::lifecycle::serve::sandbox_name`]) and be owned by this record
 /// ([`crate::lifecycle::boot::owned`]).
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 fn local_record_of(host: &Host, id: &str, value: &DaemonRecord) -> Result<(PathBuf, LocalRecord)> {
-    let directory = PathBuf::from(helpers::required(value.directory(), "directory")?);
+    let directory = PathBuf::from(layerfs_home::reply::values::required(
+        value.directory(),
+        "directory",
+    )?);
     // the Sandbox's own name, exactly the one this deployment gives it:
     // nothing is stripped from it
-    let name = helpers::required(value.name(), "name")?;
+    let name = layerfs_home::reply::values::required(value.name(), "name")?;
     let given = crate::lifecycle::serve::sandbox_name(host.deploy(), id)?;
     let named = name == given;
     let expected =
@@ -230,7 +232,7 @@ fn local_record_of(host: &Host, id: &str, value: &DaemonRecord) -> Result<(PathB
         // a name this deployment does not give: `sandbox remove` removes
         // its records alone
         return Err(match named {
-            false => layerfs_home::outcome::with_fix(
+            false => layerfs_home::reply::outcome::with_fix(
                 refusal,
                 format!("layerfs sandbox remove {id}", id = shell_word(id)),
             ),
@@ -248,8 +250,11 @@ fn local_record_of(host: &Host, id: &str, value: &DaemonRecord) -> Result<(PathB
 /// A local record's directory and physical facts, unchecked.
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 fn local_parts(value: &DaemonRecord) -> Result<(PathBuf, LocalRecord)> {
-    let directory = PathBuf::from(helpers::required(value.directory(), "directory")?);
-    let name = helpers::required(value.name(), "name")?;
+    let directory = PathBuf::from(layerfs_home::reply::values::required(
+        value.directory(),
+        "directory",
+    )?);
+    let name = layerfs_home::reply::values::required(value.name(), "name")?;
     let process = recorded_process(value)?;
     let port = value
         .port()
@@ -277,7 +282,7 @@ pub fn recorded_process(value: &DaemonRecord) -> Result<LocalProcess> {
         .ok_or_else(|| refused("InvalidInput", "local Sandbox record boot"))?;
     Ok(LocalProcess {
         pid: u32::try_from(pid).map_err(failed)?,
-        start: helpers::required(value.start(), "start")?
+        start: layerfs_home::reply::values::required(value.start(), "start")?
             .parse::<u64>()
             .map_err(failed)?,
         boot: Some(boot),
@@ -299,7 +304,7 @@ fn namespaces(
     local: LocalRecord,
     value: &DaemonRecord,
 ) -> Result<Recorded> {
-    let image = helpers::required(value.image(), "image")?;
+    let image = layerfs_home::reply::values::required(value.image(), "image")?;
     let image = crate::Image::parse(image).map_err(|error| {
         refused(
             "InvalidInput",

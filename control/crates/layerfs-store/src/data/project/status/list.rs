@@ -4,10 +4,10 @@ use crate::admin::record::store::StoreRecord;
 use crate::admin::status::state::Machines;
 use crate::data::project::record::project::ProjectRecord;
 use crate::data::project::status::state::{self, Listing};
-use layerfs_home::cursor;
-use layerfs_home::home::paths;
+use layerfs_home::disk::paths;
 use layerfs_home::names::StoreName;
-use layerfs_home::outcome::{failed, refused, Outcome};
+use layerfs_home::reply::cursor;
+use layerfs_home::reply::outcome::{failed, refused, Outcome};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 
@@ -18,7 +18,7 @@ type Result<T> = std::result::Result<T, SdkRefusal>;
 /// The call a `project.list` cursor belongs to.
 const LIST: &str = "project.list";
 /// The most bytes of rows one page holds before it ends early with a cursor.
-const PAGE_BYTES: usize = layerfs_home::logs::PAGE_BYTES;
+const PAGE_BYTES: usize = layerfs_home::log::calls::PAGE_BYTES;
 
 /// `project.list({ store, limit, cursor, with: stats })`.
 #[derive(Clone, Debug, Default)]

@@ -2,7 +2,7 @@
 use super::{bytes, fixture};
 use layerfs_content::{
     filesystem::{
-        attributes::read::{read_portable, AttributeReadWork},
+        tree::attribute::read::{read_portable, AttributeReadWork},
         FilesystemRead, LogicalPath, PathName,
     },
     object::inode_leaf::InodeKind,

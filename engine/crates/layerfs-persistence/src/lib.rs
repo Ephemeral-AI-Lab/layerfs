@@ -64,7 +64,3 @@ pub use storage::merge_records::{
 };
 pub(crate) use storage::publication;
 pub use storage_provider::StorageProvider;
-
-// #828 compat: old public module paths, removed in wave 3.
-#[doc(hidden)]
-pub use crate::gc::metrics as compact_metrics; // #828 compat

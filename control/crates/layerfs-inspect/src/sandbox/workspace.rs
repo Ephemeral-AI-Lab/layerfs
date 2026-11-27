@@ -11,9 +11,9 @@
 use super::super::doctor::budget::Checks;
 use super::super::doctor::report::{NoVerdict, Node, NotChecked, Thing};
 use super::super::doctor::runner::Probe;
-use layerfs_home::state::BlockedBy;
+use layerfs_home::reply::state::BlockedBy;
 use layerfs_protocol::sdk::SdkValue;
-use layerfs_sandbox::state::unmount_fix;
+use layerfs_sandbox::status::state::unmount_fix;
 use std::path::Path;
 
 /// The `workspace` kind's checks, in the order they run.
@@ -127,7 +127,7 @@ impl Seen {
 /// the name its mount gave it, else its path. A folder that cannot be read
 /// records none here; the home's own doctor names it.
 pub(super) fn recorded(dir: &Path) -> Vec<(String, String)> {
-    let records = layerfs_sandbox::files::workspaces(dir).unwrap_or_default();
+    let records = layerfs_sandbox::record::discovery::workspaces(dir).unwrap_or_default();
     (records.into_iter())
         .filter_map(|(_, record)| {
             let id = record.id()?.to_owned();

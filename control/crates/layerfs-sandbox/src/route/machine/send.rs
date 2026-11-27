@@ -5,17 +5,18 @@
 use crate::deploy::{self, Side};
 use crate::record::SandboxRecord;
 use crate::route::machine::{Call, Deploy, Host, Message, Op, Sent, StoreUrl};
-use layerfs_home::events::Events;
-use layerfs_home::home::{self, paths};
-use layerfs_home::outcome::{failed, refused, Outcome};
-use layerfs_machine::worker::Unreached;
+use layerfs_home::disk;
+use layerfs_home::disk::paths;
+use layerfs_home::reply::events::Events;
+use layerfs_home::reply::outcome::{failed, refused, Outcome};
+use layerfs_machine::route::Unreached;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
-use layerfs_store::open_args::PgSelection;
-use layerfs_store::place::{self, Executor};
-use layerfs_store::postgresql::connect::dialled;
-use layerfs_store::project::record::ProjectRecord;
-use layerfs_store::record::{StoreKind, StoreRecord};
-use layerfs_store::resolve;
+use layerfs_store::admin::open::args::PgSelection;
+use layerfs_store::admin::record::store::{StoreKind, StoreRecord};
+use layerfs_store::admin::route::executor::{self, Executor};
+use layerfs_store::admin::route::resolve;
+use layerfs_store::backend::postgresql::connect::dialled;
+use layerfs_store::data::project::record::project::ProjectRecord;
 use std::path::{Path, PathBuf};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -34,7 +35,7 @@ fn host_args(
     (sandbox, message): (Option<String>, Message),
     root: RunRoot,
 ) -> Result<Host> {
-    let id = layerfs_home::home::opened(home)?.id;
+    let id = layerfs_home::disk::opened(home)?.id;
     let backend = if cfg!(target_os = "macos") {
         "process"
     } else {
@@ -55,7 +56,7 @@ fn host_args(
         // namespaces commands run as another identity: the home's folders
         // above the root must let them pass (a macOS native command does not)
         if backend == "namespaces" {
-            home::traversable(home, &local)?;
+            disk::traversable(home, &local)?;
         }
     }
     let deploy = Deploy {
@@ -107,7 +108,12 @@ pub fn reached(
     machine: &str,
     record: &StoreRecord,
 ) -> Result<(PgSelection, Option<String>)> {
-    dialled(home, machine, record, layerfs_store::record::url(record)?)?
+    dialled(
+        home,
+        machine,
+        record,
+        layerfs_store::admin::record::store::url(record)?,
+    )?
 }
 
 /// The reach check of a PostgreSQL Sandbox's create (#535 §7.4 step 4), on
@@ -130,31 +136,36 @@ fn reach_check(
     let host = layerfs_machine::table::postgresql_url::url_hosts(url)
         .map(|hosts| hosts.join(","))
         .unwrap_or_default();
-    let reached = layerfs_store::postgresql::reader::reach(key, store, postgresql, project)
-        .map_err(|refusal| {
-            let name = store.name();
-            let message = match (refusal.code.as_str(), hint) {
-                ("Unsupported", _) => {
-                    return refused(
-                        "Unsupported",
-                        format!(
-                            "{who} cannot check PostgreSQL Store {name}'s server: {}",
-                            refusal.message
-                        ),
-                    )
-                }
-                (_, Some(hint))
-                    if layerfs_store::postgresql::open::not_connected(&refusal.message) =>
-                {
-                    format!("{}; {hint}", refusal.message)
-                }
-                _ => refusal.message,
-            };
-            refused(
-                "Unavailable",
-                format!("{who} cannot reach PostgreSQL Store {name}'s server at {host}: {message}"),
-            )
-        })?;
+    let reached =
+        layerfs_store::backend::postgresql::reader::reach(key, store, postgresql, project)
+            .map_err(|refusal| {
+                let name = store.name();
+                let message = match (refusal.code.as_str(), hint) {
+                    ("Unsupported", _) => {
+                        return refused(
+                            "Unsupported",
+                            format!(
+                                "{who} cannot check PostgreSQL Store {name}'s server: {}",
+                                refusal.message
+                            ),
+                        )
+                    }
+                    (_, Some(hint))
+                        if layerfs_store::backend::postgresql::open::not_connected(
+                            &refusal.message,
+                        ) =>
+                    {
+                        format!("{}; {hint}", refusal.message)
+                    }
+                    _ => refusal.message,
+                };
+                refused(
+                    "Unavailable",
+                    format!(
+                        "{who} cannot reach PostgreSQL Store {name}'s server at {host}: {message}"
+                    ),
+                )
+            })?;
     match reached {
         Ok(true) => Ok(()),
         Ok(false) => Err(refused(
@@ -164,7 +175,7 @@ fn reach_check(
                 postgresql.schema.as_deref().unwrap_or("")
             ),
         )),
-        Err(layerfs_store::postgresql::reader::OtherStore) => Err(refused(
+        Err(layerfs_store::backend::postgresql::reader::OtherStore) => Err(refused(
             "Unavailable",
             format!(
                 "the PostgreSQL server {who} reaches at {host} holds another Store than {}",
@@ -258,8 +269,13 @@ pub fn reach(
         &outcome,
         record.project().and_then(|p| p.split_once('/')),
     ) {
-        let reached = layerfs_store::observed::Reach::reached();
-        layerfs_store::observed::record(home, store, Some(record.machine()), &reached);
+        let reached = layerfs_store::admin::status::observed::Reach::reached();
+        layerfs_store::admin::status::observed::record(
+            home,
+            store,
+            Some(record.machine()),
+            &reached,
+        );
     }
     match unreached {
         Some(unreached) => Err(unreached),
@@ -279,7 +295,7 @@ fn host_op(
 ) -> Outcome {
     let home = home.to_path_buf();
     let machine = record.machine();
-    if let Some(machine) = layerfs_machine::record::MachineRecord::read(&home, machine)? {
+    if let Some(machine) = layerfs_machine::record::machine::MachineRecord::read(&home, machine)? {
         machine.not_held()?;
     }
     let project = record.project().unwrap_or("");
@@ -317,7 +333,7 @@ fn host_op(
             (Some(value), hint)
         }
         (StoreKind::Postgresql, StoreUrl::Cleanup) => {
-            let url = layerfs_store::record::url(&target.record)?;
+            let url = layerfs_store::admin::record::store::url(&target.record)?;
             match dialled(&home, machine, &target.record, url)? {
                 Ok((value, hint)) => (Some(value), hint),
                 Err(_cannot_dial) => (None, None),
@@ -327,7 +343,7 @@ fn host_op(
     };
     // a Sandbox's host operations run where its machine runs them, for
     // either Store kind (#535 §7.4)
-    let mut executor = place::on_machine(&home, machine)?;
+    let mut executor = executor::on_machine(&home, machine)?;
     // the image a create names: none on macOS native (R0), else resolved
     // and copied to the machine when it does not hold it yet (R1). A copy's
     // lock is held until this call returns, by when the Sandbox is built on
@@ -413,12 +429,15 @@ fn host_op(
             // (a create's reach check, a status's head) runs on the
             // process's one held read session, opened when one is needed;
             // mount, exec, Commit, unmount and close open nothing.
-            let lease = layerfs_store::lease::hold(&home, &target.store)?;
+            let lease = layerfs_store::admin::open::lease::hold(&home, &target.store)?;
             let (_lease, opened) = match held {
                 true => (Some(lease), None),
                 false => (
                     None,
-                    Some(layerfs_store::open::hold(&host.open_args(), Some(lease))?),
+                    Some(layerfs_store::admin::open::cache::hold(
+                        &host.open_args(),
+                        Some(lease),
+                    )?),
                 ),
             };
             if op == Op::Status {
@@ -509,7 +528,7 @@ pub fn in_worker(
             (sandbox, message),
             RunRoot::AsFound,
         )?;
-        layerfs_home::trace::step("host_args");
+        layerfs_home::log::trace::step("host_args");
         return runner(host, call);
     }
     // before a daemon starts on this machine, what earlier starts and
@@ -541,7 +560,7 @@ pub fn in_worker(
         Some(local) if local.created().is_none() => local.with_fields_of(&sent).write(root)?,
         Some(_) => sent.write(root)?,
     }
-    layerfs_home::trace::step("records");
+    layerfs_home::log::trace::step("records");
     let how = deploy::resolve(&Side::Worker(root), &choice)?;
     // the operations that dial a PostgreSQL Store's URL carry it; the
     // others carry none, or one for a close's cleanup ([`Op::store_url`])
@@ -578,14 +597,17 @@ pub fn in_worker(
             RunRoot::Made,
         )?
     };
-    layerfs_home::trace::step("host_args");
+    layerfs_home::log::trace::step("host_args");
     // a PostgreSQL Store opens no Store service here (#65); its reads run
     // on the held read session
     let opened = match held {
         true => None,
-        false => opened_for(op, layerfs_store::open::hold(&host.open_args(), None))?,
+        false => opened_for(
+            op,
+            layerfs_store::admin::open::cache::hold(&host.open_args(), None),
+        )?,
     };
-    layerfs_home::trace::step("store_open");
+    layerfs_home::log::trace::step("store_open");
     if op == Op::Status {
         return runner(host, call);
     }
@@ -670,7 +692,7 @@ pub fn opened_for(op: Op, held: Result<PathBuf>) -> Result<Option<PathBuf>> {
         Ok(path) => Ok(Some(path)),
         Err(refusal)
             if op == Op::SandboxClose
-                && layerfs_store::state::outdated_status(&refusal).is_some() =>
+                && layerfs_store::admin::status::state::outdated_status(&refusal).is_some() =>
         {
             Ok(None)
         }
@@ -680,7 +702,7 @@ pub fn opened_for(op: Op, held: Result<PathBuf>) -> Result<Option<PathBuf>> {
 
 fn closed(op: Op, opened: Option<&Path>, out: &Outcome) {
     if let (Some(path), Op::SandboxClose, true) = (opened, op, out.is_ok()) {
-        let _ = layerfs_store::open::released(path);
+        let _ = layerfs_store::admin::open::checkpoint::released(path);
     }
 }
 
@@ -725,5 +747,5 @@ fn drain(out: SdkValue, emit: &mut dyn FnMut(SdkValue)) -> Outcome {
         }
         other => other,
     };
-    Ok(home::with_field(out, "streamed", SdkValue::Bool(true)))
+    Ok(disk::with_field(out, "streamed", SdkValue::Bool(true)))
 }

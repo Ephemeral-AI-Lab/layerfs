@@ -3,10 +3,10 @@
 //! and under the one-attempt rule a part refused `Busy` would fail the
 //! Init. Checked against the worker itself; the caller's side, with its
 //! parts held in flight, is `layerfs-api` `project_init_worker`.
-use layerfs_home::home::paths;
-use layerfs_machine::worker;
+use layerfs_home::disk::paths;
+use layerfs_machine::route;
 use layerfs_protocol::sdk::SdkValue;
-use layerfs_store::project::frame::{StageFrame, StageStep};
+use layerfs_store::data::project::frame::{StageFrame, StageStep};
 
 #[path = "../support/worker_store.rs"]
 mod worker_store;
@@ -56,9 +56,9 @@ fn init_with_parts_sent_at_once_succeeds_with_no_busy() {
             let id = format!("{at:016x}");
             std::thread::spawn(move || {
                 let write = part(&id, StageStep::Write(Vec::new())).encode();
-                let wrote = worker::call(&endpoint, "project.stage", write, &mut |_| {});
+                let wrote = route::call(&endpoint, "project.stage", write, &mut |_| {});
                 let discard = part(&id, StageStep::Discard).encode();
-                let dropped = worker::call(&endpoint, "project.stage", discard, &mut |_| {});
+                let dropped = route::call(&endpoint, "project.stage", discard, &mut |_| {});
                 (wrote, dropped)
             })
         })

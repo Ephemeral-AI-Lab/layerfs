@@ -2,8 +2,8 @@
 use super::read::{date, octal, pin, run, take};
 use super::requests::FileStat;
 use crate::admin::route::methods::Args;
-use layerfs_home::events::Events;
-use layerfs_home::outcome::Outcome;
+use layerfs_home::reply::events::Events;
+use layerfs_home::reply::outcome::Outcome;
 use layerfs_protocol::sdk::SdkValue;
 use std::path::Path;
 

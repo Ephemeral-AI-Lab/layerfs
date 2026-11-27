@@ -22,12 +22,9 @@ use super::client::{decode_answer, unknown};
 use super::endpoint::{unavailable, HostPaths};
 use super::frame::{self, HOST_MAX_REPLY, HOST_MAX_REQUEST};
 use crate::route::guest::frame::ATTACHED;
-use layerfs_home::{
-    json,
-    log::trace,
-    reply::outcome::{refused, Outcome},
-    socket,
-};
+use layerfs_home::log::trace;
+use layerfs_home::reply::outcome::{refused, Outcome};
+use layerfs_home::{json, socket};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::io::{self, Write};
 use std::os::unix::net::UnixStream;

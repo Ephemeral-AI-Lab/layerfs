@@ -3,11 +3,11 @@
 //! writes only its observation file: each leaves a stale lease and
 //! `log/leases.jsonl` as they were and takes no lock, while its answer
 //! still ignores the dead holder.
-use layerfs_home::events::Events;
-use layerfs_home::home::{paths, private_dir, write_entity};
+use layerfs_home::disk::{paths, private_dir, write_entity};
+use layerfs_home::reply::events::Events;
 use layerfs_protocol::sdk::SdkValue;
-use layerfs_store::get::{get, With};
-use layerfs_store::list::list;
+use layerfs_store::admin::status::get::{get, With};
+use layerfs_store::admin::status::list::list;
 use std::collections::BTreeMap;
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};

@@ -3,11 +3,11 @@
 //! This also runs in builds without machine adapters, so a recorded worker or
 //! a forwarded daemon cannot bypass the product policy. Each table entry
 //! says which [`Policy`] checks it, so no call name is written here.
-use layerfs_home::outcome::refused;
-use layerfs_machine::record::MachineRecord;
+use layerfs_home::reply::outcome::refused;
+use layerfs_machine::record::machine::MachineRecord;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_sandbox::record::SandboxRecord;
-use layerfs_store::record::{StoreKind, StoreRecord};
+use layerfs_store::admin::record::store::{StoreKind, StoreRecord};
 use std::path::Path;
 
 type Result = std::result::Result<(), SdkRefusal>;
@@ -87,7 +87,7 @@ fn transfer(home: &Path, name: &str) -> Result {
     if let Some(record) = StoreRecord::read(home, name)? {
         // A new transfer must not implicitly retire a historical copy on a
         // machine of a removed platform before it checks the newly selected destination.
-        if let Some(left) = layerfs_store::sqlite::transfer::resolve::leftover(&record) {
+        if let Some(left) = layerfs_store::backend::sqlite::move_leftover::leftover(&record) {
             machine(home, &left.from)?;
             machine(home, &left.to)?;
         }

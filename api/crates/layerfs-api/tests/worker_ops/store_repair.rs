@@ -9,14 +9,15 @@ use crate::worker_store;
 use layerfs_history::records::{GcIntent, GcIntentKind, GcScopeKind};
 use layerfs_history::{HistoryName, NamedSnapshot, PlaceAuthority};
 use layerfs_home::names::StoreName;
-use layerfs_machine::worker;
+use layerfs_machine::route;
 use layerfs_protocol::sdk::hex;
 use layerfs_protocol::sdk::SdkValue;
+use layerfs_store::admin::open::args::OpenArgs;
+use layerfs_store::admin::open::service::with_service;
+use layerfs_store::admin::record::store::StoreRecord;
 use layerfs_store::admin::with_users::RepairRequest;
-use layerfs_store::open_args::OpenArgs;
-use layerfs_store::project::add::{add_project, ProjectAdd};
-use layerfs_store::record::StoreRecord;
-use layerfs_store::service::{branch_named, with_service};
+use layerfs_store::data::branch::branch_named;
+use layerfs_store::data::project::init::sqlite::{add_project, ProjectAdd};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -89,7 +90,7 @@ fn seed(home: &Path) {
         "project.list_branches names the main Branch add_project recorded"
     );
     let stack = with_service(&open, |service| {
-        Ok(layerfs_store_service::history::lookup::project(&service.store, "app")?.id)
+        Ok(layerfs_store_service::lookup::project(&service.store, "app")?.id)
     })
     .unwrap();
     let live = mount(stack.as_slice(), branch.as_slice(), 0x21)
@@ -148,7 +149,7 @@ fn diagnostic_holders(placed: &worker_store::Placed) -> Vec<SdkValue> {
         Some(SdkValue::Bytes(bytes)) => SdkValue::Bytes(bytes.clone()),
         _ => panic!("the record holds {key} bytes"),
     };
-    let value = worker::call(
+    let value = route::call(
         &placed.endpoint,
         "store.diagnose",
         SdkValue::map([
@@ -312,9 +313,9 @@ fn the_worker_judges_with_the_sent_view_and_pages_the_audit_by_key() {
 
     // The host home now holds the tombstone of generation `generation:1` of
     // Sandbox `box` on machine `box`, and no Sandbox record: dead.
-    let retired = layerfs_home::home::paths::sandbox_retired_dir(&placed.home, "box");
+    let retired = layerfs_home::disk::paths::sandbox_retired_dir(&placed.home, "box");
     std::fs::create_dir_all(&retired).unwrap();
-    layerfs_home::home::write_record(
+    layerfs_home::disk::write_record(
         &retired.join("box.json"),
         &SdkValue::map([("generation", SdkValue::text("generation:1"))]),
     )
@@ -369,7 +370,7 @@ fn the_worker_judges_with_the_sent_view_and_pages_the_audit_by_key() {
         SdkValue::text("12:abcd"),
         SdkValue::Int(1),
     ] {
-        let made = layerfs_home::cursor::make("store.repair_mount_holders", place, &filters);
+        let made = layerfs_home::reply::cursor::make("store.repair_mount_holders", place, &filters);
         let refused = page(Some(made)).unwrap_err();
         assert_eq!(refused.code, "InvalidInput", "{refused:?}");
     }

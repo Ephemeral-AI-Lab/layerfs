@@ -1,11 +1,11 @@
 //! The `workspace` family: each call goes to its Sandbox's machine, or,
 //! for a Sandbox whose daemon this host reaches (#535 G4), straight to its
 //! daemon; an exec always runs through the Sandbox's runtime, in its machine.
-use layerfs_home::events::Events;
 use layerfs_home::names::{WorkspaceAt, WorkspaceName, WorkspaceRef};
-use layerfs_home::outcome::shell_word;
-use layerfs_home::outcome::{refused, with_fix, Outcome};
-use layerfs_machine::worker::Unreached;
+use layerfs_home::reply::events::Events;
+use layerfs_home::reply::outcome::shell_word;
+use layerfs_home::reply::outcome::{refused, with_fix, Outcome};
+use layerfs_machine::route::Unreached;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_sandbox::family::sandbox_of;
 use layerfs_sandbox::record::{SandboxRecord, WorkspaceRecord};
@@ -110,7 +110,7 @@ pub struct StatusRequest {
 /// project's Branches whose names start with `work`. `work` when that page
 /// cannot be read.
 fn unused_work(home: &Path, events: &mut Events<'_>, project: &str) -> String {
-    use layerfs_store::calls::{Names, StoreOp};
+    use layerfs_store::data::{Names, StoreOp};
     const PAGE: i64 = 1000;
     let names = Names {
         prefix: Some("work"),
@@ -118,8 +118,9 @@ fn unused_work(home: &Path, events: &mut Events<'_>, project: &str) -> String {
         after: None,
     };
     let op = StoreOp::Branches { names, limit: PAGE };
-    let listed = layerfs_store::resolve::target(home, project)
-        .and_then(|target| layerfs_store::call::store_call(home, events, &target, &op));
+    let listed = layerfs_store::admin::route::resolve::target(home, project).and_then(|target| {
+        layerfs_store::admin::route::call::store_call(home, events, &target, &op)
+    });
     let taken: Vec<String> = match listed.as_ref().ok().and_then(|page| page.get("items")) {
         Some(SdkValue::List(items)) => (items.iter())
             .filter_map(|item| item.get_text("branch").map(str::to_owned))

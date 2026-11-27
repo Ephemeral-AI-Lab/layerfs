@@ -1,5 +1,5 @@
 //! Typed acquisition facts. No engine representation appears here.
-use layerfs_content::filesystem::attributes::PortableMetadata;
+use layerfs_content::filesystem::tree::attribute::PortableMetadata;
 use layerfs_content::{inode_leaf::InodeKind, ObjectId};
 
 /// Bytes of host change evidence: length, mode, mtime and ctime.

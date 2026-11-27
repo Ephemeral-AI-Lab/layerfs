@@ -15,8 +15,7 @@ use layerfs_history::{BranchSnapshot, CommitOutcome, HistoryError, WorkspaceId};
 use layerfs_overlay::ProfileConfig;
 use layerfs_storage::{ReservationBlocks, Save, StorageError};
 use layerfs_store_service::{
-    bootstrap::open_store,
-    store::{BindRequest, BoundWorkspace, CommitError, CommitPhase, Store},
+    store::{open::open_store, BindRequest, BoundWorkspace, CommitError, CommitPhase, Store},
     Owner, OwnerClient, OwnerConfig,
 };
 use layerfs_telemetry::timer::Timing;

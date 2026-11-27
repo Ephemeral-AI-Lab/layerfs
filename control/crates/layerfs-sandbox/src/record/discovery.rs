@@ -17,11 +17,10 @@ use crate::LocalRecord;
 use crate::SandboxRecord as BackendRecord;
 use crate::{internal::workspace, BoundWorkspace, MountedWorkspace};
 use crate::{CommandIdentity, Sandbox};
-use layerfs_home::helpers;
-use layerfs_home::home::paths;
-use layerfs_home::outcome::{failed, refused};
+use layerfs_home::disk::paths;
+use layerfs_home::reply::outcome::{failed, refused};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
-use layerfs_store::project::discovery::{home_of, private};
+use layerfs_store::data::project::record::discovery::{home_of, private};
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -33,8 +32,8 @@ type Result<T> = std::result::Result<T, SdkRefusal>;
 /// identity (its commands run as this user).
 pub fn user() -> (u32, u32) {
     (
-        layerfs_home::home::flock::euid(),
-        layerfs_home::home::flock::egid(),
+        layerfs_home::lock::flock::euid(),
+        layerfs_home::lock::flock::egid(),
     )
 }
 /// The folder of the Sandbox a call names (`sandbox`, its name):
@@ -93,7 +92,7 @@ pub fn save_sandbox(
         }
     };
     // the keys first: a record with `daemon` is a started Sandbox
-    layerfs_home::secrets::save_daemon_keys(
+    layerfs_home::secret::keys::save_daemon_keys(
         directory,
         &SdkValue::map([
             (
@@ -111,7 +110,7 @@ pub fn save_sandbox(
         runtime.identity().to_string(),
     ];
     let project = format!("{}/{}", host.store, state.project);
-    let worker = layerfs_home::home::guest::is_root(&host.home);
+    let worker = layerfs_home::disk::guest::is_root(&host.home);
     write_started(
         directory,
         &state.id,
@@ -207,7 +206,7 @@ pub fn reopen(host: &Host) -> Result<Arc<SandboxState>> {
         ));
     };
     private(&directory, true)?;
-    let keys = layerfs_home::secrets::daemon_keys(&directory)?
+    let keys = layerfs_home::secret::keys::daemon_keys(&directory)?
         .ok_or_else(|| refused("NoSuchSandbox", format!("Sandbox {id} has no daemon keys")))?;
     let project = &host.project;
     // a Sandbox in a machine whose daemon's port is forwarded here (#535
@@ -227,9 +226,9 @@ pub fn reopen(host: &Host) -> Result<Arc<SandboxState>> {
     };
     let dial = crate::route::daemon::channel::pool::Dial {
         endpoint,
-        secret: layerfs_home::secrets::key(&keys, "secret")?,
-        peer: layerfs_home::secrets::key(&keys, "peer")?,
-        instance: layerfs_home::secrets::key(&keys, "instance")?,
+        secret: layerfs_home::secret::keys::key(&keys, "secret")?,
+        peer: layerfs_home::secret::keys::key(&keys, "peer")?,
+        instance: layerfs_home::secret::keys::key(&keys, "instance")?,
     };
     let forwarded = runtime.is_none();
     let control = dial.open_waiting().map_err(|refusal| match forwarded {
@@ -252,7 +251,7 @@ pub fn reopen(host: &Host) -> Result<Arc<SandboxState>> {
 /// The runtime a Sandbox record's `daemon` names, observed running once;
 /// its daemon listens on this kernel's loopback.
 fn observed(host: &Host, id: &str, value: &DaemonRecord) -> Result<Box<Sandbox>> {
-    let container = helpers::required(value.container(), "container")?;
+    let container = layerfs_home::reply::values::required(value.container(), "container")?;
     recorded(host, id, value)?.reopen().map_err(|failure| {
         if failure.container_stopped() {
             gone(id, container, true)
@@ -303,7 +302,7 @@ pub fn refresh_except_within(
     let deadline = std::time::Instant::now() + wait;
     let mut mounts = std::collections::BTreeMap::new();
     for (_, value) in workspaces(&state.directory)? {
-        let path = helpers::required(value.path(), "path")?;
+        let path = layerfs_home::reply::values::required(value.path(), "path")?;
         if retained.iter().any(|kept| kept == path) {
             continue;
         }
@@ -334,11 +333,11 @@ pub fn refresh_except_within(
                     },
                     ready,
                 },
-                branch: helpers::required(value.branch(), "branch")?.to_owned(),
+                branch: layerfs_home::reply::values::required(value.branch(), "branch")?.to_owned(),
             },
         );
     }
-    *helpers::lock(&state.mounts)? = mounts;
+    *layerfs_home::lock::mutex::lock(&state.mounts)? = mounts;
     Ok(())
 }
 /// The Workspace records in Sandbox folder `directory`
@@ -364,7 +363,7 @@ pub fn workspaces(directory: &Path) -> Result<Vec<(PathBuf, WorkspaceRecord)>> {
 }
 /// A Workspace record's token: its id (64 hex digits) and namespace.
 fn token_of(value: &WorkspaceRecord) -> Result<layerfs_protocol::daemon::WorkspaceToken> {
-    let id = helpers::required(value.id(), "id")?;
+    let id = layerfs_home::reply::values::required(value.id(), "id")?;
     let bytes: Vec<u8> = (0..id.len())
         .step_by(2)
         .map(|i| {

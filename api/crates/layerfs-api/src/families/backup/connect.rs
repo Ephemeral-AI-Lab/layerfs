@@ -6,10 +6,10 @@ use crate::dispatch::table::Kind::{Content, Name, Text};
 use crate::dispatch::table::{a, call, opt, Call};
 use crate::dispatch::{Context, Form};
 use layerfs_home::names::BucketName;
-use layerfs_home::outcome::{refused, Outcome};
+use layerfs_home::reply::outcome::{refused, Outcome};
 use layerfs_protocol::sdk::SdkValue;
-use layerfs_store::backup::family::connect;
-use layerfs_store::backup::record::BucketConnect;
+use layerfs_store::backup::bucket::connect::connect;
+use layerfs_store::backup::bucket::record::BucketConnect;
 
 /// Its answer: `ok`; the long form says `connected` or `rotated` and names
 /// the bucket, its provider, URL and key id.

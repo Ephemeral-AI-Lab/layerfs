@@ -129,7 +129,7 @@ fn expired_pending_cancel_does_not_affect_id_reuse_or_other_workspaces() {
     let running = Running::start(&dir, "s1", &other, &mut unreached).unwrap();
     running.spawned(&handles()[0]).unwrap();
     assert!(!running.end().unwrap());
-    layerfs_home::home::write_entity(
+    layerfs_home::disk::write_entity(
         &file.with_extension("cancel"),
         &layerfs_protocol::sdk::SdkValue::map([(
             "expires",

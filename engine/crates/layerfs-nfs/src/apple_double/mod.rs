@@ -7,7 +7,3 @@ pub(crate) mod index;
 pub(crate) mod reclaim;
 pub(crate) mod spill;
 pub(crate) mod trace;
-
-// #828 compat: old public paths, removed in wave 3.
-#[doc(hidden)]
-pub use companions::{companion, DECODED_ENTRY_BYTES, FILE_BYTES, HELD, RESIDENT_BYTES, SERIALS}; // #828 compat

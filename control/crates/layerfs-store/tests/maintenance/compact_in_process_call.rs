@@ -5,7 +5,7 @@
 //! the Store with a null phase and op. Product source holds no tests (the
 //! product-boundary guard), so `compact::gc_refusal` is `#[doc(hidden)] pub`
 //! for this target alone.
-use layerfs_home::outcome::refused;
+use layerfs_home::reply::outcome::refused;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_store::admin::maintenance::compact::gc_refusal;
 

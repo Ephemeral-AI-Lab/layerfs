@@ -25,10 +25,10 @@ use crate::admin::record::store::{self, StoreRecord};
 use crate::admin::route::executor::Executor;
 use crate::backend::sqlite::step_request::{StepFrame, StoreStep};
 use crate::Related;
-use layerfs_home::events::Events;
-use layerfs_home::home::{self, paths};
-use layerfs_home::op::{self, Op};
-use layerfs_home::outcome::{refused, Outcome};
+use layerfs_home::disk::paths;
+use layerfs_home::record::intent::{self as op, Op};
+use layerfs_home::reply::events::Events;
+use layerfs_home::reply::outcome::{refused, Outcome};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 
@@ -109,7 +109,7 @@ pub(crate) fn begin_maintenance<T>(
     worker: Option<Worker>,
     check: impl FnOnce(&StoreRecord) -> Result<T>,
 ) -> Result<(T, Option<Worker>)> {
-    let _lock = home::lock::take(home)?;
+    let _lock = layerfs_home::lock::home::take(home)?;
     let _store = store::lock(home, name)?;
     let record = StoreRecord::of(home, name)?;
     if record
@@ -140,7 +140,7 @@ pub(crate) fn begin_maintenance<T>(
 /// lease, taken there.
 pub fn settle(home: &Path, name: &str, related: Related, op: &Op) -> Result<lease::Lease> {
     crate::admin::open::close::close(&paths::store_file(home, name))?;
-    let _lock = home::lock::take(home)?;
+    let _lock = layerfs_home::lock::home::take(home)?;
     let _store = store::lock(home, name)?;
     let current = StoreRecord::of(home, name)?;
     if !current

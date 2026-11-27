@@ -12,19 +12,19 @@ use crate::worker_store;
 
 use layerfs_history::records::{GcIntent, GcIntentKind, GcScopeKind};
 use layerfs_history::PlaceAuthority;
-use layerfs_home::events::Events;
-use layerfs_home::home::{paths, write_entity};
+use layerfs_home::disk::{paths, write_entity};
 use layerfs_home::names::StoreName;
-use layerfs_machine::record::MachineRecord;
-use layerfs_machine::worker;
+use layerfs_home::reply::events::Events;
+use layerfs_machine::record::machine::MachineRecord;
+use layerfs_machine::route;
 use layerfs_protocol::sdk::{SdkCall, SdkRefusal, SdkValue};
-use layerfs_store::calls::branch::{BranchFork, BranchRemove};
-use layerfs_store::calls::file::FileRead;
-use layerfs_store::open_args::OpenArgs;
-use layerfs_store::project::add::{add_project, ProjectAdd};
-use layerfs_store::record::StoreRecord;
-use layerfs_store::service::with_service;
-use layerfs_store_service::history::lookup;
+use layerfs_store::admin::open::args::OpenArgs;
+use layerfs_store::admin::open::service::with_service;
+use layerfs_store::admin::record::store::StoreRecord;
+use layerfs_store::data::branch::{BranchFork, BranchRemove};
+use layerfs_store::data::file::FileRead;
+use layerfs_store::data::project::init::sqlite::{add_project, ProjectAdd};
+use layerfs_store_service::lookup;
 
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
@@ -251,7 +251,7 @@ fn diagnostic_holders(placed: &worker_store::Placed) -> Vec<SdkValue> {
         Some(SdkValue::Bytes(bytes)) => SdkValue::Bytes(bytes.clone()),
         _ => panic!("the record holds {key} bytes"),
     };
-    let value = worker::call(
+    let value = route::call(
         &placed.endpoint,
         "store.diagnose",
         SdkValue::map([
@@ -277,7 +277,7 @@ fn diagnostic_audit(placed: &worker_store::Placed) -> SdkValue {
         Some(SdkValue::Bytes(bytes)) => SdkValue::Bytes(bytes.clone()),
         _ => panic!("the record holds {key} bytes"),
     };
-    let value = worker::call(
+    let value = route::call(
         &placed.endpoint,
         "store.diagnose",
         SdkValue::map([
@@ -298,7 +298,7 @@ fn diagnostic_audit(placed: &worker_store::Placed) -> SdkValue {
 fn branch_remove(placed: &worker_store::Placed, branch: &str) -> Result<SdkValue, SdkRefusal> {
     let mut sink = |_event: SdkValue| {};
     let mut events = Events::new(&mut sink);
-    layerfs_store::calls::branch::remove(
+    layerfs_store::data::branch::remove(
         &placed.home,
         &mut events,
         &BranchRemove {
@@ -315,7 +315,7 @@ fn branch_fork(
 ) -> Result<SdkValue, SdkRefusal> {
     let mut sink = |_event: SdkValue| {};
     let mut events = Events::new(&mut sink);
-    layerfs_store::calls::branch::fork(
+    layerfs_store::data::branch::fork(
         &placed.home,
         &mut events,
         &BranchFork {
@@ -334,7 +334,7 @@ fn read_file(
 ) -> Result<SdkValue, SdkRefusal> {
     let mut sink = |_event: SdkValue| {};
     let mut events = Events::new(&mut sink);
-    layerfs_store::calls::file::read(
+    layerfs_store::data::file::read(
         &placed.home,
         &mut events,
         &FileRead {
@@ -480,7 +480,7 @@ fn seed_reconcile(home: &Path) {
 #[test]
 fn a_worker_start_reconciles_the_incarnations_its_home_records() {
     let placed = worker_store::placed_seeded("reconcile", seed_reconcile, serve);
-    let outcome = layerfs_store::service::reconcile_machine(
+    let outcome = layerfs_store::admin::route::mount_intents::reconcile_machine(
         &placed.home,
         "shop",
         "box",

@@ -176,7 +176,7 @@ impl PackCache {
     /// selected unit. Descriptor/eligibility checks precede every unit hit.
     pub fn group<'a>(
         &'a self,
-        source: &dyn crate::source::Source,
+        source: &dyn crate::location::Source,
         id: i64,
         number: usize,
     ) -> StorageResult<Option<crate::encoding::GroupSlice<'a>>> {
@@ -253,7 +253,7 @@ impl PackCache {
     // Descriptor eligibility and recency still apply separately to every hit.
     fn whole_cohort(
         &self,
-        source: &dyn crate::source::Source,
+        source: &dyn crate::location::Source,
         id: i64,
         wanted: &BTreeSet<usize>,
     ) -> StorageResult<bool> {
@@ -281,7 +281,7 @@ impl PackCache {
     /// including the complete authentication scan for selected results.
     pub fn acquire_groups(
         &mut self,
-        source: &dyn crate::source::Source,
+        source: &dyn crate::location::Source,
         id: i64,
         groups: &[usize],
     ) -> StorageResult<(bool, usize)> {
@@ -336,7 +336,7 @@ impl PackCache {
     /// group read that already holds the bytes (#758).
     pub(crate) fn admit_groups(
         &mut self,
-        source: &dyn crate::source::Source,
+        source: &dyn crate::location::Source,
         id: i64,
         wanted: &BTreeSet<usize>,
         missing: &[usize],

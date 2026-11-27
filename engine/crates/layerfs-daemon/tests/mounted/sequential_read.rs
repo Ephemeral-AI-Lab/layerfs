@@ -12,7 +12,7 @@
 use crate::installed;
 use crate::mounted;
 use layerfs_persistence::SqlWork;
-use layerfs_store_service::bootstrap::{open_store_observed, OpenedStore};
+use layerfs_store_service::store::open::{open_store_observed, OpenedStore};
 use mounted::Harness;
 use std::io::Read;
 use std::path::Path;

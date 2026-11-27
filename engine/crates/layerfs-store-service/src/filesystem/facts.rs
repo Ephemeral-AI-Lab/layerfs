@@ -3,7 +3,7 @@ use super::cache::Cached;
 use super::{compare::diff, root};
 use crate::lookup as args;
 use layerfs_content::compare::{tree::same_metadata, EntryFacts};
-use layerfs_content::filesystem::attributes::{read_portable, AttributeReadWork};
+use layerfs_content::filesystem::tree::attribute::{read_portable, AttributeReadWork};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 
 /// Metadata for a present file; a missing side remains a literal null.

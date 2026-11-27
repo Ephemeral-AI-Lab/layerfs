@@ -8,7 +8,7 @@
 //! first-wins path permits forward locators and explicitly refuses repeated
 //! identities in the chain, because concurrent winners can have higher pack ids.
 
-use crate::source::Source;
+use crate::location::Source;
 
 use layerfs_content::ObjectId;
 

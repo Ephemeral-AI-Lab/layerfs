@@ -2,7 +2,7 @@
 use crate::support;
 use layerfs_content::{
     filesystem::{
-        directory::{encode_directory_page, DirectoryPage},
+        tree::directory::{encode_directory_page, DirectoryPage},
         PathName,
     },
     FinalizedObject, ObjectId, ObjectRole,

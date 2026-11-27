@@ -21,7 +21,7 @@
 //! a record's way must already be a real directory.
 use super::super::frame::{StageFrame, StageStep};
 use super::tree::{Reader, Record};
-use layerfs_home::outcome::{failed, refused, Outcome};
+use layerfs_home::reply::outcome::{failed, refused, Outcome};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use nix::sys::stat::{utimensat, UtimensatFlags};
 use nix::sys::time::TimeSpec;
@@ -45,7 +45,7 @@ pub fn run(root: &Path, frame: &StageFrame) -> Outcome {
     let dir = folder(root, &frame.id);
     match &frame.step {
         StageStep::Write(part) => {
-            layerfs_home::home::private_dir(&dir)?;
+            layerfs_home::disk::private_dir(&dir)?;
             let records = apply(&dir, part)?;
             Ok(SdkValue::map([("records", SdkValue::Int(records as i64))]))
         }
@@ -79,7 +79,7 @@ pub fn hold(dir: &Path) -> Result<Option<Option<fs::File>>> {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Some(None)),
         Err(error) => return Err(failed(error)),
     };
-    match layerfs_home::home::flock::try_lock(&folder, true).map_err(failed)? {
+    match layerfs_home::lock::flock::try_lock(&folder, true).map_err(failed)? {
         true => Ok(Some(Some(folder))),
         false => Ok(None),
     }

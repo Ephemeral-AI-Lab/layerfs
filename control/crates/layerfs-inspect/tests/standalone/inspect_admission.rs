@@ -8,7 +8,7 @@
 //!
 //! The permits are the process's, so every test here takes one lock.
 #![cfg(any(target_os = "linux", target_os = "macos"))]
-use layerfs_home::home::{self, paths, write_record};
+use layerfs_home::disk::{self, paths, write_record};
 use layerfs_home::names::MachineName;
 use layerfs_os::process::LocalProcess;
 use layerfs_protocol::sdk::SdkValue;
@@ -20,7 +20,7 @@ use std::sync::{mpsc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 use {
     layerfs_inspect::{self, Window},
-    layerfs_sandbox::inspect::owner::{HARD, PERMITS, SOFT},
+    layerfs_sandbox::route::inspect::{HARD, PERMITS, SOFT},
 };
 
 static PROCESS: Mutex<()> = Mutex::new(());
@@ -55,8 +55,8 @@ fn new_home(tag: &str) -> PathBuf {
         NEXT.fetch_add(1, Ordering::Relaxed)
     ));
     let _ = std::fs::remove_dir_all(&dir);
-    home::private_dir(&dir).unwrap();
-    home::ensure(&dir).unwrap();
+    disk::private_dir(&dir).unwrap();
+    disk::ensure(&dir).unwrap();
     dir
 }
 
@@ -74,8 +74,8 @@ fn sandbox(root: &Path, name: &str, directory: &Path) {
             .into_owned(),
         container: "ab".repeat(32),
         runtime: "process",
-        uid: home::flock::euid(),
-        gid: home::flock::egid(),
+        uid: layerfs_home::lock::flock::euid(),
+        gid: layerfs_home::lock::flock::egid(),
         directory: directory.display().to_string(),
         process: (me.pid, me.start, format!("{:032x}", me.boot.unwrap())),
         port: 1,
@@ -371,10 +371,10 @@ fn a_sandbox_with_no_run_folder_on_this_side_is_no_such_sandbox() {
         sandbox(&home, "s1", &directory.join("x"));
         // `sandbox` names `<directory>/x`; put the directory itself
         let path = paths::sandbox_record(&home, "s1");
-        let record = home::read_record(&path).unwrap().unwrap();
+        let record = disk::read_record(&path).unwrap().unwrap();
         let daemon = record.get("daemon").unwrap().clone();
-        let daemon = home::with_field(daemon, "directory", t(&directory.display().to_string()));
-        write_record(&path, &home::with_field(record, "daemon", daemon)).unwrap();
+        let daemon = disk::with_field(daemon, "directory", t(&directory.display().to_string()));
+        write_record(&path, &disk::with_field(record, "daemon", daemon)).unwrap();
         let refused = layerfs_inspect::sandbox_log(&home, "s1", &window).unwrap_err();
         assert_eq!(refused.code, "InvalidInput", "{directory:?}: {refused:?}");
         assert!(refused.message.contains("outside"), "{refused:?}");

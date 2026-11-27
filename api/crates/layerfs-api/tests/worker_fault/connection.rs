@@ -8,10 +8,10 @@
 //! `cargo test -p layerfs-api --features worker-fault --test worker_fault`
 #![cfg(feature = "worker-fault")]
 use layerfs_api::worker::fault::{Faults, OpFault};
-use layerfs_home::home::paths;
-use layerfs_machine::worker::{self, Endpoint};
+use layerfs_home::disk::paths;
+use layerfs_machine::route::{self, Endpoint};
 use layerfs_protocol::sdk::SdkValue;
-use layerfs_store::sqlite::transfer::step::{StepFrame, StoreStep};
+use layerfs_store::backend::sqlite::step_request::{StepFrame, StoreStep};
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::PathBuf;
@@ -56,7 +56,7 @@ fn worker(tag: &str, faults: Faults) -> Worker {
 impl Worker {
     fn call(&self, op: &str, args: SdkValue) -> (Result<SdkValue, (String, String)>, usize) {
         let mut events = 0;
-        let outcome = worker::call(&self.endpoint, op, args, &mut |_| events += 1);
+        let outcome = route::call(&self.endpoint, op, args, &mut |_| events += 1);
         (
             outcome.map_err(|refusal| (refusal.code, refusal.message)),
             events,
@@ -64,7 +64,7 @@ impl Worker {
     }
 
     fn ping(&self) -> Result<SdkValue, (String, String)> {
-        worker::ping(&self.endpoint).map_err(|refusal| (refusal.code, refusal.message))
+        route::ping(&self.endpoint).map_err(|refusal| (refusal.code, refusal.message))
     }
 
     /// The logged lines that hold `part`.
@@ -226,7 +226,7 @@ fn a_hung_operation_holds_up_no_other_request() {
     worker.faults.on("worker.ping", OpFault::Hang(hang));
     let started = Instant::now();
     let endpoint = worker.endpoint.clone();
-    let hung = std::thread::spawn(move || worker::ping(&endpoint));
+    let hung = std::thread::spawn(move || route::ping(&endpoint));
     until(Duration::from_secs(5), "the hung request", || {
         worker.faults.serving_now() == 1
     });
@@ -248,7 +248,7 @@ fn a_trickling_hello_is_closed_at_one_deadline() {
         ("secret", SdkValue::text(SECRET)),
         ("pad", SdkValue::text("x".repeat(200))),
     ]);
-    let hello = worker::frame_bytes(&hello).unwrap();
+    let hello = route::frame_bytes(&hello).unwrap();
     let mut stream = TcpStream::connect(worker.endpoint.address).unwrap();
     stream.set_nodelay(true).unwrap();
     stream
@@ -311,7 +311,7 @@ fn a_caller_that_stops_reading_is_cut_once_and_the_step_still_ends() {
     let wait = Duration::from_millis(1200);
     let worker = worker("stall", Faults::default().write_wait(wait));
     // this thread works for a home: its id goes with the Sandbox request
-    layerfs_home::home::open(&worker.root.parent().unwrap().join("home")).unwrap();
+    layerfs_home::disk::open(&worker.root.parent().unwrap().join("home")).unwrap();
 
     // `store.file`: the write of a piece of a Store's incoming copy
     worker.faults.on("store.file", FLOOD);
@@ -371,7 +371,7 @@ fn a_caller_that_never_closes_is_waited_for_once() {
     let worker = worker("close", Faults::default().close_wait(wait));
     let started = Instant::now();
     let mut open = sent(&worker.endpoint, "worker.ping", SdkValue::Null);
-    let answer = worker::read_frame(&mut open).unwrap().unwrap();
+    let answer = route::read_frame(&mut open).unwrap().unwrap();
     assert!(answer.get("value").is_some(), "{answer:?}");
     assert_eq!(worker.faults.serving_now(), 1, "it waits for the close");
     until(wait * 5, "the connection's thread", || {

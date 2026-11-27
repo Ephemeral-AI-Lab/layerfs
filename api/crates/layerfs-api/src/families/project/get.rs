@@ -3,7 +3,7 @@ use crate::dispatch::table::Kind::Project;
 use crate::dispatch::table::{a, call, Call};
 use crate::dispatch::{Context, Form};
 use layerfs_home::names::ProjectRef;
-use layerfs_home::outcome::Outcome;
+use layerfs_home::reply::outcome::Outcome;
 use layerfs_protocol::sdk::SdkValue;
 
 /// Its Store and state always, with the state's companion; `commit` is

@@ -297,10 +297,13 @@ fn independent_history_lineage_checks_accept_real_forks_and_detect_damage() {
 fn identical_root_is_qualified_under_every_history_context() {
     use layerfs_content::{
         filesystem::{
-            attributes::PortableMetadata,
-            directory::{encode_directory_page, DirectoryPage},
-            inode::{encode_inode_page, InodePage},
-            scope_for_seed, FilesystemRoot,
+            scope_for_seed,
+            tree::{
+                attribute::PortableMetadata,
+                directory::{encode_directory_page, DirectoryPage},
+                inode::{encode_inode_page, InodePage},
+            },
+            FilesystemRoot,
         },
         inode_leaf::{InodeKind, InodeMetadata, InodeValue},
     };

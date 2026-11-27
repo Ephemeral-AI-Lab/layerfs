@@ -16,7 +16,7 @@ use crate::{
     ViewStat, VisitFacts, Workspace, WorkspaceError, WorkspaceResult, WriteData,
 };
 use layerfs_content::{
-    filesystem::{identity::MAXIMUM_INODE_SERIAL, PathName},
+    filesystem::{name::identity::MAXIMUM_INODE_SERIAL, PathName},
     ContentError,
 };
 use layerfs_overlay::{

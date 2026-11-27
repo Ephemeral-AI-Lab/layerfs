@@ -1,5 +1,5 @@
 //! LayerFS removes what interrupted Sandbox starts and removals left in a
-//! run root itself (spec v20, `layerfs_sandbox::sweep`): an orphan run
+//! run root itself (spec v20, `layerfs_sandbox::record::sweep`): an orphan run
 //! folder and an empty private root go; a run folder a record names, one
 //! whose record's daemon lives, one with no `owner` marker or a fresh one,
 //! one of a create in flight, a private root beside its run folder or one
@@ -13,12 +13,12 @@
 //! test starts stands for a live daemon. A mount point is not made (that
 //! needs root).
 #![cfg(any(target_os = "linux", target_os = "macos"))]
-use layerfs_home::home::{self, paths, write_record};
-use layerfs_machine::worker::{self, Endpoint};
+use layerfs_home::disk::{self, paths, write_record};
+use layerfs_machine::route::{self, Endpoint};
 use layerfs_os::process::LocalProcess;
 use layerfs_protocol::sdk::SdkValue;
+use layerfs_sandbox::record::sweep::{run_root, Swept};
 use layerfs_sandbox::record::{DaemonRecord, Local};
-use layerfs_sandbox::sweep::{run_root, Swept};
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
@@ -80,8 +80,8 @@ fn started(root: &Path, id: &str, folder: &Path, pid: u32) {
         name: folder.file_name().unwrap().to_str().unwrap().to_owned(),
         container: "ab".repeat(32),
         runtime: "process",
-        uid: home::flock::euid(),
-        gid: home::flock::egid(),
+        uid: layerfs_home::lock::flock::euid(),
+        gid: layerfs_home::lock::flock::egid(),
         directory: folder.display().to_string(),
         process: (
             process.pid,
@@ -96,7 +96,7 @@ fn started(root: &Path, id: &str, folder: &Path, pid: u32) {
     write_record(
         &paths::sandbox_record(root, id),
         &SdkValue::map([
-            ("v", SdkValue::Int(home::RECORD_VERSION)),
+            ("v", SdkValue::Int(disk::RECORD_VERSION)),
             ("name", t(id)),
             ("project", t("shop/api")),
             ("machine", t(layerfs_home::names::HOST_MACHINE)),
@@ -168,7 +168,7 @@ fn the_run_root_sweep_removes_orphans_and_keeps_what_is_owned() {
     write_record(
         &paths::sandbox_record(&root, "soon"),
         &SdkValue::map([
-            ("v", SdkValue::Int(home::RECORD_VERSION)),
+            ("v", SdkValue::Int(disk::RECORD_VERSION)),
             ("name", t("soon")),
             ("project", t("shop/api")),
             ("machine", t(layerfs_home::names::HOST_MACHINE)),
@@ -239,7 +239,7 @@ fn a_worker_sweeps_when_it_starts_and_before_a_sandbox_create() {
         layerfs_api::worker::serve::serve(listener, worker_store::SECRET.to_owned(), served)
     });
     // the first answer comes after the start's sweep
-    worker::call(&endpoint, "worker.ping", SdkValue::Null, &mut |_| {}).unwrap();
+    route::call(&endpoint, "worker.ping", SdkValue::Null, &mut |_| {}).unwrap();
     assert!(!before.exists(), "the worker's start swept it");
     assert_eq!(paths::run_root(&root), run);
     assert!(!root
@@ -253,10 +253,10 @@ fn a_worker_sweeps_when_it_starts_and_before_a_sandbox_create() {
     // does not sweep
     let after = run_folder(&root, "layerfs-0123abcd-after", "after", &outside);
     let mut args = worker_store::sandbox_args();
-    let _ = worker::call(&endpoint, "sandbox.host", args.clone(), &mut |_| {});
+    let _ = route::call(&endpoint, "sandbox.host", args.clone(), &mut |_| {});
     assert!(after.is_dir(), "only a create sweeps");
-    args = home::with_field(args, "op", t("sandbox.create"));
-    let created = worker::call(&endpoint, "sandbox.host", args, &mut |_| {});
+    args = disk::with_field(args, "op", t("sandbox.create"));
+    let created = route::call(&endpoint, "sandbox.host", args, &mut |_| {});
     assert!(created.is_err(), "{created:?}");
     assert!(!after.exists(), "the create swept it");
     assert!(fresh.join("daemon.log").is_file());

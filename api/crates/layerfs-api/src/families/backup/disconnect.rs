@@ -3,7 +3,7 @@ use crate::dispatch::table::Kind::Name;
 use crate::dispatch::table::{a, call, Call};
 use crate::dispatch::{Context, Form, Part};
 use layerfs_home::names::BucketName;
-use layerfs_home::outcome::Outcome;
+use layerfs_home::reply::outcome::Outcome;
 use layerfs_protocol::sdk::SdkValue;
 
 /// Its answer: `ok`, or the Stores whose link to it was removed.
@@ -28,5 +28,5 @@ pub(crate) const CALL: Call = call(
 /// Runs `backup.disconnect`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let bucket = BucketName::parse(args.get_text("bucket").unwrap_or(""))?;
-    layerfs_store::backup::family::disconnect(&context.home, &bucket)
+    layerfs_store::backup::bucket::connect::disconnect(&context.home, &bucket)
 }

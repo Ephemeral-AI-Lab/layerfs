@@ -7,7 +7,7 @@
 //! TOAST relation.
 //!
 //! Needs `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
-use layerfs_content::filesystem::attributes::portable::PortableMetadata;
+use layerfs_content::filesystem::tree::attribute::portable::PortableMetadata;
 use layerfs_content::{
     inode_leaf::{encode_inode_value, InodeKind, InodeMetadata, InodeValue},
     ObjectId, ObjectRole,

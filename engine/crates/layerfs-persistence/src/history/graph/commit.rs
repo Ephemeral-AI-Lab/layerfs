@@ -17,7 +17,7 @@ use layerfs_history::records::{
 };
 
 use super::super::statement::rows::{commit_row, one, sql};
-use layerfs_history::query::{self, Context, Cursor, Range};
+use layerfs_history::catalog::query::{self, Context, Cursor, Range};
 
 const COMMIT_BY_ID: &str = "commit_commit_by_id";
 

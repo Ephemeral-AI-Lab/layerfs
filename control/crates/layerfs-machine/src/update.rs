@@ -3,9 +3,10 @@ use super::record::adapter_spec::machine_of;
 use super::status::list::changed;
 use crate::platform::HostOs;
 use crate::Related;
+use layerfs_home::disk::paths;
+use layerfs_home::lock::home;
 use layerfs_home::reply::outcome::shell_word;
 use layerfs_home::reply::outcome::{refused, Outcome};
-use layerfs_home::{disk::paths, lock::home};
 use layerfs_protocol::sdk::SdkValue;
 use std::path::Path;
 

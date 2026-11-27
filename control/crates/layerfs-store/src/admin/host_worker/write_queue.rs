@@ -37,10 +37,10 @@
 //! Store's close never do.
 use super::server::{log, HostServer};
 use crate::backend::postgresql::pool::Reservation;
-use layerfs_home::outcome::{refused, Outcome};
-use layerfs_machine::worker::StreamReader;
+use layerfs_home::reply::outcome::{refused, Outcome};
+use layerfs_machine::route::StreamReader;
 #[cfg(doc)]
-use layerfs_machine::worker::HOST_HELD_WRITES;
+use layerfs_machine::route::HOST_HELD_WRITES;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::collections::VecDeque;
 use std::os::unix::net::UnixStream;
@@ -219,7 +219,7 @@ impl HostServer {
         }));
         crate::backend::postgresql::pool::release_held();
         if result.is_err() {
-            let _ = layerfs_home::trace::steps_take();
+            let _ = layerfs_home::log::trace::steps_take();
             log("a host write panicked; its answer was lost");
         }
         drop(held);
@@ -248,7 +248,7 @@ impl HostServer {
     /// thread that read it runs a single-change write.
     pub(super) fn answer_write(&self, held: &Held, admitted: &mut bool) -> bool {
         if held.traced {
-            layerfs_home::trace::steps_begin();
+            layerfs_home::log::trace::steps_begin();
         }
         let outcome = self.dispatch_write(held, admitted);
         #[cfg(feature = "worker-fault")]
@@ -275,7 +275,7 @@ impl HostServer {
         let outcome = Err(refusal.clone());
         let recorded = self.keep(&held.request_id, "uncertain", &held.args, &outcome);
         refusal.detail =
-            layerfs_home::home::with_field(refusal.detail, "recorded", SdkValue::Bool(recorded));
+            layerfs_home::disk::with_field(refusal.detail, "recorded", SdkValue::Bool(recorded));
         if !recorded {
             let fields = held.args.get("fields");
             let mut activity = self.lock();
@@ -365,9 +365,9 @@ fn committed(outcome: &Outcome) -> bool {
 #[cfg(feature = "worker-fault")]
 fn write_outcome(
     home: &std::path::Path,
-    outcome: layerfs_home::outcome::Outcome,
-) -> layerfs_home::outcome::Outcome {
-    let switch = layerfs_home::home::paths::machine_dir(home, layerfs_home::names::HOST_MACHINE)
+    outcome: layerfs_home::reply::outcome::Outcome,
+) -> layerfs_home::reply::outcome::Outcome {
+    let switch = layerfs_home::disk::paths::machine_dir(home, layerfs_home::names::HOST_MACHINE)
         .join("fault-write-unknown");
     if !switch.exists() {
         return outcome;

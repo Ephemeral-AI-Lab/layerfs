@@ -1,7 +1,7 @@
 //! The destination on the caller's host: checked before any effect, and
 //! the hidden sibling staging folder that becomes it by one rename.
 use crate::data::project::init::staged;
-use layerfs_home::outcome::{failed, refused};
+use layerfs_home::reply::outcome::{failed, refused};
 use layerfs_protocol::sdk::hex;
 use layerfs_protocol::sdk::SdkRefusal;
 use std::fs;
@@ -150,7 +150,7 @@ impl StagingGuard {
         let parent = dest
             .parent()
             .ok_or_else(|| refused("InvalidInput", "destination has no parent"))?;
-        let random = layerfs_home::helpers::random()?;
+        let random = layerfs_home::record::token::random()?;
         let staging = parent.join(format!(".layerfs-export-{}", hex(&random[..8])));
         fs::DirBuilder::new()
             .mode(0o700)

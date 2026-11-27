@@ -58,7 +58,7 @@ pub(crate) fn token(input: &mut Reader<'_>) -> Result<WorkspaceToken, ControlErr
 pub(crate) fn put_cursor(out: &mut Writer, value: &Option<Vec<u8>>) -> Result<(), ControlError> {
     out.byte(u8::from(value.is_some()))?;
     if let Some(bytes) = value {
-        if bytes.len() != layerfs_history::query::CURSOR_BYTES {
+        if bytes.len() != layerfs_history::catalog::query::CURSOR_BYTES {
             return Err(ControlError("history cursor width"));
         }
         out.blob(bytes)?;
@@ -69,8 +69,8 @@ pub(crate) fn cursor(input: &mut Reader<'_>) -> Result<Option<Vec<u8>>, ControlE
     if !boolean(input)? {
         return Ok(None);
     }
-    let bytes = input.blob(layerfs_history::query::CURSOR_BYTES)?;
-    if bytes.len() != layerfs_history::query::CURSOR_BYTES {
+    let bytes = input.blob(layerfs_history::catalog::query::CURSOR_BYTES)?;
+    if bytes.len() != layerfs_history::catalog::query::CURSOR_BYTES {
         return Err(ControlError("history cursor width"));
     }
     Ok(Some(bytes.to_vec()))

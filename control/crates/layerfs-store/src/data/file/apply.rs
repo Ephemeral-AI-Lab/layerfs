@@ -3,8 +3,8 @@
 use super::requests::FileApply;
 use super::write::{base, commit, mode};
 use super::Change;
-use layerfs_home::events::Events;
-use layerfs_home::outcome::{refused, Outcome};
+use layerfs_home::reply::events::Events;
+use layerfs_home::reply::outcome::{refused, Outcome};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 

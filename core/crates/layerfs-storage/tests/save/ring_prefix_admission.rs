@@ -12,9 +12,11 @@ use crate::support;
 
 use layerfs_content::{
     filesystem::{
-        attributes::PortableMetadata,
-        inode::{encode_inode_page, InodePage},
         root::scope_for_seed,
+        tree::{
+            attribute::PortableMetadata,
+            inode::{encode_inode_page, InodePage},
+        },
     },
     inode_leaf::{InodeKind, InodeMetadata, InodeValue},
     object::codec::encode_bytes_object,

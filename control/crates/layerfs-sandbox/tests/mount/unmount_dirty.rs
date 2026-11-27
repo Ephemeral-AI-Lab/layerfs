@@ -2,7 +2,7 @@
 use crate::fixture;
 use crate::support;
 use layerfs_content::filesystem::PathName;
-use layerfs_daemon::control::Service;
+use layerfs_daemon::workspace::Service;
 use layerfs_history::WorkspaceId;
 use layerfs_sandbox::internal::Control;
 use layerfs_sandbox::Unmounted;

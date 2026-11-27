@@ -17,9 +17,9 @@ use crate::admin::record::store::{StoreKind, StoreRecord};
 use crate::data::project::record::project::ProjectRecord;
 use crate::data::project::status::listing;
 use crate::Related;
-use layerfs_home::home::{self, paths, with_field};
+use layerfs_home::disk::{self, paths, with_field};
 use layerfs_home::names::StoreName;
-use layerfs_home::outcome::{failed, refused, shell_word, with_fix, Outcome};
+use layerfs_home::reply::outcome::{failed, refused, shell_word, with_fix, Outcome};
 use layerfs_persistence::diagnostic::ConnectionStep;
 use layerfs_protocol::sdk::hex;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
@@ -167,7 +167,7 @@ pub fn password_changed(record: &StoreRecord) -> (bool, SdkValue) {
 /// setting and the attached machines; never the password.
 pub fn answer(record: &StoreRecord, outcome: &str, projects: Option<&[String]>) -> SdkValue {
     let (names, count) = match projects {
-        Some(found) => layerfs_home::helpers::shown_names(found),
+        Some(found) => layerfs_home::reply::values::shown_names(found),
         None => (SdkValue::Null, SdkValue::Null),
     };
     let text = |key: &str| record.text(key).map_or(SdkValue::Null, SdkValue::text);
@@ -266,8 +266,8 @@ pub fn connect(home_dir: &Path, request: &StoreConnect) -> Outcome {
             schema: SCHEMA.to_owned(),
             synchronous_commit: sync.to_owned(),
         },
-        binding: layerfs_home::helpers::random()?.to_vec(),
-        cursor_key: layerfs_home::helpers::random()?,
+        binding: layerfs_home::record::token::random()?.to_vec(),
+        cursor_key: layerfs_home::record::token::random()?,
     };
     let binding = match found {
         Some(binding) => binding,
@@ -293,12 +293,12 @@ pub fn connect(home_dir: &Path, request: &StoreConnect) -> Outcome {
     let listed = crate::admin::open::service::with_service(&open, |service| {
         listing::listed(service, false)
     })?;
-    let lock = home::lock::take(home_dir)?;
+    let lock = layerfs_home::lock::home::take(home_dir)?;
     if paths::store_record(home_dir, name).exists() {
         return Err(refused("Exists", format!("a Store named {name} exists")));
     }
     unclaimed_by_others(home_dir, name, &binding)?;
-    home::private_dir(&directory)?;
+    disk::private_dir(&directory)?;
     // the password first: a login revision is never visible without it
     login::save(home_dir, name, password)?;
     if let Err(mut refusal) = record.write(home_dir) {
@@ -401,7 +401,7 @@ fn update(home_dir: &Path, request: &StoreConnect) -> Result<Update> {
         || saved.as_ref().map(login::Saved::password) != Some(password.as_str());
     let trial = changed(record.clone(), request, &user);
     let dial = with_login(&request.url, &user, &password);
-    layerfs_home::wipe::text(password);
+    layerfs_home::secret::wipe::text(password);
     let dial = dial?;
     let mut probe = selection_at(&trial, dial.clone());
     let here = super::check::same_store(&trial, &probe).map_err(|refusal| SdkRefusal {
@@ -409,7 +409,7 @@ fn update(home_dir: &Path, request: &StoreConnect) -> Result<Update> {
         ..refusal
     });
     if let Some(url) = probe.url.take() {
-        layerfs_home::wipe::text(url);
+        layerfs_home::secret::wipe::text(url);
     }
     Ok(Update {
         record,
@@ -434,9 +434,9 @@ fn changed(record: StoreRecord, request: &StoreConnect, user: &str) -> StoreReco
 
 impl Drop for Update {
     fn drop(&mut self) {
-        layerfs_home::wipe::text(std::mem::take(&mut self.dial));
+        layerfs_home::secret::wipe::text(std::mem::take(&mut self.dial));
         if let Some(password) = self.new_password.take() {
-            layerfs_home::wipe::text(password);
+            layerfs_home::secret::wipe::text(password);
         }
     }
 }
@@ -469,7 +469,7 @@ impl Update {
         let name = request.store.as_str();
         let here = std::mem::replace(&mut self.here, Ok(SdkValue::Null));
         let reach = crate::admin::status::observed::Reach::of(&Ok(here?));
-        let home_lock = home::lock::take(home_dir)?;
+        let home_lock = layerfs_home::lock::home::take(home_dir)?;
         let store_lock = crate::admin::record::store::lock(home_dir, name)?;
         let binding = self.record.binding();
         let current = StoreRecord::read(home_dir, name)?.filter(|r| r.binding() == binding);
@@ -496,7 +496,7 @@ impl Update {
             let kept = login::kept(home_dir, name)?;
             if let Err(refusal) = login::save(home_dir, name, password) {
                 if let Some(kept) = kept {
-                    layerfs_home::wipe::value(kept);
+                    layerfs_home::secret::wipe::value(kept);
                 }
                 return Err(refusal);
             }
@@ -508,7 +508,7 @@ impl Update {
             _ => Ok(()),
         };
         if let Some(Some(kept)) = before {
-            layerfs_home::wipe::value(kept);
+            layerfs_home::secret::wipe::value(kept);
         }
         if let Err(mut refusal) = written {
             if let Err(back) = put {
@@ -539,7 +539,7 @@ pub fn disconnect(home_dir: &Path, name: &StoreName, related: Related) -> Outcom
         login::forget(home_dir, name)?;
         return Ok(disconnected(name));
     }
-    let lock = home::lock::take(home_dir)?;
+    let lock = layerfs_home::lock::home::take(home_dir)?;
     let store = crate::admin::record::store::lock(home_dir, name)?;
     let record = StoreRecord::read(home_dir, name)?
         .ok_or_else(|| refused("NotFound", format!("no Store named {name}")))?;
@@ -555,7 +555,7 @@ pub fn disconnect(home_dir: &Path, name: &StoreName, related: Related) -> Outcom
     crate::admin::open::close::close(&record.postgresql_key(home_dir, name))?;
     std::fs::remove_dir_all(paths::store_dir(home_dir, name)).map_err(failed)?;
     login::forget(home_dir, name)?;
-    layerfs_home::home::generation::moved(home_dir);
+    layerfs_home::record::generation::moved(home_dir);
     // the worker's retire reads the record without a lock; it is sent once
     // this call's locks are released, so no call waits on them meanwhile
     drop((store, lock));

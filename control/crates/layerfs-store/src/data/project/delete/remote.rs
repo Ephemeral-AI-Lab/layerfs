@@ -11,11 +11,11 @@ use crate::data::project::frame::{
 };
 use layerfs_history::LayerStackId;
 use layerfs_home::names::StoreName;
-use layerfs_home::outcome::refused;
+use layerfs_home::reply::outcome::refused;
 use layerfs_protocol::sdk::unhex;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
-use layerfs_store_service::history::deletion::Deletion;
-use layerfs_store_service::history::lookup;
+use layerfs_store_service::history::project_delete::Deletion;
+use layerfs_store_service::lookup;
 use std::path::Path;
 
 use super::run::{remove_tree, Admission, Effects};

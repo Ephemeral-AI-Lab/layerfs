@@ -234,26 +234,32 @@ fn settle(home: &Path) {
 /// carries a running `store.move` intent and its lock is held. The lock is
 /// released when the answer drops.
 fn pushing(home: &Path) -> impl Drop {
-    let op = layerfs_home::op::Op::begin("store.move", "check", SdkValue::Null).unwrap();
-    let record = layerfs_store::record::StoreRecord::read(home, "shop")
+    let op =
+        layerfs_home::record::intent::Op::begin("store.move", "check", SdkValue::Null).unwrap();
+    let record = layerfs_store::admin::record::store::StoreRecord::read(home, "shop")
         .unwrap()
         .unwrap();
     record
-        .with(layerfs_home::op::FIELD, op.to_record().clone())
+        .with(layerfs_home::record::intent::FIELD, op.to_record().clone())
         .write(home)
         .unwrap();
-    layerfs_store::record::lock(home, "shop").unwrap()
+    layerfs_store::admin::record::store::lock(home, "shop").unwrap()
 }
 
 /// Machine `machine` held by a running `machine.stop`, as an ordinary call
 /// on it finds it: `Busy`.
 fn held(home: &Path, machine: &str) {
-    let op = layerfs_home::op::Op::begin("machine.stop", "stop", SdkValue::Null).unwrap();
+    let op =
+        layerfs_home::record::intent::Op::begin("machine.stop", "stop", SdkValue::Null).unwrap();
     let path = paths::machine_record(home, machine);
     let record = read_record(&path).unwrap().unwrap();
-    let record = home::with_field(record, layerfs_home::op::FIELD, op.to_record().clone());
+    let record = home::with_field(
+        record,
+        layerfs_home::record::intent::FIELD,
+        op.to_record().clone(),
+    );
     write_record(&path, &record).unwrap();
-    let busy = layerfs_store::place::on_machine(home, machine)
+    let busy = layerfs_store::admin::route::executor::on_machine(home, machine)
         .err()
         .unwrap();
     assert_eq!(busy.code, "Busy", "{busy:?}");
@@ -269,7 +275,7 @@ fn no_lease(root: &Path) {
     assert!(!lease::held_here(root, "shop"));
     let file = paths::store_file(root, "shop");
     assert!(!file.exists(), "a Store file was made");
-    assert!(!layerfs_store::open::close(&file).unwrap());
+    assert!(!layerfs_store::admin::open::close::close(&file).unwrap());
 }
 
 /// Workspace `n` of Sandbox `s1`, recorded in `root`'s Sandbox folder as

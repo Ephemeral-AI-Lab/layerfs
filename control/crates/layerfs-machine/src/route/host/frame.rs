@@ -1,6 +1,7 @@
 //! The bounded plain JSON frames of the host-worker read exchange.
 use crate::route::guest::frame::ATTACHED;
-use layerfs_home::{json, reply::outcome::refused, socket};
+use layerfs_home::reply::outcome::refused;
+use layerfs_home::{json, socket};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::io::{self, Read, Write};
 use std::os::unix::net::UnixStream;

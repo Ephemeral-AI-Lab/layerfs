@@ -10,7 +10,7 @@ use crate::dispatch::{Form, Part};
 #[cfg(feature = "machine")]
 use layerfs_home::names::MachineName;
 #[cfg(feature = "machine")]
-use layerfs_home::outcome::Outcome;
+use layerfs_home::reply::outcome::Outcome;
 #[cfg(feature = "machine")]
 use layerfs_protocol::sdk::SdkValue;
 
@@ -54,7 +54,7 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let machine = MachineName::parse(args.get_text("machine").unwrap_or(""))?;
     let image = args.get_text("image").unwrap_or("").to_owned();
     let (home, events) = context.parts();
-    let loaded = layerfs_sandbox::image_load::machine_load(home, events, &machine, &image)?;
+    let loaded = layerfs_sandbox::image::copy::load::machine_load(home, events, &machine, &image)?;
     let reused = loaded.get_bool("reused");
     // the copy's filter report, when it sent the image: the FIFOs and
     // devices it left out (init files are always left out and not listed)
@@ -78,7 +78,7 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
 }
 
 /// The FIFO and device paths of a copy's `dropped {fifos, devices}`, the
-/// first [`layerfs_home::helpers::SHOWN`], with how many there were when
+/// first [`layerfs_home::reply::values::SHOWN`], with how many there were when
 /// that cut the list.
 #[cfg(feature = "machine")]
 fn dropped(report: &SdkValue) -> (SdkValue, SdkValue) {
@@ -87,7 +87,7 @@ fn dropped(report: &SdkValue) -> (SdkValue, SdkValue) {
         _ => Vec::new(),
     };
     let all: Vec<SdkValue> = paths("fifos").into_iter().chain(paths("devices")).collect();
-    layerfs_home::helpers::shown(all, 0, false)
+    layerfs_home::reply::values::shown(all, 0, false)
 }
 
 // without the `machine` feature (the guest worker's build) it is

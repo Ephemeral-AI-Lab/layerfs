@@ -25,7 +25,7 @@
 //! is sent again rather than answered from the record (#538).
 use crate::lifecycle::registry::SandboxState;
 use crate::record::discovery;
-use layerfs_home::outcome::{failed, refused, Outcome};
+use layerfs_home::reply::outcome::{failed, refused, Outcome};
 use layerfs_protocol::daemon::WorkspaceToken;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::{
@@ -51,7 +51,7 @@ fn record(state: &SandboxState, token: WorkspaceToken) -> PathBuf {
 struct Lease(File);
 impl Drop for Lease {
     fn drop(&mut self) {
-        layerfs_home::home::flock::unlock(&self.0);
+        layerfs_home::lock::flock::unlock(&self.0);
     }
 }
 fn lease(path: &std::path::Path, exclusive: bool) -> Result<Option<Lease>, SdkRefusal> {
@@ -63,8 +63,8 @@ fn lease(path: &std::path::Path, exclusive: bool) -> Result<Option<Lease>, SdkRe
         .custom_flags(libc::O_NOFOLLOW)
         .open(path)
         .map_err(failed)?;
-    layerfs_store::project::discovery::private(path, false)?;
-    if layerfs_home::home::flock::try_lock(&file, exclusive).map_err(failed)? {
+    layerfs_store::data::project::record::discovery::private(path, false)?;
+    if layerfs_home::lock::flock::try_lock(&file, exclusive).map_err(failed)? {
         Ok(Some(Lease(file)))
     } else {
         Ok(None)
@@ -126,7 +126,7 @@ fn progress(value: &SdkValue, active: bool) -> SdkRefusal {
     }
 }
 fn observed(path: &std::path::Path) -> Result<Option<SdkValue>, SdkRefusal> {
-    match layerfs_store::project::discovery::load(path) {
+    match layerfs_store::data::project::record::discovery::load(path) {
         Ok(value) => Ok(Some(value)),
         Err(_) if !path.exists() => Ok(None),
         Err(error) => Err(error),
@@ -199,7 +199,7 @@ pub fn check(state: &SandboxState, path: &str) -> Result<(), SdkRefusal> {
 pub fn find(state: &SandboxState, path: &str) -> Result<Option<SdkValue>, SdkRefusal> {
     // Steady-state token/directory lookups already have a token: avoid a
     // directory scan proportional to the lifetime's completed unmounts.
-    let known = layerfs_home::helpers::lock(&state.mounts)?
+    let known = layerfs_home::lock::mutex::lock(&state.mounts)?
         .get(path)
         .map(|mount| mount.workspace.bound.token);
     if let Some(token) = known {
@@ -249,7 +249,7 @@ pub fn check_all(state: &SandboxState) -> Result<Vec<String>, SdkRefusal> {
             }
             if let Some(value) = inspect(&entry.path())? {
                 if value.get_text("state") == Some("Retained") {
-                    recoverable.push(layerfs_home::helpers::text(&value, "path")?.to_owned());
+                    recoverable.push(layerfs_home::reply::values::text(&value, "path")?.to_owned());
                 }
             }
         }
@@ -319,7 +319,7 @@ pub fn begin_at(path_record: PathBuf, path: &str, forced: bool) -> Result<Attemp
         started: millis(),
         forced,
     };
-    layerfs_store::project::discovery::save(
+    layerfs_store::data::project::record::discovery::save(
         &attempt.path,
         SdkValue::map([
             ("v", SdkValue::Int(VERSION)),
@@ -338,7 +338,9 @@ pub fn begin_at(path_record: PathBuf, path: &str, forced: bool) -> Result<Attemp
 /// that sent nothing is the same case.
 fn restore(attempt: &Attempt) -> Result<(), SdkRefusal> {
     match &attempt.prior {
-        Some(prior) => layerfs_store::project::discovery::save(&attempt.path, prior.clone()),
+        Some(prior) => {
+            layerfs_store::data::project::record::discovery::save(&attempt.path, prior.clone())
+        }
         None => std::fs::remove_file(&attempt.path).map_err(failed),
     }
 }
@@ -363,7 +365,7 @@ pub fn finish(attempt: &Attempt, path: &str, outcome: &Outcome) -> Result<(), Sd
                 Ok(_) => SdkValue::Null,
                 Err(error) => error.detail.get("stage").cloned().unwrap_or(SdkValue::Null),
             };
-            layerfs_store::project::discovery::save(
+            layerfs_store::data::project::record::discovery::save(
                 &attempt.path,
                 SdkValue::map([
                     ("v", SdkValue::Int(VERSION)),

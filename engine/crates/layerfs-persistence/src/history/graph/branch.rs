@@ -24,7 +24,7 @@ use super::super::statement::rows::{
 };
 use crate::backend::seam::{Record as Row, Value};
 use layerfs_content::ObjectId;
-use layerfs_history::query::{self, Context, Cursor, Range};
+use layerfs_history::catalog::query::{self, Context, Cursor, Range};
 use layerfs_history::records::{CommitRecord, LayerStackRecord};
 
 const BRANCH_BY_ID: &str = "branch_branch_by_id";

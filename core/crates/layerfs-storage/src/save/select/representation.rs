@@ -10,9 +10,9 @@ use crate::{
         encode_prefix, raw_payload, EncodedRecord,
     },
     error::{StorageError, StorageResult},
+    location::Source,
     pack::{assemble, layout::PackLane},
     policy::{GROUP_CANONICAL_BYTES_LIMIT, GROUP_TARGET},
-    source::Source,
 };
 use layerfs_content::{FinalizedObject, ObjectId, ObjectRole};
 impl State<'_> {

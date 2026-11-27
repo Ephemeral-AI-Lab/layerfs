@@ -4,10 +4,10 @@
 //! record-only variant/config (#176 I03).
 use crate::fixture;
 use fixture::{pax_record, Scratch, Tar};
-use layerfs_home::events::Events;
-use layerfs_home::home::{self, paths, write_record};
+use layerfs_home::disk::{self, paths, write_record};
 use layerfs_home::names::MachineName;
-use layerfs_machine::worker::{read_frame, read_frame_within, write_frame, MAX_HELLO, PROTOCOL};
+use layerfs_home::reply::events::Events;
+use layerfs_machine::route::{read_frame, read_frame_within, write_frame, MAX_HELLO, PROTOCOL};
 use layerfs_protocol::sdk::SdkValue;
 use layerfs_sandbox::image::cache::{self as cache, architecture, Sidecar, CHUNK};
 use layerfs_sandbox::image::copy::docker::Docker;
@@ -16,7 +16,7 @@ use layerfs_sandbox::image::list;
 use layerfs_sandbox::image::prune;
 use layerfs_sandbox::image::tar::{Filtered, TarReport, EXTENDED_TOTAL_MAX, SPARSE_MAX};
 use layerfs_sandbox::{rootfs, Image};
-use layerfs_store::place::{self, Executor};
+use layerfs_store::admin::route::executor::{self, Executor};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
 use std::fs;
@@ -131,7 +131,7 @@ impl DockerGuard {
     fn make_home(&mut self, name: &str) -> (PathBuf, String) {
         let home = self.scratch.base.join(name);
         fs::create_dir_all(&home).unwrap();
-        let id = home::ensure(&home).unwrap().id;
+        let id = disk::ensure(&home).unwrap().id;
         self.homes.push(id.clone());
         (home, id)
     }
@@ -500,7 +500,7 @@ fn prune_reclaims_parts_temps_and_stranded_while_protecting_live_locks_and_in_us
     let scratch = Scratch::new("lp176-rec-prune");
     let home = scratch.base.join("home");
     fs::create_dir_all(&home).unwrap();
-    home::ensure(&home).unwrap();
+    disk::ensure(&home).unwrap();
     let cache_dir = cache::cache(&home);
     fs::create_dir_all(&cache_dir).unwrap();
 
@@ -702,7 +702,7 @@ fn interrupted_publish_with_renamed_dir_and_missing_sidecar_recovers_and_prunes(
     let scratch = Scratch::new("lp176-rec-publish");
     let home = scratch.base.join("home");
     fs::create_dir_all(&home).unwrap();
-    home::ensure(&home).unwrap();
+    disk::ensure(&home).unwrap();
     let cache_dir = cache::cache(&home);
     fs::create_dir_all(&cache_dir).unwrap();
 
@@ -1427,7 +1427,7 @@ fn prune_skips_unwritable_lock_dir_and_bad_lock_symlinks_while_reclaiming_others
     let scratch1 = Scratch::new("lp176-r1-lock-ro");
     let home1 = scratch1.base.join("home");
     fs::create_dir_all(&home1).unwrap();
-    home::ensure(&home1).unwrap();
+    disk::ensure(&home1).unwrap();
     let cache1 = cache::cache(&home1);
     fs::create_dir_all(&cache1).unwrap();
 
@@ -1471,7 +1471,7 @@ fn prune_skips_unwritable_lock_dir_and_bad_lock_symlinks_while_reclaiming_others
     let scratch2 = Scratch::new("lp176-r1-lock-symlink");
     let home2 = scratch2.base.join("home");
     fs::create_dir_all(&home2).unwrap();
-    home::ensure(&home2).unwrap();
+    disk::ensure(&home2).unwrap();
     let cache2 = cache::cache(&home2);
     fs::create_dir_all(&cache2).unwrap();
     let lock_dir2 = ImageLock::dir(&home2, layerfs_home::names::HOST_MACHINE);
@@ -1868,7 +1868,7 @@ fn sparse_expanded_bytes_are_counted_in_load_capacity_check() {
     let scratch = Scratch::new("lp176-r1-sparse-cap");
     let home = scratch.base.join("home");
     fs::create_dir_all(&home).unwrap();
-    home::ensure(&home).unwrap();
+    disk::ensure(&home).unwrap();
 
     // Stand-in Docker reports small inspected.size (64 KiB) so initial capacity() passes,
     // but streams a sparse file expanding to 512 KiB (docker::need(512 KiB) > 512 KiB free).
@@ -1974,7 +1974,7 @@ esac
         writes
     });
 
-    let Executor::Worker(mut worker) = place::on_machine(&home, "vm1").unwrap() else {
+    let Executor::Worker(mut worker) = executor::on_machine(&home, "vm1").unwrap() else {
         panic!("expected worker executor");
     };
     let docker = Docker::at(Some(dbin), None);

@@ -4,8 +4,8 @@ use crate::chains;
 use chains::{noise, save, storage, url, whole, Store};
 use layerfs_content::{
     filesystem::{
-        directory::{encode_directory_page, DirectoryPage},
-        path::PathName,
+        name::path::PathName,
+        tree::directory::{encode_directory_page, DirectoryPage},
     },
     FinalizedObject, ObjectRole,
 };

@@ -128,7 +128,7 @@ fn a_daemon_refusal_is_known_and_keeps_its_code() {
     let refusal = sdk_error(SdkError::Operation(refused));
     assert_eq!(refusal.code, "Busy");
     assert_eq!(refusal.detail.get(ATTEMPTED), None);
-    let passed = sdk_error(SdkError::Refused(layerfs_home::outcome::refused(
+    let passed = sdk_error(SdkError::Refused(layerfs_home::reply::outcome::refused(
         "NoSuchPath",
         "gone",
     )));

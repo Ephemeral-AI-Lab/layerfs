@@ -3,9 +3,9 @@ use crate::dispatch::guard::scope::Rule;
 use crate::dispatch::table::Kind::{Int, Name, Project, Text};
 use crate::dispatch::table::{a, call, opt, Call};
 use crate::dispatch::{Context, Form, Paging, Part, Section};
-use layerfs_home::outcome::Outcome;
+use layerfs_home::reply::outcome::Outcome;
 use layerfs_protocol::sdk::SdkValue;
-use layerfs_store::calls::commit::{diff, CommitDiff};
+use layerfs_store::data::commit::{diff, CommitDiff};
 
 /// One path that differs; `change` is added, modified or removed.
 const ROW: Form = Form::of(

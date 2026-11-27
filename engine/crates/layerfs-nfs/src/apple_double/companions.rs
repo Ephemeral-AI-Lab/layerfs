@@ -76,7 +76,7 @@ use crate::{
     },
     protocol::attributes::Status,
 };
-use layerfs_content::filesystem::attributes::PortableMetadata;
+use layerfs_content::filesystem::tree::attribute::PortableMetadata;
 use layerfs_vfs::ViewStat;
 use std::{
     collections::{BTreeSet, HashMap, HashSet},

@@ -2,7 +2,7 @@
 use super::list_changes::selected;
 use crate::workspace::Service;
 use layerfs_protocol::sdk::SdkValue;
-use layerfs_store_service::history::lookup::{self as args, Answer};
+use layerfs_store_service::lookup::{self as args, Answer};
 
 /// The overlay's own row counts, read from its database alone (#508). Path
 /// change counts are `null`: naming them walks the base tree, which costs

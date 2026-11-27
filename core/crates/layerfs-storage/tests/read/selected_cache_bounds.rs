@@ -2,14 +2,13 @@
 use layerfs_content::ObjectId;
 use layerfs_storage::{
     encoding::{PackAcquisition, PackCache, PackUnit},
-    location::{ObjectLocation, PackDomain, PackInfo, SignatureRow},
+    location::{ObjectLocation, PackDomain, PackInfo, SignatureRow, Source},
     pack::{
         assemble, build_group,
         layout::{self, PackLane},
     },
     policy,
     port::*,
-    source::Source,
     StorageError, StorageResult,
 };
 use std::cell::Cell;

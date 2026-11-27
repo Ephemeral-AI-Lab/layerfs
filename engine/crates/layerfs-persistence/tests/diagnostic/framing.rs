@@ -1,7 +1,7 @@
 //! C01 and losing physical representations: full pack checks are independent.
 use crate::support;
 use layerfs_content::{
-    filesystem::directory::{encode_directory_page, DirectoryPage},
+    filesystem::tree::directory::{encode_directory_page, DirectoryPage},
     ObjectRole,
 };
 use layerfs_storage::{

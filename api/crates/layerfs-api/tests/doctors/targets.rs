@@ -414,7 +414,7 @@ fn a_silent_server_fails_its_connection_within_the_handshake_limit() {
     });
     let home = tempdir("silent");
     short(&home, "home.init", &[]);
-    layerfs_store::postgresql::login::save(&home, "silent", "pw").unwrap();
+    layerfs_store::backend::postgresql::login::save(&home, "silent", "pw").unwrap();
     let url = format!("postgresql://127.0.0.1:{port}/layerfs_db?sslmode=disable");
     write_entity(
         &paths::store_record(&home, "silent"),
@@ -506,7 +506,7 @@ fn a_sqlite_project_without_a_manifest_fails_project_doctor() {
     }
 
     // PostgreSQL project records hold no manifest; project.record still passes.
-    layerfs_store::postgresql::login::save(&home, "pg", "pw").unwrap();
+    layerfs_store::backend::postgresql::login::save(&home, "pg", "pw").unwrap();
     write_entity(
         &paths::store_record(&home, "pg"),
         &SdkValue::map([

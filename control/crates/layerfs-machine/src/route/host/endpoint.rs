@@ -1,12 +1,10 @@
 //! The host worker's endpoint custody: its canonical home and three
 //! endpoints ([`HostPaths`]), the lifetime lock ([`HostGuard`]), binding a
 //! private endpoint and the peer check.
-use layerfs_home::{
-    disk::{self, paths},
-    lock::flock,
-    reply::outcome::refused,
-    socket,
-};
+use layerfs_home::disk::{self, paths};
+use layerfs_home::lock::flock;
+use layerfs_home::reply::outcome::refused;
+use layerfs_home::socket;
 use layerfs_protocol::sdk::SdkRefusal;
 use std::fs::{self, File};
 use std::io;

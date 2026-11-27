@@ -11,7 +11,7 @@
 use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::source::Source;
+use crate::location::Source;
 
 use layerfs_content::inode_leaf::{
     decode_pooled_body, rebuild_leaf, INODE_VALUE_BYTES, MAXIMUM_LEAF_ROWS,

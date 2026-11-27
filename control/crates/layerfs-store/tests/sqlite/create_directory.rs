@@ -3,7 +3,7 @@
 //! the directory when nothing was published. The guard refuses tmpfs by
 //! filesystem, after the `mkdir` succeeded, so it shows both sides; a `mkdir`
 //! that fails on a taken name claims nothing and removes nothing.
-use layerfs_home::home::paths;
+use layerfs_home::disk::paths;
 use layerfs_home::names::StoreName;
 use std::path::{Path, PathBuf};
 
@@ -40,7 +40,7 @@ fn a_mkdir_failure_removes_nothing() {
     let Some(home) = scratch(&std::env::temp_dir(), "taken-name") else {
         return;
     };
-    layerfs_home::home::layout::create(&home).unwrap();
+    layerfs_home::disk::layout::create(&home).unwrap();
     let name = StoreName::parse("taken").unwrap();
     let directory = paths::store_dir(&home, &name);
     let absent_target = home.join("link-target");
@@ -73,7 +73,7 @@ fn a_refused_create_removes_only_the_directory_this_call_made() {
         eprintln!("skipping: /dev/shm is not writable for this test");
         return;
     };
-    layerfs_home::home::layout::create(&home).unwrap();
+    layerfs_home::disk::layout::create(&home).unwrap();
     let name = StoreName::parse("tmp").unwrap();
     let refusal = layerfs_store::backend::sqlite::create::create(&home, &name, None).unwrap_err();
     assert_eq!(refusal.code, "Unsupported", "{}", refusal.message);

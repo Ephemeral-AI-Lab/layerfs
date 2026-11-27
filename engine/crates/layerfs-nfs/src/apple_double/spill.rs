@@ -13,7 +13,7 @@
 //! and its files are this user's alone; the modes are set here rather than
 //! left to the caller's umask.
 use crate::protocol::attributes::Status;
-use layerfs_content::filesystem::attributes::PortableMetadata;
+use layerfs_content::filesystem::tree::attribute::PortableMetadata;
 use std::{
     fs::{self, File, OpenOptions},
     io,

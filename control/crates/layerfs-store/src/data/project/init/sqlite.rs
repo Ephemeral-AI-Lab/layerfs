@@ -7,17 +7,17 @@ use crate::data::project::record::discovery::Project;
 use layerfs_history::error::{HolderKind, HolderState, NameHolder, NameSource, NameTakenState};
 use layerfs_history::records::GcScopeKind;
 use layerfs_history::{BranchId, HistoryName, LayerStackId};
-use layerfs_home::helpers::random;
-use layerfs_home::home::paths;
+use layerfs_home::disk::paths;
 use layerfs_home::names::StoreName;
-use layerfs_home::outcome::{failed, refused, Outcome};
+use layerfs_home::record::token::random;
+use layerfs_home::reply::outcome::{failed, refused, Outcome};
 use layerfs_persistence::{PersistenceConfig, SealedStore, SqlitePersistenceProfile};
 use layerfs_project::store::{AddRequest, InitError, ProjectApi};
 use layerfs_project::{InitCounters, ProjectError};
 use layerfs_protocol::provision::manifest::{ProviderKind, StoreManifest, StoreProfile};
 use layerfs_protocol::sdk::hex;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
-use layerfs_store_service::history::lookup;
+use layerfs_store_service::lookup;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -72,12 +72,12 @@ pub fn save_entry(
 
 /// Makes the entry of project `name` of the shared Store `store` once,
 /// owner-only, with its parents: `<home>/store/<store>/project/<name>/`.
-/// An entry an Init of this process claimed ([`crate::project::op`]) is
+/// An entry an Init of this process claimed ([`crate::data::project::record::intent`]) is
 /// that Init's to fill; any other entry already there is `NameTaken`.
 pub fn make_entry(home: &Path, store: &str, name: &str) -> Result<PathBuf> {
     let directory = store_dir(home, store)?;
-    layerfs_home::home::private_dir(&directory.join("project"))?;
-    let entry = layerfs_home::home::paths::project_dir(home, store, name);
+    layerfs_home::disk::private_dir(&directory.join("project"))?;
+    let entry = layerfs_home::disk::paths::project_dir(home, store, name);
     if let Err(error) = std::fs::create_dir(&entry) {
         if error.kind() != std::io::ErrorKind::AlreadyExists {
             return Err(failed(error));
@@ -145,7 +145,7 @@ pub fn add_project(request: &ProjectAdd) -> Outcome {
     let deadline = crate::data::project::init::worker::deadline(request.timeout_ms)?;
     let open = request.open();
     let store_file = request.store_file();
-    layerfs_store_service::kernel_guard::check(&store_file)
+    layerfs_store_service::store::kernel_guard::check(&store_file)
         .map_err(|reason| refused("Unsupported", reason.0))?;
     let identity = identity(&open)?;
     sqlite_only(&identity, "adding a project")?;
@@ -283,7 +283,7 @@ pub fn add_failure(error: InitError, entry: Option<&Path>, name: &str, store: &s
     };
     if let Some(entry) = entry {
         let _ = std::fs::remove_dir_all(entry);
-        layerfs_home::home::generation::moved_above(entry);
+        layerfs_home::record::generation::moved_above(entry);
     }
     refusal
 }

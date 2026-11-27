@@ -1,14 +1,14 @@
 //! How a backup or a restore recorded as its Store's `op` ends, through the
-//! Store's one operation helper ([`crate::intent`]): a transfer that worked
+//! Store's one operation helper ([`crate::admin::record::intent`]): a transfer that worked
 //! drops `op` and sets its link in one record write; a certain failure
 //! drops `op` and writes what was tried to the link's `attempt`
-//! ([`crate::get::ATTEMPT`]), which `store.get`'s `backups` section reads;
+//! ([`crate::admin::status::get::ATTEMPT`]), which `store.get`'s `backups` section reads;
 //! an `Unknown` one leaves `op` unresolved for `store get --with live` to
 //! settle.
 use crate::admin::record::intent;
 use crate::admin::record::store::{self, StoreRecord};
 use crate::backup::copy::link::StoreLink;
-use layerfs_home::op::{self, Op};
+use layerfs_home::record::intent::{self as op, Op};
 use layerfs_protocol::sdk::SdkRefusal;
 use std::path::Path;
 

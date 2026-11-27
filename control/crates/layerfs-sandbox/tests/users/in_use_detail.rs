@@ -1,8 +1,8 @@
 //! `InUse` from `store.disconnect` fills `detail.related` with
 //! `{kind, name}` entries (#536 §10b refusal detail): another process's
 //! lease on the Store.
-use layerfs_home::events::Events;
-use layerfs_home::home::{paths, private_dir, write_entity};
+use layerfs_home::disk::{paths, private_dir, write_entity};
+use layerfs_home::reply::events::Events;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::PathBuf;
 
@@ -29,7 +29,9 @@ fn related(refusal: &SdkRefusal) -> Vec<(String, String)> {
         .collect()
 }
 
-fn refused(run: impl FnOnce(&mut Events<'_>) -> layerfs_home::outcome::Outcome) -> SdkRefusal {
+fn refused(
+    run: impl FnOnce(&mut Events<'_>) -> layerfs_home::reply::outcome::Outcome,
+) -> SdkRefusal {
     let mut sink = |_| {};
     run(&mut Events::new(&mut sink)).unwrap_err()
 }

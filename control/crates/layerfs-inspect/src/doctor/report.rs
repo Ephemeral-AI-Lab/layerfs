@@ -9,7 +9,7 @@
 //! made and nothing was found, so a notice makes it false. A thing's
 //! status is the worst outcome among its own checks; the answer's is the
 //! worst thing in it; `counts` counts things, once each.
-use layerfs_home::state::BlockedBy;
+use layerfs_home::reply::state::BlockedBy;
 use layerfs_protocol::sdk::SdkValue;
 
 /// A kind of thing a doctor checks.
@@ -414,7 +414,7 @@ impl Node {
             ]);
             match &row.evidence {
                 Some(evidence) => {
-                    layerfs_home::home::with_field(value, "evidence", evidence.clone())
+                    layerfs_home::disk::with_field(value, "evidence", evidence.clone())
                 }
                 None => value,
             }
@@ -511,7 +511,7 @@ impl Report {
             ("counts", SdkValue::Map(counted.iter().map(count).collect())),
             (
                 "observed_at",
-                SdkValue::Text(layerfs_home::time::iso(self.observed_ms)),
+                SdkValue::Text(layerfs_home::reply::time::iso(self.observed_ms)),
             ),
             ("tree", self.tree.to_sdk(true)),
         ])

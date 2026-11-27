@@ -3,11 +3,11 @@
 //! each bucket link) in the frozen order, and the same cut through a real
 //! worker's `store.diagnose`, which refuses a request without `cut`.
 use layerfs_history::HistoryCatalogConfig;
-use layerfs_home::events::Events;
-use layerfs_home::home::{self, paths, with_field, write_entity};
-use layerfs_home::op::Op;
+use layerfs_home::disk::{self, paths, with_field, write_entity};
+use layerfs_home::record::intent::Op;
+use layerfs_home::reply::events::Events;
 use layerfs_inspect::{self, Kind, Options, Thing};
-use layerfs_machine::worker::{diagnostic_connect, Endpoint};
+use layerfs_machine::route::{diagnostic_connect, Endpoint};
 use layerfs_persistence::{PersistenceConfig, SqliteHandles, SqlitePersistenceProfile};
 use layerfs_protocol::sdk::SdkValue;
 use layerfs_storage::StoragePolicy;
@@ -27,8 +27,8 @@ impl Fixture {
         let root =
             std::env::temp_dir().join(format!("layerfs-store-doctor-{}-{n}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
-        home::private_dir(&root).unwrap();
-        home::ensure(&root).unwrap();
+        disk::private_dir(&root).unwrap();
+        disk::ensure(&root).unwrap();
         Self { root }
     }
 }
@@ -50,7 +50,7 @@ fn fields(name: &str) -> SdkValue {
 
 /// A real sqlite Store file of the fixture's identity at `path`.
 fn store_file(path: &Path) -> SqliteHandles {
-    home::private_dir(path.parent().unwrap()).unwrap();
+    disk::private_dir(path.parent().unwrap()).unwrap();
     SqliteHandles::create(
         PersistenceConfig::sqlite(path).with_sqlite_profile(SqlitePersistenceProfile::Normal),
         StoragePolicy::frozen_default(),
@@ -310,7 +310,7 @@ fn a_worker_makes_the_shallow_cut_and_refuses_a_request_without_one() {
 /// A `<store>.compact-op` record beside `file` naming this process as its
 /// owner (`live`), or a process that is gone.
 fn compact_record(file: &Path, live: bool) {
-    let (start, boot) = match (live, layerfs_home::process::me()) {
+    let (start, boot) = match (live, layerfs_home::record::process::me()) {
         (true, Some((start, boot))) => (start.to_string(), format!("{boot:032x}")),
         (true, None) => (String::new(), String::new()),
         (false, _) => ("1".to_owned(), "0".repeat(32)),

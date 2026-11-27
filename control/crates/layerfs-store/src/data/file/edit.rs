@@ -2,8 +2,8 @@
 use super::read::{run, take};
 use super::requests::FileEdit;
 use super::write::{answer, base, on_main, word};
-use layerfs_home::events::Events;
-use layerfs_home::outcome::{with_fix, Outcome};
+use layerfs_home::reply::events::Events;
+use layerfs_home::reply::outcome::{with_fix, Outcome};
 use layerfs_protocol::sdk::SdkValue;
 use std::path::Path;
 

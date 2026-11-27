@@ -5,7 +5,7 @@
 //! (layerfs-project#104, #105). Callers pass [`MACHINE`] and [`STORE`]
 //! into the machine and Store calls that check their users.
 use crate::status::inventory;
-use layerfs_home::state::State;
+use layerfs_home::reply::state::State;
 use layerfs_machine::{MachineUsers, Related};
 use layerfs_protocol::sdk::SdkRefusal;
 use layerfs_store::StoreUsers;
@@ -96,20 +96,20 @@ impl StoreUsers for Store {
 }
 
 /// A machine's records-only state as the Store reads take it
-/// ([`layerfs_store::state::Machines`]): the machine family's one
+/// ([`layerfs_store::admin::status::state::Machines`]): the machine family's one
 /// derivation, [`inventory::machine_state`], so a Store's `blocked_by` says
 /// what `machine get` says of its machine.
 pub fn machine_state(home: &Path, name: &str) -> Result<State> {
-    match layerfs_machine::record::MachineRecord::read(home, name) {
+    match layerfs_machine::record::machine::MachineRecord::read(home, name) {
         Ok(record) => inventory::machine_state(home, name, record.as_ref()),
         // a record that cannot be read blocks the Stores on it, nothing else
-        Err(_) => Ok(layerfs_machine::state::unreadable(name)),
+        Err(_) => Ok(layerfs_machine::status::state::unreadable(name)),
     }
 }
 
 /// What the Store reads take from the other entities: each machine's
 /// state ([`machine_state`]).
-pub fn reads() -> layerfs_store::state::Machines<'static> {
+pub fn reads() -> layerfs_store::admin::status::state::Machines<'static> {
     &machine_state
 }
 
@@ -132,7 +132,12 @@ fn nameless_fix(home: &Path, machine: &str, refusal: SdkRefusal) -> SdkRefusal {
 /// does. A Store the reconcile cannot reach is left for the next start.
 fn reconcile(home: &Path, machine: &str, incarnation: &str) -> Result<()> {
     for store in inventory::stores_on(home, machine)? {
-        let _ = layerfs_store::service::reconcile_machine(home, &store, machine, incarnation);
+        let _ = layerfs_store::admin::route::mount_intents::reconcile_machine(
+            home,
+            &store,
+            machine,
+            incarnation,
+        );
     }
     Ok(())
 }
@@ -141,8 +146,8 @@ fn reconcile(home: &Path, machine: &str, incarnation: &str) -> Result<()> {
 /// it, so a later machine of its name is attached to none, and so are the
 /// home's image copy locks of it (`run/image-lock/<machine>/`).
 fn forget(home: &Path, name: &str) -> Result<()> {
-    layerfs_store::postgresql::check::forget_machine(home, name).map_err(|refusal| {
-        layerfs_home::outcome::refused(
+    layerfs_store::backend::postgresql::check::forget_machine(home, name).map_err(|refusal| {
+        layerfs_home::reply::outcome::refused(
             &refusal.code,
             format!(
                 "machine {name} was removed, but its PostgreSQL Store attachments were not forgotten: {}",
@@ -154,7 +159,7 @@ fn forget(home: &Path, name: &str) -> Result<()> {
     let locks = crate::image::copy::lock::ImageLock::dir(home, name);
     match std::fs::remove_dir_all(&locks) {
         Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
-            Err(layerfs_home::outcome::refused(
+            Err(layerfs_home::reply::outcome::refused(
                 "Failed",
                 format!(
                     "machine {name} was removed, but its image copy locks in {} were not: {error}",
@@ -183,8 +188,8 @@ fn host_holders(home: &Path, name: &str) -> Result<Vec<String>> {
     // (Store I/O, so before any record lock): only other processes and a
     // call running here hold the machine; a copy in use stays a holder
     for store in &stores {
-        let file = layerfs_home::home::paths::store_file(home, store);
-        match layerfs_store::open::close(&file) {
+        let file = layerfs_home::disk::paths::store_file(home, store);
+        match layerfs_store::admin::open::close::close(&file) {
             Err(error) if error.code != "InUse" => {
                 blocking.push(format!("Store {store} (close failed: {})", error.message));
             }
@@ -205,16 +210,16 @@ fn host_holders(home: &Path, name: &str) -> Result<Vec<String>> {
 /// The holders of host Store `store` on machine `name`: this process's
 /// lease and every other live one.
 fn store_holders(home: &Path, name: &str, store: &str, blocking: &mut Vec<String>) -> Result<()> {
-    let _guard = layerfs_store::record::lock(home, store)?;
-    let record = layerfs_store::record::StoreRecord::of(home, store)?;
-    if !matches!(record.store_ref()?,layerfs_store::record::StoreRef::Sqlite{machine,..} if machine == name)
+    let _guard = layerfs_store::admin::record::store::lock(home, store)?;
+    let record = layerfs_store::admin::record::store::StoreRecord::of(home, store)?;
+    if !matches!(record.store_ref()?,layerfs_store::admin::record::store::StoreRef::Sqlite{machine,..} if machine == name)
     {
         return Ok(());
     }
-    if layerfs_store::lease::held_here(home, store) {
+    if layerfs_store::admin::open::lease::held_here(home, store) {
         blocking.push(format!("Store {store} (pid {})", std::process::id()));
     }
-    for pid in layerfs_store::lease::holders(home, store)? {
+    for pid in layerfs_store::admin::open::lease::holders(home, store)? {
         blocking.push(format!("Store {store} (pid {pid})"));
     }
     Ok(())

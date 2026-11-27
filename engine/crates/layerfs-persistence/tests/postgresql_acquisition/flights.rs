@@ -66,7 +66,7 @@ fn entry(
         },
         position: Some(position),
         kind,
-        metadata: layerfs_content::filesystem::attributes::PortableMetadata {
+        metadata: layerfs_content::filesystem::tree::attribute::PortableMetadata {
             mode: if kind == InodeKind::Directory {
                 0o755
             } else {

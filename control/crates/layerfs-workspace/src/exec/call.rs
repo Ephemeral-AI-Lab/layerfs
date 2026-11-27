@@ -13,10 +13,10 @@
 //! implicit timeout, Commit or unmount.
 use crate::route::dispatch::call as dispatch;
 use crate::route::send::at;
-use layerfs_home::events::Events;
-use layerfs_home::outcome::shell_word;
-use layerfs_home::outcome::{with_fix, with_next, Outcome as Answer};
-use layerfs_machine::worker::Unreached;
+use layerfs_home::reply::events::Events;
+use layerfs_home::reply::outcome::shell_word;
+use layerfs_home::reply::outcome::{with_fix, with_next, Outcome as Answer};
+use layerfs_machine::route::Unreached;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_sandbox::exec::id::ExecId;
 use layerfs_sandbox::exec::settle::Outcome;

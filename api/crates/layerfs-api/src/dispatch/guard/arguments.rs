@@ -3,7 +3,7 @@
 //! kind. Sizes become whole bytes. Front ends strip their functions
 //! (`on_progress`, exec sinks) before the call reaches the library.
 use crate::dispatch::table::{Call, Kind};
-use layerfs_home::outcome::refused;
+use layerfs_home::reply::outcome::refused;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 
 /// `args` as the call's checked fields, in the table's order.

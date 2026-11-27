@@ -160,7 +160,7 @@ fn change(path: &str, kind: &str) -> SdkValue {
 }
 
 fn dirty(entries: Vec<SdkValue>, partial: bool) -> SdkValue {
-    let refusal = layerfs_home::outcome::refused("Dirty", "1 uncommitted change(s)");
+    let refusal = layerfs_home::reply::outcome::refused("Dirty", "1 uncommitted change(s)");
     let read = SdkValue::map([
         ("entries", SdkValue::List(entries)),
         ("partial", SdkValue::Bool(partial)),

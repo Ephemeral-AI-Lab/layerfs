@@ -687,8 +687,12 @@ fn list_states_compare_the_store_and_the_copy() {
 /// The project a call names, as `sandbox.create` reads it
 /// (`layerfs-sandbox`'s `lifecycle::installed`): its entry's manifest and
 /// installed manifest.
-fn entry(home: &Path, store: &str, project: &str) -> layerfs_store::project::discovery::Project {
-    layerfs_store::project::discovery::project(Some(home), Some(store), Some(project))
+fn entry(
+    home: &Path,
+    store: &str,
+    project: &str,
+) -> layerfs_store::data::project::record::discovery::Project {
+    layerfs_store::data::project::record::discovery::project(Some(home), Some(store), Some(project))
         .unwrap_or_else(|refusal| panic!("{store}/{project}: {refusal:?}"))
 }
 
@@ -699,8 +703,8 @@ fn entry(home: &Path, store: &str, project: &str) -> layerfs_store::project::dis
 fn same_project(
     home: &Path,
     store: &str,
-    original: &layerfs_store::project::discovery::Project,
-) -> layerfs_store::project::discovery::Project {
+    original: &layerfs_store::data::project::record::discovery::Project,
+) -> layerfs_store::data::project::record::discovery::Project {
     let restored = entry(home, store, "api");
     // the restored Store's own record: the file's binding, and the cursor
     // authority a load gives the new Store

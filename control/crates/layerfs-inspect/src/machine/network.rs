@@ -12,8 +12,8 @@
 //! `native` on Linux.
 use super::super::doctor::budget::Checks;
 #[cfg(target_os = "linux")]
-use layerfs_home::outcome::refused;
-use layerfs_home::outcome::Outcome;
+use layerfs_home::reply::outcome::refused;
+use layerfs_home::reply::outcome::Outcome;
 #[cfg(any(target_os = "linux", feature = "machine"))]
 use layerfs_protocol::sdk::SdkValue;
 use layerfs_sandbox::record::SandboxRecord;
@@ -116,7 +116,7 @@ pub(crate) fn report(root: &Path) -> Outcome {
 
 #[cfg(not(target_os = "linux"))]
 pub(crate) fn report(_root: &Path) -> Outcome {
-    Err(layerfs_home::outcome::refused(
+    Err(layerfs_home::reply::outcome::refused(
         "Unsupported",
         "Sandbox networks are Linux only",
     ))
@@ -135,7 +135,7 @@ pub(super) fn machine(
     owned: &[(String, String)],
     checks: &mut Checks,
 ) {
-    use layerfs_home::outcome::shell_word;
+    use layerfs_home::reply::outcome::shell_word;
     let restart = format!(
         "layerfs machine stop {m} && layerfs machine start {m}",
         m = shell_word(name)
@@ -229,7 +229,7 @@ pub(super) fn machine(
 #[cfg(target_os = "linux")]
 pub(crate) fn sandbox(record: &SandboxRecord, checks: &mut Checks) {
     use layerfs_sandbox::network::{inspect, pool::link_name, private};
-    use layerfs_sandbox::state::remove_fix;
+    use layerfs_sandbox::status::state::remove_fix;
     let Some(daemon) = record.daemon() else {
         return;
     };
@@ -354,10 +354,10 @@ mod tests {
     #[cfg(any(target_os = "linux", feature = "machine"))]
     #[test]
     fn an_unreadable_record_leaves_no_owner_list() {
-        use layerfs_home::home::{self, paths, write_entity};
+        use layerfs_home::disk::{self, paths, write_entity};
         let home = std::env::temp_dir().join(format!("lfs-owned-in-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&home);
-        home::ensure(&home).unwrap();
+        disk::ensure(&home).unwrap();
         let good = record("good", "docker", "lfsba9876543210");
         write_entity(&paths::sandbox_record(&home, "good"), &good.to_record()).unwrap();
         assert_eq!(

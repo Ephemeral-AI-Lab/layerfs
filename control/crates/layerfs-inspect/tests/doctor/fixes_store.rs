@@ -2,8 +2,8 @@
 //! with the reason, and redacted evidence (layerfs-project#159). Doctor stays
 //! observational: these cases read the report and never run a fix.
 use layerfs_history::HistoryCatalogConfig;
-use layerfs_home::events::Events;
-use layerfs_home::home::{self, paths, with_field, write_entity};
+use layerfs_home::disk::{self, paths, with_field, write_entity};
+use layerfs_home::reply::events::Events;
 use layerfs_inspect::{self, Kind, Options, Thing};
 use layerfs_persistence::{PersistenceConfig, SqliteHandles, SqlitePersistenceProfile};
 use layerfs_protocol::sdk::SdkValue;
@@ -23,8 +23,8 @@ impl Fixture {
         let root =
             std::env::temp_dir().join(format!("layerfs-store-fixes-{}-{n}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
-        home::private_dir(&root).unwrap();
-        home::ensure(&root).unwrap();
+        disk::private_dir(&root).unwrap();
+        disk::ensure(&root).unwrap();
         Self { root }
     }
 }
@@ -45,7 +45,7 @@ fn fields(name: &str) -> SdkValue {
 }
 
 fn store_file(path: &Path) -> SqliteHandles {
-    home::private_dir(path.parent().unwrap()).unwrap();
+    disk::private_dir(path.parent().unwrap()).unwrap();
     SqliteHandles::create(
         PersistenceConfig::sqlite(path).with_sqlite_profile(SqlitePersistenceProfile::Normal),
         StoragePolicy::frozen_default(),
@@ -276,7 +276,7 @@ fn stale_leases_are_reported_without_removing_them() {
     let f = Fixture::new();
     write_entity(&paths::store_record(&f.root, "one"), &fields("one")).unwrap();
     let lease_dir = paths::lease_dir(&f.root, "one");
-    home::private_dir(&lease_dir).unwrap();
+    disk::private_dir(&lease_dir).unwrap();
     let lease = lease_dir.join("99999999");
     std::fs::write(&lease, "1\n").unwrap();
     let out = report(&f.root, Kind::Store, "one");
@@ -303,7 +303,7 @@ fn a_postgresql_store_that_is_not_reached_names_the_connect_fix_and_hides_its_pa
         ("cursor", SdkValue::Bytes(vec![9; 32])),
     ]);
     write_entity(&paths::store_record(&f.root, "pg"), &record).unwrap();
-    layerfs_store::postgresql::login::save(&f.root, "pg", PASSWORD).unwrap();
+    layerfs_store::backend::postgresql::login::save(&f.root, "pg", PASSWORD).unwrap();
     let out = report(&f.root, Kind::Store, "pg");
     let found = finding(&out, "store.connection");
     assert!(

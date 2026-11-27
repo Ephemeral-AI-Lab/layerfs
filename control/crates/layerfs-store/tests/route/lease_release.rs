@@ -1,4 +1,5 @@
-use layerfs_home::home::{self, paths};
+use layerfs_home::disk;
+use layerfs_home::disk::paths;
 use layerfs_home::names::StoreName;
 use layerfs_store::{admin::open::lease, backend::sqlite::create};
 use std::path::PathBuf;
@@ -14,7 +15,7 @@ impl Home {
             std::process::id(),
             NEXT.fetch_add(1, Ordering::Relaxed)
         ));
-        home::open(&path).unwrap();
+        disk::open(&path).unwrap();
         create::create(&path, &StoreName::parse("shop").unwrap(), None).unwrap();
         Self(path)
     }

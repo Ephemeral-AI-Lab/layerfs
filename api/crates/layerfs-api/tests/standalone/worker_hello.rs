@@ -2,7 +2,7 @@
 //! answers its secret with its protocol and bundle hash, and a caller sends
 //! nothing to a worker of another protocol or bundle (an old worker, whose
 //! hello names no protocol, included); the matching worker answers.
-use layerfs_machine::worker::{
+use layerfs_machine::route::{
     self, read_frame, read_frame_within, write_frame, Endpoint, Hello, MAX_HELLO, PROTOCOL,
 };
 use layerfs_protocol::sdk::SdkValue;
@@ -68,11 +68,11 @@ fn hello(protocol: Option<i64>, bundle: Option<&str>) -> SdkValue {
 fn call(answer: SdkValue) -> (Result<SdkValue, (String, String)>, Option<SdkValue>) {
     deployed_bundle();
     let (endpoint, received) = stand_in(answer);
-    let outcome = worker::call(&endpoint, "worker.ping", SdkValue::Null, &mut |_| {});
+    let outcome = route::call(&endpoint, "worker.ping", SdkValue::Null, &mut |_| {});
     let refusal = outcome.as_ref().err().cloned();
     let request = received.recv_timeout(Duration::from_secs(15)).unwrap();
     if let Some(refusal) = refusal {
-        assert!(worker::is_mismatch(&refusal), "{refusal:?}");
+        assert!(route::is_mismatch(&refusal), "{refusal:?}");
     }
     (outcome.map_err(|r| (r.code, r.message)), request)
 }
@@ -129,7 +129,7 @@ fn a_worker_just_started_of_another_build_names_its_stale_bundle() {
     };
     let refusal = old.stale_bundle("lima1", &dir, "127.0.0.1:7").unwrap();
     assert_eq!(refusal.code, "Unavailable");
-    assert!(worker::is_mismatch(&refusal), "{refusal:?}");
+    assert!(route::is_mismatch(&refusal), "{refusal:?}");
     for said in [
         "machine lima1 started",
         "protocol none",
@@ -167,11 +167,11 @@ fn the_library_worker_says_its_protocol_and_answers() {
         secret: "k".to_owned(),
     };
     // a test binary runs from no sealed bundle
-    let said = worker::hello(&endpoint).unwrap();
+    let said = route::hello(&endpoint).unwrap();
     assert_eq!(said.protocol, Some(PROTOCOL));
     assert_eq!(said.bundle, None);
     assert_eq!(
-        worker::ping(&endpoint).unwrap().get_text("kind"),
+        route::ping(&endpoint).unwrap().get_text("kind"),
         Some("worker")
     );
     // a wrong secret is still the worker's refusal
@@ -179,6 +179,6 @@ fn the_library_worker_says_its_protocol_and_answers() {
         address,
         secret: "no".to_owned(),
     };
-    assert_eq!(worker::hello(&wrong).unwrap_err().code, "Denied");
+    assert_eq!(route::hello(&wrong).unwrap_err().code, "Denied");
     let _ = std::fs::remove_dir_all(root);
 }

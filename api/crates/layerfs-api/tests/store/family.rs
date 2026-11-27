@@ -441,7 +441,7 @@ fn a_killed_opener_leaves_its_log_frames() {
     let record = read_record(&paths::store_record(&home, "shop"))
         .unwrap()
         .unwrap();
-    let identity = layerfs_store::identity::identity_of(&record).unwrap();
+    let identity = layerfs_store::admin::record::identity::identity_of(&record).unwrap();
     let handles = layerfs_persistence::SqliteHandles::open_writable(
         layerfs_persistence::PersistenceConfig::sqlite(&file)
             .with_sqlite_profile(layerfs_persistence::SqlitePersistenceProfile::Normal),

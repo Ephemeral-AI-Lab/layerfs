@@ -143,8 +143,8 @@ impl Rig {
     }
 }
 
-fn meta(mode: u32) -> layerfs_content::filesystem::attributes::PortableMetadata {
-    layerfs_content::filesystem::attributes::PortableMetadata {
+fn meta(mode: u32) -> layerfs_content::filesystem::tree::attribute::PortableMetadata {
+    layerfs_content::filesystem::tree::attribute::PortableMetadata {
         mode,
         mtime_seconds: 0,
         mtime_nanoseconds: 0,

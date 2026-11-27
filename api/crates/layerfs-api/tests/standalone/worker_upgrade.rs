@@ -7,15 +7,15 @@
 #[path = "../support/worker_store.rs"]
 mod worker_store;
 
-use layerfs_home::events::Events;
-use layerfs_home::home::{self, paths, write_record};
+use layerfs_home::disk::{self, paths, write_record};
 use layerfs_home::names::StoreName;
-use layerfs_home::op::{Op, Standing};
-use layerfs_machine::worker;
+use layerfs_home::record::intent::{Op, Standing};
+use layerfs_home::reply::events::Events;
+use layerfs_machine::route;
 use layerfs_persistence::upgrade::{Format, FormatStatus};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
-use layerfs_store::intent;
-use layerfs_store::record::StoreRecord;
+use layerfs_store::admin::record::intent;
+use layerfs_store::admin::record::store::StoreRecord;
 use layerfs_store::upgrade::{Running, CANCEL_OP, FORMAT_OP, WORKER_OP};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -32,8 +32,12 @@ fn home_with_shop(tag: &str) -> Option<PathBuf> {
     let home = scratch(tag).join("home");
     std::fs::create_dir_all(&home).unwrap();
     std::fs::set_permissions(&home, std::fs::Permissions::from_mode(0o700)).unwrap();
-    layerfs_home::home::open(&home).unwrap();
-    match layerfs_store::sqlite::create::create(&home, &StoreName::parse("shop").unwrap(), None) {
+    layerfs_home::disk::open(&home).unwrap();
+    match layerfs_store::backend::sqlite::create::create(
+        &home,
+        &StoreName::parse("shop").unwrap(),
+        None,
+    ) {
         Ok(_) => Some(home),
         Err(refusal) if refusal.message.contains("does not carry SQLite locks") => {
             eprintln!("NOT RUN: this filesystem cannot hold a directly opened Store: {refusal:?}");
@@ -96,7 +100,7 @@ fn another_process_s_lease_refuses_in_use_and_changes_nothing() {
     };
     let before = file_state(&home);
     let mut holder = other_process();
-    home::private_dir(&paths::lease_dir(&home, "shop")).unwrap();
+    disk::private_dir(&paths::lease_dir(&home, "shop")).unwrap();
     let lease = paths::lease_dir(&home, "shop").join(holder.id().to_string());
     std::fs::write(&lease, "1\n").unwrap();
     let (outcome, events) = upgrade(&home);
@@ -121,7 +125,7 @@ fn this_process_s_lease_refuses_in_use_and_drops_the_operation() {
         return;
     };
     let before = file_state(&home);
-    let held = layerfs_store::lease::hold(&home, "shop").unwrap();
+    let held = layerfs_store::admin::open::lease::hold(&home, "shop").unwrap();
     let (outcome, _) = upgrade(&home);
     drop(held);
     let refusal = outcome.unwrap_err();
@@ -202,11 +206,13 @@ fn an_unresolved_upgrade_is_adopted_by_the_next_upgrade() {
     intent::leave(&home, "shop", &earlier, "the worker's reply was lost");
     let record = StoreRecord::of(&home, "shop").unwrap();
     assert_eq!(record.op().unwrap().standing(), Standing::Unresolved);
-    let state = layerfs_store::state::held(&record).unwrap();
+    let state = layerfs_store::admin::status::state::held(&record).unwrap();
     let fix = format!("{:?}", state.fields());
     assert!(fix.contains("layerfs store upgrade shop"), "{fix}");
     // a compaction is refused by it, naming the upgrade as the fix
-    let refusal = layerfs_store::lease::hold(&home, "shop").err().unwrap();
+    let refusal = layerfs_store::admin::open::lease::hold(&home, "shop")
+        .err()
+        .unwrap();
     assert_eq!(refusal.code, "Unresolved", "{refusal:?}");
     assert_eq!(
         refusal.detail.get_text("fix"),
@@ -244,14 +250,14 @@ fn the_worker_s_cancel_sets_the_running_upgrade_s_flag() {
     // one id runs once
     assert_eq!(Running::register("op-cancel-1").err().unwrap().code, "Busy");
     let args = SdkValue::map([("op", t("op-cancel-1"))]);
-    let answer = worker::call(&fixture.endpoint, CANCEL_OP, args.clone(), &mut |_| {}).unwrap();
+    let answer = route::call(&fixture.endpoint, CANCEL_OP, args.clone(), &mut |_| {}).unwrap();
     assert_eq!(answer, SdkValue::Map(Vec::new()));
     assert!(running.flag().load(Ordering::SeqCst));
     drop(running);
-    let refusal = worker::call(&fixture.endpoint, CANCEL_OP, args, &mut |_| {}).unwrap_err();
+    let refusal = route::call(&fixture.endpoint, CANCEL_OP, args, &mut |_| {}).unwrap_err();
     assert_eq!(refusal.code, "NotFound", "{refusal:?}");
     let refusal =
-        worker::call(&fixture.endpoint, CANCEL_OP, SdkValue::Null, &mut |_| {}).unwrap_err();
+        route::call(&fixture.endpoint, CANCEL_OP, SdkValue::Null, &mut |_| {}).unwrap_err();
     assert_eq!(refusal.code, "InvalidInput", "{refusal:?}");
     fixture.remove();
 }
@@ -269,7 +275,7 @@ fn the_worker_refuses_an_upgrade_of_a_store_another_process_holds() {
     });
     let before = file_state(&fixture.root);
     let mut holder = other_process();
-    home::private_dir(&paths::lease_dir(&fixture.root, "shop")).unwrap();
+    disk::private_dir(&paths::lease_dir(&fixture.root, "shop")).unwrap();
     let lease = paths::lease_dir(&fixture.root, "shop").join(holder.id().to_string());
     std::fs::write(&lease, "1\n").unwrap();
     // the worker op alone
@@ -278,7 +284,7 @@ fn the_worker_refuses_an_upgrade_of_a_store_another_process_holds() {
         ("store_record", store_record(&fixture.home)),
         ("op", t("op-lease-1")),
     ]);
-    let refusal = worker::call(&fixture.endpoint, WORKER_OP, args, &mut |_| {}).unwrap_err();
+    let refusal = route::call(&fixture.endpoint, WORKER_OP, args, &mut |_| {}).unwrap_err();
     assert_eq!(refusal.code, "InUse", "{refusal:?}");
     // and through the home
     let (outcome, events) = upgrade(&fixture.home);
@@ -315,7 +321,7 @@ fn the_worker_operation_needs_a_sqlite_record_and_an_op() {
             ),
         ]),
     ] {
-        let refusal = worker::call(&fixture.endpoint, WORKER_OP, args, &mut |_| {}).unwrap_err();
+        let refusal = route::call(&fixture.endpoint, WORKER_OP, args, &mut |_| {}).unwrap_err();
         assert_eq!(refusal.code, "InvalidInput", "{refusal:?}");
     }
     fixture.remove();
@@ -358,11 +364,11 @@ fn the_worker_answers_a_format_section() {
         });
     });
     let args = SdkValue::map([("store", t("shop"))]);
-    let section = worker::call(&fixture.endpoint, FORMAT_OP, args, &mut |_| {}).unwrap();
+    let section = route::call(&fixture.endpoint, FORMAT_OP, args, &mut |_| {}).unwrap();
     assert!(section.get_text("status").is_some(), "{section:?}");
     assert_eq!(section.get_int("latest"), Some(3));
     let args = SdkValue::map([("store", t("other"))]);
-    let section = worker::call(&fixture.endpoint, FORMAT_OP, args, &mut |_| {}).unwrap();
+    let section = route::call(&fixture.endpoint, FORMAT_OP, args, &mut |_| {}).unwrap();
     assert_eq!(section.get_text("status"), Some("unknown"));
     fixture.remove();
 }
@@ -376,8 +382,13 @@ fn only_with_format_adds_the_section() {
     };
     let plain = get(&home, false).unwrap();
     assert!(plain.get("format").is_none(), "{plain:?}");
-    let listed =
-        layerfs_store::list::list(&home, None, false, layerfs_sandbox::users::reads()).unwrap();
+    let listed = layerfs_store::admin::status::list::list(
+        &home,
+        None,
+        false,
+        layerfs_sandbox::users::reads(),
+    )
+    .unwrap();
     let SdkValue::List(items) = listed.get("items").unwrap() else {
         panic!("{listed:?}");
     };
@@ -397,7 +408,7 @@ fn the_format_section_names_each_status_and_its_fix() {
         latest: 3,
         status,
     };
-    let section = layerfs_store::formats::section;
+    let section = layerfs_store::admin::status::formats::section;
     let current = section(&format(Some(3), FormatStatus::Current), "shop", false);
     assert_eq!(
         current,
@@ -433,7 +444,10 @@ fn the_format_section_names_each_status_and_its_fix() {
 /// A cancel is the internal `Cancelled`, folded to the public `Failed`.
 #[test]
 fn a_cancel_folds_to_failed() {
-    assert_eq!(layerfs_home::outcome::public_code("Cancelled"), "Failed");
+    assert_eq!(
+        layerfs_home::reply::outcome::public_code("Cancelled"),
+        "Failed"
+    );
     assert_eq!(
         layerfs_store::upgrade::CANCELLED,
         "cancelled before COMMIT; nothing changed"
@@ -442,12 +456,12 @@ fn a_cancel_folds_to_failed() {
 
 fn get(home: &Path, format: bool) -> Result<SdkValue, SdkRefusal> {
     let mut sink = |_| {};
-    let with = layerfs_store::get::With {
+    let with = layerfs_store::admin::status::get::With {
         live: false,
         stats: false,
         format,
     };
-    layerfs_store::get::get(
+    layerfs_store::admin::status::get::get(
         home,
         &mut Events::new(&mut sink),
         "shop",
@@ -463,9 +477,14 @@ fn get_format(home: &Path) -> Option<SdkValue> {
 
 /// Each `store list --with format` item's section.
 fn list_formats(home: &Path) -> Vec<SdkValue> {
-    let listed =
-        layerfs_store::list::list_with(home, None, false, true, layerfs_sandbox::users::reads())
-            .unwrap();
+    let listed = layerfs_store::admin::status::list::list_with(
+        home,
+        None,
+        false,
+        true,
+        layerfs_sandbox::users::reads(),
+    )
+    .unwrap();
     let Some(SdkValue::List(items)) = listed.get("items") else {
         panic!("{listed:?}");
     };
@@ -480,8 +499,8 @@ fn home_with_pg(tag: &str, url: &str) -> PathBuf {
     let home = scratch(tag).join("home");
     std::fs::create_dir_all(&home).unwrap();
     std::fs::set_permissions(&home, std::fs::Permissions::from_mode(0o700)).unwrap();
-    layerfs_home::home::open(&home).unwrap();
-    layerfs_store::postgresql::login::save(&home, "shop", "unused").unwrap();
+    layerfs_home::disk::open(&home).unwrap();
+    layerfs_store::backend::postgresql::login::save(&home, "shop", "unused").unwrap();
     StoreRecord::connected("shop", url, "postgres", "layerfs", "off")
         .write(&home)
         .unwrap();
@@ -497,7 +516,7 @@ fn a_postgresql_store_s_upgrade_is_refused_before_anything_is_dialled() {
     // a port nothing listens on: any dial would fail, not refuse InUse
     let home = home_with_pg("pg-refusals", "postgresql://127.0.0.1:9/postgres");
     let mut holder = other_process();
-    home::private_dir(&paths::lease_dir(&home, "shop")).unwrap();
+    disk::private_dir(&paths::lease_dir(&home, "shop")).unwrap();
     let lease = paths::lease_dir(&home, "shop").join(holder.id().to_string());
     std::fs::write(&lease, "1\n").unwrap();
     let (outcome, _) = upgrade(&home);
@@ -507,7 +526,7 @@ fn a_postgresql_store_s_upgrade_is_refused_before_anything_is_dialled() {
     assert!(op_of(&home).is_none());
     let _ = std::fs::remove_file(&lease);
 
-    let held = layerfs_store::lease::hold(&home, "shop").unwrap();
+    let held = layerfs_store::admin::open::lease::hold(&home, "shop").unwrap();
     let (outcome, _) = upgrade(&home);
     drop(held);
     assert_eq!(outcome.unwrap_err().code, "InUse");
@@ -557,7 +576,8 @@ fn a_compaction_record_under_the_home_does_not_refuse_a_worker_upgrade() {
     );
     std::fs::write(format!("{}.compact-op", file.display()), record).unwrap();
     // the record reads as a compaction live on this machine
-    let busy = layerfs_store::compact::refuse_while_running(&file, "shop").unwrap_err();
+    let busy = layerfs_store::admin::maintenance::compact::refuse_while_running(&file, "shop")
+        .unwrap_err();
     assert_eq!(busy.code, "Busy", "{busy:?}");
     let (outcome, _) = upgrade(&fixture.home);
     if let Err(refusal) = &outcome {

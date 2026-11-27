@@ -27,13 +27,11 @@ use crate::record::adapter_spec::{self as record, refusal};
 use crate::record::machine::{MachineRecord, CREATE, REMOVE};
 use crate::route::{self, Endpoint, Hello};
 use crate::Related;
+use layerfs_home::disk::{self, paths};
+use layerfs_home::lock::home as lock;
 use layerfs_home::record::intent::Standing;
+use layerfs_home::record::observed;
 use layerfs_home::reply::state::{Reason, State};
-use layerfs_home::{
-    disk::{self, paths},
-    lock::home as lock,
-    record::observed,
-};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 use std::sync::mpsc;

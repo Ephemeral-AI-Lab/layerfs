@@ -12,7 +12,7 @@ use crate::producer;
 use common::{file, metadata, name, Fixture, Store};
 use harness::Bench;
 use layerfs_content::compare::{
-    sorted::DifferenceWork,
+    pages::DifferenceWork,
     tree::{inode_changes, TreeTable},
 };
 use layerfs_content::filesystem::{

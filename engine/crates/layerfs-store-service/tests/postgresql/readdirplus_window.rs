@@ -21,7 +21,7 @@
 #[allow(dead_code)]
 mod installed;
 
-use layerfs_content::filesystem::attributes::PortableMetadata;
+use layerfs_content::filesystem::tree::attribute::PortableMetadata;
 use layerfs_content::object::inode_leaf::InodeKind;
 use layerfs_history::{
     BranchId, ForkRequest, ForkSource, HistoryCatalog, HistoryCatalogConfig, HistoryName,

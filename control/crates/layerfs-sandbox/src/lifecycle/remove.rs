@@ -27,10 +27,10 @@ use super::super::status::list::handle;
 use super::create::remove_folder;
 use crate::route::machine::send::{on_machine, Local};
 use crate::route::machine::Call;
-use layerfs_home::events::Events;
-use layerfs_home::home;
-use layerfs_home::op::{Op, Standing};
-use layerfs_home::outcome::{refused, shell_word, with_fix, with_next};
+use layerfs_home::disk;
+use layerfs_home::record::intent::{Op, Standing};
+use layerfs_home::reply::events::Events;
+use layerfs_home::reply::outcome::{refused, shell_word, with_fix, with_next};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 
@@ -112,7 +112,7 @@ pub fn remove(
         // an unknown outcome stays as it is: its record keeps the intent
         let status = match request.force || refusal.code == "Unknown" {
             true => None,
-            false => layerfs_store::state::outdated_status(&refusal),
+            false => layerfs_store::admin::status::state::outdated_status(&refusal),
         };
         let Some(status) = status else {
             return refusal;
@@ -121,7 +121,10 @@ pub fn remove(
             "layerfs sandbox remove {} --force",
             shell_word(&request.name)
         );
-        with_fix(refused(layerfs_store::state::OLD_STORE, status), fix)
+        with_fix(
+            refused(layerfs_store::admin::status::state::OLD_STORE, status),
+            fix,
+        )
     })
 }
 
@@ -146,7 +149,7 @@ fn removed(
     // whose VM a live read found missing: nothing on that machine is
     // reached, its worker included, and neither proves its runtime gone
     let machine = found.machine();
-    let on = layerfs_machine::record::MachineRecord::read(&home, machine)?;
+    let on = layerfs_machine::record::machine::MachineRecord::read(&home, machine)?;
     if let Some(on) = on.filter(|record| record.gone()) {
         let first = match on.nameless() {
             true => format!(
@@ -189,7 +192,7 @@ fn removed(
     // an unstarted Sandbox whose create may have started a daemon is closed
     // like a started one; its create's intent comes back if the close fails
     let (record, created) = {
-        let _lock = home::lock::take(&home)?;
+        let _lock = layerfs_home::lock::home::take(&home)?;
         let _sandbox = record::lock(&home, name)?;
         let Some(record) = SandboxRecord::read(&home, name)? else {
             return Err(refused("NoSuchSandbox", format!("no Sandbox named {name}")));
@@ -228,7 +231,7 @@ fn removed(
         match settled {
             Ok(paths) => held = Some(paths),
             Err(refusal) => {
-                let _lock = home::lock::take(&home)?;
+                let _lock = layerfs_home::lock::home::take(&home)?;
                 let _sandbox = record::lock(&home, name)?;
                 if let Some(now) = SandboxRecord::read(&home, name)? {
                     now.without_op().write(&home)?;
@@ -256,7 +259,7 @@ fn removed(
     } else {
         on_machine(&home, events, &record, Call::Close { force, held }, local)
     };
-    let _lock = home::lock::take(&home)?;
+    let _lock = layerfs_home::lock::home::take(&home)?;
     // on `native` the Sandbox's own side removed the folder already
     let dir = record.dir(&home);
     let _sandbox = match dir.exists() {
@@ -397,7 +400,7 @@ fn foreign(home: &Path, record: &SandboxRecord) -> Result<Option<String>> {
     let Some(recorded) = daemon.name() else {
         return Ok(None);
     };
-    let id = home::opened(home)?.id;
+    let id = disk::opened(home)?.id;
     let given = format!(
         "{}{}",
         layerfs_home::names::provider_prefix(&id),
@@ -451,7 +454,7 @@ fn forget(
     local: Local,
 ) -> Result<Removed> {
     let record = {
-        let _lock = home::lock::take(home)?;
+        let _lock = layerfs_home::lock::home::take(home)?;
         let _sandbox = record::lock(home, name)?;
         let Some(record) = SandboxRecord::read(home, name)? else {
             return Err(refused("NoSuchSandbox", format!("no Sandbox named {name}")));
@@ -479,7 +482,7 @@ fn forget(
         .map(|refusal| refusal.message),
     };
     phase(events, "delete", None);
-    let _lock = home::lock::take(home)?;
+    let _lock = layerfs_home::lock::home::take(home)?;
     let dir = record.dir(home);
     {
         let _sandbox = record::lock(home, name)?;
@@ -517,7 +520,7 @@ fn forget(
 fn stopped_on(home: &Path, record: &SandboxRecord, force: bool) -> Result<Option<String>> {
     let machine = record.machine();
     let stopped = !layerfs_machine::runs_here(home, machine).unwrap_or(false)
-        && layerfs_machine::record::MachineRecord::read(home, machine)?
+        && layerfs_machine::record::machine::MachineRecord::read(home, machine)?
             .is_some_and(|on| on.recorded_state() == Some("stopped"));
     if !stopped {
         return Ok(None);
@@ -534,7 +537,7 @@ fn stopped_on(home: &Path, record: &SandboxRecord, force: bool) -> Result<Option
                 shell_word(name)
             ),
         );
-        return Err(layerfs_home::outcome::with_fix(
+        return Err(layerfs_home::reply::outcome::with_fix(
             refusal,
             format!("layerfs machine start {word}"),
         ));

@@ -5,7 +5,7 @@ use crate::dispatch::table::Kind::{Bool, Name};
 use crate::dispatch::table::{a, call, opt, Call};
 use crate::dispatch::{Context, Form};
 use layerfs_home::names::{MachineName, StoreName};
-use layerfs_home::outcome::Outcome;
+use layerfs_home::reply::outcome::Outcome;
 use layerfs_protocol::sdk::SdkValue;
 
 /// Its answer: `ok` and the outcome (`attached`, `checked` for an

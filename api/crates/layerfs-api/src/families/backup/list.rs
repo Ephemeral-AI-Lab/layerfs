@@ -3,7 +3,7 @@
 use crate::dispatch::table::Kind::Name;
 use crate::dispatch::table::{call, opt, Call};
 use crate::dispatch::{Context, Form, Part};
-use layerfs_home::outcome::Outcome;
+use layerfs_home::reply::outcome::Outcome;
 use layerfs_protocol::sdk::SdkValue;
 
 /// One Store file: its bucket and name, and what is news about it.
@@ -50,5 +50,5 @@ pub(crate) const CALL: Call = call(
 
 /// Runs `backup.list`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
-    layerfs_store::backup::family::list(&context.home, args.get_text("bucket"))
+    layerfs_store::backup::bucket::connect::list(&context.home, args.get_text("bucket"))
 }

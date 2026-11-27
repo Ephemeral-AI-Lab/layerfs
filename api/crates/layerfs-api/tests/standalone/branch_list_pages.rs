@@ -223,7 +223,7 @@ fn a_bad_limit_or_cursor_is_refused_and_a_cursor_past_the_end_is_empty() {
         &[p(), ("prefix", t("a.")), ("limit", SdkValue::Int(1))],
     );
     let made = first.get_text("next_cursor").unwrap().to_owned();
-    let other_call = layerfs_home::cursor::make("commit.list", t("a.000"), &[]);
+    let other_call = layerfs_home::reply::cursor::make("commit.list", t("a.000"), &[]);
     for scope in [None, Some(&scoped)] {
         for (what, args) in [
             ("limit 0", vec![("limit", SdkValue::Int(0))]),
@@ -243,7 +243,7 @@ fn a_bad_limit_or_cursor_is_refused_and_a_cursor_past_the_end_is_empty() {
             assert_eq!(refused.0, "InvalidInput", "{what}: {refused:?}");
         }
         // past the end: an empty last page, not an error
-        let past = layerfs_home::cursor::make("branch.list", t("zzz"), &[]);
+        let past = layerfs_home::reply::cursor::make("branch.list", t("zzz"), &[]);
         let past = call(&home, scope, "branch.list", &[p(), ("cursor", t(&past))]).unwrap();
         assert!(names(&past).is_empty(), "{past:?}");
         assert_eq!(past.get_text("next_cursor"), None, "{past:?}");

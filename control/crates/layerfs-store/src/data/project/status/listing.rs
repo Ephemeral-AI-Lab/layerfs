@@ -9,10 +9,10 @@ use crate::admin::open::args::OpenArgs;
 use crate::admin::open::service;
 use crate::data::project::frame::{ListedProject, ListingFrame, ListingReply};
 use layerfs_history::NodeId;
-use layerfs_home::outcome::{refused, Outcome};
+use layerfs_home::reply::outcome::{refused, Outcome};
 use layerfs_protocol::sdk::node_text;
 use layerfs_protocol::sdk::SdkRefusal;
-use layerfs_store_service::history::lookup;
+use layerfs_store_service::lookup;
 use layerfs_store_service::StoreService;
 use std::path::Path;
 

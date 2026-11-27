@@ -2,7 +2,7 @@
 //! writable opens; credentials are resolved only here.
 use crate::admin::record::{identity::Identity, store::StoreRecord};
 use layerfs_history::LayerStackId;
-use layerfs_home::outcome::refused;
+use layerfs_home::reply::outcome::refused;
 use layerfs_persistence::diagnostic::{Observation, Options, Outcome, ProjectCoverage};
 use layerfs_protocol::sdk::SdkRefusal;
 

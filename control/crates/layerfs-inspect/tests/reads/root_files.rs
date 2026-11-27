@@ -12,7 +12,7 @@
 //! not give). The run folder is under `/tmp`, where a read from `/`
 //! reaches it.
 #![cfg(any(target_os = "linux", target_os = "macos"))]
-use layerfs_home::home::{paths, write_record};
+use layerfs_home::disk::{paths, write_record};
 use layerfs_os::process::LocalProcess;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_sandbox::deploy::Side;
@@ -78,7 +78,7 @@ fn fixture(tag: &str, runtime: &'static str, live: bool) -> Fixture {
     let _ = std::fs::remove_dir_all(&scratch);
     let data = scratch.join("layerfs/data");
     // a worker's root: its run root is the guest's (#819 R)
-    layerfs_home::home::guest::serve_root(&data);
+    layerfs_home::disk::guest::serve_root(&data);
     let run = paths::run_root(&data).join("layerfs-0a1b2c3d-s1");
     assert!(run.starts_with(data.join("machine/linux-guest/run")));
     for folder in ["tmp", "workspaces/1", "config", "overlay"] {
@@ -307,7 +307,7 @@ fn macos_has_no_root_view() {
 #[test]
 fn a_sandbox_s_root_is_read_through_its_init_with_what_layerfs_keeps_restricted() {
     let mut fx = fixture("root", "namespaces", true);
-    if layerfs_home::home::flock::euid() != 0 {
+    if layerfs_home::lock::flock::euid() != 0 {
         // a reader that is not root, as on a native Linux home
         refused(at(&fx, Path::new("/etc"), &[]), "Unsupported", "needs root");
         println!("not root: the Root view is Unsupported; its reads are NOT_RUN here");

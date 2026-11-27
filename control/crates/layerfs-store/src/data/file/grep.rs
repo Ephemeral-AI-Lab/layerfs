@@ -2,8 +2,8 @@
 use super::glob::{search_args, search_filters};
 use super::read::{items, pin, run, take, Page};
 use super::requests::FileSearch;
-use layerfs_home::events::Events;
-use layerfs_home::outcome::Outcome;
+use layerfs_home::reply::events::Events;
+use layerfs_home::reply::outcome::Outcome;
 use layerfs_protocol::sdk::SdkValue;
 use std::path::Path;
 

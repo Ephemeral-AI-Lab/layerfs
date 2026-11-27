@@ -4,7 +4,7 @@
 //! names, and `home.log` / `home.clear_log`. The environment is shared by the
 //! test threads, so every test here takes one lock.
 use layerfs_api::Scope;
-use layerfs_home::home::paths;
+use layerfs_home::disk::paths;
 use layerfs_protocol::sdk::SdkValue;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -577,7 +577,7 @@ fn eight_threads_appending_leave_whole_lines() {
                         ("argv", SdkValue::List(vec![t(&"w".repeat(300))])),
                         ("n", SdkValue::Int(thread * 1000 + i)),
                     ]);
-                    layerfs_home::logs::append(home, &line);
+                    layerfs_home::log::calls::append(home, &line);
                 }
                 ok(home, "store.list", &[]);
             });
@@ -653,7 +653,7 @@ fn page(home: &Path, args: &[(&str, SdkValue)]) -> (Vec<SdkValue>, Option<String
 fn home_log_filters_pages_and_refuses_a_stale_cursor() {
     let _env = serial();
     let (home, folder) = project();
-    let since = layerfs_home::home::now_ms();
+    let since = layerfs_home::disk::now_ms();
     for i in 0..5 {
         std::env::set_var("LAYERFS_LOGS_TAG", format!("dsh:s{}:r{i}", i % 2));
         ok(&home, "store.list", &[]);

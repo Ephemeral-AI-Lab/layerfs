@@ -3,9 +3,9 @@ use crate::admin::open::lease::Owner;
 use crate::admin::record::intent::{self, WORKER_CLOSE};
 use crate::admin::record::store::{self, StoreRecord, StoreRef};
 use crate::Related;
-use layerfs_home::home::{self, with_field};
-use layerfs_home::op::{self, Op, Standing};
-use layerfs_home::outcome::refused;
+use layerfs_home::disk::with_field;
+use layerfs_home::record::intent::{self as op, Op, Standing};
+use layerfs_home::reply::outcome::refused;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 
@@ -36,7 +36,7 @@ pub(crate) fn observe(home: &Path, record: &StoreRecord) -> Option<Worker> {
     }
     #[cfg(any(target_os = "macos", target_os = "linux"))]
     {
-        let paths = layerfs_machine::worker::HostPaths::new(home).ok()?;
+        let paths = layerfs_machine::route::HostPaths::new(home).ok()?;
         let answer = paths
             .call_existing(true, "ping", SdkValue::map([]))
             .ok()??;
@@ -85,7 +85,7 @@ impl Worker {
 
     #[cfg(any(target_os = "macos", target_os = "linux"))]
     fn close(&self, home: &Path, name: &str, op: &Op) -> Result<()> {
-        let paths = layerfs_machine::worker::HostPaths::new(home)?;
+        let paths = layerfs_machine::route::HostPaths::new(home)?;
         let args = SdkValue::map([
             ("store", SdkValue::text(name)),
             ("op", SdkValue::text(op.id())),
@@ -160,7 +160,7 @@ pub(crate) fn finish(
         }
     }
     let settled = closed.and_then(|()| {
-        let _home = home::lock::take(home)?;
+        let _home = layerfs_home::lock::home::take(home)?;
         let _store = store::lock(home, name)?;
         let record = StoreRecord::of(home, name)?;
         let held = ensures_fence(&record, op.id())?;

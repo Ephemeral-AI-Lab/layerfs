@@ -6,8 +6,9 @@
 //! ([`local_host`], `Recorded::stop_now`).
 use crate::lifecycle::mount_intents::{Bound, Branch};
 use crate::route::machine::{Deploy, Host, Message};
-use layerfs_home::home::{self, paths};
-use layerfs_home::outcome::{failed, refused, Outcome};
+use layerfs_home::disk;
+use layerfs_home::disk::paths;
+use layerfs_home::reply::outcome::{failed, refused, Outcome};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 
@@ -15,7 +16,7 @@ use std::path::Path;
 /// machine whose calls run here, from its own records alone: no Store,
 /// project or daemon is resolved.
 pub fn local_host(home: &Path, sandbox: &str) -> Result<Host, SdkRefusal> {
-    let id = home::opened(home)?.id;
+    let id = disk::opened(home)?.id;
     Ok(Host {
         home: home.to_path_buf(),
         store: String::new(),
@@ -42,7 +43,8 @@ pub const RUNTIME_STOPPED: &str = "runtime_stopped";
 /// `machine.stop` in progress, for one). An unresolved intent does not stop
 /// a forced close, whether an ended process left it or this process did.
 pub fn machine_free(home: &Path, machine: &str) -> Result<(), SdkRefusal> {
-    let Some(machine) = layerfs_machine::record::MachineRecord::read(home, machine)? else {
+    let Some(machine) = layerfs_machine::record::machine::MachineRecord::read(home, machine)?
+    else {
         return Ok(());
     };
     match machine.op() {
@@ -65,7 +67,7 @@ pub fn machine_free(home: &Path, machine: &str) -> Result<(), SdkRefusal> {
 pub fn close(host: &Host, held: &[String]) -> Outcome {
     let id = host.sandbox()?.to_owned();
     let directory = crate::record::discovery::sandbox_dir(host)?;
-    let _guard = layerfs_store::project::discovery::guard(&directory)?;
+    let _guard = layerfs_store::data::project::record::discovery::guard(&directory)?;
     let value = crate::record::discovery::started(&directory)?
         .ok_or_else(|| refused("NoSuchSandbox", format!("no Sandbox {id} is recorded")))?;
     let mut bound = crate::record::discovery::workspaces(&directory)?
@@ -89,7 +91,7 @@ pub fn close(host: &Host, held: &[String]) -> Outcome {
     // The runtime is confirmed stopped from here on: a later failure says so,
     // so the record shows it stopped instead of as it was.
     let after_stop = |mut refusal: SdkRefusal| {
-        refusal.detail = home::with_field(refusal.detail, RUNTIME_STOPPED, SdkValue::Bool(true));
+        refusal.detail = disk::with_field(refusal.detail, RUNTIME_STOPPED, SdkValue::Bool(true));
         refusal
     };
     crate::record::reopen::recorded(host, &id, &value)
@@ -118,7 +120,7 @@ pub fn close(host: &Host, held: &[String]) -> Outcome {
         .unwrap_or_else(|poisoned| poisoned.into_inner())
         .remove(&directory);
     std::fs::remove_dir_all(&directory).map_err(|error| after_stop(failed(error)))?;
-    layerfs_home::home::generation::moved_above(&directory);
+    layerfs_home::record::generation::moved_above(&directory);
     Ok(SdkValue::map([
         ("kind", SdkValue::text("Closed")),
         ("sandbox", SdkValue::text(id)),

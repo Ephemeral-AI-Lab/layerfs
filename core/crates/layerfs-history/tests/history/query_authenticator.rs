@@ -1,5 +1,5 @@
 //! Query authentication separates payload, authority, catalog and incarnation.
-use layerfs_history::{query::authenticate_query, CatalogId};
+use layerfs_history::{catalog::query::authenticate_query, CatalogId};
 #[test]
 fn every_bound_identity_and_payload_changes_the_authenticator() {
     let catalog = CatalogId::derive(b"one").unwrap();

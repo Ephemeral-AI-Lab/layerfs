@@ -24,7 +24,7 @@ use layerfs_history::records::{
 };
 
 use super::super::statement::rows::{cell, layer_row, many, one, sql, stack_row};
-use layerfs_history::query::{self, Context, Cursor, Range};
+use layerfs_history::catalog::query::{self, Context, Cursor, Range};
 
 const STACK_BY_ID: &str = "layerstack_stack_by_id";
 

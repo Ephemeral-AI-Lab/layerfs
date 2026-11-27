@@ -22,10 +22,10 @@ use crate::data::branch::branch_named;
 use layerfs_history::{
     GcAuditAfter, GcIntent, GcIntentKind, GcScopeKind, Liveness, MountHolderView,
 };
-use layerfs_home::outcome::{failed, refused};
+use layerfs_home::reply::outcome::{failed, refused};
 use layerfs_protocol::sdk::{hex, unhex};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
-use layerfs_store_service::history::admission;
+use layerfs_store_service::history::gc_admission;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
@@ -149,7 +149,7 @@ pub fn repair_at(open: &OpenArgs, request: &Repair) -> Result<SdkValue> {
 fn audit(open: &OpenArgs, request: &Repair) -> Result<SdkValue> {
     let after = audit_after(request.after.as_ref())?;
     with_service(open, |service| {
-        let read = admission::done_intents_branch(
+        let read = gc_admission::done_intents_branch(
             service.store.history(),
             &request.project,
             &request.branch,
@@ -157,7 +157,7 @@ fn audit(open: &OpenArgs, request: &Repair) -> Result<SdkValue> {
             request.limit,
         )
         .map_err(failed)?;
-        let items = read.items.iter().map(admission::done_value).collect();
+        let items = read.items.iter().map(gc_admission::done_value).collect();
         let next = read.next.map_or(SdkValue::Null, |next| {
             SdkValue::text(format!("{}:{}", next.updated_ms, hex(&next.op_id)))
         });
@@ -288,7 +288,8 @@ fn settle(
         ));
     }
     if !(request.force || request.legacy) {
-        let judged = admission::liveness(catalog, std::slice::from_ref(found)).map_err(failed)?;
+        let judged =
+            gc_admission::liveness(catalog, std::slice::from_ref(found)).map_err(failed)?;
         if judged.first() == Some(&Liveness::Live) {
             return Err(refused(
                 "InUse",
@@ -331,7 +332,7 @@ fn page(
         (Some(_), Some(last)) => SdkValue::text(hex(&last.op_id)),
         _ => SdkValue::Null,
     };
-    let judged = admission::liveness(catalog, &shown).map_err(failed)?;
+    let judged = gc_admission::liveness(catalog, &shown).map_err(failed)?;
     let items = (shown.iter().zip(judged))
         .map(|(intent, liveness)| holder_row(intent, liveness))
         .collect();

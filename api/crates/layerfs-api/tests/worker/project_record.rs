@@ -3,8 +3,8 @@
 //! L2-D1): the worker's own record (manifest, no `created`) takes the
 //! caller's fields; a record of a removed project of the same name (another
 //! `created`) is replaced.
-use layerfs_home::home::{paths, read_record, write_record};
-use layerfs_machine::worker::{self, Endpoint};
+use layerfs_home::disk::{paths, read_record, write_record};
+use layerfs_machine::route::{self, Endpoint};
 use layerfs_protocol::sdk::SdkValue;
 use std::path::{Path, PathBuf};
 
@@ -45,7 +45,7 @@ fn sandbox_call(endpoint: &Endpoint, created: i64) {
     ]);
     // the operation itself fails later (no such Sandbox); the record is
     // settled before it runs
-    let _ = worker::call(endpoint, "sandbox.host", args, &mut |_| {});
+    let _ = route::call(endpoint, "sandbox.host", args, &mut |_| {});
 }
 
 fn record(root: &Path) -> SdkValue {
@@ -67,12 +67,12 @@ fn a_worker_inited_project_keeps_its_manifest() {
     let guest = root.clone();
     std::thread::spawn(move || layerfs_api::worker::serve::serve(listener, "k".to_owned(), guest));
     for _ in 0..200 {
-        if worker::ping(&endpoint).is_ok() {
+        if route::ping(&endpoint).is_ok() {
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(10));
     }
-    layerfs_home::home::open(&scratch.join("home")).unwrap();
+    layerfs_home::disk::open(&scratch.join("home")).unwrap();
     let manifest = SdkValue::Bytes(vec![1, 2, 3]);
     let path = paths::project_record(&root, "shop", "api");
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();

@@ -2,7 +2,7 @@
 use super::{engine_records, json::Json};
 use layerfs_overlay::DatabaseWork;
 use layerfs_persistence::SqlWork;
-use layerfs_store_service::{bootstrap::StoreDiagnostics, store::CommitSuccess};
+use layerfs_store_service::store::{open::StoreDiagnostics, CommitSuccess};
 use std::{fs::File, io::Write};
 fn sql(out: &mut Json, from: SqlWork, to: SqlWork) {
     out.raw("{").unwrap();

@@ -1,6 +1,6 @@
 //! The Store directory an install (`install_local`) or a backup restore
 //! (`backup::fetch`) prepares before it writes anything (#570 P1). Both call
-//! [`layerfs_store_service::install::prepare`]: the directory belongs to the
+//! [`layerfs_store_service::store::install::prepare`]: the directory belongs to the
 //! call only when that call's own `mkdir` returned success. A `mkdir` failure
 //! claims nothing, and a guard refusal reclaims only that own, still-empty
 //! directory, non-recursively.

@@ -8,7 +8,7 @@
 //! each file and folder, a file with two names once) taken by the test
 //! itself over the paths it made.
 #![cfg(any(target_os = "linux", target_os = "macos"))]
-use layerfs_home::home::{self, paths, write_record};
+use layerfs_home::disk::{self, paths, write_record};
 use layerfs_home::names::MachineName;
 use layerfs_os::process::LocalProcess;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
@@ -46,8 +46,8 @@ fn new_home(tag: &str) -> PathBuf {
         NEXT.fetch_add(1, Ordering::Relaxed)
     ));
     let _ = std::fs::remove_dir_all(&dir);
-    home::private_dir(&dir).unwrap();
-    home::ensure(&dir).unwrap();
+    disk::private_dir(&dir).unwrap();
+    disk::ensure(&dir).unwrap();
     dir
 }
 
@@ -63,8 +63,8 @@ fn daemon(directory: &Path) -> DaemonRecord {
         name: "layerfs-0a1b2c3d-s".to_owned(),
         container: "ab".repeat(32),
         runtime: "process",
-        uid: home::flock::euid(),
-        gid: home::flock::egid(),
+        uid: layerfs_home::lock::flock::euid(),
+        gid: layerfs_home::lock::flock::egid(),
         directory: directory.display().to_string(),
         process: (
             process.pid,
@@ -344,7 +344,7 @@ fn machine_space_counts_each_part_once_and_skips_mounts_and_private_roots() {
 
 #[test]
 fn a_folder_that_cannot_be_listed_is_counted_as_unreadable() {
-    if home::flock::euid() == 0 {
+    if layerfs_home::lock::flock::euid() == 0 {
         // root lists every folder: the case cannot be made here
         return;
     }

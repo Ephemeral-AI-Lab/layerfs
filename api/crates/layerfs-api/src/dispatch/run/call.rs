@@ -25,7 +25,7 @@ use crate::dispatch::answer::{refusal, shape};
 use crate::dispatch::guard::arguments;
 use crate::dispatch::table::Call;
 use crate::dispatch::{table, table::Family, Context, Scope};
-use layerfs_home::outcome::{refused, Outcome};
+use layerfs_home::reply::outcome::{refused, Outcome};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -130,11 +130,11 @@ pub fn call_cli(
     scope: Option<&Scope>,
     name: &str,
     args: SdkValue,
-    input: Option<layerfs_store::host_write::Input>,
+    input: Option<layerfs_store::admin::host_worker::write::Input>,
     events: &mut dyn FnMut(SdkValue),
 ) -> Outcome {
     let front = FrontEnd::Cli;
-    layerfs_store::host_write::with_input(input, || {
+    layerfs_store::admin::host_worker::write::with_input(input, || {
         call_from(families, None, scope, name, args, events, front)
     })
 }
@@ -148,7 +148,8 @@ pub fn cli_defers(name: &str, project: &str) -> bool {
         feature = "machine",
         any(target_os = "macos", target_os = "linux")
     )) && matches!(name, "file.write" | "file.apply")
-        && home(None).is_ok_and(|home| layerfs_store::host_write::likely(&home, project))
+        && home(None)
+            .is_ok_and(|home| layerfs_store::admin::host_worker::write::likely(&home, project))
 }
 
 enum FrontEnd {
@@ -190,7 +191,7 @@ fn call_from(
             any(target_os = "macos", target_os = "linux")
         ))
         && HOST_ROUTE.contains(&name);
-    let outcome = layerfs_home::trace::stepped(name, || {
+    let outcome = layerfs_home::log::trace::stepped(name, || {
         scoped(families, home_path, scope, name, args, events, &mut log)
     });
     // a call refused for a nameless machine names the chain of what is on
@@ -237,7 +238,7 @@ fn take(args: &mut SdkValue, name: &str) -> Option<SdkValue> {
 /// call has no tag.
 fn take_tag(args: &mut SdkValue) -> Option<Option<String>> {
     Some(match take(args, LOG_TAG)? {
-        SdkValue::Text(tag) => layerfs_home::logs::tag(&tag),
+        SdkValue::Text(tag) => layerfs_home::log::calls::tag(&tag),
         _ => None,
     })
 }
@@ -316,11 +317,11 @@ impl<'n> Log<'n> {
         tag: Option<Option<String>>,
     ) -> Self {
         let quiet = table::find(families, name).is_some_and(|call| call.quiet);
-        let on = layerfs_home::logs::enabled() && !quiet;
+        let on = layerfs_home::log::calls::enabled() && !quiet;
         let tag = tag.unwrap_or_else(|| {
             std::env::var("LAYERFS_LOGS_TAG")
                 .ok()
-                .and_then(|tag| layerfs_home::logs::tag(&tag))
+                .and_then(|tag| layerfs_home::log::calls::tag(&tag))
         });
         Log {
             name,
@@ -328,7 +329,7 @@ impl<'n> Log<'n> {
             tag,
             argv: None,
             saved: Vec::new(),
-            at: layerfs_home::home::now_ms(),
+            at: layerfs_home::disk::now_ms(),
             started: Instant::now(),
             on,
             host_reads: false,
@@ -355,7 +356,7 @@ impl<'n> Log<'n> {
             self.saved,
             self.tag.as_deref(),
         );
-        layerfs_home::logs::append(&home, &line);
+        layerfs_home::log::calls::append(&home, &line);
     }
 }
 
@@ -381,7 +382,7 @@ fn scoped(
     let home = home(home_path)?;
     crate::dispatch::guard::platform_policy::check(&home, spec.policy, &args)?;
     if spec.opens {
-        let id = layerfs_home::home::open(&home)?.id;
+        let id = layerfs_home::disk::open(&home)?.id;
         // the host machine's folder and `machine/docker/` exist from the
         // first call; checked once per process for each home (R6)
         #[cfg(feature = "machine")]
@@ -392,11 +393,14 @@ fn scoped(
     if let Some(scope) = scope {
         scope.owns(&home, spec, &args)?;
     }
-    layerfs_home::trace::step("dispatch");
+    layerfs_home::log::trace::step("dispatch");
     let mut context = Context::new(home, log.tag.clone(), asked.clone(), events);
-    let value = layerfs_store::open::with_one_shot(log.client == Client::Cli, || {
-        layerfs_store::host_read::with_cli(log.host_reads, || (spec.run)(&mut context, &args))
-    })?;
+    let value =
+        layerfs_store::admin::open::cache::with_one_shot(log.client == Client::Cli, || {
+            layerfs_store::admin::host_worker::read::with_cli(log.host_reads, || {
+                (spec.run)(&mut context, &args)
+            })
+        })?;
     let value = match scope {
         Some(scope) => scope.answer(spec, value),
         None => value,
@@ -418,11 +422,13 @@ fn scoped(
 /// `LAYERFS_TRACE_STEP` set its steps are traced as op `close`: `stores`
 /// and `sessions`.
 pub fn close() -> usize {
-    layerfs_home::trace::stepped("close", || {
+    layerfs_home::log::trace::stepped("close", || {
         let closed = layerfs_store::admin::with_users::close_idle(std::time::Duration::ZERO);
-        layerfs_home::trace::step("stores");
-        layerfs_sandbox::registry::end_idle_sessions(layerfs_sandbox::registry::SESSION_END);
-        layerfs_home::trace::step("sessions");
+        layerfs_home::log::trace::step("stores");
+        layerfs_sandbox::lifecycle::registry::end_idle_sessions(
+            layerfs_sandbox::lifecycle::registry::SESSION_END,
+        );
+        layerfs_home::log::trace::step("sessions");
         closed
     })
 }

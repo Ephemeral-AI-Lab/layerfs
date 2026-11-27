@@ -25,7 +25,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use edits::{Edits, Parts};
-use layerfs_content::filesystem::directory::{
+use layerfs_content::filesystem::tree::directory::{
     apply_bindings, build_directory, list_after, DirectoryReadWork,
 };
 use layerfs_content::filesystem::{DirectoryRoot, FilesystemObjects, PathName};
@@ -228,7 +228,8 @@ fn directory_pages_take_programs_re_base_at_the_cap_and_read_back() {
     let (root, listing) = versions.last().unwrap();
     let reader = store.reader().unwrap();
     let probe = PathName::from_bytes(listing.keys().next().unwrap()).unwrap();
-    let found = layerfs_content::filesystem::directory::lookup(&reader, *root, &probe).unwrap();
+    let found =
+        layerfs_content::filesystem::tree::directory::lookup(&reader, *root, &probe).unwrap();
     assert_eq!(found, listing.values().next().copied());
     let pool = reader.pooled_read_counters();
     assert!(pool.page_requests >= 2, "{pool:?}");

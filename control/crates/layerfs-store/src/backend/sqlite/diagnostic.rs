@@ -3,7 +3,7 @@
 use crate::admin::record::identity::Identity;
 /// The project id a project audit takes.
 pub use layerfs_history::LayerStackId;
-use layerfs_home::outcome::refused;
+use layerfs_home::reply::outcome::refused;
 pub use layerfs_persistence::diagnostic::{
     ConnectionStep, Observation, Options, Outcome, ProjectCoverage, PROJECT_CHECK,
 };
@@ -20,7 +20,7 @@ pub fn sqlite(
     options: Options,
     observer: &mut dyn FnMut(Observation),
 ) -> Result<(), SdkRefusal> {
-    layerfs_store_service::kernel_guard::check(path)
+    layerfs_store_service::store::kernel_guard::check(path)
         .map_err(|reason| refused("Unsupported", reason.0))?;
     let handles = layerfs_persistence::SqliteHandles::open_diagnostic(
         path,
@@ -57,7 +57,7 @@ pub fn sqlite(
 /// against this build's, and nothing else read. A host that cannot open a
 /// sqlite Store is `Unsupported`.
 pub fn sqlite_schema(path: &Path, identity: &Identity) -> Result<(), SdkRefusal> {
-    layerfs_store_service::kernel_guard::check(path)
+    layerfs_store_service::store::kernel_guard::check(path)
         .map_err(|reason| refused("Unsupported", reason.0))?;
     layerfs_persistence::SqliteHandles::open_diagnostic(
         path,
@@ -80,7 +80,7 @@ pub fn sqlite_identity(path: &Path, identity: &Identity) -> Result<bool, SdkRefu
 /// refusal for a Store of an older schema version, else `Unavailable` with
 /// its text.
 ///
-/// [`OLD_STORE`]: crate::state::OLD_STORE
+/// [`OLD_STORE`]: crate::admin::status::state::OLD_STORE
 fn open_refusal(error: layerfs_storage::port::PersistenceError) -> SdkRefusal {
     use layerfs_storage::port::PersistenceError;
     let code = match &error {
@@ -107,7 +107,7 @@ pub fn sqlite_project(
     observer: &mut dyn FnMut(Observation),
     progress: &mut dyn FnMut(u64, u64),
 ) -> Result<ProjectCoverage, SdkRefusal> {
-    layerfs_store_service::kernel_guard::check(path)
+    layerfs_store_service::store::kernel_guard::check(path)
         .map_err(|reason| refused("Unsupported", reason.0))?;
     let handles = layerfs_persistence::SqliteHandles::open_diagnostic(
         path,
@@ -173,7 +173,7 @@ pub fn done_audit(
     page: u32,
     limit: u32,
 ) -> Result<SdkValue, SdkRefusal> {
-    layerfs_store_service::kernel_guard::check(path)
+    layerfs_store_service::store::kernel_guard::check(path)
         .map_err(|reason| refused("Unsupported", reason.0))?;
     let handles = layerfs_persistence::SqliteHandles::open_diagnostic(
         path,
@@ -230,7 +230,7 @@ pub fn done_audit(
 /// a diagnostic open. Missing local records are reported by the doctor; this
 /// function never releases an admission.
 pub fn mount_holders(path: &Path, identity: &Identity) -> Result<SdkValue, SdkRefusal> {
-    layerfs_store_service::kernel_guard::check(path)
+    layerfs_store_service::store::kernel_guard::check(path)
         .map_err(|reason| refused("Unsupported", reason.0))?;
     let handles = layerfs_persistence::SqliteHandles::open_diagnostic(
         path,

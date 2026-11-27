@@ -11,9 +11,9 @@ use layerfs_daemon::workspace::Service;
 use layerfs_history::{PathRemovalKind, PathRemovalRequest, WorkspaceId};
 use layerfs_protocol::sdk::SdkValue;
 use layerfs_storage::ReservationBlocks;
-use layerfs_store_service::{
-    bootstrap::open_store_observed, store::BindRequest, write::mutation::Mutation,
-};
+use layerfs_store_service::filesystem::change::mutation::Mutation;
+use layerfs_store_service::store::open::open_store_observed;
+use layerfs_store_service::store::BindRequest;
 use layerfs_store_service::{Owner, OwnerConfig};
 use std::fs;
 

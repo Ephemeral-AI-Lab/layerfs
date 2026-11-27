@@ -8,12 +8,12 @@ use crate::support;
 
 use layerfs_history::records::GcScopeKind;
 use layerfs_history::{BranchId, ForkRequest, ForkSource, HistoryName, LayerStackId, WorkspaceId};
-use layerfs_machine::record::MachineRecord;
+use layerfs_machine::record::machine::MachineRecord;
 use layerfs_protocol::sdk::SdkValue;
 use layerfs_sandbox::internal::Control;
 use layerfs_sandbox::record::{mount_place, retire_in, SandboxRecord};
-use layerfs_store::place_view;
-use layerfs_store_service::history::{admission, removal};
+use layerfs_store::admin::route::place_view;
+use layerfs_store_service::history::{gc_admission, removal};
 
 #[test]
 fn a_daemon_mount_records_the_home_place_and_its_tombstone_settles_it() {
@@ -31,7 +31,7 @@ fn a_daemon_mount_records_the_home_place_and_its_tombstone_settles_it() {
         .unwrap();
     let sandbox = "place-sbx";
     let generation = "p1:aa11.sandbox:10:bb";
-    let directory = layerfs_home::home::paths::sandbox_dir(&home, sandbox);
+    let directory = layerfs_home::disk::paths::sandbox_dir(&home, sandbox);
     std::fs::create_dir_all(&directory).unwrap();
     SandboxRecord::from_record(
         sandbox,
@@ -104,7 +104,7 @@ fn a_daemon_mount_records_the_home_place_and_its_tombstone_settles_it() {
     retire_in(&home, &directory, sandbox).expect("the tombstone");
     std::fs::remove_dir_all(&directory).unwrap();
     let view = place_view::from_home(&home).expect("the home's places");
-    let removed = admission::with_place_view(Some(view), || {
+    let removed = gc_admission::with_place_view(Some(view), || {
         removal::remove(&f.installed.opened.store, &stack, "work")
     })
     .expect("the retired Sandbox settles its mount");

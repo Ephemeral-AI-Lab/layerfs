@@ -7,7 +7,7 @@
 //! Nothing is retried here.
 use super::call::{asks_detail, refuse_early, Client};
 use crate::dispatch::{call_scoped, json, Family, Scope};
-use layerfs_home::outcome::{refused, Outcome};
+use layerfs_home::reply::outcome::{refused, Outcome};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 
 /// One call's outcome, and whether it asked for the long form.

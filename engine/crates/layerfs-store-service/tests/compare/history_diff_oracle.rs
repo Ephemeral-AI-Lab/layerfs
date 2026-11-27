@@ -184,7 +184,7 @@ fn entries(reader: &dyn AuthenticatedObjects, root: ObjectId) -> Vec<(String, En
 /// The full walk's listing: every path whose entries differ, except a
 /// directory whose only change is its children.
 fn walked(reader: &dyn AuthenticatedObjects, from: ObjectId, to: ObjectId) -> Vec<String> {
-    let mut work = layerfs_content::filesystem::attributes::AttributeReadWork::default();
+    let mut work = layerfs_content::filesystem::tree::attribute::AttributeReadWork::default();
     let (left, right) = (entries(reader, from), entries(reader, to));
     let (mut l, mut r) = (left.into_iter().peekable(), right.into_iter().peekable());
     let mut out = Vec::new();

@@ -3,11 +3,11 @@
 //! byte as JSON text, and reads past a layout-3 `v`; a project's record
 //! gives the fields every project answer carries (call surface 2.0).
 use layerfs_home::json::{parse, print};
-use layerfs_home::outcome::View;
+use layerfs_home::reply::outcome::View;
 use layerfs_protocol::sdk::SdkValue;
-use layerfs_store::backup::record::BucketRecord;
-use layerfs_store::project::record::ProjectRecord;
-use layerfs_store::record::StoreRecord;
+use layerfs_store::admin::record::store::StoreRecord;
+use layerfs_store::backup::bucket::record::BucketRecord;
+use layerfs_store::data::project::record::project::ProjectRecord;
 
 fn value(text: &str) -> SdkValue {
     parse(text).unwrap()
@@ -61,7 +61,7 @@ fn a_bucket_shows_its_record() {
 
 #[test]
 fn a_sandbox_shows_its_record() {
-    use layerfs_home::state::State;
+    use layerfs_home::reply::state::State;
     use layerfs_sandbox::record::SandboxRecord;
     let text = r#"{"name":"t1","project":"shop/api","machine":"macos-host","created":3,"id":"t1","platform":"macos","runtime":"process","image":null,"backend":"process","route":"nfs"}"#;
     let record = SandboxRecord::from_record("t1", value(text));
@@ -106,9 +106,9 @@ fn a_sandbox_shows_its_record() {
 #[cfg(feature = "machine")]
 mod machines {
     use super::*;
-    use layerfs_home::state::{Reason, State};
-    use layerfs_machine::record::MachineRecord;
-    use layerfs_machine::state::unrecorded;
+    use layerfs_home::reply::state::{Reason, State};
+    use layerfs_machine::record::machine::MachineRecord;
+    use layerfs_machine::status::state::unrecorded;
 
     fn machine(name: &str, record: &str) -> MachineRecord {
         MachineRecord::from_record(name, value(record))
@@ -255,9 +255,9 @@ mod machines {
 
 #[test]
 fn a_store_state_from_its_records_is_busy_unresolved_blocked_broken_or_ready() {
-    use layerfs_home::op::Op;
-    use layerfs_home::state::{Reason, State};
-    use layerfs_store::state::{held, recorded};
+    use layerfs_home::record::intent::Op;
+    use layerfs_home::reply::state::{Reason, State};
+    use layerfs_store::admin::status::state::{held, recorded};
     let machines = &layerfs_sandbox::users::machine_state;
     let home = std::env::temp_dir().join(format!("layerfs-store-state-{}", std::process::id()));
     std::fs::create_dir_all(&home).unwrap();
@@ -365,7 +365,7 @@ fn sandbox_with(id: bool, op: Option<(&str, i64, bool)>) -> layerfs_sandbox::rec
 
 #[test]
 fn a_sandbox_state_is_derived_from_its_record_and_intent() {
-    use layerfs_home::state::{Reason, State};
+    use layerfs_home::reply::state::{Reason, State};
     let me = i64::from(std::process::id());
     let ready = State::Ready;
     let broken = |reason| State::broken(reason, Some("layerfs sandbox remove b"));

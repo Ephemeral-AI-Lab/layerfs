@@ -1,5 +1,5 @@
 //! The cursor reader of a log and its rotated file (layerfs-project#178,
-//! `layerfs_home::tail::read`): the tail, the lines after a cursor, the
+//! `layerfs_home::log::tail::read`): the tail, the lines after a cursor, the
 //! lines before one back into the rotated file, a line longer than a
 //! window in pieces, an unfinished last line, escaped control characters,
 //! and a cursor into a rotated or replaced file.

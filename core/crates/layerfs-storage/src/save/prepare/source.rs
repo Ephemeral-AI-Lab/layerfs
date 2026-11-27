@@ -2,9 +2,8 @@
 use super::super::publish::seal::Packer;
 use crate::{
     error::StorageResult,
-    location::{ObjectLocation, SignatureRow},
+    location::{ObjectLocation, SignatureRow, Source},
     read::Fetch,
-    source::Source,
 };
 use layerfs_content::{inode_leaf::INODE_VALUE_BYTES, ObjectId};
 use std::{cell::RefCell, collections::BTreeMap};

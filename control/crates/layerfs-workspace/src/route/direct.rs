@@ -4,9 +4,8 @@
 //! layerfs-project#106).
 use crate::machine::serve;
 use layerfs_history::{BranchId, CommitId};
-use layerfs_home::events::Events;
-use layerfs_home::helpers;
-use layerfs_home::outcome::{refused, Outcome};
+use layerfs_home::reply::events::Events;
+use layerfs_home::reply::outcome::{refused, Outcome};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_sandbox::record::{SandboxRecord, WorkspaceRecord};
 use layerfs_sandbox::route::direct::host;
@@ -15,11 +14,11 @@ use layerfs_sandbox::{
     record::{discovery, unmount_guard},
     route::machine::dispatch,
 };
-use layerfs_store::call::store_call;
-use layerfs_store::calls::commit::CommitGet;
-use layerfs_store::calls::{Page, StoreOp};
-use layerfs_store::lease;
-use layerfs_store::resolve::{self, Target};
+use layerfs_store::admin::open::lease;
+use layerfs_store::admin::route::call::store_call;
+use layerfs_store::admin::route::resolve::{self, Target};
+use layerfs_store::data::commit::CommitGet;
+use layerfs_store::data::{Page, StoreOp};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -35,7 +34,9 @@ pub fn call(
     message: Message,
 ) -> Outcome {
     let home = home.to_path_buf();
-    if let Some(machine) = layerfs_machine::record::MachineRecord::read(&home, record.machine())? {
+    if let Some(machine) =
+        layerfs_machine::record::machine::MachineRecord::read(&home, record.machine())?
+    {
         machine.not_held()?;
     }
     let target = resolve::target(&home, record.project().unwrap_or(""))?;
@@ -119,7 +120,7 @@ fn branch_of(
     target: &Target,
     name: &str,
 ) -> Result<(BranchId, Option<CommitId>)> {
-    if let Some(found) = layerfs_store::call::held_branch(home, target, name)? {
+    if let Some(found) = layerfs_store::admin::route::call::held_branch(home, target, name)? {
         return Ok(found);
     }
     let op = StoreOp::ListBranches {
@@ -166,7 +167,7 @@ pub fn exec_directory(
             format!("{}:{at} is not mounted", record.name()),
         ));
     };
-    let path = helpers::required(workspace.path(), "path")?.to_owned();
+    let path = layerfs_home::reply::values::required(workspace.path(), "path")?.to_owned();
     unmount_guard::check_in(&dir, &path)?;
     Ok((path, workspace))
 }

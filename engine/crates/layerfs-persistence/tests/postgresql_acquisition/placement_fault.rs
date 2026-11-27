@@ -41,7 +41,7 @@ fn entry(
         },
         position,
         kind,
-        metadata: layerfs_content::filesystem::attributes::PortableMetadata {
+        metadata: layerfs_content::filesystem::tree::attribute::PortableMetadata {
             mode: if kind == InodeKind::Symlink {
                 0o777
             } else {

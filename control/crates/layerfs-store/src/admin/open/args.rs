@@ -1,13 +1,13 @@
 //! What a Store call opens its Store with (layerfs-project#109 R8): the
 //! Store file or key, the Store's identity sources and a PostgreSQL Store's
 //! server. Read from an args map only at a map's edge, a worker's
-//! `store.call` frame ([`CallFrame::open`](crate::call::CallFrame::open));
+//! `store.call` frame ([`CallFrame::open`](crate::admin::route::call::CallFrame::open));
 //! the engine call gets the call's own arguments without these keys
 //! ([`ROUTING`]).
 use crate::admin::record::store::{StoreRecord, StoreRef};
 use crate::backend::postgresql::open::{schema_of, setting_of, url_of};
-use layerfs_home::home::paths;
-use layerfs_home::outcome::refused;
+use layerfs_home::disk::paths;
+use layerfs_home::reply::outcome::refused;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::{Path, PathBuf};
 
@@ -72,7 +72,7 @@ impl OpenArgs {
     /// Store `store` of `home` as its record `record` places it: a sqlite
     /// Store's file ([`in_root`](Self::in_root)), or a PostgreSQL Store's
     /// key dialled with its saved login
-    /// ([`selection`](crate::postgresql::connect::selection)).
+    /// ([`selection`](crate::backend::postgresql::connect::selection)).
     pub fn of_record(home: &Path, store: &str, record: &StoreRecord) -> Result<Self> {
         let fields = Some(record.to_record().clone());
         match record.store_ref()? {

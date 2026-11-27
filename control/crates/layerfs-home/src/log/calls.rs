@@ -9,7 +9,7 @@
 //! not retried. `LAYERFS_LOGS=0` turns the log off for the process.
 //!
 //! `home.log` reads the two files by cursor with the pair reader of
-//! [`crate::tail`], which the log calls of a machine and a Sandbox share,
+//! [`crate::log::tail`], which the log calls of a machine and a Sandbox share,
 //! and answers each stored line as a row of the call surface (2.0): the
 //! stored format, `{ v, at, ms, client, argv, outcome, kind?, commit?,
 //! layer?, tag? }`, does not change.
@@ -268,7 +268,7 @@ impl Filter {
     }
 
     /// The `next_cursor` of a page that ended at `last`: the place and
-    /// these filters, as one opaque word ([`crate::cursor`]).
+    /// these filters, as one opaque word ([`crate::reply::cursor`]).
     fn cursor(&self, last: &Cursor) -> String {
         crate::reply::cursor::make(CURSOR_FOR, SdkValue::Text(last.text()), &self.fields())
     }

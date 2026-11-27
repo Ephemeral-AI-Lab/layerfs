@@ -495,7 +495,7 @@ fn the_copy_holds_what_init_reads_of_the_folder() {
     same_tree(&folder, &copies[0]);
     assert!(!paths::project_record(&home, "shop", "web").exists());
     let seen = seen.lock().unwrap();
-    let at_once = layerfs_store::project::parts::AT_ONCE;
+    let at_once = layerfs_store::data::project::init::parts::AT_ONCE;
     assert!((2..=at_once).contains(&seen.most), "{} at once", seen.most);
     // five data parts and the modes and times after them, each sent once
     assert_eq!(writes(&seen), 6, "{:?}", seen.log);
@@ -653,7 +653,7 @@ fn a_copy_that_fails_midway_is_discarded_after_its_parts_in_flight() {
     // no part was sent after it, and the parts in flight were written,
     // then the copy discarded
     let seen = seen.lock().unwrap();
-    let at_once = layerfs_store::project::parts::AT_ONCE;
+    let at_once = layerfs_store::data::project::init::parts::AT_ONCE;
     assert!(writes(&seen) <= at_once, "{:?}", seen.log);
     assert_eq!(seen.log.last(), Some(&"discard"), "{:?}", seen.log);
     assert_eq!(copies(&root).len(), 0);
@@ -699,7 +699,7 @@ fn a_part_whose_answer_is_lost_leaves_the_copy_unknown() {
     // the project is certainly not in the Store (its Init was never sent),
     // so the claimed home entry is removed
     let seen = seen.lock().unwrap();
-    let at_once = layerfs_store::project::parts::AT_ONCE;
+    let at_once = layerfs_store::data::project::init::parts::AT_ONCE;
     assert!(writes(&seen) <= at_once, "{:?}", seen.log);
     assert!(!seen.log.contains(&"discard"), "{:?}", seen.log);
     assert_eq!(copies(&root).len(), 1);

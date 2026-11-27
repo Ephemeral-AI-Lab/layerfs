@@ -16,7 +16,7 @@
 //! A backup or a restore whose owner is gone with its outcome unknown is
 //! settled here: a backup changes nothing in the Store and a restore
 //! installs by one rename, so the read drops the `op` and writes what was
-//! tried to the link's `attempt` ([`crate::get::ATTEMPT`]).
+//! tried to the link's `attempt` ([`crate::admin::status::get::ATTEMPT`]).
 use crate::admin::record::intent;
 use crate::admin::record::store::{self, StoreRecord, StoreRef};
 use crate::admin::route::executor;
@@ -24,10 +24,11 @@ use crate::admin::status::get::ATTEMPT;
 use crate::admin::status::state;
 use crate::backend::sqlite::family::step_on;
 use crate::backend::sqlite::step_request::StoreStep;
-use layerfs_home::home::{now_ms, observed, paths, with_field};
-use layerfs_home::op::{self, Standing};
-use layerfs_home::state::{Reason, State};
-use layerfs_persistence::compact_metrics::{self, CompactStatusState};
+use layerfs_home::disk::{now_ms, paths, with_field};
+use layerfs_home::record::intent::{self as op, Standing};
+use layerfs_home::record::observed;
+use layerfs_home::reply::state::{Reason, State};
+use layerfs_persistence::gc::metrics::{self, CompactStatusState};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 
@@ -274,8 +275,8 @@ pub fn read(home: &Path, record: StoreRecord, machines: state::Machines) -> Resu
     // a compaction's own record is observed by its bounded state label,
     // never by a Store name or phase path
     match &compaction {
-        Some(State::Busy { .. }) => compact_metrics::record_status(CompactStatusState::Busy),
-        Some(_) => compact_metrics::record_status(CompactStatusState::Unresolved),
+        Some(State::Busy { .. }) => metrics::record_status(CompactStatusState::Busy),
+        Some(_) => metrics::record_status(CompactStatusState::Unresolved),
         None => {}
     }
     let left = matches!(compaction, Some(State::Broken { .. }));

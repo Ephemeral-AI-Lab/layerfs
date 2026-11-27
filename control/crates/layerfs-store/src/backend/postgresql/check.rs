@@ -8,9 +8,9 @@
 use crate::admin::open::args::PgSelection;
 use crate::admin::record::store::{StoreKind, StoreRecord};
 use crate::backend::postgresql::connect::SCHEMA;
-use layerfs_home::home;
+use layerfs_home::disk;
 use layerfs_home::names::StoreName;
-use layerfs_home::outcome::{public_code, refused, with_next, NEXT};
+use layerfs_home::reply::outcome::{public_code, refused, with_next, NEXT};
 use layerfs_persistence::diagnostic::ConnectionStep;
 use layerfs_persistence::PostgresAccess;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
@@ -101,7 +101,7 @@ fn access(postgresql: &PgSelection) -> Result<PostgresAccess> {
 /// What a passed check answers: `{ at, server_version, latency_ms }`.
 fn reached(access: &PostgresAccess) -> SdkValue {
     SdkValue::map([
-        ("at", SdkValue::Int(home::now_ms())),
+        ("at", SdkValue::Int(disk::now_ms())),
         ("server_version", SdkValue::text(&access.server_version)),
         (
             "latency_ms",
@@ -138,7 +138,7 @@ fn another(record: &StoreRecord, step: ConnectionStep) -> SdkRefusal {
 /// the schema at `postgresql` must hold Store `record`'s binding, and the
 /// role must have every privilege a Sandbox's writes need there. Answers
 /// the check, `{ at, server_version, latency_ms }`, which its caller
-/// records ([`crate::observed`]). The server not reached is
+/// records ([`crate::admin::status::observed`]). The server not reached is
 /// `Unavailable`, a login refused or a privilege missing `Denied`, and
 /// another Store's schema `Unavailable` naming it; each refusal names its
 /// step ([`STEP`]).
@@ -220,7 +220,7 @@ pub fn attach(
     machine: &str,
     binding: Option<&[u8]>,
 ) -> Result<bool> {
-    let _lock = home::lock::take(home_dir)?;
+    let _lock = layerfs_home::lock::home::take(home_dir)?;
     let _store = crate::admin::record::store::lock(home_dir, name)?;
     let doing = format!("machine {machine} was checked");
     let record = current(home_dir, name, binding, &doing)?;
@@ -241,7 +241,7 @@ pub fn detach(
     machine: &str,
     idle: &dyn Fn(&Path) -> Result<()>,
 ) -> Result<()> {
-    let _lock = home::lock::take(home_dir)?;
+    let _lock = layerfs_home::lock::home::take(home_dir)?;
     let _store = crate::admin::record::store::lock(home_dir, name)?;
     let record = StoreRecord::of(home_dir, name)?;
     if !record.is_attached(machine) {
@@ -261,7 +261,7 @@ pub fn detach(
 /// of each record as it was; a later machine of the same name is attached
 /// to none. Under the home lock and each Store's.
 pub fn forget_machine(home_dir: &Path, machine: &str) -> Result<()> {
-    let _lock = home::lock::take(home_dir)?;
+    let _lock = layerfs_home::lock::home::take(home_dir)?;
     for record in crate::admin::record::store::stores(home_dir)? {
         if record.kind().ok() != Some(StoreKind::Postgresql) {
             continue;

@@ -8,12 +8,11 @@ use chains::{copy, history, read, ChainProvider, Shape};
 use layerfs_content::ObjectId;
 use layerfs_storage::{
     encoding::{PackAcquisition, PackCache, PackUnit},
-    location::{ObjectLocation, PackInfo, SignatureRow},
+    location::{ObjectLocation, PackInfo, SignatureRow, Source},
     pack::layout,
     port::{
         AcquiredPackRead, ObjectKey, PackRange, PackReadChoice, PackReadPlan, PersistenceError,
     },
-    source::Source,
     StorageError, StorageResult,
 };
 use std::sync::Arc;

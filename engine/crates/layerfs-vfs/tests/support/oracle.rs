@@ -8,8 +8,10 @@
 use super::common::Store;
 use layerfs_content::{
     filesystem::{
-        attributes::{decode_attribute_page, read_value, AttributeEntry, AttributePage},
-        inode::codec::{decode_inode_page, InodePage},
+        tree::{
+            attribute::{decode_attribute_page, read_value, AttributeEntry, AttributePage},
+            inode::codec::{decode_inode_page, InodePage},
+        },
         FilesystemRead, FilesystemRootId, PathName,
     },
     object::inode_leaf::{InodeKind, InodeMetadata, InodeValue},

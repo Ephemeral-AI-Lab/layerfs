@@ -6,8 +6,8 @@
 //! host's private-home check, which accepts o+x on a folder and nothing
 //! more, is covered through `project.init` in layerfs-api's
 //! `project_family`.)
-use layerfs_home::home;
-use layerfs_machine::worker;
+use layerfs_home::disk;
+use layerfs_machine::route;
 use layerfs_protocol::sdk::SdkValue;
 use std::net::TcpListener;
 use std::os::unix::fs::PermissionsExt;
@@ -32,7 +32,7 @@ fn set(path: &Path, mode: u32) {
 fn the_home_s_folders_down_to_the_local_root_let_others_pass() {
     let top = tempdir("home");
     let home = top.join("h");
-    let local = home::paths::run_root(&home);
+    let local = disk::paths::run_root(&home);
     let machine = local.parent().unwrap().to_owned();
     assert_eq!(
         machine,
@@ -44,7 +44,7 @@ fn the_home_s_folders_down_to_the_local_root_let_others_pass() {
     }
     set(&local, 0o755);
     set(&top, 0o750);
-    home::traversable(&home, &local).unwrap();
+    disk::traversable(&home, &local).unwrap();
     for folder in [&home, &home.join("machine"), &machine] {
         assert_eq!(mode(folder), 0o701, "{}", folder.display());
     }
@@ -67,11 +67,11 @@ fn a_worker_s_root_is_passable_and_private() {
     let address = listener.local_addr().unwrap();
     let served = root.clone();
     std::thread::spawn(move || layerfs_api::worker::serve::serve(listener, "s".to_owned(), served));
-    let endpoint = worker::Endpoint {
+    let endpoint = route::Endpoint {
         address,
         secret: "s".to_owned(),
     };
-    worker::call(
+    route::call(
         &endpoint,
         "worker.ping",
         SdkValue::Map(Vec::new()),

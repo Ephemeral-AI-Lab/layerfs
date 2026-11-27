@@ -3,9 +3,9 @@
 //! map (the keys of its long form; the dispatcher shapes it). A paged call's
 //! cursor carries its filters and the Commits it pinned.
 use crate::admin::route::methods::{next_fields, on_project, StoreOp};
-use layerfs_home::cursor;
-use layerfs_home::events::Events;
-use layerfs_home::outcome::Outcome;
+use layerfs_home::reply::cursor;
+use layerfs_home::reply::events::Events;
+use layerfs_home::reply::outcome::Outcome;
 use layerfs_protocol::sdk::SdkValue;
 use std::path::Path;
 
@@ -103,7 +103,7 @@ fn row(value: &SdkValue) -> SdkValue {
     let field = |(key, value): &(String, SdkValue)| match (key.as_str(), value) {
         ("createdMs", SdkValue::Int(ms)) => (
             "created_at".to_owned(),
-            SdkValue::text(layerfs_home::time::iso(*ms)),
+            SdkValue::text(layerfs_home::reply::time::iso(*ms)),
         ),
         ("createdMs", _) => ("created_at".to_owned(), SdkValue::Null),
         _ => (key.clone(), value.clone()),
@@ -192,7 +192,7 @@ fn cut_overwritten(value: SdkValue) -> SdkValue {
     let SdkValue::Map(mut fields) = value else {
         return value;
     };
-    let (paths, count) = layerfs_home::helpers::shown(paths, total, false);
+    let (paths, count) = layerfs_home::reply::values::shown(paths, total, false);
     for (key, value) in fields.iter_mut() {
         match key.as_str() {
             "overwritten" => *value = paths.clone(),

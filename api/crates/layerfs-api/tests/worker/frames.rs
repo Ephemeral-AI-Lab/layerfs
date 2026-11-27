@@ -2,7 +2,7 @@
 //! in a small frame, so a wrong secret or an oversized first frame is
 //! refused before a large body is read; reads are bounded in time; a
 //! refusal before the request was sent is a plain refusal, not `Unknown`.
-use layerfs_machine::worker::{self, read_frame_within, write_frame, Endpoint, MAX_HELLO};
+use layerfs_machine::route::{self, read_frame_within, write_frame, Endpoint, MAX_HELLO};
 use layerfs_protocol::sdk::SdkValue;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -74,10 +74,10 @@ fn a_wrong_secret_is_refused_before_the_request_is_read() {
         address: endpoint.address,
         secret: "no".to_owned(),
     };
-    let refusal = worker::call(&wrong, "worker.ping", SdkValue::Null, &mut |_| {}).unwrap_err();
+    let refusal = route::call(&wrong, "worker.ping", SdkValue::Null, &mut |_| {}).unwrap_err();
     assert_eq!(refusal.code, "Denied");
     // the right secret is answered
-    let answer = worker::ping(&endpoint).unwrap();
+    let answer = route::ping(&endpoint).unwrap();
     assert_eq!(answer.get_text("kind"), Some("worker"));
     let _ = std::fs::remove_dir_all(dir);
 }
@@ -89,7 +89,7 @@ fn a_worker_that_does_not_answer_its_secret_is_unavailable_in_time() {
     let address = listener.local_addr().unwrap();
     let held = std::thread::spawn(move || {
         let (stream, _) = listener.accept().unwrap();
-        std::thread::sleep(worker::HELLO_WAIT + Duration::from_secs(5));
+        std::thread::sleep(route::HELLO_WAIT + Duration::from_secs(5));
         drop(stream);
     });
     let endpoint = Endpoint {
@@ -97,12 +97,12 @@ fn a_worker_that_does_not_answer_its_secret_is_unavailable_in_time() {
         secret: "k".to_owned(),
     };
     let started = Instant::now();
-    let refusal = worker::ping(&endpoint).unwrap_err();
+    let refusal = route::ping(&endpoint).unwrap_err();
     let waited = started.elapsed();
     assert_eq!(refusal.code, "Unavailable", "{refusal:?}");
-    assert!(waited >= worker::HELLO_WAIT, "{waited:?}");
+    assert!(waited >= route::HELLO_WAIT, "{waited:?}");
     assert!(
-        waited < worker::HELLO_WAIT + Duration::from_secs(4),
+        waited < route::HELLO_WAIT + Duration::from_secs(4),
         "{waited:?}"
     );
     drop(held);
@@ -116,25 +116,25 @@ fn a_ping_whose_answer_never_comes_times_out_unknown() {
     std::thread::spawn(move || {
         let (mut stream, _) = listener.accept().unwrap();
         let _ = read_frame_within(&mut stream, MAX_HELLO);
-        let ready = worker::Hello {
-            protocol: Some(worker::PROTOCOL),
+        let ready = route::Hello {
+            protocol: Some(route::PROTOCOL),
             bundle: None,
         };
         let _ = write_frame(&mut stream, &ready.to_frame());
-        let _ = worker::read_frame(&mut stream);
-        std::thread::sleep(worker::PING_WAIT + Duration::from_secs(5));
+        let _ = route::read_frame(&mut stream);
+        std::thread::sleep(route::PING_WAIT + Duration::from_secs(5));
     });
     let endpoint = Endpoint {
         address,
         secret: "k".to_owned(),
     };
     let started = Instant::now();
-    let refusal = worker::ping(&endpoint).unwrap_err();
+    let refusal = route::ping(&endpoint).unwrap_err();
     let waited = started.elapsed();
     // the request was sent: its outcome is not known
     assert_eq!(refusal.code, "Unknown", "{refusal:?}");
     assert!(
-        waited < worker::PING_WAIT + Duration::from_secs(4),
+        waited < route::PING_WAIT + Duration::from_secs(4),
         "{waited:?}"
     );
 }
@@ -155,9 +155,9 @@ fn the_worker_waits_for_the_client_to_close_after_its_answer() {
     .unwrap();
     let ready = read_frame_within(&mut stream, MAX_HELLO).unwrap().unwrap();
     assert!(ready.get("ready").is_some(), "{ready:?}");
-    let request = worker::request("worker.ping", SdkValue::Null).unwrap();
+    let request = route::request("worker.ping", SdkValue::Null).unwrap();
     stream.write_all(&request).unwrap();
-    let answer = worker::read_frame(&mut stream).unwrap().unwrap();
+    let answer = route::read_frame(&mut stream).unwrap().unwrap();
     assert!(answer.get("value").is_some(), "{answer:?}");
     // the answer is complete, and the worker has not closed
     stream

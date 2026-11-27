@@ -16,10 +16,10 @@
 //!
 //! A Workspace's state comes from its daemon's `activity` ([`activity`]).
 use super::super::record::SandboxRecord;
-use layerfs_home::op::Standing;
-use layerfs_home::outcome::shell_word;
-use layerfs_home::state::{Reason, State};
-use layerfs_machine::record::MachineRecord;
+use layerfs_home::record::intent::Standing;
+use layerfs_home::reply::outcome::shell_word;
+use layerfs_home::reply::state::{Reason, State};
+use layerfs_machine::record::machine::MachineRecord;
 use layerfs_protocol::sdk::SdkRefusal;
 use std::path::Path;
 
@@ -126,9 +126,9 @@ impl SandboxRecord {
 pub fn machine_state(home: &Path, name: &str) -> Result<State, SdkRefusal> {
     let record = match MachineRecord::read(home, name) {
         Ok(Some(record)) => record,
-        Ok(None) => return Ok(layerfs_machine::state::unrecorded(name)),
+        Ok(None) => return Ok(layerfs_machine::status::state::unrecorded(name)),
         // a record that cannot be read blocks what is on it, nothing else
-        Err(_) => return Ok(layerfs_machine::state::unreadable(name)),
+        Err(_) => return Ok(layerfs_machine::status::state::unreadable(name)),
     };
     let platform = record.platform_name().unwrap_or("");
     let removed = layerfs_machine::table::removed::removed_reason(platform).is_some();

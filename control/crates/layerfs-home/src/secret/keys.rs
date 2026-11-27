@@ -1,6 +1,6 @@
 //! Secrets (#536 §9.2): worker secrets in `worker.json` and Sandbox daemon
 //! keys in `control.json`. A PostgreSQL login is put into a Store's URL by
-//! `layerfs_store::postgresql::address::with_login`, which reads the URL
+//! `layerfs_store::backend::postgresql::address::with_login`, which reads the URL
 //! with the PostgreSQL client itself.
 use crate::disk::{paths, read_record, write_record};
 use crate::reply::outcome::{failed, refused};

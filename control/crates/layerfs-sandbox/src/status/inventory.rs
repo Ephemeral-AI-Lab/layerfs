@@ -6,13 +6,13 @@
 //! keeps each Sandbox at `sandbox/<name>/`: a Sandbox by name is one read;
 //! only the relationships (by machine, Store or project) list `sandbox/*`.
 use crate::status::state::remove_fix;
-use layerfs_home::home::paths;
-use layerfs_home::outcome::{failed, refused, shell_word, with_fix, with_next};
-use layerfs_home::state::State;
-use layerfs_machine::record::{Holders, MachineRecord};
+use layerfs_home::disk::paths;
+use layerfs_home::reply::outcome::{failed, refused, shell_word, with_fix, with_next};
+use layerfs_home::reply::state::State;
+use layerfs_machine::record::machine::{Holders, MachineRecord};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
-use layerfs_store::lease;
-use layerfs_store::record::StoreRef;
+use layerfs_store::admin::open::lease;
+use layerfs_store::admin::record::store::StoreRef;
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -22,7 +22,7 @@ fn names(dir: &Path) -> Result<Vec<String>> {
     paths::names(dir).map_err(failed)
 }
 
-pub use layerfs_store::record::stores;
+pub use layerfs_store::admin::record::store::stores;
 
 /// Every machine record, by name.
 pub fn machines(home: &Path) -> Result<Vec<MachineRecord>> {
@@ -62,7 +62,7 @@ pub fn machine_state(home: &Path, name: &str, record: Option<&MachineRecord>) ->
 /// record has no 2.0 name).
 pub fn machine_state_with(name: &str, record: Option<&MachineRecord>, held: Holders<'_>) -> State {
     let Some(record) = record else {
-        return layerfs_machine::state::unrecorded(name);
+        return layerfs_machine::status::state::unrecorded(name);
     };
     let platform = record.platform_name().unwrap_or("");
     let removed = layerfs_machine::table::removed::removed_reason(platform).is_some();
@@ -251,7 +251,7 @@ pub fn can_remove_machine(home: &Path, name: &str) -> Result<()> {
     }
     if nameless {
         // the one line every view of such a machine shows as its fix
-        let chain = layerfs_machine::record::no_vm_name_fix(name, held.holders());
+        let chain = layerfs_machine::record::machine::no_vm_name_fix(name, held.holders());
         refusal = with_fix(refusal, chain);
     } else if stores.is_empty() && hosted.is_empty() && !stopped {
         // Sandboxes alone: removing them lets the machine go, when it runs

@@ -9,7 +9,7 @@
 //! `<run folder>/overlay/<namespace>.sqlite` per Workspace: the file is
 //! never opened and no daemon is asked.
 use super::super::deploy::Side;
-use layerfs_home::outcome::{refused, Outcome};
+use layerfs_home::reply::outcome::{refused, Outcome};
 use layerfs_protocol::sdk::SdkValue;
 
 /// The inspect kind.
@@ -69,7 +69,7 @@ pub fn serve(side: &Side<'_>, args: &SdkValue) -> Outcome {
     // daemon record on this side names, and that record's process
     let run = super::super::route::inspect::run_folder(side, sandbox)?;
     let (Side::Home(root) | Side::Worker(root)) = side;
-    let directory = layerfs_home::home::paths::sandbox_dir(root, sandbox);
+    let directory = layerfs_home::disk::paths::sandbox_dir(root, sandbox);
     Ok(match crate::record::discovery::started(&directory)? {
         Some(daemon) => crate::status::run_folder::observed(&daemon, &run, &namespaces),
         None => crate::status::run_folder::sizes(&run, &namespaces),

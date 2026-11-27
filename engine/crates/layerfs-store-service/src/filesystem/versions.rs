@@ -40,7 +40,7 @@ use super::cache::{batches, Cached, ROOTS};
 use crate::store::Store;
 use crate::{history::rows::Rows, lookup as args};
 use layerfs_content::compare::{AcrossWork, EntryFacts, PathAcross, PathAnswer};
-use layerfs_content::filesystem::{path::PathName, FilesystemRootId};
+use layerfs_content::filesystem::{name::path::PathName, FilesystemRootId};
 use layerfs_content::object::inode_leaf::InodeKind;
 use layerfs_content::{AuthenticatedObjects, ContentError, ContentResult, ObjectId};
 use layerfs_history::NodeId;

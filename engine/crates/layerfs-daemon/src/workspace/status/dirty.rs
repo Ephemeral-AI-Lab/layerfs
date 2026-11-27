@@ -19,7 +19,7 @@
 //! is closed with the Workspace.
 use super::super::{registry::bound, Failure, Service};
 use layerfs_content::compare::{locate, TreeTable};
-use layerfs_content::filesystem::attributes::{read_portable, AttributeReadWork};
+use layerfs_content::filesystem::tree::attribute::{read_portable, AttributeReadWork};
 use layerfs_content::filesystem::FilesystemRootId;
 use layerfs_content::ObjectId;
 use layerfs_protocol::daemon::{DirtyReport, WorkspaceToken};

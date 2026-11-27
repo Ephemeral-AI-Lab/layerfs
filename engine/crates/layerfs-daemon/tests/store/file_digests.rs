@@ -12,8 +12,7 @@ use layerfs_history::{CommitOutcome, WorkspaceId};
 use layerfs_overlay::ProfileConfig;
 use layerfs_storage::ReservationBlocks;
 use layerfs_store_service::{
-    bootstrap::open_store,
-    store::{BindRequest, BoundWorkspace, CommitSuccess, Store},
+    store::{open::open_store, BindRequest, BoundWorkspace, CommitSuccess, Store},
     Owner, OwnerConfig,
 };
 use layerfs_vfs::{CapturedNamespaceWork, Operation, Outcome, Position, Time};

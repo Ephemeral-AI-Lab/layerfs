@@ -13,7 +13,7 @@ mod operator;
 mod ports;
 pub use ports::{request as mount_request, Mounted};
 pub mod telemetry;
-pub use layerfs_store_service::{bootstrap, install as shared_install, store};
+pub use layerfs_store_service::store::{self, install as shared_install, open as bootstrap};
 
 pub use layerfs_store_service::{
     JobWork, OriginalInput, Owner, OwnerClient, OwnerConfig, OwnerError, OwnerStart, OwnerWork,
@@ -24,9 +24,3 @@ pub mod workspace;
 
 pub mod application;
 pub mod install;
-
-// #828 compat: old public module paths, removed in wave 3.
-#[doc(hidden)]
-pub use crate::install::outcome as install_types; // #828 compat
-#[doc(hidden)]
-pub use crate::workspace as control; // #828 compat

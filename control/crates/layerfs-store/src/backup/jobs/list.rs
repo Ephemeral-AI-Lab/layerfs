@@ -7,8 +7,8 @@ use crate::backup::bucket::record::BucketRecord;
 use crate::backup::bucket::RemoteError;
 use crate::backup::copy as remote;
 use crate::backup::copy::link::StoreLink;
-use layerfs_home::home::paths;
-use layerfs_home::outcome::{failed, Outcome};
+use layerfs_home::disk::paths;
+use layerfs_home::reply::outcome::{failed, Outcome};
 use layerfs_protocol::sdk::SdkValue;
 use layerfs_protocol::StoreKind;
 use std::collections::BTreeMap;
@@ -98,7 +98,7 @@ fn row(
         ),
         (
             "modified_at",
-            SdkValue::opt_text(modified.map(|ms| layerfs_home::time::iso(ms as i64))),
+            SdkValue::opt_text(modified.map(|ms| layerfs_home::reply::time::iso(ms as i64))),
         ),
         ("sha256", hex(copy.and_then(|c| c.sha256.as_ref()))),
         ("heads_sha256", hex(copy.and_then(|c| c.heads.as_ref()))),

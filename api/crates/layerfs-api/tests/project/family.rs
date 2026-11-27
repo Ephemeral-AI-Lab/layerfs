@@ -648,8 +648,12 @@ fn worker_inited_project_keeps_manifest_across_move_to_native_and_back() {
         host_record.get("manifest").is_some() && host_record.get("installed").is_some(),
         "host record after worker init must keep manifest and installed: {host_record:?}"
     );
-    layerfs_store::project::discovery::project(Some(&home), Some("shop"), Some("api"))
-        .expect("host project discovery succeeds right after worker init");
+    layerfs_store::data::project::record::discovery::project(
+        Some(&home),
+        Some("shop"),
+        Some("api"),
+    )
+    .expect("host project discovery succeeds right after worker init");
 
     ok(
         &home,
@@ -659,8 +663,12 @@ fn worker_inited_project_keeps_manifest_across_move_to_native_and_back() {
             ("machine", t(layerfs_home::names::HOST_MACHINE)),
         ],
     );
-    layerfs_store::project::discovery::project(Some(&home), Some("shop"), Some("api"))
-        .expect("host project discovery succeeds after store move to native");
+    layerfs_store::data::project::record::discovery::project(
+        Some(&home),
+        Some("shop"),
+        Some("api"),
+    )
+    .expect("host project discovery succeeds after store move to native");
     let doc = ok(
         &home,
         "project.doctor",
@@ -677,8 +685,12 @@ fn worker_inited_project_keeps_manifest_across_move_to_native_and_back() {
         "store.move",
         &[("store", t("shop")), ("machine", t("box"))],
     );
-    layerfs_store::project::discovery::project(Some(&home), Some("shop"), Some("api"))
-        .expect("host project discovery succeeds after moving back to worker");
+    layerfs_store::data::project::record::discovery::project(
+        Some(&home),
+        Some("shop"),
+        Some("api"),
+    )
+    .expect("host project discovery succeeds after moving back to worker");
 
     std::fs::remove_dir_all(home).unwrap();
     let _ = std::fs::remove_dir_all(root);
@@ -736,9 +748,13 @@ fn move_and_sandbox_repair_an_existing_incomplete_project_record() {
     // Case 1: Store is on worker with a pre-fix 88-byte host record; move to native repairs it.
     write_stub(12345);
     assert_eq!(
-        layerfs_store::project::discovery::project(Some(&home), Some("shop"), Some("api"))
-            .err()
-            .map(|r| r.code),
+        layerfs_store::data::project::record::discovery::project(
+            Some(&home),
+            Some("shop"),
+            Some("api")
+        )
+        .err()
+        .map(|r| r.code),
         Some("NoSuchProject".to_owned())
     );
     let doc_before = ok(
@@ -764,8 +780,12 @@ fn move_and_sandbox_repair_an_existing_incomplete_project_record() {
             ("machine", t(layerfs_home::names::HOST_MACHINE)),
         ],
     );
-    layerfs_store::project::discovery::project(Some(&home), Some("shop"), Some("api"))
-        .expect("store move to native repairs incomplete host project record");
+    layerfs_store::data::project::record::discovery::project(
+        Some(&home),
+        Some("shop"),
+        Some("api"),
+    )
+    .expect("store move to native repairs incomplete host project record");
     let repaired = layerfs_api::home::read_record(&record_path)
         .unwrap()
         .unwrap();
@@ -778,9 +798,13 @@ fn move_and_sandbox_repair_an_existing_incomplete_project_record() {
     // Case 2: Incomplete host record on native when moving back to worker is also repaired.
     write_stub(24680);
     assert_eq!(
-        layerfs_store::project::discovery::project(Some(&home), Some("shop"), Some("api"))
-            .err()
-            .map(|r| r.code),
+        layerfs_store::data::project::record::discovery::project(
+            Some(&home),
+            Some("shop"),
+            Some("api")
+        )
+        .err()
+        .map(|r| r.code),
         Some("NoSuchProject".to_owned())
     );
     ok(
@@ -788,8 +812,12 @@ fn move_and_sandbox_repair_an_existing_incomplete_project_record() {
         "store.move",
         &[("store", t("shop")), ("machine", t("box"))],
     );
-    layerfs_store::project::discovery::project(Some(&home), Some("shop"), Some("api"))
-        .expect("store move from native repairs incomplete host project record");
+    layerfs_store::data::project::record::discovery::project(
+        Some(&home),
+        Some("shop"),
+        Some("api"),
+    )
+    .expect("store move from native repairs incomplete host project record");
     let repaired2 = layerfs_api::home::read_record(&record_path)
         .unwrap()
         .unwrap();
@@ -891,8 +919,12 @@ fn move_skips_unreadable_project_record_and_still_repairs_incomplete_ones() {
         ],
     );
     assert_eq!(content(&read), "hello\n");
-    layerfs_store::project::discovery::project(Some(&home), Some("shop"), Some("legacy"))
-        .expect("legacy project repaired on move to worker despite damaged sibling");
+    layerfs_store::data::project::record::discovery::project(
+        Some(&home),
+        Some("shop"),
+        Some("legacy"),
+    )
+    .expect("legacy project repaired on move to worker despite damaged sibling");
     assert_eq!(
         layerfs_api::home::read_record(&legacy_path)
             .unwrap()
@@ -930,8 +962,12 @@ fn move_skips_unreadable_project_record_and_still_repairs_incomplete_ones() {
         ],
     );
     assert_eq!(content(&read), "hello\n");
-    layerfs_store::project::discovery::project(Some(&home), Some("shop"), Some("legacy"))
-        .expect("legacy project repaired on move to native despite damaged sibling");
+    layerfs_store::data::project::record::discovery::project(
+        Some(&home),
+        Some("shop"),
+        Some("legacy"),
+    )
+    .expect("legacy project repaired on move to native despite damaged sibling");
     assert_eq!(
         layerfs_api::home::read_record(&legacy_path)
             .unwrap()

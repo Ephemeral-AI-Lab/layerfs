@@ -3,7 +3,7 @@
 //! mistyped fields; a changed field keeps its place and a new one comes
 //! last, as the untyped records did.
 use layerfs_home::json::{parse, print};
-use layerfs_home::op::Op;
+use layerfs_home::record::intent::Op;
 use layerfs_protocol::sdk::SdkValue;
 use layerfs_sandbox::record::{DaemonRecord, SandboxRecord, WorkspaceRecord};
 use layerfs_sandbox::route::machine::Started;
@@ -16,7 +16,7 @@ fn value(text: &str) -> SdkValue {
 fn scratch_home(tag: &str) -> std::path::PathBuf {
     let home = std::env::temp_dir().join(format!("lfs-codec-{tag}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&home);
-    layerfs_home::home::layout::open(&home).expect("a new home");
+    layerfs_home::disk::layout::open(&home).expect("a new home");
     home
 }
 
@@ -243,7 +243,7 @@ fn a_created_sandbox_records_one_generation_that_round_trips() {
     .expect("record");
     let generation = record.generation().expect("a generation").to_owned();
     assert!(!generation.is_empty());
-    let id = layerfs_home::home::opened(&home).expect("home").id;
+    let id = layerfs_home::disk::opened(&home).expect("home").id;
     let (label, _, _) =
         layerfs_history::ordered_token_parts(&generation).expect("a new generation is ordered");
     assert_eq!(label, format!("{id}.sandbox"), "it names the minting home");
@@ -268,7 +268,7 @@ fn a_created_sandbox_records_one_generation_that_round_trips() {
 fn a_generation_is_minted_past_the_retired_one_after_a_backwards_clock() {
     use layerfs_sandbox::record::SandboxTombstone;
     let home = scratch_home("floor");
-    let id = layerfs_home::home::opened(&home).expect("home").id;
+    let id = layerfs_home::disk::opened(&home).expect("home").id;
     // A retirement minted far in the future, as a clock stepped back after.
     let future = format!("p1:{id}.sandbox:{:016}:aa", u64::MAX / 4);
     SandboxTombstone {

@@ -2,7 +2,7 @@
 #[allow(dead_code)]
 #[path = "../support/rig.rs"]
 mod rig;
-use layerfs_daemon::control::{
+use layerfs_daemon::workspace::{
     ExportServing, ExportServingConfig, Failure, Helper, Mounter, HELPER_WAIT,
 };
 use layerfs_history::WorkspaceId;

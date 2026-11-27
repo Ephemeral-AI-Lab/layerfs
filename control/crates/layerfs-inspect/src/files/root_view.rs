@@ -25,11 +25,11 @@
 //! their links.
 use super::roots;
 use super::walk::{answer, refusal, FilesRequest, Rules, Scope, CALL};
-use layerfs_home::outcome::{refused, Outcome};
+use layerfs_home::reply::outcome::{refused, Outcome};
 use layerfs_protocol::sdk::SdkValue;
 use layerfs_sandbox::backend::confined::{self, Refused, View};
-use layerfs_sandbox::inspect::process;
 use layerfs_sandbox::record::DaemonRecord;
+use layerfs_sandbox::status::stats as process;
 use std::path::Path;
 
 /// The entries of a Sandbox's root that are the kernel's own.

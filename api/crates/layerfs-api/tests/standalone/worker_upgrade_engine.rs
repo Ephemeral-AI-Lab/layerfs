@@ -8,11 +8,11 @@
 #[path = "../support/worker_store.rs"]
 mod worker_store;
 
-use layerfs_home::events::Events;
-use layerfs_home::home::paths;
+use layerfs_home::disk::paths;
 use layerfs_home::names::StoreName;
+use layerfs_home::reply::events::Events;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
-use layerfs_store::record::StoreRecord;
+use layerfs_store::admin::record::store::StoreRecord;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
@@ -24,8 +24,12 @@ fn home_with_shop(tag: &str) -> Option<PathBuf> {
     let home = scratch(tag).join("home");
     std::fs::create_dir_all(&home).unwrap();
     std::fs::set_permissions(&home, std::fs::Permissions::from_mode(0o700)).unwrap();
-    layerfs_home::home::open(&home).unwrap();
-    match layerfs_store::sqlite::create::create(&home, &StoreName::parse("shop").unwrap(), None) {
+    layerfs_home::disk::open(&home).unwrap();
+    match layerfs_store::backend::sqlite::create::create(
+        &home,
+        &StoreName::parse("shop").unwrap(),
+        None,
+    ) {
         Ok(_) => Some(home),
         Err(refusal) if refusal.message.contains("does not carry SQLite locks") => {
             eprintln!("NOT RUN: this filesystem cannot hold a directly opened Store: {refusal:?}");
@@ -62,12 +66,12 @@ fn upgrade_with(home: &Path, cancel: &AtomicBool) -> (Result<SdkValue, SdkRefusa
 
 fn get_format(home: &Path) -> SdkValue {
     let mut sink = |_| {};
-    let with = layerfs_store::get::With {
+    let with = layerfs_store::admin::status::get::With {
         live: false,
         stats: false,
         format: true,
     };
-    let got = layerfs_store::get::get(
+    let got = layerfs_store::admin::status::get::get(
         home,
         &mut Events::new(&mut sink),
         "shop",
@@ -119,7 +123,10 @@ fn needs_w1_a_cancel_before_commit_changes_nothing() {
     let refusal = outcome.unwrap_err();
     assert_eq!(refusal.code, "Cancelled", "{refusal:?}");
     assert_eq!(refusal.message, "cancelled before COMMIT; nothing changed");
-    assert_eq!(layerfs_home::outcome::public_code(&refusal.code), "Failed");
+    assert_eq!(
+        layerfs_home::reply::outcome::public_code(&refusal.code),
+        "Failed"
+    );
     assert!(StoreRecord::of(&home, "shop").unwrap().op().is_none());
     assert_eq!(std::fs::read(&file).unwrap(), before);
 }
@@ -157,12 +164,12 @@ fn needs_w1_the_format_section_reads_every_status() {
         assert_eq!(format.get_text("fix"), fix, "{format:?}");
         // the open this build refuses
         let mut sink = |_| {};
-        let with = layerfs_store::get::With {
+        let with = layerfs_store::admin::status::get::With {
             live: false,
             stats: true,
             format: false,
         };
-        let stats = layerfs_store::get::get(
+        let stats = layerfs_store::admin::status::get::get(
             &home,
             &mut Events::new(&mut sink),
             "shop",
@@ -221,7 +228,7 @@ fn needs_w1_a_schema_version_1_backup_is_refused_by_name() {
         return;
     };
     let record = StoreRecord::of(&home, "shop").unwrap();
-    let identity = layerfs_store::identity::identity_in(&record).unwrap();
+    let identity = layerfs_store::admin::record::identity::identity_in(&record).unwrap();
     let copy = home.join("copy.sqlite");
     std::fs::copy(paths::store_file(&home, "shop"), &copy).unwrap();
     set_user_version(&copy, 16);
@@ -283,12 +290,12 @@ fn needs_w1_a_current_postgresql_store_answers_current() {
     let home = scratch("pg-current").join("home");
     std::fs::create_dir_all(&home).unwrap();
     std::fs::set_permissions(&home, std::fs::Permissions::from_mode(0o700)).unwrap();
-    layerfs_home::home::open(&home).unwrap();
+    layerfs_home::disk::open(&home).unwrap();
     // a trust server: the URL's user is the login, any password passes
     let (scheme, after) = url.split_once("://").unwrap();
     let (user, address) = after.split_once('@').unwrap();
     let address = format!("{scheme}://{address}");
-    layerfs_store::postgresql::login::save(&home, "shop", "unused").unwrap();
+    layerfs_store::backend::postgresql::login::save(&home, "shop", "unused").unwrap();
     StoreRecord::connected("shop", &address, user, &schema, "off")
         .with("binding", SdkValue::Bytes(b"w2-804-upgrade".to_vec()))
         .with("cursor", SdkValue::Bytes([3; 32].to_vec()))
@@ -392,13 +399,18 @@ fn needs_w1_a_failed_size_does_not_blank_later_formats() {
         return;
     };
     let name = StoreName::parse("a").unwrap();
-    layerfs_store::sqlite::create::create(&home, &name, None).unwrap();
+    layerfs_store::backend::sqlite::create::create(&home, &name, None).unwrap();
     let wal = format!("{}-wal", paths::store_file(&home, "a").display());
     let _ = std::fs::remove_file(&wal);
     std::os::unix::fs::symlink(&wal, &wal).unwrap();
-    let listed =
-        layerfs_store::list::list_with(&home, None, true, true, layerfs_sandbox::users::reads())
-            .unwrap();
+    let listed = layerfs_store::admin::status::list::list_with(
+        &home,
+        None,
+        true,
+        true,
+        layerfs_sandbox::users::reads(),
+    )
+    .unwrap();
     let Some(SdkValue::List(items)) = listed.get("items") else {
         panic!("{listed:?}");
     };

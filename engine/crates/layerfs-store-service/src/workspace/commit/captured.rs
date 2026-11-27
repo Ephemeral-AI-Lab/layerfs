@@ -8,9 +8,10 @@ use crate::store::{
 };
 use crate::OwnerError;
 use layerfs_content::{
-    compare::ChangedDirectories, filesystem::statistics::LogicalChanges,
-    filesystem::FilesystemRootId, AuthenticatedObjects, ContentError, ContentResult,
-    FilesystemResult, FinalizedConsumer, FinalizedObject, ObjectId,
+    compare::ChangedDirectories,
+    filesystem::{construction::statistics::LogicalChanges, FilesystemRootId},
+    AuthenticatedObjects, ContentError, ContentResult, FilesystemResult, FinalizedConsumer,
+    FinalizedObject, ObjectId,
 };
 use layerfs_overlay::{Capture, IndexedOperationRecordScope};
 use layerfs_storage::{Save, SaveSink};

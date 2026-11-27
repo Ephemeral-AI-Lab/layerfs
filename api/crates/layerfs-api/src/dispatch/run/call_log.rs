@@ -7,7 +7,7 @@
 use crate::dispatch::answer::form::Asked;
 use crate::dispatch::table::{Arg, Call, Kind, Redact};
 use crate::dispatch::Scope;
-use layerfs_home::outcome::Outcome;
+use layerfs_home::reply::outcome::Outcome;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 
 /// A path argument's logged byte length: the §4.3 normalization (strip one
@@ -41,7 +41,7 @@ fn word(arg: &Arg, value: &SdkValue) -> Option<SdkValue> {
     Some(match (arg.kind, value) {
         (Kind::Function, _) => return None,
         // an input the CLI left unread for its route: its size is not known
-        (Kind::Content | Kind::Json, _) if layerfs_store::host_write::deferred() => {
+        (Kind::Content | Kind::Json, _) if layerfs_store::admin::host_worker::write::deferred() => {
             SdkValue::text("<input>")
         }
         (Kind::Content, SdkValue::Text(text)) => bytes(text.len()),

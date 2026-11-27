@@ -16,7 +16,7 @@ use crate::Image;
 #[cfg(target_os = "linux")]
 use crate::SandboxRecord;
 use crate::{CommandIdentity, ExecSlot, Sandbox};
-use layerfs_home::outcome::refused;
+use layerfs_home::reply::outcome::refused;
 use layerfs_protocol::sdk::SdkRefusal;
 #[cfg(target_os = "linux")]
 use std::path::PathBuf;
@@ -272,7 +272,10 @@ fn no_helper(sandbox: &str, failure: Box<crate::WireFailure>) -> SdkRefusal {
             "Unsupported",
             format!("Sandbox {sandbox}: {}", failure.cause),
         );
-        return layerfs_home::outcome::with_fix(refusal, crate::status::state::remove_fix(sandbox));
+        return layerfs_home::reply::outcome::with_fix(
+            refusal,
+            crate::status::state::remove_fix(sandbox),
+        );
     }
     let _ = sandbox;
     crate::route::daemon::refusal::wire(failure)

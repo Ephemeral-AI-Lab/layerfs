@@ -3,8 +3,7 @@
 //! names, a project's folder and record, the turn calls take on one folder,
 //! and the record file format (moved from `sandbox/files.rs`,
 //! layerfs-project#105).
-use layerfs_home::helpers;
-use layerfs_home::outcome::{failed, refused};
+use layerfs_home::reply::outcome::{failed, refused};
 use layerfs_persistence::{SealedStore, SqlitePersistenceProfile};
 use layerfs_protocol::daemon::Reply;
 use layerfs_protocol::provision::manifest::StoreManifest;
@@ -44,14 +43,14 @@ pub fn home_of(home: Option<&Path>) -> Result<PathBuf> {
 }
 /// `path` is this user's and nobody else may read or change it. A folder
 /// may let others pass through by name (o+x), as the folders above a
-/// namespaces Sandbox's local root must ([`layerfs_home::home::traversable`]).
+/// namespaces Sandbox's local root must ([`layerfs_home::disk::traversable`]).
 pub fn private(path: &Path, dir: bool) -> Result<()> {
     let meta = fs::symlink_metadata(path).map_err(failed)?;
     let others = if dir { 0o076 } else { 0o077 };
     if meta.file_type().is_symlink()
         || meta.is_dir() != dir
         || (!dir && !meta.is_file())
-        || meta.uid() != layerfs_home::home::flock::euid()
+        || meta.uid() != layerfs_home::lock::flock::euid()
         || meta.mode() & others != 0
     {
         return Err(refused(
@@ -75,13 +74,13 @@ pub fn directory(path: &Path) -> Result<()> {
 /// record); `<home>/.stores/<store>/projects/<project>/` for every other
 /// project of a Store.
 fn project_dir(home: Option<&Path>, store: Option<&str>, name: Option<&str>) -> Result<PathBuf> {
-    let name = helpers::required(name, "project")?;
+    let name = layerfs_home::reply::values::required(name, "project")?;
     layerfs_history::HistoryName::new(name).map_err(failed)?;
     let home = home_of(home)?;
     // 2.0 (#533 step 4): every project is named with its Store
     let store = store.unwrap_or(name);
     crate::admin::record::identity::store_dir(&home, store)?;
-    let path = layerfs_home::home::paths::project_dir(&home, store, name);
+    let path = layerfs_home::disk::paths::project_dir(&home, store, name);
     private(&path, true)?;
     Ok(path)
 }
@@ -108,7 +107,7 @@ impl Drop for Guard {
         // The lock belongs to the open file description, which a child forked
         // meanwhile shares until its exec: closing only this descriptor would
         // leave it held (F-053). Unlock explicitly; the close follows.
-        layerfs_home::home::flock::unlock(&self.file);
+        layerfs_home::lock::flock::unlock(&self.file);
         let mut held = HELD.lock().unwrap_or_else(|error| error.into_inner());
         held.remove(&self.directory);
         FREED.notify_all();
@@ -170,7 +169,7 @@ fn os_lock(directory: &Path, deadline: std::time::Instant) -> Result<File> {
         .open(&path)
         .map_err(failed)?;
     private(&path, false)?;
-    while !layerfs_home::home::flock::try_lock(&file, true).map_err(failed)? {
+    while !layerfs_home::lock::flock::try_lock(&file, true).map_err(failed)? {
         if std::time::Instant::now() >= deadline {
             return Err(refused(
                 "Busy",
@@ -200,7 +199,7 @@ pub fn save(path: &Path, value: SdkValue) -> Result<()> {
     let temp = path.with_extension(format!(
         "{}-{}",
         std::process::id(),
-        layerfs_protocol::sdk::hex(&helpers::random()?[..8])
+        layerfs_protocol::sdk::hex(&layerfs_home::record::token::random()?[..8])
     ));
     let mut file = OpenOptions::new()
         .write(true)
@@ -240,8 +239,8 @@ pub fn save_project(path: &Path, project: &Project) -> Result<()> {
         .ancestors()
         .nth(4)
         .filter(|_| path.parent().and_then(Path::file_name) == Some("project".as_ref()));
-    let _lock = home.map(layerfs_home::home::lock::take).transpose()?;
-    let old = layerfs_home::home::read_record(&path.join("record.json"))?.unwrap_or_default();
+    let _lock = home.map(layerfs_home::lock::home::take).transpose()?;
+    let old = layerfs_home::disk::read_record(&path.join("record.json"))?.unwrap_or_default();
     let mut record = SdkValue::map([
         (
             "manifest",
@@ -262,17 +261,17 @@ pub fn save_project(path: &Path, project: &Project) -> Result<()> {
     if let SdkValue::Map(fields) = old {
         for (name, value) in fields {
             if name != "manifest" && name != "installed" {
-                record = layerfs_home::home::with_field(record, &name, value);
+                record = layerfs_home::disk::with_field(record, &name, value);
             }
         }
     }
-    layerfs_home::home::write_entity(&path.join("record.json"), &record)
+    layerfs_home::disk::write_entity(&path.join("record.json"), &record)
 }
 /// Project `name` of Store `store` (by default, the Store of its own name)
 /// in `home` (by default, `LAYERFS_HOME`), read from its entry.
 pub fn project(home: Option<&Path>, store: Option<&str>, name: Option<&str>) -> Result<Project> {
     let path = project_dir(home, store, name)?;
-    let value = layerfs_home::home::read_record(&path.join("record.json"))?
+    let value = layerfs_home::disk::read_record(&path.join("record.json"))?
         .ok_or_else(|| refused("NoSuchProject", "no project record"))?;
     decoded(&path, &value)
 }

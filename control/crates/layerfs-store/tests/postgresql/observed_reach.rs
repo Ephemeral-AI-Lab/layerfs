@@ -6,7 +6,8 @@
 //! are forgotten; `machines` lists the attached machines with their reach;
 //! a Store whose password is not saved is not dialled. A failed check is `not_connected` (the one case a machine's
 //! loopback hint is added) only when no server answered.
-use layerfs_home::home::{self, observed, paths, write_entity};
+use layerfs_home::disk::{self, paths, write_entity};
+use layerfs_home::record::observed;
 use layerfs_protocol::sdk::SdkValue;
 use layerfs_store::admin::record::store::StoreRecord;
 use layerfs_store::admin::status::observed::{self as seen, Reach};
@@ -17,7 +18,7 @@ use std::path::{Path, PathBuf};
 fn tempdir(tag: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("layerfs-observed-{tag}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    home::ensure(&dir).unwrap();
+    disk::ensure(&dir).unwrap();
     dir
 }
 
@@ -39,7 +40,7 @@ fn store(home: &Path, name: &str, extra: &[(&str, SdkValue)]) -> StoreRecord {
     ];
     let fields = fields.into_iter().map(|(k, v)| (k.to_owned(), v));
     let record = (extra.iter()).fold(SdkValue::Map(fields.collect()), |record, (k, v)| {
-        home::with_field(record, k, v.clone())
+        disk::with_field(record, k, v.clone())
     });
     write_entity(&paths::store_record(home, name), &record).unwrap();
     StoreRecord::of(home, name).unwrap()

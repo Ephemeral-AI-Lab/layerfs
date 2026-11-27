@@ -1,6 +1,6 @@
 //! Effective read semantics over an owned unchanged base and short overlay jobs.
 use crate::{BaseStat, BaseView, OverlayRead, Workspace, WorkspaceError, WorkspaceResult};
-use layerfs_content::filesystem::{attributes::PortableMetadata, PathName};
+use layerfs_content::filesystem::{tree::attribute::PortableMetadata, PathName};
 use layerfs_content::object::inode_leaf::InodeKind;
 use layerfs_content::ContentError;
 use layerfs_overlay::{BaseSource, Inode};

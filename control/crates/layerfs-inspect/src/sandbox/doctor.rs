@@ -13,15 +13,15 @@ use super::super::doctor::budget::{Budget, Checks};
 use super::super::doctor::report::{NoVerdict, Node, NotChecked};
 use super::super::doctor::runner::Probe;
 use super::workspace::{self, Listing, Seen};
-use layerfs_home::home::{paths, read_record, RECORD_VERSION};
+use layerfs_home::disk::{paths, read_record, RECORD_VERSION};
 use layerfs_home::names::{self, MachineName, SandboxName};
-use layerfs_home::op::Standing;
-use layerfs_home::outcome::shell_word;
-use layerfs_home::state::{BlockedBy, Reason, State};
+use layerfs_home::record::intent::Standing;
+use layerfs_home::reply::outcome::shell_word;
+use layerfs_home::reply::state::{BlockedBy, Reason, State};
 use layerfs_protocol::sdk::SdkValue;
 use layerfs_sandbox::record::SandboxRecord;
-use layerfs_sandbox::state::remove_fix;
-use layerfs_store::record::{StoreRecord, StoreRef};
+use layerfs_sandbox::status::state::remove_fix;
+use layerfs_store::admin::record::store::{StoreRecord, StoreRef};
 use std::path::Path;
 
 #[path = "channel.rs"]
@@ -64,11 +64,11 @@ struct Observed {
 }
 
 /// The Sandbox's state from its records and its machine's records: the
-/// Sandbox package's one derivation (`layerfs_sandbox::state::state`), so
+/// Sandbox package's one derivation (`layerfs_sandbox::status::state::state`), so
 /// the doctor and `sandbox get` agree. Its machine's record that cannot be
 /// read is `sandbox.machine_reference`'s finding, not a state here.
 fn recorded_state(home: &Path, record: &SandboxRecord) -> State {
-    layerfs_sandbox::state::state(home, record).unwrap_or(State::Ready)
+    layerfs_sandbox::status::state::state(home, record).unwrap_or(State::Ready)
 }
 
 /// The `sandbox` kind's run: its checks into `node`, then its Workspaces'
@@ -491,7 +491,7 @@ fn local(
     };
     let before = modified();
     const KEYS: &str = "sandbox.daemon_keys";
-    let keys = match layerfs_home::secrets::daemon_keys(&directory) {
+    let keys = match layerfs_home::secret::keys::daemon_keys(&directory) {
         Ok(Some(keys)) => keys,
         _ => {
             checks.fail(

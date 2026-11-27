@@ -39,7 +39,7 @@ pub fn compact_report(store: &str, report: &CompactReceipt) -> SdkValue {
         .map(|id| SdkValue::text(layerfs_protocol::sdk::hex(id)))
         .collect();
     let capped = report.kept_waste.delta_base_references_capped;
-    let (references, references_count) = layerfs_home::helpers::shown(references, 0, capped);
+    let (references, references_count) = layerfs_home::reply::values::shown(references, 0, capped);
     let artifacts = report.residue.artifacts.iter().map(SdkValue::text);
     let mut zero_reasons: Vec<SdkValue> = Vec::new();
     for zero in &report.zero_reasons {

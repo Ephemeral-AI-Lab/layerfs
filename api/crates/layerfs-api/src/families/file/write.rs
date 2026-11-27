@@ -4,10 +4,10 @@ use crate::dispatch::guard::scope::Rule;
 use crate::dispatch::table::Kind::{Content, Name, Project, Text};
 use crate::dispatch::table::{a, call, opt, Call, MESSAGE};
 use crate::dispatch::{Context, Form, Policy};
-use layerfs_home::outcome::Outcome;
+use layerfs_home::reply::outcome::Outcome;
 use layerfs_protocol::sdk::SdkValue;
-use layerfs_store::calls::file::{write, FileWrite};
-use layerfs_store::calls::Content as Body;
+use layerfs_store::data::file::{write, FileWrite};
+use layerfs_store::data::Content as Body;
 
 /// The answer of every write but `file.edit`: `unchanged` when no Commit
 /// was made (`commit` is the head), `merged` when the Branch had moved and

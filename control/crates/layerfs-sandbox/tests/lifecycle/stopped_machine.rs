@@ -10,7 +10,7 @@
 //! Nothing runs a machine or a daemon: records are written by hand, and a
 //! `sleep` this test starts and ends stands for a daemon that ended.
 #![cfg(any(target_os = "linux", target_os = "macos"))]
-use layerfs_home::home::{self, paths, write_record};
+use layerfs_home::disk::{self, paths, write_record};
 use layerfs_os::process::LocalProcess;
 use layerfs_protocol::sdk::SdkValue;
 use layerfs_sandbox::family::{remove, RemoveRequest, Removed};
@@ -25,8 +25,8 @@ fn t(s: &str) -> SdkValue {
 fn new_root(tag: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("lfs-stopped-{tag}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    home::private_dir(&dir).unwrap();
-    home::ensure(&dir).unwrap();
+    disk::private_dir(&dir).unwrap();
+    disk::ensure(&dir).unwrap();
     dir
 }
 
@@ -36,7 +36,7 @@ fn removed(
     force: bool,
 ) -> Result<Removed, layerfs_protocol::sdk::SdkRefusal> {
     let mut sink = |_| {};
-    let mut events = layerfs_home::events::Events::new(&mut sink);
+    let mut events = layerfs_home::reply::events::Events::new(&mut sink);
     let request = RemoveRequest {
         name: name.to_owned(),
         force,
@@ -108,7 +108,7 @@ fn a_sandbox_on_a_stopped_machine_goes_by_its_records() {
         "{}",
         refusal.message
     );
-    let kept = home::read_record(&paths::sandbox_record(&home, "plain"))
+    let kept = disk::read_record(&paths::sandbox_record(&home, "plain"))
         .unwrap()
         .unwrap();
     assert!(kept.get("op").is_none(), "{kept:?}");
@@ -148,8 +148,8 @@ fn worker_record(root: &Path, name: &str, process: LocalProcess) -> PathBuf {
         name: format!("layerfs-0123abcd-{name}"),
         container: "ab".repeat(32),
         runtime: "process",
-        uid: home::flock::euid(),
-        gid: home::flock::egid(),
+        uid: layerfs_home::lock::flock::euid(),
+        gid: layerfs_home::lock::flock::egid(),
         directory: folder.display().to_string(),
         process: (
             process.pid,
@@ -217,6 +217,6 @@ impl layerfs_sandbox::lifecycle::serve::WorkspaceDrain for NoDrain {
 fn local(
     host: layerfs_sandbox::route::machine::Host,
     call: layerfs_sandbox::route::machine::Call,
-) -> layerfs_home::outcome::Outcome {
+) -> layerfs_home::reply::outcome::Outcome {
     layerfs_sandbox::route::machine::dispatch::call(host, call, &NoDrain)
 }

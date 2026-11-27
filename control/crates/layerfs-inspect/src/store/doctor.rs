@@ -7,7 +7,7 @@
 //! computer, then, when this computer reached it, once more from each
 //! machine attached to it, or from `--machine` alone (owner, 2026-11-24),
 //! one `store.connection` each with `from`; every reach is recorded
-//! (`layerfs_store::observed`).
+//! (`layerfs_store::admin::status::observed`).
 //! `store.operation` reads the home's record and, for a sqlite Store, the
 //! compaction record beside its file through its machine (the shallow cut
 //! answers it, spec v19). Under a machine that is not ready only
@@ -15,20 +15,20 @@
 use super::super::doctor::budget::{Budget, Checks};
 use super::super::doctor::report::Node;
 use super::super::doctor::runner::{CheckId, Probe};
-use layerfs_home::events::Events;
-use layerfs_home::helpers::map_of;
-use layerfs_home::home::paths;
-use layerfs_home::op::Standing;
-use layerfs_home::outcome::shell_word;
-use layerfs_home::outcome::{refused, Outcome as CallOutcome};
-use layerfs_home::state::{Reason, State};
+use layerfs_home::disk::paths;
+use layerfs_home::record::intent::Standing;
+use layerfs_home::reply::events::Events;
+use layerfs_home::reply::outcome::shell_word;
+use layerfs_home::reply::outcome::{refused, Outcome as CallOutcome};
+use layerfs_home::reply::state::{Reason, State};
+use layerfs_home::reply::values::map_of;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
-use layerfs_store::diagnostic::{self, Observation, Options, Outcome};
-use layerfs_store::identity::{self, Identity};
-use layerfs_store::intent::clearing as clearing_call;
-use layerfs_store::place::{self, Executor};
-use layerfs_store::record::{unread_fix, StoreRecord, StoreRef};
-use layerfs_store::state::broken;
+use layerfs_store::admin::record::identity::{self, Identity};
+use layerfs_store::admin::record::intent::clearing as clearing_call;
+use layerfs_store::admin::record::store::{unread_fix, StoreRecord, StoreRef};
+use layerfs_store::admin::route::executor::{self, Executor};
+use layerfs_store::admin::status::state::broken;
+use layerfs_store::backend::sqlite::diagnostic::{Observation, Options, Outcome};
 use std::path::Path;
 use std::time::{Duration, Instant};
 
@@ -60,7 +60,7 @@ const CUT: &str = "schema";
 const SCHEMA_HINT: &str = "this build does not read its schema; use the LayerFS build that wrote it, or restore a backup under a new Store name";
 
 /// Checks Store `probe.thing` into `node`: its state from the home's
-/// records (`layerfs_store::state`, with the machine family's derivation
+/// records (`layerfs_store::admin::status::state`, with the machine family's derivation
 /// handed in) says whether it waits on its machine, and what blocks the
 /// Store blocks its projects too.
 pub(crate) fn run(probe: &Probe<'_>, node: &mut Node) {
@@ -69,7 +69,9 @@ pub(crate) fn run(probe: &Probe<'_>, node: &mut Node) {
     let mut state = probe.state.clone();
     if let Some((record, identity)) = resolve(probe.home, name, &mut checks) {
         let machines = layerfs_sandbox::users::machine_state;
-        if let Ok(recorded) = layerfs_store::state::recorded(probe.home, &record, &machines) {
+        if let Ok(recorded) =
+            layerfs_store::admin::status::state::recorded(probe.home, &record, &machines)
+        {
             state = recorded;
         }
         match &state {
@@ -127,7 +129,7 @@ fn resolve(home: &Path, name: &str, checks: &mut Checks) -> Option<(StoreRecord,
         Some(SdkValue::Int(v)) => Some(*v),
         _ => None,
     };
-    let version_matches = version == Some(layerfs_home::home::RECORD_VERSION);
+    let version_matches = version == Some(layerfs_home::disk::RECORD_VERSION);
     let name_matches = record.text("name") == Some(name);
     if !version_matches || !name_matches {
         // no fix: the record may be another build's or another Store's, and
@@ -234,7 +236,7 @@ fn operation(record: &StoreRecord, compaction: Option<&SdkValue>, checks: &mut C
 }
 
 fn leases(probe: &Probe<'_>, name: &str, checks: &mut Checks) {
-    match layerfs_store::lease::read_holders(probe.home, name) {
+    match layerfs_store::admin::open::lease::read_holders(probe.home, name) {
         Ok((live, stale)) => {
             if !stale.is_empty() {
                 checks.notice(
@@ -314,7 +316,7 @@ fn sqlite(probe: &Probe<'_>, record: &StoreRecord, identity: &Identity, checks: 
     let name = record.name();
     let machine = record.machine().unwrap_or_default();
     let heads = !record.links().is_empty();
-    let found = match place::on_machine_read(probe.home, &machine) {
+    let found = match executor::on_machine_read(probe.home, &machine) {
         Ok(Executor::Local) => Ok(shallow(
             &paths::store_file(probe.home, name),
             identity,
@@ -443,7 +445,7 @@ fn sqlite(probe: &Probe<'_>, record: &StoreRecord, identity: &Identity, checks: 
         checks.evidence(SCHEMA, with_format(vec![reason], format));
         checks.fix(
             SCHEMA,
-            layerfs_store::state::outdated_fix(name, false, &why),
+            layerfs_store::admin::status::state::outdated_fix(name, false, &why),
         );
         return;
     }
@@ -530,7 +532,7 @@ fn shallow(path: &Path, identity: &Identity, heads: bool) -> SdkValue {
     if !path.is_file() {
         return map_of(fields);
     }
-    if let Some(run) = layerfs_store::compact::recorded_run(path) {
+    if let Some(run) = layerfs_store::admin::maintenance::compact::recorded_run(path) {
         fields.push(("compaction", run));
     }
     // the format from its header alone, whatever this build makes of it
@@ -541,20 +543,22 @@ fn shallow(path: &Path, identity: &Identity, heads: bool) -> SdkValue {
             Err(error) => SdkValue::map([("error", SdkValue::text(upgrade_error(&error)))]),
         },
     ));
-    match diagnostic::sqlite_schema(path, identity) {
+    match layerfs_store::backend::sqlite::diagnostic::sqlite_schema(path, identity) {
         Err(error) if error.code == "Unsupported" => {
             fields.push(("unsupported", SdkValue::Text(error.message)))
         }
         // another writer holds the file: neither its id nor its schema
         // could be read, which says nothing wrong of either
         Err(error) if error.code == "Busy" => fields.push(("busy", SdkValue::Text(error.message))),
-        Err(error) => match diagnostic::sqlite_identity(path, identity) {
-            Ok(false) => fields.push(("identity_error", SdkValue::Text(error.message))),
-            _ if error.code == layerfs_store::state::OLD_STORE => {
-                fields.push(("outdated", SdkValue::Text(error.message)))
+        Err(error) => {
+            match layerfs_store::backend::sqlite::diagnostic::sqlite_identity(path, identity) {
+                Ok(false) => fields.push(("identity_error", SdkValue::Text(error.message))),
+                _ if error.code == layerfs_store::admin::status::state::OLD_STORE => {
+                    fields.push(("outdated", SdkValue::Text(error.message)))
+                }
+                _ => fields.push(("schema_error", SdkValue::Text(error.message))),
             }
-            _ => fields.push(("schema_error", SdkValue::Text(error.message))),
-        },
+        }
         Ok(()) if heads => match layerfs_store::backup::copy::heads(path) {
             Ok(now) => fields.push((
                 "heads",
@@ -568,14 +572,14 @@ fn shallow(path: &Path, identity: &Identity, heads: bool) -> SdkValue {
     // doctor reports them beside the schema, and changes no row
     fields.push((
         "mount_holders",
-        match diagnostic::mount_holders(path, identity) {
+        match layerfs_store::backend::sqlite::diagnostic::mount_holders(path, identity) {
             Ok(rows) => rows,
             Err(error) => SdkValue::map([("error", SdkValue::text(error.message))]),
         },
     ));
     fields.push((
         "gc_audit",
-        match diagnostic::done_audit(path, identity, 0, 16) {
+        match layerfs_store::backend::sqlite::diagnostic::done_audit(path, identity, 0, 16) {
             Ok(page) => page,
             Err(error) => SdkValue::map([("error", SdkValue::text(error.message))]),
         },
@@ -593,8 +597,8 @@ fn remote(
     heads: bool,
     budget: &Budget,
 ) -> Result<SdkValue, SdkRefusal> {
-    use layerfs_machine::worker::{diagnostic_connect, Endpoint};
-    let saved = layerfs_home::secrets::worker_secret(home, machine)?
+    use layerfs_machine::route::{diagnostic_connect, Endpoint};
+    let saved = layerfs_home::secret::keys::worker_secret(home, machine)?
         .ok_or_else(|| refused("Unavailable", "it records no worker endpoint"))?;
     let endpoint = Endpoint {
         address: saved.address,
@@ -668,7 +672,13 @@ fn postgresql(probe: &Probe<'_>, record: &StoreRecord, identity: &Identity, chec
         cancelled: None,
     };
     let mut seen = Vec::new();
-    let made = diagnostic::postgresql(record, identity, options, true, &mut |o| seen.push(o));
+    let made = layerfs_store::backend::postgresql::diagnostic::postgresql(
+        record,
+        identity,
+        options,
+        true,
+        &mut |o| seen.push(o),
+    );
     let reached = match made {
         Err(error) if seen.is_empty() => {
             checks.fail(
@@ -682,16 +692,26 @@ fn postgresql(probe: &Probe<'_>, record: &StoreRecord, identity: &Identity, chec
             // a refusal before any dial carries its own fix: a password
             // this home does not hold names `store connect` again
             fix_of(&error, checks);
-            let failed = layerfs_store::observed::Reach::failed(&error.message);
-            layerfs_store::observed::record(probe.home, record.name(), None, &failed);
+            let failed = layerfs_store::admin::status::observed::Reach::failed(&error.message);
+            layerfs_store::admin::status::observed::record(
+                probe.home,
+                record.name(),
+                None,
+                &failed,
+            );
             false
         }
         // a server that said nothing within the handshake limit is not
         // dialled a second time: its silence is the reach recorded
         _ => match fold(record, &seen, probe.budget.expired(), checks) {
             Some(silent) => {
-                let failed = layerfs_store::observed::Reach::failed(&silent);
-                layerfs_store::observed::record(probe.home, record.name(), None, &failed);
+                let failed = layerfs_store::admin::status::observed::Reach::failed(&silent);
+                layerfs_store::admin::status::observed::record(
+                    probe.home,
+                    record.name(),
+                    None,
+                    &failed,
+                );
                 false
             }
             None => {
@@ -712,10 +732,10 @@ fn postgresql(probe: &Probe<'_>, record: &StoreRecord, identity: &Identity, chec
 /// observation carries its latency and the server's version. Whether it
 /// was reached.
 fn here(home: &Path, record: &StoreRecord) -> bool {
-    use layerfs_store::postgresql::{check, connect};
+    use layerfs_store::backend::postgresql::{check, connect};
     let checked = connect::selection(record).and_then(|pg| check::check(record, &pg));
-    let seen = layerfs_store::observed::Reach::of(&checked);
-    layerfs_store::observed::record(home, record.name(), None, &seen);
+    let seen = layerfs_store::admin::status::observed::Reach::of(&checked);
+    layerfs_store::admin::status::observed::record(home, record.name(), None, &seen);
     checked.is_ok()
 }
 
@@ -736,7 +756,7 @@ fn fold(
 ) -> Option<String> {
     let host = record
         .text("url")
-        .and_then(|url| layerfs_store::postgresql::connect::target(url).ok())
+        .and_then(|url| layerfs_store::backend::postgresql::connect::target(url).ok())
         .map(|(host, port, _)| format!("{host}:{port}"))
         .unwrap_or_default();
     let bookkeeping = [
@@ -758,7 +778,9 @@ fn fold(
     };
     // a refused login names the password; any other step the address
     let fix = |o: &Observation| match step(o) {
-        "authentication" | "login" => layerfs_store::postgresql::login::password_fix(record),
+        "authentication" | "login" => {
+            layerfs_store::backend::postgresql::login::password_fix(record)
+        }
         _ => connect_fix(record, false),
     };
     match (failed, unknown) {
@@ -777,7 +799,7 @@ fn fold(
             checks.unknown(CONNECTION, o.message.clone())
         }
         (None, Some(o)) if step(o) == "cancelled" => {
-            let limit = diagnostic::POSTGRESQL_HANDSHAKE.as_secs();
+            let limit = layerfs_store::backend::sqlite::diagnostic::POSTGRESQL_HANDSHAKE.as_secs();
             let message = format!(
                 "this computer cannot reach the server at {host}: it did not answer within {limit} s (connect and login)"
             );
@@ -877,8 +899,13 @@ fn reach(probe: &Probe<'_>, record: &StoreRecord, checks: &mut Checks) {
                     &layerfs_sandbox::users::STORE,
                 )
                 .1;
-                let seen = layerfs_store::observed::Reach::of(&checked);
-                layerfs_store::observed::record(probe.home, record.name(), Some(machine), &seen);
+                let seen = layerfs_store::admin::status::observed::Reach::of(&checked);
+                layerfs_store::admin::status::observed::record(
+                    probe.home,
+                    record.name(),
+                    Some(machine),
+                    &seen,
+                );
                 match checked {
                     Ok(_) => {
                         checks.pass(CONNECTION, format!("machine {machine} reaches the server"))
@@ -961,7 +988,7 @@ fn with_format(mut fields: Vec<(&str, SdkValue)>, format: Option<&SdkValue>) -> 
 /// PostgreSQL Store `record`'s format as `store.schema`'s evidence: one
 /// connect and one `SELECT` (`postgresql_format_evidence`).
 fn postgresql_format(record: &StoreRecord, checks: &mut Checks) {
-    let url = layerfs_store::record::url(record);
+    let url = layerfs_store::admin::record::store::url(record);
     let schema = layerfs_store::upgrade::postgresql_schema(record);
     let format = match (url, schema) {
         (Ok(url), Ok(schema)) => {

@@ -7,8 +7,8 @@ use crate::admin::open::args::PgSelection;
 use crate::admin::record::identity as stores;
 use crate::admin::record::identity::Identity;
 use crate::data::project::init::sqlite::ProjectAdd;
-use layerfs_home::helpers::random;
-use layerfs_home::outcome::{refused, Outcome};
+use layerfs_home::record::token::random;
+use layerfs_home::reply::outcome::{refused, Outcome};
 use layerfs_protocol::sdk::hex;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
@@ -117,7 +117,7 @@ fn run(
     use crate::backend::postgresql::open::selection;
     use layerfs_history::{BranchId, HistoryName, LayerStackId};
     use layerfs_project::store::{AddRequest, ProjectApi};
-    let history = |text: &str| HistoryName::new(text).map_err(layerfs_home::outcome::failed);
+    let history = |text: &str| HistoryName::new(text).map_err(layerfs_home::reply::outcome::failed);
     let stack =
         LayerStackId::from_authority(crate::data::project::init::worker::sixteen(random()?));
     let branch = BranchId::from_authority(crate::data::project::init::worker::sixteen(random()?));

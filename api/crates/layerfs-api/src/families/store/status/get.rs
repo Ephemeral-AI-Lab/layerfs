@@ -6,9 +6,9 @@ use crate::dispatch::table::Kind::Name;
 use crate::dispatch::table::{a, call, Call};
 use crate::dispatch::{Context, Form, Part, Section};
 use layerfs_home::names::StoreName;
-use layerfs_home::outcome::Outcome;
+use layerfs_home::reply::outcome::Outcome;
 use layerfs_protocol::sdk::SdkValue;
-use layerfs_store::get::With;
+use layerfs_store::admin::status::get::With;
 
 /// One `backups` row: `{bucket}`, and in the long form what the link holds.
 const BACKUP: Form = Form::of(
@@ -150,5 +150,5 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     };
     let (home, events) = context.parts();
     let reads = layerfs_sandbox::users::reads();
-    layerfs_store::get::get(home, events, store.as_str(), with, reads)
+    layerfs_store::admin::status::get::get(home, events, store.as_str(), with, reads)
 }

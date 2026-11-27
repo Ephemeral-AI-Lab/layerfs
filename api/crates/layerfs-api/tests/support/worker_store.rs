@@ -2,12 +2,12 @@
 //! that holds sqlite Store `shop`: the home and the root are two folders
 //! of one scratch directory, and calls on `shop` take the worker route.
 #![allow(dead_code)]
-use layerfs_home::events::Events;
-use layerfs_home::home::{self, paths, read_record, write_record};
+use layerfs_home::disk::{self, paths, read_record, write_record};
 use layerfs_home::names::{ProjectRef, StoreName};
-use layerfs_machine::worker::{self, Endpoint, MAX_HELLO};
+use layerfs_home::reply::events::Events;
+use layerfs_machine::route::{self, Endpoint, MAX_HELLO};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
-use layerfs_store::project::family::ProjectInit;
+use layerfs_store::data::project::init::run::ProjectInit;
 use std::net::{TcpListener, TcpStream};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -71,7 +71,7 @@ pub fn placed_seeded(
     let (home, root) = (scratch.join("home"), scratch.join("data"));
     std::fs::create_dir_all(&home).unwrap();
     std::fs::set_permissions(&home, std::fs::Permissions::from_mode(0o700)).unwrap();
-    layerfs_home::home::open(&home).unwrap();
+    layerfs_home::disk::open(&home).unwrap();
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let address = listener.local_addr().unwrap();
     write_record(
@@ -90,13 +90,13 @@ pub fn placed_seeded(
     .unwrap();
     // made on native, then its file placed under the worker's root
     let shop = StoreName::parse("shop").unwrap();
-    layerfs_store::sqlite::create::create(&home, &shop, None).unwrap();
+    layerfs_store::backend::sqlite::create::create(&home, &shop, None).unwrap();
     seed(&home);
     let (from, to) = (
         paths::store_dir(&home, "shop"),
         paths::store_dir(&root, "shop"),
     );
-    home::private_dir(&to).unwrap();
+    disk::private_dir(&to).unwrap();
     for entry in std::fs::read_dir(&from).unwrap() {
         let entry = entry.unwrap();
         let name = entry.file_name().to_string_lossy().into_owned();
@@ -106,7 +106,7 @@ pub fn placed_seeded(
     }
     let record_path = paths::store_record(&home, "shop");
     let record = read_record(&record_path).unwrap().unwrap();
-    write_record(&record_path, &home::with_field(record, "machine", t("box"))).unwrap();
+    write_record(&record_path, &disk::with_field(record, "machine", t("box"))).unwrap();
     serve(listener, root.clone());
     let endpoint = Endpoint {
         address,
@@ -150,7 +150,8 @@ pub fn init(
     };
     let mut seen = Vec::new();
     let mut sink = |event| seen.push(event);
-    let outcome = layerfs_store::project::family::init(home, &mut Events::new(&mut sink), &request);
+    let outcome =
+        layerfs_store::data::project::init::run::init(home, &mut Events::new(&mut sink), &request);
     (outcome, seen)
 }
 
@@ -158,12 +159,12 @@ pub fn init(
 /// `store.call` through the worker.
 pub fn stats(home: &Path) -> Result<SdkValue, SdkRefusal> {
     let mut sink = |_| {};
-    let with = layerfs_store::get::With {
+    let with = layerfs_store::admin::status::get::With {
         live: false,
         stats: true,
         format: false,
     };
-    layerfs_store::get::get(
+    layerfs_store::admin::status::get::get(
         home,
         &mut Events::new(&mut sink),
         "shop",
@@ -182,7 +183,7 @@ pub fn store_record(home: &Path) -> SdkValue {
 /// One Sandbox operation for a Sandbox that does not exist: the worker
 /// settles its records, then refuses.
 pub fn sandbox_call(endpoint: &Endpoint) -> Result<SdkValue, SdkRefusal> {
-    worker::call(endpoint, "sandbox.host", sandbox_args(), &mut |_| {})
+    route::call(endpoint, "sandbox.host", sandbox_args(), &mut |_| {})
 }
 
 /// The arguments of [`sandbox_call`]: a Workspace status, which settles
@@ -215,12 +216,12 @@ pub fn sent(endpoint: &Endpoint, op: &str, args: SdkValue) -> TcpStream {
         .set_read_timeout(Some(Duration::from_secs(10)))
         .unwrap();
     let secret = SdkValue::map([("secret", t(&endpoint.secret))]);
-    worker::write_frame(&mut stream, &secret).unwrap();
-    let ready = worker::read_frame_within(&mut stream, MAX_HELLO)
+    route::write_frame(&mut stream, &secret).unwrap();
+    let ready = route::read_frame_within(&mut stream, MAX_HELLO)
         .unwrap()
         .unwrap();
     assert!(ready.get("ready").is_some(), "{ready:?}");
-    std::io::Write::write_all(&mut stream, &worker::request(op, args).unwrap()).unwrap();
+    std::io::Write::write_all(&mut stream, &route::request(op, args).unwrap()).unwrap();
     stream
 }
 

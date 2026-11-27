@@ -19,8 +19,8 @@
 use crate::exec::id::ExecId;
 use crate::record::lock_in;
 use crate::Stop;
-use layerfs_home::home::{now_ms, read_record, write_entity};
-use layerfs_home::outcome::{failed, refused};
+use layerfs_home::disk::{now_ms, read_record, write_entity};
+use layerfs_home::reply::outcome::{failed, refused};
 use layerfs_os::process::LocalProcess;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::fs;
@@ -136,9 +136,9 @@ impl ExecRecord {
 
     /// The record of a command `command` that the call tagged `tag`
     /// started: its tag when a log line may carry it
-    /// (`layerfs_home::logs::tag`) and its [`program`].
+    /// (`layerfs_home::log::calls::tag`) and its [`program`].
     pub fn started_by(mut self, tag: Option<&str>, command: &str) -> Self {
-        self.tag = tag.and_then(layerfs_home::logs::tag);
+        self.tag = tag.and_then(layerfs_home::log::calls::tag);
         self.program = program(command);
         self
     }
@@ -157,7 +157,7 @@ impl ExecRecord {
     /// This process's identity fields, as a record names its owner.
     pub fn new_owner() -> SdkValue {
         SdkValue::Map(
-            (layerfs_home::process::identity().into_iter())
+            (layerfs_home::record::process::identity().into_iter())
                 .map(|(name, value)| (name.to_owned(), value))
                 .collect(),
         )
@@ -165,7 +165,7 @@ impl ExecRecord {
 
     /// Whether its owner process is the one it names and still runs.
     pub fn owned(&self) -> bool {
-        layerfs_home::process::recorded_alive(&self.owner)
+        layerfs_home::record::process::recorded_alive(&self.owner)
     }
 
     /// The record as written.

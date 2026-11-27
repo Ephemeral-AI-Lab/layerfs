@@ -9,7 +9,7 @@ use crate::chains;
 use crate::metadata;
 
 use chains::{copy, depth, history, history_with, read, ChainProvider, Shape};
-use layerfs_content::filesystem::directory::{apply_bindings, build_directory};
+use layerfs_content::filesystem::tree::directory::{apply_bindings, build_directory};
 use layerfs_content::filesystem::{DirectoryRoot, FilesystemObjects, PathName};
 use layerfs_content::{
     AdvisoryPredecessors, ContentResult, FinalizedConsumer, FinalizedObject, ObjectId, ObjectRole,

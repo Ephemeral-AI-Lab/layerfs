@@ -7,8 +7,8 @@
 //! into the address a call dials, only when it dials.
 use super::address::with_login;
 use crate::admin::record::store::StoreRecord;
-use layerfs_home::home::secrets::{read_secret, remove_secret, save_secret};
-use layerfs_home::outcome::{refused, shell_word, with_fix};
+use layerfs_home::reply::outcome::{refused, shell_word, with_fix};
+use layerfs_home::secret::saved::{read_secret, remove_secret, save_secret};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 
@@ -26,7 +26,7 @@ pub struct Saved {
 
 impl Drop for Saved {
     fn drop(&mut self) {
-        layerfs_home::wipe::text(std::mem::take(&mut self.password));
+        layerfs_home::secret::wipe::text(std::mem::take(&mut self.password));
     }
 }
 
@@ -55,10 +55,10 @@ pub fn read(home: &Path, store: &str) -> Result<Option<Saved>> {
 pub fn save(home: &Path, store: &str, password: &str) -> Result<()> {
     let value = SdkValue::map([
         ("password", SdkValue::text(password)),
-        ("changed", SdkValue::Int(layerfs_home::home::now_ms())),
+        ("changed", SdkValue::Int(layerfs_home::disk::now_ms())),
     ]);
     let saved = save_secret(home, KIND, store, &value);
-    layerfs_home::wipe::value(value);
+    layerfs_home::secret::wipe::value(value);
     saved
 }
 

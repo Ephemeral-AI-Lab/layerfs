@@ -10,7 +10,8 @@
 //! the Store's lock, and write nothing once the Store is gone, so a late
 //! write never leaves a folder behind.
 use crate::admin::record::store::{lock, StoreKind, StoreRecord};
-use layerfs_home::home::{now_ms, observed, paths, with_field};
+use layerfs_home::disk::{now_ms, paths, with_field};
+use layerfs_home::record::observed;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 

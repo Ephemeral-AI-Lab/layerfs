@@ -16,11 +16,12 @@ use crate::admin::record::store::{self, StoreRecord};
 use crate::admin::route::executor::{self, Executor};
 use crate::backend::sqlite::family::step;
 use crate::backend::sqlite::step_request::{StepFrame, StoreStep};
-use layerfs_home::home::{self, paths};
-use layerfs_home::op::{self, Op};
-use layerfs_home::outcome::{refused, Outcome};
-use layerfs_home::time;
-use layerfs_machine::record::MachineRecord;
+use layerfs_home::disk;
+use layerfs_home::disk::paths;
+use layerfs_home::record::intent::{self as op, Op};
+use layerfs_home::reply::outcome::{refused, Outcome};
+use layerfs_home::reply::time;
+use layerfs_machine::record::machine::MachineRecord;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 
@@ -31,8 +32,8 @@ type Result<T> = std::result::Result<T, SdkRefusal>;
 fn new_identity() -> Result<Identity> {
     Ok(Identity {
         kind: identity::Kind::Sqlite,
-        binding: layerfs_home::helpers::random()?.to_vec(),
-        cursor_key: layerfs_home::helpers::random()?,
+        binding: layerfs_home::record::token::random()?.to_vec(),
+        cursor_key: layerfs_home::record::token::random()?,
     })
 }
 
@@ -91,13 +92,13 @@ pub fn create(home: &Path, name: &str, machine: Option<&str>) -> Outcome {
 
 /// The Store made in this process, under the home lock.
 fn here(home: &Path, name: &str, machine: &str) -> Outcome {
-    let _lock = home::lock::take(home)?;
+    let _lock = layerfs_home::lock::home::take(home)?;
     if paths::store_record(home, name).exists() {
         return Err(refused("Exists", format!("a Store named {name} exists")));
     }
     let directory = paths::store_dir(home, name);
     if let Some(parent) = directory.parent() {
-        home::private_dir(parent)?;
+        disk::private_dir(parent)?;
     }
     let identity = new_identity()?;
     let file = paths::store_file(home, name);
@@ -131,7 +132,7 @@ fn on_machine(home: &Path, name: &str, machine: &str, executor: &mut Executor) -
     let op = Op::begin(intent::CREATE, "create", args)?.as_uncertain();
     let directory = paths::store_dir(home, name);
     let (record, made) = {
-        let _lock = home::lock::take(home)?;
+        let _lock = layerfs_home::lock::home::take(home)?;
         if paths::store_record(home, name).exists() {
             return Err(refused("Exists", format!("a Store named {name} exists")));
         }
@@ -180,7 +181,7 @@ fn on_machine(home: &Path, name: &str, machine: &str, executor: &mut Executor) -
 /// that create's operation: the Store's folder when this call made it,
 /// else only the record.
 fn forget(home: &Path, name: &str, op: &Op, made: bool) {
-    let Ok(_lock) = home::lock::take(home) else {
+    let Ok(_lock) = layerfs_home::lock::home::take(home) else {
         return;
     };
     let Ok(_store) = store::lock(home, name) else {
@@ -198,5 +199,5 @@ fn forget(home: &Path, name: &str, op: &Op, made: bool) {
         true => std::fs::remove_dir_all(paths::store_dir(home, name)),
         false => std::fs::remove_file(paths::store_record(home, name)),
     };
-    home::generation::moved(home);
+    layerfs_home::record::generation::moved(home);
 }

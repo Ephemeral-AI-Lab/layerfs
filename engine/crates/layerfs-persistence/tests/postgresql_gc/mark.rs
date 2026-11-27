@@ -247,10 +247,10 @@ fn save_tree_with(
     files: u32,
     pages: u32,
 ) -> (ObjectId, Vec<ObjectId>) {
-    use layerfs_content::filesystem::attributes::PortableMetadata;
-    use layerfs_content::filesystem::directory::{encode_directory_page, DirectoryPage};
-    use layerfs_content::filesystem::inode::{encode_inode_page, InodePage};
     use layerfs_content::filesystem::root::profile_id;
+    use layerfs_content::filesystem::tree::attribute::PortableMetadata;
+    use layerfs_content::filesystem::tree::directory::{encode_directory_page, DirectoryPage};
+    use layerfs_content::filesystem::tree::inode::{encode_inode_page, InodePage};
     use layerfs_content::filesystem::{scope_for_seed, FilesystemRoot};
     use layerfs_content::inode_leaf::{InodeKind, InodeMetadata, InodeValue};
     use layerfs_content::{encode_whole_file_payload, FinalizedObject, ObjectRole};
@@ -273,14 +273,15 @@ fn save_tree_with(
         .collect();
     let wide: Vec<FinalizedObject> = (0..pages)
         .map(|page| {
-            let mut rows: Vec<(layerfs_content::filesystem::path::PathName, u64)> = (0..30u32)
+            let mut rows: Vec<(layerfs_content::filesystem::name::path::PathName, u64)> = (0
+                ..30u32)
                 .map(|index| {
                     let mut name = String::new();
                     for byte in bytes(seed.wrapping_mul(7919) + page * 31 + index, 100) {
                         name.push_str(&format!("{byte:02x}"));
                     }
                     (
-                        layerfs_content::filesystem::path::PathName::new(&name).unwrap(),
+                        layerfs_content::filesystem::name::path::PathName::new(&name).unwrap(),
                         u64::from(index) + 2,
                     )
                 })
@@ -820,10 +821,10 @@ fn save_table(
     changes: &[u64],
     version: u32,
 ) -> (ObjectId, ObjectId, u64) {
-    use layerfs_content::filesystem::attributes::PortableMetadata;
-    use layerfs_content::filesystem::directory::{encode_directory_page, DirectoryPage};
-    use layerfs_content::filesystem::inode::apply_inode_values;
     use layerfs_content::filesystem::root::profile_id;
+    use layerfs_content::filesystem::tree::attribute::PortableMetadata;
+    use layerfs_content::filesystem::tree::directory::{encode_directory_page, DirectoryPage};
+    use layerfs_content::filesystem::tree::inode::apply_inode_values;
     use layerfs_content::filesystem::{
         scope_for_seed, FilesystemObjects, FilesystemRoot, MAXIMUM_SCRATCH_BYTES,
     };

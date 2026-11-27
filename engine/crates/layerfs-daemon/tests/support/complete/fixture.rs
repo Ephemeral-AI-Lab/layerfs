@@ -1,6 +1,6 @@
 //! Kernel source creation and authenticated installation, retaining failures.
 use super::{bytes, support};
-use layerfs_content::filesystem::attributes::PortableMetadata;
+use layerfs_content::filesystem::tree::attribute::PortableMetadata;
 use layerfs_daemon::{
     bootstrap::{open_store_observed, OpenedStore},
     install::outcome::StoreSettings,

@@ -14,8 +14,8 @@
 //! layout: every listing and every read asks it, for the path and for each
 //! folder above it.
 use super::walk::{entry, refusal, CALL};
-use layerfs_home::home::paths;
-use layerfs_home::outcome::{refused, Outcome};
+use layerfs_home::disk::paths;
+use layerfs_home::reply::outcome::{refused, Outcome};
 use layerfs_protocol::sdk::SdkValue;
 use layerfs_sandbox::backend::confined::{Base, Kind, View};
 use layerfs_sandbox::deploy::Side;
@@ -151,8 +151,8 @@ pub(crate) fn recorded(directory: &Path) -> Outcome {
         .and_then(|name| name.to_str())
         .unwrap_or("");
     let mut sent = Vec::new();
-    for (_, record) in layerfs_sandbox::files::workspaces(directory)? {
-        let handle = layerfs_sandbox::list::handle(sandbox, &record);
+    for (_, record) in layerfs_sandbox::record::discovery::workspaces(directory)? {
+        let handle = layerfs_sandbox::status::list::handle(sandbox, &record);
         if let (Some(id), Some(path), Some(handle)) = (record.id(), record.path(), handle) {
             sent.push(SdkValue::map([
                 ("id", SdkValue::text(id)),
@@ -232,7 +232,7 @@ pub(crate) fn machine(side: &Side<'_>) -> Outcome {
         let mut root = entry(&folder.to_string_lossy(), 1, "folder", Some(&opened.stat));
         root.push(("role".to_owned(), SdkValue::text(role)));
         if role == "data" {
-            let free = layerfs_home::home::filesystem(&folder).ok();
+            let free = layerfs_home::disk::filesystem(&folder).ok();
             let free = free.and_then(|disk| i64::try_from(disk.free).ok());
             root.push((
                 "free_bytes".to_owned(),

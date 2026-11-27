@@ -3,7 +3,7 @@
 //! canonical walker reads a published root only to be compared against it.
 use layerfs_content::{
     filesystem::{
-        inode::codec::{decode_inode_page, InodePage},
+        tree::inode::codec::{decode_inode_page, InodePage},
         FilesystemRead, FilesystemRootId, PathName,
     },
     object::inode_leaf::InodeKind,

@@ -1,7 +1,7 @@
 //! A worker's root under layout 3 (#536 H10, §6): a Sandbox call writes the
 //! Store's thin record `{ v, name, kind }` only when it changed (#535 R5).
-use layerfs_home::home::{self, paths, read_record};
-use layerfs_machine::worker::{self, Endpoint};
+use layerfs_home::disk::{self, paths, read_record};
+use layerfs_machine::route::{self, Endpoint};
 use layerfs_protocol::sdk::SdkValue;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
@@ -23,7 +23,7 @@ fn worker(root: &Path) -> Endpoint {
     let guest = root.to_owned();
     std::thread::spawn(move || layerfs_api::worker::serve::serve(listener, "k".to_owned(), guest));
     for _ in 0..200 {
-        if worker::ping(&endpoint).is_ok() {
+        if route::ping(&endpoint).is_ok() {
             return endpoint;
         }
         std::thread::sleep(Duration::from_millis(10));
@@ -47,7 +47,7 @@ fn sandbox_call(endpoint: &Endpoint, store_record: SdkValue) {
         ("sandbox", SdkValue::text("one")),
     ]);
     // no daemon runs here: the call itself fails after the records
-    let _ = worker::call(endpoint, "sandbox.host", args, &mut |_| {});
+    let _ = route::call(endpoint, "sandbox.host", args, &mut |_| {});
 }
 
 fn modified(path: &Path) -> SystemTime {
@@ -60,7 +60,7 @@ fn the_store_record_is_thin_and_written_only_when_it_changed() {
     let root = scratch.join("data");
     let endpoint = worker(&root);
     // the caller's home id travels with each request
-    layerfs_home::home::open(&scratch.join("home")).unwrap();
+    layerfs_home::disk::open(&scratch.join("home")).unwrap();
     let sent = SdkValue::map([
         ("name", SdkValue::text("shop")),
         ("kind", SdkValue::text("sqlite")),
@@ -86,7 +86,7 @@ fn the_store_record_is_thin_and_written_only_when_it_changed() {
         .set_modified(old)
         .unwrap();
     sandbox_call(&endpoint, sent.clone());
-    let changed = home::with_field(sent, "profile", SdkValue::text("disposable"));
+    let changed = disk::with_field(sent, "profile", SdkValue::text("disposable"));
     sandbox_call(&endpoint, changed);
     assert_eq!(
         modified(&path),

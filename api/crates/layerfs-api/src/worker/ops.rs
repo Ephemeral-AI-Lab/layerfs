@@ -1,19 +1,19 @@
 //! The worker's operations: what each request's `op` runs on this machine,
 //! and which of them are read-only.
 use super::serve::Server;
-use layerfs_home::outcome::{refused, Outcome};
+use layerfs_home::reply::outcome::{refused, Outcome};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
-use layerfs_store::project::delete::{
+use layerfs_store::data::project::delete::worker::{
     admit_project, delete_project, release_project, remove_project_entry,
 };
-use layerfs_store::project::discovery::home_of;
-use layerfs_store::project::export::in_worker as export_in_worker;
-use layerfs_store::project::frame::{
+use layerfs_store::data::project::export::in_worker as export_in_worker;
+use layerfs_store::data::project::frame::{
     DeleteAdmitFrame, DeleteEntryFrame, DeleteFrame, DeleteReleaseFrame, ExportFrame, InitFrame,
     ListingFrame, StageFrame,
 };
-use layerfs_store::project::listing::list_projects;
-use layerfs_store::project::{init::in_worker, staged};
+use layerfs_store::data::project::init::{staged, worker::in_worker};
+use layerfs_store::data::project::record::discovery::home_of;
+use layerfs_store::data::project::status::listing::list_projects;
 use std::path::Path;
 
 /// The operations that change nothing on the machine. Only these answer
@@ -25,7 +25,7 @@ const READ_ONLY: [&str; 10] = [
     "worker.ping",
     layerfs_store::upgrade::FORMAT_OP,
     layerfs_inspect::NETWORK_OP,
-    layerfs_sandbox::inspect::route::OP,
+    layerfs_sandbox::route::inspect::OP,
     "machine.images",
     "store.reach",
     "doctor.sandbox",
@@ -60,7 +60,7 @@ fn about(server: &Server) -> SdkValue {
 /// whatever the caller sent.
 #[cfg(not(feature = "worker-fault"))]
 fn inspect(server: &Server, args: SdkValue) -> Outcome {
-    let args = layerfs_home::home::with_field(args, "worker", about(server));
+    let args = layerfs_home::disk::with_field(args, "worker", about(server));
     layerfs_inspect::in_worker(&server.root, args)
 }
 
@@ -69,7 +69,7 @@ fn inspect(server: &Server, args: SdkValue) -> Outcome {
 #[cfg(feature = "worker-fault")]
 fn inspect(server: &Server, args: SdkValue) -> Outcome {
     use layerfs_inspect::{admit, serve, Side};
-    let args = layerfs_home::home::with_field(args, "worker", about(server));
+    let args = layerfs_home::disk::with_field(args, "worker", about(server));
     let (root, faults) = (server.root.clone(), server.faults.clone());
     admit(move |budget| {
         faults.in_helper();
@@ -97,7 +97,7 @@ pub(super) fn run(
                 ("incarnation", SdkValue::text(&server.incarnation)),
             ];
             if args.get("capacity") == Some(&SdkValue::Bool(true)) {
-                let available = layerfs_home::home::filesystem_available(root)
+                let available = layerfs_home::disk::filesystem_available(root)
                     .ok()
                     .and_then(|bytes| i64::try_from(bytes).ok());
                 fields.push(("free_disk", available.map_or(SdkValue::Null, SdkValue::Int)));
@@ -109,12 +109,12 @@ pub(super) fn run(
                     .collect(),
             ))
         }
-        layerfs_sandbox::inspect::route::OP => inspect(server, args),
+        layerfs_sandbox::route::inspect::OP => inspect(server, args),
         // the Workspace records of named Sandboxes, read as files
         // (`workspace.list`, call surface 2.0)
         layerfs_workspace::list::OP => layerfs_workspace::list::in_worker(root, &args),
-        "machine.images" => layerfs_sandbox::images::in_worker(root, args),
-        "machine.prune" => layerfs_sandbox::images::prune_in_worker(root, args),
+        "machine.images" => layerfs_sandbox::image::list::in_worker(root, args),
+        "machine.prune" => layerfs_sandbox::image::prune::prune_in_worker(root, args),
         "doctor.sandbox" => layerfs_inspect::diagnose_worker_sandbox(root, args),
         // this machine's Sandbox network, for `machine.network`
         layerfs_inspect::NETWORK_OP => layerfs_inspect::inspect_network_in_worker(root),
@@ -125,23 +125,28 @@ pub(super) fn run(
         "store.reach" => layerfs_store::admin::with_users::reach_in_worker(&args),
         // one Store call, on the Store file under this worker's root (2.0)
         "store.call" => {
-            let call = layerfs_store::call::CallFrame::decode(&args)?;
+            let call = layerfs_store::admin::route::call::CallFrame::decode(&args)?;
             let store = call.store.as_str();
             layerfs_home::names::StoreName::parse(store)?;
-            let file = layerfs_home::home::paths::store_file(root, store);
+            let file = layerfs_home::disk::paths::store_file(root, store);
             // the worker holds the Store's lease under its root while it
             // keeps the Store open
-            let lease = layerfs_store::lease::hold_locked(root, store)?;
-            let open = layerfs_store::open_args::OpenArgs {
+            let lease = layerfs_store::admin::open::lease::hold_locked(root, store)?;
+            let open = layerfs_store::admin::open::args::OpenArgs {
                 home: Some(root.to_path_buf()),
                 store_path: Some(file.display().to_string()),
                 ..call.open()
             };
-            let place = layerfs_store_service::history::admission::decode_place_view(
+            let place = layerfs_store_service::history::gc_admission::decode_place_view(
                 call.fields.get("place_view"),
             );
-            layerfs_store_service::history::admission::with_place_view(place, || {
-                layerfs_store::open::run(&call.method, &open, call.fields, Some(lease))
+            layerfs_store_service::history::gc_admission::with_place_view(place, || {
+                layerfs_store::admin::open::cache::run(
+                    &call.method,
+                    &open,
+                    call.fields,
+                    Some(lease),
+                )
             })
         }
         // settles the intents a previous worker incarnation left in a Store
@@ -163,8 +168,8 @@ pub(super) fn run(
                 .get_text("incarnation")
                 .ok_or_else(|| refused("InvalidInput", "a Store reconcile names its incarnation"))?
                 .to_owned();
-            let file = layerfs_home::home::paths::store_file(root, &store);
-            let open = layerfs_store::open_args::OpenArgs {
+            let file = layerfs_home::disk::paths::store_file(root, &store);
+            let open = layerfs_store::admin::open::args::OpenArgs {
                 home: Some(root.to_path_buf()),
                 store: Some(store),
                 project: None,
@@ -172,37 +177,38 @@ pub(super) fn run(
                 store_record: args.get("store_record").cloned(),
                 postgresql: None,
             };
-            let place = layerfs_store_service::history::admission::decode_place_view(
+            let place = layerfs_store_service::history::gc_admission::decode_place_view(
                 args.get("place_view"),
             );
-            layerfs_store_service::history::admission::with_place_view(place, || {
-                layerfs_store::service::with_service(&open, |service| {
-                    layerfs_store_service::history::admission::reconcile_machine(
+            layerfs_store_service::history::gc_admission::with_place_view(place, || {
+                layerfs_store::admin::open::service::with_service(&open, |service| {
+                    layerfs_store_service::history::gc_admission::reconcile_machine(
                         service.store.history(),
                         &machine,
                         &incarnation,
                     )
                     .map(|reconcile| {
-                        layerfs_store_service::history::admission::reconcile_value(&reconcile)
+                        layerfs_store_service::history::gc_admission::reconcile_value(&reconcile)
                     })
-                    .map_err(layerfs_store_service::history::lookup::history)
+                    .map_err(layerfs_store_service::lookup::history)
                 })
             })
         }
         // the operator's repair of one Branch's mount holders on the Store
         // under this worker's root: `{ store, store_record, place_view?,
-        // <layerfs_store::repair::Repair fields> }`. `list`, `preview` and
+        // <layerfs_store::admin::maintenance::repair_mount_holders::Repair fields> }`. `list`, `preview` and
         // `settle` judge each holder with the caller's place view, installed
-        // here as a Store call's is; the rest is `layerfs_store::repair`.
+        // here as a Store call's is; the rest is `layerfs_store::admin::maintenance::repair_mount_holders`.
         "store.repair" => {
             let store = args
                 .get_text("store")
                 .ok_or_else(|| refused("InvalidInput", "a Store repair names its Store"))?
                 .to_owned();
             layerfs_home::names::StoreName::parse(&store)?;
-            let request = layerfs_store::repair::Repair::read(&args)?;
-            let file = layerfs_home::home::paths::store_file(root, &store);
-            let open = layerfs_store::open_args::OpenArgs {
+            let request =
+                layerfs_store::admin::maintenance::repair_mount_holders::Repair::read(&args)?;
+            let file = layerfs_home::disk::paths::store_file(root, &store);
+            let open = layerfs_store::admin::open::args::OpenArgs {
                 home: Some(root.to_path_buf()),
                 store: Some(store),
                 project: None,
@@ -210,21 +216,21 @@ pub(super) fn run(
                 store_record: args.get("store_record").cloned(),
                 postgresql: None,
             };
-            let place = layerfs_store_service::history::admission::decode_place_view(
+            let place = layerfs_store_service::history::gc_admission::decode_place_view(
                 args.get("place_view"),
             );
-            layerfs_store_service::history::admission::with_place_view(place, || {
-                layerfs_store::repair::repair_at(&open, &request)
+            layerfs_store_service::history::gc_admission::with_place_view(place, || {
+                layerfs_store::admin::maintenance::repair_mount_holders::repair_at(&open, &request)
             })
         }
         // one step of a Store move, remove or create, or a live read's, on
         // this machine
         "store.file" => {
-            let frame = layerfs_store::sqlite::transfer::step::StepFrame::decode(&args)?;
+            let frame = layerfs_store::backend::sqlite::step_request::StepFrame::decode(&args)?;
             // a hashing step (snapshot, verify) reports its bytes as events
             // the caller passes on (#536 §10b); once one cannot be written
             // the step still ends, and nothing more is written (#177)
-            layerfs_store::sqlite::transfer::steps::run_observed(
+            layerfs_store::backend::sqlite::step_run::run_observed(
                 root,
                 &frame,
                 &mut |done, total| {
@@ -241,7 +247,9 @@ pub(super) fn run(
         }
         // compacts a sqlite Store on this machine (spec S6, #42 D5):
         // `{ store, store_record }`; its phases go out as events
-        layerfs_store::compact::WORKER_OP => layerfs_store::compact::in_worker(root, &args, events),
+        layerfs_store::admin::maintenance::compact::WORKER_OP => {
+            layerfs_store::admin::maintenance::compact::in_worker(root, &args, events)
+        }
         // upgrades a sqlite Store on this machine in place (#804):
         // `{ store, store_record, op }`; its phases go out as events, and
         // `store.cancel { op }`, on another connection, stops it before
@@ -252,12 +260,12 @@ pub(super) fn run(
         layerfs_store::upgrade::FORMAT_OP => layerfs_store::upgrade::format_in_worker(root, &args),
         // a Sandbox image copied to this machine (`sandbox.create --image`,
         // `machine.load_image`), one step at a time
-        "image.artifact" => layerfs_sandbox::image_artifact::in_worker(root, &args),
+        "image.artifact" => layerfs_sandbox::image::cache::in_worker(root, &args),
         // a Sandbox or Workspace operation on this machine's own kernel (its guest root, namespaces backend);
         // an event that cannot be written does not end it (#177)
-        "sandbox.host" => layerfs_sandbox::route::in_worker(
+        "sandbox.host" => layerfs_sandbox::route::machine::send::in_worker(
             root,
-            layerfs_sandbox::host::decode(&args)?,
+            layerfs_sandbox::route::machine::decode(&args)?,
             &mut |event| {
                 let _ = events(event);
             },
@@ -268,10 +276,10 @@ pub(super) fn run(
         // deleted_ms?, project?, op_id?, pending_retry?, store_record? }`
         "project.delete" => {
             let root = home_of(Some(root))?;
-            let place = layerfs_store_service::history::admission::decode_place_view(
+            let place = layerfs_store_service::history::gc_admission::decode_place_view(
                 args.get("place_view"),
             );
-            layerfs_store_service::history::admission::with_place_view(place, || {
+            layerfs_store_service::history::gc_admission::with_place_view(place, || {
                 delete_project(&root, &DeleteFrame::decode(&args)?)
             })
         }
@@ -279,10 +287,10 @@ pub(super) fn run(
         // and marker (2.0, T4.6): `{ store, stack_id, op_id, store_record? }`
         "project.delete.admit" => {
             let root = home_of(Some(root))?;
-            let place = layerfs_store_service::history::admission::decode_place_view(
+            let place = layerfs_store_service::history::gc_admission::decode_place_view(
                 args.get("place_view"),
             );
-            layerfs_store_service::history::admission::with_place_view(place, || {
+            layerfs_store_service::history::gc_admission::with_place_view(place, || {
                 admit_project(&root, &DeleteAdmitFrame::decode(&args)?)
             })
         }
@@ -290,10 +298,10 @@ pub(super) fn run(
         // (2.0, T4.6): `{ store, op_id, store_record? }`
         "project.delete.release" => {
             let root = home_of(Some(root))?;
-            let place = layerfs_store_service::history::admission::decode_place_view(
+            let place = layerfs_store_service::history::gc_admission::decode_place_view(
                 args.get("place_view"),
             );
-            layerfs_store_service::history::admission::with_place_view(place, || {
+            layerfs_store_service::history::gc_admission::with_place_view(place, || {
                 release_project(&root, &DeleteReleaseFrame::decode(&args)?)
             })
         }

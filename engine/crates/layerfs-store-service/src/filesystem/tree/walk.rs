@@ -6,9 +6,11 @@ use crate::store::StorePorts;
 use layerfs_content::{
     compare::{memo::Memo, EntryFacts},
     filesystem::{
-        directory::read::{list_after, DirectoryReadWork},
-        path::PathName,
-        sorted::DirectoryRoot,
+        name::path::PathName,
+        tree::{
+            directory::read::{list_after, DirectoryReadWork},
+            pages::DirectoryRoot,
+        },
     },
     object::inode_leaf::{InodeKind, InodeValue},
     AuthenticatedObjects,

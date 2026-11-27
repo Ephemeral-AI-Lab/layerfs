@@ -14,8 +14,8 @@
 use crate::admin::maintenance::upgrade::FORMAT_OP;
 use crate::admin::record::store::{StoreRecord, StoreRef};
 use crate::admin::route::executor::{self, Executor};
-use layerfs_home::home::paths;
-use layerfs_home::outcome::shell_word;
+use layerfs_home::disk::paths;
+use layerfs_home::reply::outcome::shell_word;
 use layerfs_persistence::upgrade::{
     postgresql_format, sqlite_format, Format, FormatStatus, POSTGRESQL_LATEST, SQLITE_LATEST,
 };

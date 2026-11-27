@@ -8,8 +8,8 @@ use crate::data::project::record::project::ProjectRecord;
 use layerfs_history::{
     BranchId, HistoryCatalog, HistoryName, HistoryResult, LayerStackId, NamedSnapshot,
 };
-use layerfs_home::home::{self, paths};
-use layerfs_home::outcome::{failed, refused};
+use layerfs_home::disk::paths;
+use layerfs_home::reply::outcome::{failed, refused};
 use layerfs_protocol::provision::manifest::{StoreManifest, StoreProfile};
 use layerfs_protocol::sdk::hex;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
@@ -138,7 +138,7 @@ impl Records {
             if !self.names.contains(&old) {
                 std::fs::remove_dir_all(paths::project_dir(home, &self.store, &old))
                     .map_err(failed)?;
-                layerfs_home::home::generation::moved(home);
+                layerfs_home::record::generation::moved(home);
             }
         }
         Ok(SdkValue::List(
@@ -218,7 +218,7 @@ pub fn found_in(history: &dyn HistoryCatalog) -> HistoryResult<Vec<Found>> {
 /// `file` through a read-only diagnostic handle so the file's bytes and WAL
 /// stay untouched.
 pub fn projects_in_diagnostic(file: &Path, identity: &Identity) -> Result<(Vec<Found>, String)> {
-    layerfs_store_service::kernel_guard::check(file)
+    layerfs_store_service::store::kernel_guard::check(file)
         .map_err(|reason| refused("Unsupported", reason.0))?;
     let handles = layerfs_persistence::SqliteHandles::open_diagnostic(
         file,
@@ -311,7 +311,7 @@ fn complete_all(
         file: file.to_path_buf(),
         sqlite,
     };
-    let _lock = home::lock::take(home)?;
+    let _lock = layerfs_home::lock::home::take(home)?;
     let mut left = Vec::new();
     for name in incomplete {
         let existing = match ProjectRecord::read(home, store, name) {
@@ -353,7 +353,7 @@ pub fn repair_project(
         file: file.to_path_buf(),
         sqlite,
     };
-    let _lock = home::lock::take(home)?;
+    let _lock = layerfs_home::lock::home::take(home)?;
     let Some(existing) = ProjectRecord::read(home, store, project)?.filter(needs_repair) else {
         return Ok(None);
     };

@@ -5,12 +5,13 @@
 //! each one's daemon record under its own root and checks the process it
 //! names by id, start time and boot ([`super::process::live`]). No daemon
 //! is asked.
-use layerfs_home::home::paths;
+use layerfs_home::disk::paths;
 use layerfs_home::names::SandboxName;
-use layerfs_home::outcome::refused;
+use layerfs_home::reply::outcome::refused;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
-use layerfs_sandbox::inspect::{owner::Budget, process};
 use layerfs_sandbox::record::{DaemonRecord, SandboxRecord};
+use layerfs_sandbox::route::inspect::Budget;
+use layerfs_sandbox::status::stats as process;
 use std::path::Path;
 
 /// The most names one request holds in one list.

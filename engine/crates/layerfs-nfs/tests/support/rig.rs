@@ -204,9 +204,9 @@ impl Rig {
     /// Attach serves NFS (the native route's mount entry).
     pub fn service(
         &self,
-        export: Arc<layerfs_daemon::control::ExportServing>,
-    ) -> Arc<layerfs_daemon::control::Service> {
-        Arc::new(layerfs_daemon::control::Service::with_export(
+        export: Arc<layerfs_daemon::workspace::ExportServing>,
+    ) -> Arc<layerfs_daemon::workspace::Service> {
+        Arc::new(layerfs_daemon::workspace::Service::with_export(
             self.store.clone(),
             &self.owner,
             export,

@@ -8,12 +8,12 @@
 //! `cargo test -p layerfs-api --features worker-fault --test worker_fault`
 #![cfg(feature = "worker-fault")]
 use layerfs_api::worker::fault::{Faults, OpFault};
-use layerfs_home::home::paths;
+use layerfs_home::disk::paths;
 use layerfs_home::names::StoreName;
-use layerfs_machine::worker;
+use layerfs_machine::route;
 use layerfs_protocol::sdk::SdkValue;
-use layerfs_store::project::frame::ExportFrame;
-use layerfs_store::sqlite::transfer::step::{StepFrame, StoreStep};
+use layerfs_store::backend::sqlite::step_request::{StepFrame, StoreStep};
+use layerfs_store::data::project::frame::ExportFrame;
 use std::io::Read;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -67,7 +67,7 @@ fn after_a_panic_in_a_store_call_the_next_calls_work() {
 fn frames(mut stream: std::net::TcpStream) -> (usize, Option<SdkValue>) {
     let mut events = 0;
     loop {
-        match worker::read_frame(&mut stream) {
+        match route::read_frame(&mut stream) {
             Ok(Some(frame)) if frame.get("event").is_some() => events += 1,
             Ok(last) => return (events, last),
             Err(_) => return (events, None),
@@ -109,13 +109,16 @@ fn a_stalled_export_ends_and_gives_up_the_store() {
     assert!(started.elapsed() >= wait);
     // the lease went with it, and a push's first step on this machine runs
     assert!(!lease.exists(), "the lease outlived the export");
-    assert!(!layerfs_store::lease::held_here(&placed.root, "shop"));
+    assert!(!layerfs_store::admin::open::lease::held_here(
+        &placed.root,
+        "shop"
+    ));
     let snapshot = StepFrame {
         store: "shop".to_owned(),
         store_record: Some(worker_store::store_record(&placed.home)),
         step: StoreStep::Snapshot,
     };
-    let taken = worker::call(
+    let taken = route::call(
         &placed.endpoint,
         "store.file",
         snapshot.encode(),
@@ -144,7 +147,7 @@ fn a_lost_init_names_its_copy_and_its_delete_removes_it() {
     let folder = worker_store::folder(&placed.scratch, 4096);
     // the copy is staged, then the worker's Init dies before it answers
     faults.on("project.init", OpFault::Panic);
-    let before = layerfs_home::home::now_ms();
+    let before = layerfs_home::disk::now_ms();
     let lost = worker_store::init(&placed.home, "web", &folder)
         .0
         .unwrap_err();
@@ -178,7 +181,7 @@ fn a_lost_init_names_its_copy_and_its_delete_removes_it() {
     let mut sink = |_| {};
     let deleted = layerfs_store::data::project::with_users::delete(
         &placed.home,
-        &mut layerfs_home::events::Events::new(&mut sink),
+        &mut layerfs_home::reply::events::Events::new(&mut sink),
         &project,
         &layerfs_sandbox::users::STORE,
     )

@@ -13,8 +13,8 @@ use crate::lifecycle::registry::{SandboxState, SANDBOXES};
 use crate::record::DaemonRecord;
 use crate::route::daemon::refusal;
 use crate::route::machine::{Deploy, Host, Started};
-use layerfs_home::helpers::lock;
-use layerfs_home::outcome::{failed, refused, Outcome};
+use layerfs_home::lock::mutex::lock;
+use layerfs_home::reply::outcome::{failed, refused, Outcome};
 use layerfs_protocol::provision::daemon_setup::{DaemonLimits, DaemonSetup};
 use layerfs_protocol::provision::manifest::StoreManifest;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
@@ -123,16 +123,21 @@ pub fn labels(project: &str, store: Option<&str>, id: &str) -> Vec<(String, Stri
 /// project's installed Store file, or a PostgreSQL Store (#506), whose
 /// Sandbox binds no Store folder.
 pub enum OpenedStore {
-    File(Box<(layerfs_store::project::discovery::Project, StoreManifest)>),
+    File(
+        Box<(
+            layerfs_store::data::project::record::discovery::Project,
+            StoreManifest,
+        )>,
+    ),
     Postgres(Box<DaemonStore>),
 }
 
 /// The installed Store file of the project a call names.
 fn installed(host: &Host) -> Result<OpenedStore, SdkRefusal> {
     let name = &host.project;
-    let identity = layerfs_store::identity::identity(&host.open_args())?;
-    layerfs_store::identity::sqlite_only(&identity, "a Sandbox of a Store file")?;
-    let found = layerfs_store::project::discovery::project(
+    let identity = layerfs_store::admin::record::identity::identity(&host.open_args())?;
+    layerfs_store::admin::record::identity::sqlite_only(&identity, "a Sandbox of a Store file")?;
+    let found = layerfs_store::data::project::record::discovery::project(
         Some(&host.home),
         Some(&host.store),
         Some(&host.project),
@@ -163,13 +168,13 @@ fn installed(host: &Host) -> Result<OpenedStore, SdkRefusal> {
 /// kernel holds ([`restored::repair_project`]); `None` when there is no such
 /// file, the record needs no repair or the repair does not complete it.
 ///
-/// [`restored::repair_project`]: layerfs_store::backup::restored::repair_project
+/// [`restored::repair_project`]: layerfs_store::data::project::record::restored::repair_project
 fn repaired(
     host: &Host,
-    identity: layerfs_store::identity::Identity,
-) -> Option<layerfs_store::project::discovery::Project> {
+    identity: layerfs_store::admin::record::identity::Identity,
+) -> Option<layerfs_store::data::project::record::discovery::Project> {
     let file = host.open_args().store_path().ok().filter(|p| p.is_file())?;
-    let record = layerfs_store::backup::restored::repair_project(
+    let record = layerfs_store::data::project::record::restored::repair_project(
         &host.home,
         &host.store,
         &host.project,
@@ -177,7 +182,7 @@ fn repaired(
         &file,
     )
     .ok()??;
-    layerfs_store::project::discovery::project_of(
+    layerfs_store::data::project::record::discovery::project_of(
         Some(&host.home),
         Some(&host.store),
         Some(&host.project),
@@ -236,14 +241,14 @@ pub fn create(host: &Host, named: Option<&str>, place: Option<&(String, String)>
         .ok_or_else(|| refused("InvalidInput", "missing `deploy`"))?;
     let platform = crate::backend::select::platform(named, deploy)?;
     // a PostgreSQL Store's URL is the call's
-    let store = match layerfs_store::postgresql::open::sandbox_store(&host.open_args())? {
+    let store = match layerfs_store::backend::postgresql::open::sandbox_store(&host.open_args())? {
         Some(selected) => OpenedStore::Postgres(Box::new(selected)),
         None => installed(host)?,
     };
     let directory = crate::record::discovery::sandbox_dir(host)?;
-    layerfs_home::home::private_dir(&directory)?;
+    layerfs_home::disk::private_dir(&directory)?;
     let made = (|| {
-        let _guard = layerfs_store::project::discovery::guard(&directory)?;
+        let _guard = layerfs_store::data::project::record::discovery::guard(&directory)?;
         let recorded = crate::record::discovery::started(&directory)?;
         // a record of the retired docker backend is forgotten, as `sandbox
         // remove` forgets it, so its name is free again (D-8): nothing it
@@ -271,8 +276,9 @@ pub fn create(host: &Host, named: Option<&str>, place: Option<&(String, String)>
             // a worker's folder held only this call's turn; on `native` the
             // folder keeps the caller's record, which the caller removes
             if refusal.code == "Failed" || refusal.code == "InvalidInput" {
-                let _ =
-                    std::fs::remove_file(directory.join(layerfs_store::project::discovery::TURN));
+                let _ = std::fs::remove_file(
+                    directory.join(layerfs_store::data::project::record::discovery::TURN),
+                );
                 let _ = std::fs::remove_dir(&directory);
             }
             return Err(refusal);
@@ -347,7 +353,7 @@ pub fn close(host: &Host, force: bool, held: &[String], drain: &dyn WorkspaceDra
             let reclaimed = reclaim(host, &container, gone.detail.get_bool("containerStopped"))?;
             return Err(match reclaimed.get("left") {
                 Some(left @ SdkValue::List(items)) if !items.is_empty() => SdkRefusal {
-                    detail: layerfs_home::home::with_field(gone.detail, "left", left.clone()),
+                    detail: layerfs_home::disk::with_field(gone.detail, "left", left.clone()),
                     ..gone
                 },
                 _ => gone,
@@ -355,7 +361,7 @@ pub fn close(host: &Host, force: bool, held: &[String], drain: &dyn WorkspaceDra
         }
         Err(refusal) => return Err(refusal),
     };
-    let _guard = layerfs_store::project::discovery::guard(&state.directory)?;
+    let _guard = layerfs_store::data::project::record::discovery::guard(&state.directory)?;
     // its running commands (D-10): `Busy`, or with `force` cancelled first
     let unreached = &mut crate::exec::settle::unreached;
     crate::exec::settle::settle(&state.directory, &id, None, force, unreached)?;
@@ -451,7 +457,7 @@ pub fn close(host: &Host, force: bool, held: &[String], drain: &dyn WorkspaceDra
     let left = left.into_iter().chain(unretired).collect();
     lock(&SANDBOXES)?.remove(&directory);
     std::fs::remove_dir_all(&directory).map_err(failed)?;
-    layerfs_home::home::generation::moved_above(&directory);
+    layerfs_home::record::generation::moved_above(&directory);
     let mut answer = vec![
         ("kind", SdkValue::text("Closed")),
         ("sandbox", SdkValue::text(&id)),
@@ -515,10 +521,10 @@ fn bound_mounts(
 /// its folder goes and the answer names its container, which is left for
 /// the user to remove (`docker rm -f`); nothing else is touched.
 fn forget(id: &str, directory: &Path, recorded: &DaemonRecord) -> Outcome {
-    let _guard = layerfs_store::project::discovery::guard(directory)?;
+    let _guard = layerfs_store::data::project::record::discovery::guard(directory)?;
     let container = discard(directory, recorded)?;
     std::fs::remove_dir_all(directory).map_err(failed)?;
-    layerfs_home::home::generation::moved_above(directory);
+    layerfs_home::record::generation::moved_above(directory);
     Ok(SdkValue::map([
         ("kind", SdkValue::text("Forgotten")),
         ("sandbox", SdkValue::text(id)),
@@ -537,10 +543,10 @@ fn forget(id: &str, directory: &Path, recorded: &DaemonRecord) -> Outcome {
 /// remain: its daemon or init process and its run folder. No retired
 /// tombstone is written: that process may still run.
 fn forget_unread(id: &str, directory: &Path, recorded: &DaemonRecord, why: &str) -> Outcome {
-    let _guard = layerfs_store::project::discovery::guard(directory)?;
+    let _guard = layerfs_store::data::project::record::discovery::guard(directory)?;
     discard(directory, recorded)?;
     std::fs::remove_dir_all(directory).map_err(failed)?;
-    layerfs_home::home::generation::moved_above(directory);
+    layerfs_home::record::generation::moved_above(directory);
     let left = vec![SdkValue::text(unread_left(recorded, why))];
     Ok(SdkValue::map([
         ("kind", SdkValue::text("Forgotten")),
@@ -560,7 +566,7 @@ pub fn unread_left(recorded: &DaemonRecord, why: &str) -> String {
         Some(folder) => format!(
             "{said}, and its run folder {folder} stays: `rm -rf {}` removes it once nothing \
              runs in it",
-            layerfs_home::outcome::shell_word(folder)
+            layerfs_home::reply::outcome::shell_word(folder)
         ),
         None => said,
     }
@@ -573,7 +579,7 @@ fn discard(directory: &Path, recorded: &DaemonRecord) -> Result<String, SdkRefus
     lock(&SANDBOXES)?.remove(directory);
     for entry in std::fs::read_dir(directory).map_err(failed)? {
         let entry = entry.map_err(failed)?;
-        if entry.file_name() == layerfs_store::project::discovery::TURN {
+        if entry.file_name() == layerfs_store::data::project::record::discovery::TURN {
             continue;
         }
         let path = entry.path();
@@ -599,14 +605,14 @@ const STOP_S: u16 = 5;
 pub fn reclaim(host: &Host, container: &str, stopped: bool) -> Outcome {
     let id = host.sandbox()?;
     let directory = crate::record::discovery::sandbox_dir(host)?;
-    let _guard = layerfs_store::project::discovery::guard(&directory)?;
+    let _guard = layerfs_store::data::project::record::discovery::guard(&directory)?;
     let Some(value) = crate::record::discovery::started(&directory)? else {
         return Err(refused(
             "NoSuchSandbox",
             format!("no Sandbox {id} runs on this machine"),
         ));
     };
-    if layerfs_home::helpers::required(value.container(), "container")? != container {
+    if layerfs_home::reply::values::required(value.container(), "container")? != container {
         return Err(refused(
             "Busy",
             format!("Sandbox {id} was started again while it was reclaimed; nothing was removed"),
@@ -624,7 +630,7 @@ pub fn reclaim(host: &Host, container: &str, stopped: bool) -> Outcome {
     let unretired = retired(host, id);
     lock(&SANDBOXES)?.remove(&directory);
     std::fs::remove_dir_all(&directory).map_err(failed)?;
-    layerfs_home::home::generation::moved_above(&directory);
+    layerfs_home::record::generation::moved_above(&directory);
     Ok(SdkValue::map([
         ("kind", SdkValue::text("Reclaimed")),
         ("id", SdkValue::text(id)),

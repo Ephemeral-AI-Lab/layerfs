@@ -10,7 +10,7 @@ use crate::dispatch::{Form, Part, Section};
 #[cfg(feature = "machine")]
 use layerfs_home::names::MachineName;
 #[cfg(feature = "machine")]
-use layerfs_home::outcome::Outcome;
+use layerfs_home::reply::outcome::Outcome;
 #[cfg(feature = "machine")]
 use layerfs_protocol::sdk::SdkValue;
 
@@ -71,11 +71,11 @@ pub(crate) const CALL: Call = call(
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let machine = MachineName::parse(args.get_text("machine").unwrap_or(""))?;
     let docker = context.with("docker");
-    let answer = layerfs_sandbox::images::list(&context.home, &machine, docker)?;
+    let answer = layerfs_sandbox::image::list::list(&context.home, &machine, docker)?;
     Ok(shown(&answer, docker))
 }
 
-/// The answer of `layerfs_sandbox::images::list` as the row names it: one
+/// The answer of `layerfs_sandbox::image::list::list` as the row names it: one
 /// item per image, its state and companion from the listing.
 #[cfg(feature = "machine")]
 fn shown(answer: &SdkValue, docker: bool) -> SdkValue {

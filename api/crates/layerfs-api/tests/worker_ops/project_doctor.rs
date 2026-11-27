@@ -2,14 +2,15 @@
 //! machine: the Store's list is read in that machine's worker, and the data
 //! walk runs there too (`store.diagnose` with `cut: project`), its `data`
 //! progress events passed back. The caller's home holds no Store file.
-use layerfs_home::events::Events;
-use layerfs_home::home::{self, paths};
+use layerfs_home::disk;
+use layerfs_home::disk::paths;
 use layerfs_home::names::StoreName;
+use layerfs_home::reply::events::Events;
 use layerfs_inspect::{self, Kind, Options, Thing};
-use layerfs_machine::worker::{self, Endpoint};
+use layerfs_machine::route::{self, Endpoint};
 use layerfs_protocol::sdk::SdkValue;
-use layerfs_store::project::add::{add_project, ProjectAdd};
-use layerfs_store::sqlite::create::create;
+use layerfs_store::backend::sqlite::create::create;
+use layerfs_store::data::project::init::sqlite::{add_project, ProjectAdd};
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -24,7 +25,7 @@ fn tempdir(tag: &str, layout: bool) -> PathBuf {
     ));
     let _ = std::fs::remove_dir_all(&directory);
     match layout {
-        true => drop(home::layout::create(&directory).unwrap()),
+        true => drop(disk::layout::create(&directory).unwrap()),
         false => std::fs::create_dir_all(&directory).unwrap(),
     }
     directory
@@ -38,7 +39,7 @@ fn text(value: &str) -> SdkValue {
 fn move_store_file(from: &Path, to: &Path, store: &str) {
     let source = paths::store_dir(from, store);
     let target = paths::store_dir(to, store);
-    home::private_dir(&target).unwrap();
+    disk::private_dir(&target).unwrap();
     for entry in std::fs::read_dir(&source).unwrap() {
         let entry = entry.unwrap();
         let name = entry.file_name().to_string_lossy().into_owned();
@@ -58,7 +59,7 @@ fn serve(root: &Path) -> Endpoint {
     let served = root.to_path_buf();
     std::thread::spawn(move || layerfs_api::worker::serve::serve(listener, "k".to_owned(), served));
     for _ in 0..200 {
-        if worker::ping(&endpoint).is_ok() {
+        if route::ping(&endpoint).is_ok() {
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(10));
@@ -91,19 +92,19 @@ fn the_data_walk_of_a_store_on_another_machine_runs_in_its_worker() {
         store_record: None,
     })
     .unwrap();
-    layerfs_store::open::close_idle(std::time::Duration::ZERO);
+    layerfs_store::admin::open::close::close_idle(std::time::Duration::ZERO);
 
     // the Store belongs to machine `box`; its file is under the worker's root
     let root = tempdir("root", true);
     move_store_file(&home, &root, "shop");
     let record_path = paths::store_record(&home, "shop");
-    let record = home::read_record(&record_path).unwrap().unwrap();
-    home::write_record(
+    let record = disk::read_record(&record_path).unwrap().unwrap();
+    disk::write_record(
         &record_path,
-        &home::with_field(record, "machine", text("box")),
+        &disk::with_field(record, "machine", text("box")),
     )
     .unwrap();
-    home::write_record(
+    disk::write_record(
         &paths::machine_record(&home, "box"),
         &SdkValue::map([
             ("name", text("box")),
@@ -114,7 +115,7 @@ fn the_data_walk_of_a_store_on_another_machine_runs_in_its_worker() {
     )
     .unwrap();
     let endpoint = serve(&root);
-    home::write_record(
+    disk::write_record(
         &paths::worker_record(&home, "box"),
         &SdkValue::map([
             ("address", text(&endpoint.address.to_string())),

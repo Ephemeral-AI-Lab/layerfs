@@ -480,15 +480,16 @@ fn settle(home: &Path) {
 /// carries a running `store.move` intent and its lock is held. The lock is
 /// released when the answer drops.
 fn pushing(home: &Path) -> impl Drop {
-    let op = layerfs_home::op::Op::begin("store.move", "check", SdkValue::Null).unwrap();
-    let record = layerfs_store::record::StoreRecord::read(home, "shop")
+    let op =
+        layerfs_home::record::intent::Op::begin("store.move", "check", SdkValue::Null).unwrap();
+    let record = layerfs_store::admin::record::store::StoreRecord::read(home, "shop")
         .unwrap()
         .unwrap();
     record
-        .with(layerfs_home::op::FIELD, op.to_record().clone())
+        .with(layerfs_home::record::intent::FIELD, op.to_record().clone())
         .write(home)
         .unwrap();
-    layerfs_store::record::lock(home, "shop").unwrap()
+    layerfs_store::admin::record::store::lock(home, "shop").unwrap()
 }
 
 /// `root` (a home or a worker's root) holds no trace of a lease or an open
@@ -503,7 +504,7 @@ fn untouched(root: &Path) {
     let file = paths::store_file(root, "shop");
     assert!(!file.exists(), "a Store file was made");
     assert!(
-        !layerfs_store::open::close(&file).unwrap(),
+        !layerfs_store::admin::open::close::close(&file).unwrap(),
         "the Store was open in this process"
     );
     assert!(
@@ -1026,7 +1027,7 @@ impl Drop for Client {
 fn command(exec_id: &str, started: i64, tag: Option<&str>, program: Option<&str>) -> SdkValue {
     map(&[
         ("exec", t(exec_id)),
-        ("started_at", t(&layerfs_home::time::iso(started))),
+        ("started_at", t(&layerfs_home::reply::time::iso(started))),
         ("program", SdkValue::opt_text(program.map(str::to_owned))),
         ("tag", SdkValue::opt_text(tag.map(str::to_owned))),
     ])
@@ -1041,7 +1042,7 @@ fn execs(ids: &[&str]) -> SdkValue {
 fn a_get_lists_the_commands_another_client_runs_in_each_workspace() {
     let _turn = inspect_turn();
     use layerfs_sandbox::exec::id::ExecId;
-    use layerfs_sandbox::exec::record::{file, ExecRecord, Route};
+    use layerfs_sandbox::record::exec::{file, ExecRecord, Route};
     for side in SIDES {
         let items: Vec<SdkValue> = (1..=4).map(item).collect();
         let (scratch, home, root) = on_side(side, "running", &items);
@@ -1070,7 +1071,7 @@ fn a_get_lists_the_commands_another_client_runs_in_each_workspace() {
             let fields = (fields.into_iter())
                 .filter(|(name, _)| !(old && matches!(name.as_str(), "tag" | "program")));
             let path = file(&folder, &workspace, id);
-            layerfs_home::home::write_entity(&path, &SdkValue::Map(fields.collect())).unwrap();
+            layerfs_home::disk::write_entity(&path, &SdkValue::Map(fields.collect())).unwrap();
             path
         };
         let tagged = record(2, "e-tagged", 2_000, other.owner(), false);
@@ -1267,7 +1268,7 @@ fn a_forwarded_get_sizes_its_overlays_in_its_machine_or_leaves_them_null() {
 /// Whether ISO time `at` (`started_at`) is within the last day.
 fn recent(at: &str) -> bool {
     let now = home::now_ms();
-    let iso = layerfs_home::time::iso;
+    let iso = layerfs_home::reply::time::iso;
     at > iso(now - 86_400_000).as_str() && at <= iso(now + 2_000).as_str()
 }
 

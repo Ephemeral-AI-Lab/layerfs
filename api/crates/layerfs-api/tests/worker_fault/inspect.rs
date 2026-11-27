@@ -14,9 +14,9 @@
 use layerfs_api::worker::fault::{Faults, OpFault, INSPECT_HELPER};
 use layerfs_home::names::MachineName;
 use layerfs_inspect::{Window, HARD};
-use layerfs_machine::worker;
+use layerfs_machine::route;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
-use layerfs_store::place;
+use layerfs_store::admin::route::executor;
 use std::path::Path;
 use std::sync::{mpsc, Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
@@ -79,7 +79,7 @@ fn two_stuck_reads_hold_two_helpers_and_nothing_else() {
 
     // two reads stuck in the worker for 8 s, each on its helper thread
     let stuck = Duration::from_secs(8);
-    assert!(stuck > HARD && place::READ.answer > HARD);
+    assert!(stuck > HARD && executor::READ.answer > HARD);
     faults.on(INSPECT_HELPER, OpFault::Hang(stuck));
     faults.on(INSPECT_HELPER, OpFault::Hang(stuck));
     let (done, answers) = mpsc::channel();
@@ -109,7 +109,7 @@ fn two_stuck_reads_hold_two_helpers_and_nothing_else() {
     assert_eq!(during.get_text("store"), before.get_text("store"));
     let sandbox = worker_store::sandbox_call(&placed.endpoint).unwrap_err();
     assert_eq!(sandbox.code, "NoSuchSandbox", "{sandbox:?}");
-    worker::ping(&placed.endpoint).unwrap();
+    route::ping(&placed.endpoint).unwrap();
     assert!(
         asked.elapsed() < Duration::from_secs(2),
         "{:?}",
@@ -201,7 +201,7 @@ fn a_worker_that_never_answers_is_unavailable_at_the_caller_s_budget() {
     let _turn = serial();
     let (placed, faults) = with("inspect-silent");
     let home = placed.home.clone();
-    let budget = place::READ.answer;
+    let budget = executor::READ.answer;
     assert_eq!(budget, Duration::from_secs(8));
     // held on the connection's thread, before admission: no answer comes
     faults.on(

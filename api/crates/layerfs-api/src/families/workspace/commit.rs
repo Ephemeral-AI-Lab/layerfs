@@ -3,9 +3,9 @@ use crate::dispatch::guard::scope::Rule;
 use crate::dispatch::table::Kind::{Bool, Name, Text};
 use crate::dispatch::table::{a, call, opt, Call, MESSAGE};
 use crate::dispatch::{Context, Form, Policy};
-use layerfs_home::outcome::Outcome;
+use layerfs_home::reply::outcome::Outcome;
 use layerfs_protocol::sdk::SdkValue;
-use layerfs_sandbox::host::Message;
+use layerfs_sandbox::route::machine::Message;
 use layerfs_workspace::answers::committed;
 use layerfs_workspace::route::send::{commit, CommitRequest};
 

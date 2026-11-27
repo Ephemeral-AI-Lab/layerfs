@@ -4,9 +4,9 @@ use crate::dispatch::guard::scope::Rule;
 use crate::dispatch::table::Kind::{Bool, Int, Name, Project, Text};
 use crate::dispatch::table::{a, call, opt, Call};
 use crate::dispatch::{Context, Form, Paging, Part};
-use layerfs_home::outcome::Outcome;
+use layerfs_home::reply::outcome::Outcome;
 use layerfs_protocol::sdk::SdkValue;
-use layerfs_store::calls::file::{grep, FileGrep};
+use layerfs_store::data::file::{grep, FileGrep};
 
 /// One matching line.
 const ROW: Form = Form::of(

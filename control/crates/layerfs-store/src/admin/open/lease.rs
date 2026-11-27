@@ -14,9 +14,10 @@
 //! reads (`store.get`, `store.list`, the doctors) ignore it and
 //! change nothing.
 use crate::admin::record::store::StoreRecord;
-use layerfs_home::home::{self, paths};
-use layerfs_home::outcome::{failed, refused};
-use layerfs_home::process::{alive_as, me};
+use layerfs_home::disk;
+use layerfs_home::disk::paths;
+use layerfs_home::record::process::{alive_as, me};
+use layerfs_home::reply::outcome::{failed, refused};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -106,8 +107,8 @@ fn hold_role_locked(root: &Path, store: &str, role: Option<&str>) -> Result<Leas
     let mut held = HELD.lock().unwrap_or_else(|e| e.into_inner());
     let count = held.entry(path.clone()).or_insert(0);
     if *count == 0 {
-        home::private_dir(&dir)?;
-        let mut text = home::now_ms().to_string();
+        disk::private_dir(&dir)?;
+        let mut text = disk::now_ms().to_string();
         if let Some((start, boot)) = me() {
             text.push_str(&format!(" {start} {boot:032x}"));
         }
@@ -296,11 +297,11 @@ pub fn holders_except(
         if !remove_file(&lease.path)? {
             continue;
         }
-        home::log_line(
+        disk::log_line(
             home,
             "leases.jsonl",
             &SdkValue::map([
-                ("at", SdkValue::Int(home::now_ms())),
+                ("at", SdkValue::Int(disk::now_ms())),
                 ("store", SdkValue::text(store)),
                 (
                     "removed_stale_lease_of",

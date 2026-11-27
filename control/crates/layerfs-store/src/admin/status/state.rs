@@ -14,9 +14,9 @@
 //! not be made answers it (`live`).
 use crate::admin::record::intent;
 use crate::admin::record::store::{StoreRecord, StoreRef};
-use layerfs_home::op::Standing;
-use layerfs_home::outcome::shell_word;
-use layerfs_home::state::{Reason, State};
+use layerfs_home::record::intent::Standing;
+use layerfs_home::reply::outcome::shell_word;
+use layerfs_home::reply::state::{Reason, State};
 use layerfs_protocol::sdk::SdkRefusal;
 use std::path::Path;
 
@@ -32,7 +32,7 @@ pub const SEEN: &str = "broken";
 /// **The seam with the machine family.** A Store on a machine is `blocked`
 /// by what that machine's state says. The one derivation of it is the
 /// inventory's `machine_state` in the control crate (over
-/// `layerfs_machine::state`, adding the removed-platform check), which
+/// `layerfs_machine::status::state`, adding the removed-platform check), which
 /// this crate sits below; so every function here that needs a machine's
 /// state takes this, and the calls pass the control crate's
 /// `store::machine_state`.

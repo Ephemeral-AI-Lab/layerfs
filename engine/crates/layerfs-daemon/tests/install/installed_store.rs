@@ -8,9 +8,8 @@ use layerfs_history::{BranchId, WorkspaceId};
 use layerfs_overlay::ProfileConfig;
 use layerfs_storage::StorageError;
 use layerfs_store_service::{
-    bootstrap::open_store,
     store::{
-        BindError, BindIntent, BindPhase, BindRequest, BoundWorkspace, PortError,
+        open::open_store, BindError, BindIntent, BindPhase, BindRequest, BoundWorkspace, PortError,
         ReadAdmissionError, Store,
     },
     Owner, OwnerConfig,

@@ -8,7 +8,7 @@
 //! set is not made.
 use super::super::doctor::budget::{Budget, Checks};
 use super::findings::Findings;
-use layerfs_home::home::{detect, Layout};
+use layerfs_home::disk::{detect, Layout};
 use layerfs_protocol::sdk::SdkValue;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
@@ -87,7 +87,7 @@ fn layout(
                 LAYOUT,
                 "not a LayerFS 2.0 home: this build writes nothing in it; move it aside and make a new home",
             );
-            checks.fix(LAYOUT, layerfs_home::home::layout::foreign_fix(home));
+            checks.fix(LAYOUT, layerfs_home::disk::layout::foreign_fix(home));
             checks.evidence(
                 LAYOUT,
                 SdkValue::map([

@@ -23,7 +23,7 @@
 //! split a two-round run too long for one process.
 use crate::installed;
 
-use layerfs_content::filesystem::attributes::PortableMetadata;
+use layerfs_content::filesystem::tree::attribute::PortableMetadata;
 use layerfs_content::filesystem::PathName;
 use layerfs_content::object::inode_leaf::InodeKind;
 use layerfs_history::{CommitVia, WorkspaceId};

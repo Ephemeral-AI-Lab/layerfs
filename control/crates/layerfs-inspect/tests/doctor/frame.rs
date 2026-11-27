@@ -3,9 +3,9 @@
 //! it without calling it, one progress event per finished thing, counts
 //! and status), the one report's long form, and every kind's check ids
 //! against calls.json `doctor.checks` through `doctor_checks_pending.json`.
-use layerfs_home::events::Events;
 use layerfs_home::json;
-use layerfs_home::state::{BlockedBy, State};
+use layerfs_home::reply::events::Events;
+use layerfs_home::reply::state::{BlockedBy, State};
 use layerfs_inspect::doctor::budget::Checks;
 use layerfs_inspect::doctor::report::{Coverage, Verdict};
 use layerfs_inspect::{

@@ -2,15 +2,11 @@
 //! start and drain, and the holders a stop reports, which the Sandbox crate
 //! reads ([`crate::MachineUsers::host_holders`]).
 use crate::{record::machine::MachineRecord, route::HostPaths};
-use layerfs_home::{
-    disk::with_field,
-    lock::home,
-    names::MachineName,
-    reply::{
-        events::Events,
-        outcome::{refused, Outcome},
-    },
-};
+use layerfs_home::disk::with_field;
+use layerfs_home::lock::home;
+use layerfs_home::names::MachineName;
+use layerfs_home::reply::events::Events;
+use layerfs_home::reply::outcome::{refused, Outcome};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 
 use std::path::Path;

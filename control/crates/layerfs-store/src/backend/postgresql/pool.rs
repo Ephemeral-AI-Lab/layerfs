@@ -44,7 +44,7 @@
 //! both kinds, idle, lent and reserved. An idle session of the other kind
 //! or of another Store is closed to make room. Every slot is given back by
 //! a guard, a panicking call included. The open-Store reaper closes
-//! sessions unused for [`crate::open::IDLE`]; a drain closes them. A Store
+//! sessions unused for [`crate::admin::open::cache::IDLE`]; a drain closes them. A Store
 //! with no session left forgets its identity, and the dialled address,
 //! which holds the password, is overwritten before it is freed ([`wipe`]).
 //! While a Store has sessions the address stays here, and each open session
@@ -52,8 +52,8 @@
 //! factory keeps one copy for the readers it opens).
 use crate::admin::open::args::OpenArgs;
 use crate::admin::record::store::{self, StoreRecord};
-use layerfs_home::outcome::{refused, Outcome};
-use layerfs_home::wipe::text as wipe;
+use layerfs_home::reply::outcome::{refused, Outcome};
+use layerfs_home::secret::wipe::text as wipe;
 use layerfs_protocol::sdk::SdkRefusal;
 use layerfs_store_service::StoreService;
 use std::cell::RefCell;
@@ -281,7 +281,7 @@ pub fn reserve_write(home: &Path, store: &str) -> Option<Reservation> {
 
 /// A slot of `kind` of Store `store` of `home`, if one is free now.
 pub fn reserve_kind(home: &Path, store: &str, kind: Kind) -> Option<Reservation> {
-    let key = layerfs_home::home::paths::store_dir(home, store);
+    let key = layerfs_home::disk::paths::store_dir(home, store);
     let mut all = pools();
     let (held, writes) = (all.held(), all.writes());
     let pool = all.stores.entry(key.clone()).or_default();
@@ -409,7 +409,7 @@ fn run_kind(
     (kind, open): (Kind, &OpenArgs),
     call: impl FnOnce(&StoreService) -> Outcome,
 ) -> Outcome {
-    let key = layerfs_home::home::paths::store_dir(home, store);
+    let key = layerfs_home::disk::paths::store_dir(home, store);
     let dial = (open.postgresql.as_ref())
         .and_then(|postgresql| postgresql.url.as_deref())
         .ok_or_else(|| refused("InvalidInput", "a held session needs its address"))?;
@@ -431,12 +431,12 @@ fn run_kind(
     })?;
     let mut lent = checkout(home, store, reservation, revision, dial, open)?;
     crate::admin::open::close::reaper();
-    layerfs_home::trace::step("store_open");
+    layerfs_home::log::trace::step("store_open");
     let outcome = match lent.service.as_ref().and_then(|held| held.service.as_ref()) {
         Some(service) => call(service),
         None => Err(refused("Failed", "a held session was not lent")),
     };
-    layerfs_home::trace::step("call");
+    layerfs_home::log::trace::step("call");
     lent.keep =
         !matches!(&outcome, Err(error) if matches!(error.code.as_str(), "Unknown" | "StaleStore"));
     drop(lent);
@@ -578,7 +578,7 @@ pub fn retire(home: &Path, store: &str, revision: &str) -> Result<usize, SdkRefu
     if current.as_ref().and_then(StoreRecord::login_revision) == Some(revision) {
         return Ok(0);
     }
-    let key = layerfs_home::home::paths::store_dir(home, store);
+    let key = layerfs_home::disk::paths::store_dir(home, store);
     let mut all = pools();
     let epoch = all.next_epoch();
     let closed = match all.stores.get_mut(&key) {

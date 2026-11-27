@@ -11,10 +11,11 @@ use crate::backup::bucket::record::{remote_error, BucketRecord};
 use crate::backup::bucket::{pieces, Driver, Metadata};
 use crate::backup::copy as remote;
 use crate::backup::copy::link::StoreLink;
-use layerfs_home::events::Events;
-use layerfs_home::home::flock::{try_lock, unlock};
-use layerfs_home::home::{self, paths};
-use layerfs_home::outcome::{failed, refused, Outcome};
+use layerfs_home::disk;
+use layerfs_home::disk::paths;
+use layerfs_home::lock::flock::{try_lock, unlock};
+use layerfs_home::reply::events::Events;
+use layerfs_home::reply::outcome::{failed, refused, Outcome};
 use layerfs_protocol::sdk::hex;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
@@ -77,7 +78,7 @@ pub fn create(home: &Path, events: &mut Events<'_>, request: &BackupCreate) -> O
     let machine = store_ref.machine()?.to_owned();
     let executor = executor::plan(&home, store_ref)?;
     let identity = crate::admin::record::identity::identity_in(&record)?;
-    let home_id = home::ensure(&home)?.id;
+    let home_id = disk::ensure(&home)?.id;
     let object = remote::store_object(&file).map_err(|why| refused("InvalidInput", why))?;
     let local_steps = matches!(executor, Executor::Local);
     let executor = std::cell::RefCell::new(executor);
@@ -195,7 +196,7 @@ pub fn create(home: &Path, events: &mut Events<'_>, request: &BackupCreate) -> O
 /// now. One attempt each: what was removed, and a removal that failed, is
 /// a line of the home's `log/sweep.jsonl`; nothing here fails the create.
 fn stale_staging(home: &Path, (store, machine): (&str, &str), local: &Path, step: &Step<'_>) {
-    let log = |path: &Path, outcome| home::log_swept(home, "backup_staging", path, &outcome);
+    let log = |path: &Path, outcome| disk::log_swept(home, "backup_staging", path, &outcome);
     let fetched = paths::store_dir(home, store).join("backup.staging");
     for path in [fetched.as_path(), local] {
         match std::fs::remove_file(path) {
@@ -227,9 +228,9 @@ pub(crate) fn stale_here(home: &Path, store: &str) {
     let dir = paths::store_dir(home, store);
     for path in [dir.join("backup.staging"), std::path::PathBuf::from(file)] {
         match std::fs::remove_file(&path) {
-            Ok(()) => home::log_swept(home, "backup_staging", &path, &Ok(None)),
+            Ok(()) => disk::log_swept(home, "backup_staging", &path, &Ok(None)),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(error) => home::log_swept(home, "backup_staging", &path, &Err(error.to_string())),
+            Err(error) => disk::log_swept(home, "backup_staging", &path, &Err(error.to_string())),
         }
     }
 }

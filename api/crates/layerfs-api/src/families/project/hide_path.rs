@@ -4,9 +4,9 @@
 use crate::dispatch::table::Kind::{Project, Text};
 use crate::dispatch::table::{a, call, Call};
 use crate::dispatch::{Context, Form};
-use layerfs_home::outcome::Outcome;
+use layerfs_home::reply::outcome::Outcome;
 use layerfs_protocol::sdk::SdkValue;
-use layerfs_store::calls::project::{hide_path, ProjectHidePath};
+use layerfs_store::data::project::hide_path::{hide_path, ProjectHidePath};
 
 /// `{ok:true}`, or `unchanged` for a path already hidden.
 const FORM: Form = Form::of(

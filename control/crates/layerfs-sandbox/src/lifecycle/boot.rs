@@ -22,8 +22,9 @@ use crate::route::machine::{Deploy, Host};
 use crate::{CommandIdentity, Runtime, Sandbox};
 use crate::{LaunchRequest, ProviderLaunchOptions};
 use crate::{ProviderCreate, SandboxApi};
-use layerfs_home::helpers::{lock, required};
-use layerfs_home::outcome::{failed, refused};
+use layerfs_home::lock::mutex::lock;
+use layerfs_home::reply::outcome::{failed, refused};
+use layerfs_home::reply::values::required;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_protocol::{DaemonStore, KernelRoute};
 use std::path::{Component, Path, PathBuf};
@@ -32,7 +33,7 @@ use std::sync::Arc;
 /// Starts the Sandbox the call names as a native (macOS) or namespaces
 /// (Linux) daemon. Linux refuses `native` and requires root before any
 /// effect. Called by
-/// [`crate::lifecycle::start`] under its folder's guard, with the
+/// [`crate::lifecycle::serve::start`] under its folder's guard, with the
 /// project's installed Store file or its PostgreSQL Store already read. A
 /// namespaces root binds a sqlite Store's file and nothing for a PostgreSQL
 /// Store, whose daemon dials the server (#535 §7.4). `platform` is the

@@ -16,9 +16,10 @@ use crate::backup::copy as remote;
 use crate::backup::copy::link::StoreLink;
 pub use crate::backup::jobs::create::{create, BackupCreate};
 pub use crate::backup::jobs::restore::{restore, BackupRestore};
-use layerfs_home::home::{self, paths};
+use layerfs_home::disk;
+use layerfs_home::disk::paths;
 use layerfs_home::names::BucketName;
-use layerfs_home::outcome::{failed, refused, shell_word, with_fix, Outcome};
+use layerfs_home::reply::outcome::{failed, refused, shell_word, with_fix, Outcome};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 
@@ -35,7 +36,7 @@ pub fn list(home: &Path, bucket: Option<&str>) -> Outcome {
 /// new name works too).
 fn connected(home: &Path, record: &BucketRecord) -> Result<Option<BucketRecord>> {
     let name = record.name();
-    let Some(value) = home::read_record(&paths::bucket_record(home, name))? else {
+    let Some(value) = disk::read_record(&paths::bucket_record(home, name))? else {
         return Ok(None);
     };
     let kept = BucketRecord::from_record(name, value);
@@ -87,7 +88,7 @@ pub fn connect(home: &Path, request: &BucketConnect) -> Outcome {
             ),
         ),
     })?;
-    let _lock = home::lock::take(home)?;
+    let _lock = layerfs_home::lock::home::take(home)?;
     if let Some(kept) = connected(home, &record)? {
         return rotate(home, &kept, request);
     }
@@ -132,7 +133,7 @@ fn rotate(home: &Path, kept: &BucketRecord, request: &BucketConnect) -> Outcome 
 pub fn disconnect(home: &Path, name: &BucketName) -> Outcome {
     let name = name.as_str();
     BucketRecord::of(home, name)?;
-    let _lock = home::lock::take(home)?;
+    let _lock = layerfs_home::lock::home::take(home)?;
     let mut unlinked = Vec::new();
     for store in paths::names(&home.join("store")).map_err(failed)? {
         let _store = crate::admin::record::store::lock(home, &store)?;
@@ -151,8 +152,8 @@ pub fn disconnect(home: &Path, name: &BucketName) -> Outcome {
     )
     .map_err(failed)?;
     secret::remove(home, name)?;
-    layerfs_home::home::generation::moved(home);
-    let (unlinked, count) = layerfs_home::helpers::shown_names(&unlinked);
+    layerfs_home::record::generation::moved(home);
+    let (unlinked, count) = layerfs_home::reply::values::shown_names(&unlinked);
     Ok(SdkValue::map([
         ("ok", SdkValue::Bool(true)),
         ("unlinked", unlinked),

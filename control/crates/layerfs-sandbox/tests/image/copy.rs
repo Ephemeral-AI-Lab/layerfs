@@ -4,7 +4,7 @@
 use crate::fixture;
 use crate::standin;
 use fixture::{Scratch, Tar};
-use layerfs_home::events::Events;
+use layerfs_home::reply::events::Events;
 use layerfs_protocol::sdk::SdkValue;
 use layerfs_sandbox::deploy::Side;
 use layerfs_sandbox::image::cache::{self as cache, architecture, Sidecar};
@@ -80,7 +80,7 @@ fn setup(name: &str) -> (Scratch, Standin, std::path::PathBuf) {
     fs::create_dir_all(&home).unwrap();
     // the home is opened, as every call opens it before a copy: a folder
     // holding a lock record and no `layerfs.json` is not a 2.0 home
-    layerfs_home::home::open(&home).unwrap();
+    layerfs_home::disk::open(&home).unwrap();
     standin.image(ID, &["demo/pg:17"], ("linux", architecture()), 4000);
     standin.export(&export());
     (scratch, standin, home)

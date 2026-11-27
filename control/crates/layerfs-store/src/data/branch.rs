@@ -4,11 +4,11 @@
 use crate::admin::open::args::OpenArgs;
 use crate::admin::open::service::{call, service, with_service, Route};
 use crate::admin::route::methods::{next_fields, on_project, Names, StoreOp};
-use layerfs_home::cursor;
-use layerfs_home::events::Events;
-use layerfs_home::helpers::shown;
-use layerfs_home::outcome::failed;
-use layerfs_home::outcome::{refused, with_fix, Outcome};
+use layerfs_home::reply::cursor;
+use layerfs_home::reply::events::Events;
+use layerfs_home::reply::outcome::failed;
+use layerfs_home::reply::outcome::{refused, with_fix, Outcome};
+use layerfs_home::reply::values::shown;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 
@@ -361,7 +361,7 @@ pub fn remove(home: &Path, events: &mut Events<'_>, request: &BranchRemove) -> O
         }
     };
     let removed_at = value.get_int("removed_ms").map_or(SdkValue::Null, |ms| {
-        SdkValue::text(layerfs_home::time::iso(ms))
+        SdkValue::text(layerfs_home::reply::time::iso(ms))
     });
     Ok(SdkValue::map([
         ("ok", SdkValue::Bool(true)),

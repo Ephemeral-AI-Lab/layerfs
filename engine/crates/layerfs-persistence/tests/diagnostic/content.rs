@@ -4,10 +4,10 @@ use layerfs_content::{
     encode_whole_file_payload,
     file::mapping::{self, ChildDescriptor, ExtentNode, ExtentSlice, FileState},
     filesystem::{
-        attributes::{
+        name::symlink::SymlinkTarget,
+        tree::attribute::{
             encode_attribute_page, AttributeEntry, AttributeKey, AttributePage, PortableMetadata,
         },
-        symlink::SymlinkTarget,
     },
     inode_leaf::{
         encode_inode_value, InodeKind, InodeLeaf, InodeLeafRow, InodeMetadata, InodeValue,

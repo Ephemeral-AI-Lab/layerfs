@@ -1,6 +1,6 @@
 //! Locally consumed inode serial ranges reserved through the owning allocator.
 use crate::{Workspace, WorkspaceError, WorkspaceResult};
-use layerfs_content::filesystem::identity::MAXIMUM_INODE_SERIAL;
+use layerfs_content::filesystem::name::identity::MAXIMUM_INODE_SERIAL;
 use layerfs_content::ContentError;
 
 /// Serials requested per refill. A refill window, not a limit on created

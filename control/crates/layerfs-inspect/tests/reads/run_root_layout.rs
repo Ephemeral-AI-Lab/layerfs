@@ -9,12 +9,12 @@
 //! recorded daemon is no process. Scratch folders are under the build's
 //! own temporary folder.
 #![cfg(any(target_os = "linux", target_os = "macos"))]
-use layerfs_home::home::{self, paths, write_record};
+use layerfs_home::disk::{self, paths, write_record};
 use layerfs_home::names::HOST_MACHINE;
 use layerfs_protocol::sdk::SdkValue;
 use layerfs_sandbox::deploy::Side;
 use layerfs_sandbox::record::{DaemonRecord, Local};
-use layerfs_sandbox::{force, sweep};
+use layerfs_sandbox::{lifecycle::force_remove, record::sweep};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Mutex;
@@ -43,8 +43,8 @@ fn scratch(tag: &str) -> PathBuf {
 /// A home made by this build, as a call opens it.
 fn new_home(scratch: &Path) -> PathBuf {
     let home = scratch.join("home");
-    home::private_dir(&home).unwrap();
-    home::ensure(&home).unwrap();
+    disk::private_dir(&home).unwrap();
+    disk::ensure(&home).unwrap();
     home
 }
 
@@ -52,7 +52,7 @@ fn new_home(scratch: &Path) -> PathBuf {
 fn guest_root(scratch: &Path) -> PathBuf {
     let root = scratch.join("data");
     std::fs::create_dir_all(&root).unwrap();
-    home::guest::serve_root(&root);
+    disk::guest::serve_root(&root);
     root
 }
 
@@ -85,8 +85,8 @@ fn recorded(root: &Path, name: &str, directory: &Path) {
         name: (directory.file_name().unwrap().to_string_lossy()).into_owned(),
         container: "ab".repeat(32),
         runtime: "process",
-        uid: home::flock::euid(),
-        gid: home::flock::egid(),
+        uid: layerfs_home::lock::flock::euid(),
+        gid: layerfs_home::lock::flock::egid(),
         directory: directory.display().to_string(),
         process: (4_000_000, 1, format!("{:032x}", 7)),
         port: 1,
@@ -97,7 +97,7 @@ fn recorded(root: &Path, name: &str, directory: &Path) {
     write_record(
         &paths::sandbox_record(root, name),
         &SdkValue::map([
-            ("v", SdkValue::Int(home::RECORD_VERSION)),
+            ("v", SdkValue::Int(disk::RECORD_VERSION)),
             ("name", t(name)),
             ("project", t("shop/api")),
             ("machine", t(HOST_MACHINE)),
@@ -143,7 +143,7 @@ fn a_worker_root_s_run_root_is_linux_guest_by_any_spelling() {
     std::fs::create_dir_all(&other).unwrap();
     let other_link = scratch.join("other-link");
     std::os::unix::fs::symlink(&other, &other_link).unwrap();
-    home::guest::serve_root(&other_link);
+    disk::guest::serve_root(&other_link);
     assert_eq!(
         paths::run_root(&other),
         other.join("machine/linux-guest/run")
@@ -253,7 +253,7 @@ fn a_forced_close_uses_the_named_run_root() {
     let run = paths::run_root(&home);
     let folder = run_folder(&home, &run, "layerfs-0123abcd-s1", "s1");
     recorded(&home, "s1", &folder);
-    let host = force::local_host(&home, "s1").unwrap();
+    let host = force_remove::local_host(&home, "s1").unwrap();
     let local = host.deploy().and_then(|deploy| deploy.local_dir.clone());
     assert_eq!(local.as_deref().map(Path::new), Some(run.as_path()));
     let _ = std::fs::remove_dir_all(&scratch);

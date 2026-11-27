@@ -31,10 +31,9 @@ pub(super) use layerfs_history::error::{HistoryError, HistoryResult};
 pub(super) use layerfs_history::records::GcIntent;
 pub(super) use layerfs_storage::{
     encoding::{delta::edge::RecordDirectory, PackAcquisition, PackUnit},
-    location::{ObjectLocation, SignatureRow},
+    location::{ObjectLocation, SignatureRow, Source},
     pack::layout::{self, GroupCodec},
     port::AcquiredPackRead,
-    source::Source,
     StorageCapacities, StorageError,
 };
 pub(super) use std::path::Path;

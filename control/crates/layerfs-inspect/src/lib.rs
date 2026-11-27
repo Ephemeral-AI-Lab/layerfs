@@ -31,7 +31,7 @@ pub use layerfs_store_service::methods::call;
 //
 // No doctor's report holds what interrupted operations left: LayerFS
 // removes it itself where nothing can own it (spec v20,
-// `layerfs_sandbox::sweep` and the sweeps of image copies and backups).
+// `layerfs_sandbox::record::sweep` and the sweeps of image copies and backups).
 
 pub use doctor::kinds::kinds;
 pub use doctor::report::{Kind, Node, Report, Thing};
@@ -78,9 +78,9 @@ pub use files::walk::{
     WINDOW,
 };
 pub use layerfs_sandbox::deploy::Side;
-pub use layerfs_sandbox::inspect::overlay::overlay_sizes;
-pub use layerfs_sandbox::inspect::owner::{admit, on_owner, running, Budget, HARD, PERMITS, SOFT};
-pub use layerfs_sandbox::inspect::route::OP;
+pub use layerfs_sandbox::route::inspect::OP;
+pub use layerfs_sandbox::route::inspect::{admit, on_owner, running, Budget, HARD, PERMITS, SOFT};
+pub use layerfs_sandbox::status::overlay::overlay_sizes;
 pub use machine::files::{machine_files, machine_page};
 pub use machine::space::{machine_space, ENTRIES as SPACE_ENTRIES};
 pub use machine::stats::machine_stats;

@@ -1620,8 +1620,8 @@ fn export_omits_a_path_hidden_by_hide_path() {
 
     // The marker is written through the Store engine, the route the fs calls
     // use (engine method `project.remove_file`, the call `project.hide_path`).
-    layerfs_store::service::with_service(
-        &layerfs_store::open_args::OpenArgs {
+    layerfs_store::admin::open::service::with_service(
+        &layerfs_store::admin::open::args::OpenArgs {
             home: Some(home.clone()),
             store: Some("shop".to_owned()),
             store_path: Some(paths::store_file(&home, "shop").display().to_string()),

@@ -5,8 +5,10 @@ use layerfs_history::*;
 use layerfs_persistence::{SqliteHandles, StorageProvider};
 use layerfs_storage::{ReservationBlocks, Storage, StorageError};
 use layerfs_store_service::{
-    bootstrap::open_store_observed,
-    store::{BindError, BindIntent, BindRequest, PortError, ReaderFactory, Store, StoreReader},
+    store::{
+        open::open_store_observed, BindError, BindIntent, BindRequest, PortError, ReaderFactory,
+        Store, StoreReader,
+    },
     Owner, OwnerConfig,
 };
 use std::{

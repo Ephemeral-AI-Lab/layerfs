@@ -4,10 +4,10 @@
 //! root, the project, its Store and how the Sandbox is deployed,
 //! [`Deploy`]). Fields a request may lack stay optional and are refused
 //! where each is used, with the text the untyped request was refused with.
-use layerfs_home::helpers::required;
+use layerfs_home::reply::values::required;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
-use layerfs_store::open_args::PgSelection;
-use layerfs_store::record::StoreRecord;
+use layerfs_store::admin::open::args::PgSelection;
+use layerfs_store::admin::record::store::StoreRecord;
 use std::path::PathBuf;
 
 /// One host operation (R1: this table is the only list of them).

@@ -7,7 +7,7 @@ use crate::dispatch::{Form, Part};
 #[cfg(feature = "machine")]
 use layerfs_home::names::MachineName;
 #[cfg(feature = "machine")]
-use layerfs_home::outcome::Outcome;
+use layerfs_home::reply::outcome::Outcome;
 #[cfg(feature = "machine")]
 use layerfs_protocol::sdk::SdkValue;
 
@@ -52,7 +52,7 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let machine = MachineName::parse(args.get_text("machine").unwrap_or(""))?;
     let unused = args.get_bool("unused");
     let image = args.get_text("image");
-    let pruned = layerfs_sandbox::images::prune(&context.home, &machine, image, unused)?;
+    let pruned = layerfs_sandbox::image::prune::prune(&context.home, &machine, image, unused)?;
     let removed = pruned.get("removed").cloned().unwrap_or_default();
     let skipped: Vec<SdkValue> = match pruned.get("skipped") {
         Some(SdkValue::List(rows)) => rows
@@ -67,7 +67,7 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         _ => Vec::new(),
     };
     let (removed, removed_count) = super::status::stats::cut(removed);
-    let (skipped, skipped_count) = layerfs_home::helpers::shown(skipped, 0, false);
+    let (skipped, skipped_count) = layerfs_home::reply::values::shown(skipped, 0, false);
     Ok(SdkValue::map([
         (
             "freed_bytes",

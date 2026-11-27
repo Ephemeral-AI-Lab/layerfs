@@ -4,7 +4,7 @@
 //! paths that stopped the runtime and goes once the name is recreated with a
 //! newer generation. Missing evidence is never death.
 use layerfs_home::json::parse;
-use layerfs_home::op::Op;
+use layerfs_home::record::intent::Op;
 use layerfs_protocol::sdk::SdkValue;
 use layerfs_sandbox::record::discovery::write_started;
 use layerfs_sandbox::record::{mount_place, retire, DaemonRecord, SandboxRecord, SandboxTombstone};
@@ -17,7 +17,7 @@ fn scratch(tag: &str, home: bool) -> PathBuf {
     let _ = std::fs::remove_dir_all(&root);
     std::fs::create_dir_all(&root).unwrap();
     if home {
-        layerfs_home::home::layout::open(&root).expect("a new home");
+        layerfs_home::disk::layout::open(&root).expect("a new home");
     }
     root
 }
@@ -113,9 +113,9 @@ fn a_tombstone_is_written_in_a_home_and_never_in_a_worker_root() {
         .unwrap(),
     );
     let root = scratch("root", false);
-    layerfs_home::home::guest::serve_root(&root);
+    layerfs_home::disk::guest::serve_root(&root);
     retire(&root, &record).unwrap();
-    assert!(!layerfs_home::home::paths::sandbox_tombstone(&root, "box", "t1").exists());
+    assert!(!layerfs_home::disk::paths::sandbox_tombstone(&root, "box", "t1").exists());
     let _ = std::fs::remove_dir_all(&root);
 
     let home = scratch("home", true);
@@ -131,7 +131,7 @@ fn a_tombstone_is_written_in_a_home_and_never_in_a_worker_root() {
 #[test]
 fn a_recreated_name_drops_its_older_tombstone() {
     let home = scratch("recreate", true);
-    let id = layerfs_home::home::opened(&home).unwrap().id;
+    let id = layerfs_home::disk::opened(&home).unwrap().id;
     let old = format!("p1:{id}.sandbox:0000000000000010:aa");
     SandboxTombstone {
         name: "t1".to_owned(),

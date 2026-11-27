@@ -12,8 +12,7 @@ use layerfs_history::HistoryCatalogConfig;
 use layerfs_persistence::{PostgresHandles, PostgresSelection, SqlWork};
 use layerfs_storage::{
     encoding::{delta::read::ChainBases, DecompressionWorkspace, PackCache},
-    location::{ObjectLocation, SignatureRow},
-    source::Source,
+    location::{ObjectLocation, SignatureRow, Source},
     Diagnostics, Storage, StorageError, StoragePolicy, StorageResult,
 };
 use std::cell::RefCell;

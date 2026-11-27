@@ -43,7 +43,7 @@ fn a_sweep_removes_free_unpacks_and_keeps_held_ones() {
         .truncate(false)
         .open(dir.join(format!("{unpacking}.2.lock")))
         .unwrap();
-    assert!(layerfs_home::home::flock::try_lock(&lock, true).unwrap());
+    assert!(layerfs_home::lock::flock::try_lock(&lock, true).unwrap());
 
     let args = SdkValue::map([
         ("step", SdkValue::text("sweep")),
@@ -69,7 +69,7 @@ fn a_sweep_removes_free_unpacks_and_keeps_held_ones() {
     assert!(log.contains(&free_tmp.display().to_string()) && log.contains("\"image_tmp\""));
 
     // once the unpack ended, the next sweep takes it
-    layerfs_home::home::flock::unlock(&lock);
+    layerfs_home::lock::flock::unlock(&lock);
     let swept = cache::step(&Side::Worker(&root), &args).unwrap();
     assert_eq!(swept.get_int("removed"), Some(1), "{swept:?}");
     assert!(!unpacking_tmp.exists() && copied_tmp.is_dir());

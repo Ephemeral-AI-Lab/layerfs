@@ -53,9 +53,7 @@ impl Service {
                     .ok();
                 let pending = matches!(workspace.pending_conflicts(), Ok(Some(_)));
                 WorkspaceView {
-                    workspace: layerfs_store_service::history::lookup::hex(
-                        &workspace.identity().to_bytes(),
-                    ),
+                    workspace: layerfs_store_service::lookup::hex(&workspace.identity().to_bytes()),
                     namespace: route.namespace(),
                     activity: activity(state),
                     mounted: kernel.phase == MountPhase::Ready,

@@ -1,7 +1,7 @@
 //! Displace prepared inode values through the mounted reader's ordinary ports.
 //! No namespace is changed and the fixture keeps the default Store policy.
 use layerfs_content::{
-    filesystem::attributes::PortableMetadata,
+    filesystem::tree::attribute::PortableMetadata,
     inode_leaf::{
         encode_inode_value, InodeKind, InodeLeaf, InodeLeafRow, InodeMetadata, InodeValue,
         INODE_VALUE_BYTES, LEAF_ROW_BYTES, MAXIMUM_LEAF_ROWS,

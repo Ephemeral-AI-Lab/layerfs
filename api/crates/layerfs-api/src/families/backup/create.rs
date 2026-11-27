@@ -2,9 +2,9 @@
 use crate::dispatch::table::Kind::Name;
 use crate::dispatch::table::{a, call, opt, Call, PROGRESS};
 use crate::dispatch::{Context, Form, Policy};
-use layerfs_home::outcome::Outcome;
+use layerfs_home::reply::outcome::Outcome;
 use layerfs_protocol::sdk::SdkValue;
-use layerfs_store::backup::family::{create, BackupCreate};
+use layerfs_store::backup::bucket::connect::{create, BackupCreate};
 
 /// Its answer: the file and its size.
 const FORM: Form = Form::of(

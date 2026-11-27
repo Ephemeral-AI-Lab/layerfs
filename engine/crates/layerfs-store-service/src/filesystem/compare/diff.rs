@@ -16,7 +16,7 @@ use layerfs_content::compare::{
     line_diff, same_file_bytes, ChangeKind, ChangeWalk, DiffLine, EntryFacts, LineOp, Memo,
     PathChange, Plan,
 };
-use layerfs_content::filesystem::path::PathName;
+use layerfs_content::filesystem::name::path::PathName;
 use layerfs_content::object::inode_leaf::InodeKind;
 use layerfs_content::AuthenticatedObjects;
 use layerfs_history::LayerStackRecord;
@@ -172,7 +172,7 @@ pub(crate) fn change(
     let shown = change.right.or(change.left).map(|entry| entry.value.kind);
     let (mut content, mut identity, mut metadata, mut lines) =
         (false, false, false, SdkValue::Null);
-    let mut work = layerfs_content::filesystem::attributes::AttributeReadWork::default();
+    let mut work = layerfs_content::filesystem::tree::attribute::AttributeReadWork::default();
     let mut omitted = false;
     if let (Some(l), Some(r)) = (change.left, change.right) {
         let directories = l.value.kind == InodeKind::Directory && l.value.kind == r.value.kind;
@@ -369,7 +369,7 @@ fn emit(
     let (limit, pos) = (request.limit, request.pos);
     let skip = if request.cursor.is_some() { 0 } else { pos };
     let (mut items, mut seen, mut budget, mut more) = (Vec::new(), 0u64, REPLY_BUDGET, false);
-    let mut work = layerfs_content::filesystem::attributes::AttributeReadWork::default();
+    let mut work = layerfs_content::filesystem::tree::attribute::AttributeReadWork::default();
     let mut last = None;
     while let Some(pair) = walk.next_pair().map_err(args::content)? {
         let (path, raw_before, raw_after) = &pair;

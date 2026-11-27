@@ -8,14 +8,15 @@ use super::super::record::{self, SandboxRecord};
 use super::super::route::direct;
 use crate::route::machine::send::{on_machine, Asked};
 use crate::route::machine::{Call, Message, Started};
-use layerfs_home::events::Events;
-use layerfs_home::home::{self, paths};
-use layerfs_home::op::Op;
-use layerfs_home::outcome::shell_word;
-use layerfs_home::outcome::{public_code, refused, with_fix, with_next, FIX};
+use layerfs_home::disk;
+use layerfs_home::disk::paths;
+use layerfs_home::record::intent::Op;
+use layerfs_home::reply::events::Events;
+use layerfs_home::reply::outcome::shell_word;
+use layerfs_home::reply::outcome::{public_code, refused, with_fix, with_next, FIX};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
-use layerfs_store::record::StoreRef;
-use layerfs_store::resolve;
+use layerfs_store::admin::record::store::StoreRef;
+use layerfs_store::admin::route::resolve;
 use std::path::Path;
 
 /// `sandbox.create(project, name, machine?, { image })`.
@@ -137,7 +138,7 @@ pub fn create_on(
     }
     // the Store's place, a move and the name are checked under the lock
     // that claims the name, so a store.move cannot pass between them
-    let _lock = home::lock::take(&home)?;
+    let _lock = layerfs_home::lock::home::take(&home)?;
     let target = resolve::target(&home, project)?;
     target.record.unblocked()?;
     let machine = match (named, &target.store_ref) {
@@ -146,7 +147,7 @@ pub fn create_on(
         (None, _) => only_attached(&target.store, target.record.attached())?,
     };
     let machine = machine.as_str();
-    layerfs_machine::record::MachineRecord::admit_host(&home, machine)?;
+    layerfs_machine::record::machine::MachineRecord::admit_host(&home, machine)?;
     // refused too while the machine is being removed
     #[cfg(feature = "machine")]
     {
@@ -169,7 +170,7 @@ pub fn create_on(
         )?;
     }
     #[cfg(not(feature = "machine"))]
-    if layerfs_machine::record::MachineRecord::read(&home, machine)?.is_none() {
+    if layerfs_machine::record::machine::MachineRecord::read(&home, machine)?.is_none() {
         return Err(refused("NotFound", format!("no machine named {machine}")));
     }
     // a PostgreSQL Store is on no machine: its Sandboxes run on each
@@ -210,7 +211,7 @@ pub fn create_on(
     }
     let op = Op::begin("sandbox.create", "claim", SdkValue::Null)?;
     let record = SandboxRecord::creating(&home, name, project, machine, &op)?;
-    home::private_dir(&dir)?;
+    disk::private_dir(&dir)?;
     let claimed = record::lock(&home, name).and_then(|_sandbox| record.write(&home));
     if let Err(refusal) = claimed {
         // the folder this call made holds no record: the name stays free
@@ -240,7 +241,7 @@ pub fn create_on(
     // a worker's Sandbox whose daemon this host reaches directly (#535 G4):
     // its forward opens before the locks are taken
     let opened = (started.as_ref().ok()).map(|started| direct::open(&home, &record, started));
-    let _lock = home::lock::take(&home)?;
+    let _lock = layerfs_home::lock::home::take(&home)?;
     let sandbox = record::lock(&home, name)?;
     // read again: on `native` the Sandbox's own side added to the record
     let record = SandboxRecord::read(&home, name)?.unwrap_or(record);
@@ -295,10 +296,10 @@ pub fn create_on(
 pub fn remove_folder(dir: &Path) -> Result<(), SdkRefusal> {
     match std::fs::remove_dir_all(dir) {
         Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
-            Err(layerfs_home::outcome::failed(error))
+            Err(layerfs_home::reply::outcome::failed(error))
         }
         _ => {
-            layerfs_home::home::generation::moved_above(dir);
+            layerfs_home::record::generation::moved_above(dir);
             Ok(())
         }
     }

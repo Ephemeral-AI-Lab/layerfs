@@ -1,9 +1,9 @@
 //! A bucket key's secret, kept in the home's secret folder
-//! (`layerfs_home::home::secrets`, kind `bucket`: `secret/bucket/<bucket>.json`,
+//! (`layerfs_home::secret::saved`, kind `bucket`: `secret/bucket/<bucket>.json`,
 //! a 0600 file in a 0700 folder), never answered and never logged. Only the
 //! backup family reads or writes one.
-use layerfs_home::home::secrets::{read_secret, remove_secret, save_secret};
-use layerfs_home::outcome::refused;
+use layerfs_home::reply::outcome::refused;
+use layerfs_home::secret::saved::{read_secret, remove_secret, save_secret};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 
@@ -27,7 +27,7 @@ pub fn read(home: &Path, bucket: &str, again: impl FnOnce() -> String) -> Result
             format!("the home keeps no secret {KIND}/{bucket}; connect it again at its URL with its key"),
         ),
     };
-    Err(layerfs_home::outcome::with_fix(refusal, again()))
+    Err(layerfs_home::reply::outcome::with_fix(refusal, again()))
 }
 
 /// Keeps `secret` as bucket `bucket`'s secret, replacing one kept before.

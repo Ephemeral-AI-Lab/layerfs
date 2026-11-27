@@ -3,7 +3,7 @@
 #[test]
 fn host_record_uses_the_current_os_name_and_host_platform() {
     use layerfs_home::names::{BUILT_IN, HOST_MACHINE};
-    use layerfs_machine::record::MachineRecord;
+    use layerfs_machine::record::machine::MachineRecord;
     let expected = if cfg!(target_os = "macos") {
         "macos-host"
     } else {

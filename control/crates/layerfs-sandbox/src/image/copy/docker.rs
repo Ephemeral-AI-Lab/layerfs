@@ -4,7 +4,7 @@
 //! choice: `layerfs_machine::docker_socket`), whatever machine an image is
 //! going to, so the machine and its images are in one Engine. Reads have a
 //! deadline; nothing here pulls or builds an image.
-use layerfs_home::outcome::refused;
+use layerfs_home::reply::outcome::refused;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -93,7 +93,7 @@ impl Docker {
     /// `PATH`, on the socket the `docker` record names, else its default.
     #[cfg(not(feature = "machine"))]
     pub fn of(home: &Path) -> Result<Self, SdkRefusal> {
-        let socket = layerfs_machine::record::MachineRecord::read(home, "docker")?
+        let socket = layerfs_machine::record::machine::MachineRecord::read(home, "docker")?
             .and_then(|r| r.docker().map(str::to_owned));
         let path = std::env::var_os("PATH").unwrap_or_default();
         let program = std::env::split_paths(&path)

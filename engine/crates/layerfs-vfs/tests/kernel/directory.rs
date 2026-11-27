@@ -4,7 +4,7 @@ use crate::harness;
 use harness::{create, mkdir, path, rename, rmdir, unlink, Bench, T1, T2};
 use layerfs_content::{
     filesystem::{
-        attributes::PortableMetadata, build_filesystem, scope_for_seed, update_filesystem,
+        build_filesystem, scope_for_seed, tree::attribute::PortableMetadata, update_filesystem,
         DirectoryUpdate, FilesystemInput, FilesystemObjects, FilesystemResources, InodeUpdate,
     },
     object::inode_leaf::{InodeKind, InodeMetadata, InodeValue},

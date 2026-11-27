@@ -2,9 +2,8 @@
 use super::super::state::State;
 use crate::{
     error::{StorageError, StorageResult},
-    location::ObjectLocation,
+    location::{ObjectLocation, Source},
     port::{Publication, PublishedPack},
-    source::Source,
 };
 use layerfs_content::ObjectId;
 use std::collections::{BTreeMap, BTreeSet};

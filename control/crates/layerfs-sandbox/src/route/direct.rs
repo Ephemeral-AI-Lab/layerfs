@@ -18,13 +18,13 @@ use crate::lifecycle::registry::{self, SandboxState, SANDBOXES};
 use crate::record::unmount_guard;
 use crate::route::machine::{Call, Host, Message, Started};
 use crate::{record::discovery, route::machine::dispatch};
-use layerfs_home::helpers;
-use layerfs_home::home::{self, paths};
-use layerfs_home::outcome::shell_word;
-use layerfs_home::outcome::{refused, Outcome};
-use layerfs_machine::worker::Unreached;
+use layerfs_home::disk;
+use layerfs_home::disk::paths;
+use layerfs_home::reply::outcome::shell_word;
+use layerfs_home::reply::outcome::{refused, Outcome};
+use layerfs_machine::route::Unreached;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
-use layerfs_store::resolve::{self, Target};
+use layerfs_store::admin::route::resolve::{self, Target};
 use std::net::SocketAddr;
 use std::path::Path;
 
@@ -62,7 +62,7 @@ pub fn check(home: &Path, id: &str, daemon: &DaemonRecord) -> Result<()> {
             "layerfs machine start {machine}",
             machine = shell_word(machine)
         );
-        return Err(layerfs_home::outcome::with_fix(refusal, fix));
+        return Err(layerfs_home::reply::outcome::with_fix(refusal, fix));
     }
     if forward.pid().is_none() || forward.alive() {
         return Ok(());
@@ -129,7 +129,7 @@ pub fn unanswered(id: &str, daemon: &DaemonRecord, refusal: SdkRefusal) -> SdkRe
 /// notice carries the same counts without the tag, so `get` tags it here.
 pub(crate) fn down_detail(code: &str, detail: SdkValue) -> SdkValue {
     match code {
-        "Capacity" => home::with_field(detail, "code", SdkValue::text("Capacity")),
+        "Capacity" => disk::with_field(detail, "code", SdkValue::text("Capacity")),
         _ => SdkValue::Null,
     }
 }
@@ -138,9 +138,9 @@ pub(crate) fn down_detail(code: &str, detail: SdkValue) -> SdkValue {
 /// `root`, with the daemon's endpoint in the machine and its control keys
 /// (`control`), which only the caller reads.
 pub fn with_keys(root: &Path, name: &str, out: SdkValue) -> Outcome {
-    let keys = layerfs_home::secrets::daemon_keys(&paths::sandbox_dir(root, name))?
+    let keys = layerfs_home::secret::keys::daemon_keys(&paths::sandbox_dir(root, name))?
         .ok_or_else(|| refused("Failed", format!("Sandbox {name} has no daemon keys")))?;
-    Ok(home::with_field(out, "control", keys))
+    Ok(disk::with_field(out, "control", keys))
 }
 
 /// What a create through a worker found about reaching its daemon from
@@ -214,7 +214,7 @@ pub fn save(home: &Path, record: SandboxRecord, opened: &Opened) -> Result<Sandb
     let (Some(keys), Some(daemon)) = (&opened.keys, &opened.daemon) else {
         return Ok(record);
     };
-    if let Err(refusal) = layerfs_home::secrets::save_daemon_keys(&record.dir(home), keys) {
+    if let Err(refusal) = layerfs_home::secret::keys::save_daemon_keys(&record.dir(home), keys) {
         end(home, record.machine(), daemon);
         return Err(refusal);
     }
@@ -231,7 +231,7 @@ fn carried(
     endpoint: SocketAddr,
 ) -> Result<Option<(SocketAddr, Option<u32>)>> {
     use layerfs_machine::platform::Code;
-    let record = layerfs_machine::record::MachineRecord::of(home, machine)?;
+    let record = layerfs_machine::record::machine::MachineRecord::of(home, machine)?;
     let spec = layerfs_machine::machine_spec(home, &record)?;
     match layerfs_machine::platform::forward(&spec, endpoint.port()) {
         Ok(forward) => Ok(Some((forward.address, forward.pid))),
@@ -264,7 +264,7 @@ fn end(home: &Path, machine: &str, daemon: &DaemonRecord) {
         let Some(address) = forward_of(daemon) else {
             return;
         };
-        let spec = layerfs_machine::record::MachineRecord::of(home, machine)
+        let spec = layerfs_machine::record::machine::MachineRecord::of(home, machine)
             .and_then(|record| layerfs_machine::machine_spec(home, &record));
         if let Ok(spec) = spec {
             let forward = layerfs_machine::platform::Forward {
@@ -282,7 +282,7 @@ fn end(home: &Path, machine: &str, daemon: &DaemonRecord) {
 /// it and its forward is ended. Its folder is the caller's to remove.
 pub fn release(home: &Path, record: &SandboxRecord) {
     let dir = record.dir(home);
-    if let Ok(mut live) = helpers::lock(&SANDBOXES) {
+    if let Ok(mut live) = layerfs_home::lock::mutex::lock(&SANDBOXES) {
         live.remove(&dir);
     }
     if let Some(daemon) = record.daemon() {
@@ -352,7 +352,9 @@ pub fn capacity(home: &Path, record: &SandboxRecord) -> Outcome {
 /// lease, opens no Store and writes nothing (layerfs-project#181).
 fn served(home: &Path, record: &SandboxRecord, call: Call) -> Outcome {
     let home = home.to_path_buf();
-    if let Some(machine) = layerfs_machine::record::MachineRecord::read(&home, record.machine())? {
+    if let Some(machine) =
+        layerfs_machine::record::machine::MachineRecord::read(&home, record.machine())?
+    {
         machine.not_held()?;
     }
     let target = resolve::target(&home, record.project().unwrap_or(""))?;
@@ -368,13 +370,15 @@ pub fn held(home: &Path, record: &SandboxRecord) -> Result<Vec<String>> {
     let host = host(home, record, &target, Message::Absent);
     let Ok(state) = registry::sandbox_live(&host) else {
         return (discovery::workspaces(&record.dir(home))?.iter())
-            .map(|(_, workspace)| Ok(helpers::required(workspace.path(), "path")?.to_owned()))
+            .map(|(_, workspace)| {
+                Ok(layerfs_home::reply::values::required(workspace.path(), "path")?.to_owned())
+            })
             .collect();
     };
-    let _guard = layerfs_store::project::discovery::guard(&state.directory)?;
+    let _guard = layerfs_store::data::project::record::discovery::guard(&state.directory)?;
     let recoverable = unmount_guard::check_all(&state)?;
     discovery::refresh_except(&state, &recoverable)?;
-    let mounted = helpers::lock(&state.mounts)?
+    let mounted = layerfs_home::lock::mutex::lock(&state.mounts)?
         .keys()
         .filter(|path| !recoverable.contains(path))
         .cloned()

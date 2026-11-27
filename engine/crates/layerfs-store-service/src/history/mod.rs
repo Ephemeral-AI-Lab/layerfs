@@ -13,12 +13,5 @@ pub mod whiteout;
 
 pub use branch::MAIN;
 
-// #828 compat: old public module paths, removed in wave 3.
 #[doc(hidden)]
 pub use crate::history::branch_remove as removal;
-#[doc(hidden)]
-pub use crate::history::gc_admission as admission; // #828 compat
-#[doc(hidden)]
-pub use crate::history::project_delete as deletion; // #828 compat
-#[doc(hidden)]
-pub use crate::lookup; // #828 compat // #828 compat

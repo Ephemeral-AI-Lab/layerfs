@@ -2,7 +2,7 @@
 use crate::dispatch::table::Kind::Name;
 use crate::dispatch::table::{a, call, Call, PROGRESS};
 use crate::dispatch::{Context, Form, Policy};
-use layerfs_home::outcome::Outcome;
+use layerfs_home::reply::outcome::Outcome;
 use layerfs_protocol::sdk::SdkValue;
 
 /// Its answer: the bytes moved.

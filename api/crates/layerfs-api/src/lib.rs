@@ -23,7 +23,7 @@ use dispatch as machinery;
 // the six doctors' shared answer (`dispatch/answer/doctor.rs`), which each
 // family's doctor entry names
 use dispatch::answer::doctor;
-use layerfs_home::outcome::Outcome;
+use layerfs_home::reply::outcome::Outcome;
 use layerfs_protocol::sdk::SdkValue;
 use std::path::Path;
 
@@ -38,9 +38,11 @@ pub use layerfs_home::names;
 /// The home (`layerfs-home`) and the Store leases, for the front ends and
 /// their tests.
 pub mod home {
-    pub use layerfs_home::home::*;
-    pub use layerfs_home::process;
-    pub use layerfs_store::lease;
+    pub use layerfs_home::disk::*;
+    pub use layerfs_home::lock::{entity as entity_lock, flock, home as lock};
+    pub use layerfs_home::record::process;
+    pub use layerfs_home::secret::saved as secrets;
+    pub use layerfs_store::admin::open::lease;
 }
 /// The worker of machine `name`, started if it does not answer; `None`
 /// when its calls run in this process.
@@ -49,7 +51,7 @@ pub mod home {
 pub fn running(
     home: &std::path::Path,
     name: &str,
-) -> Result<Option<layerfs_machine::worker::Endpoint>, layerfs_protocol::sdk::SdkRefusal> {
+) -> Result<Option<layerfs_machine::route::Endpoint>, layerfs_protocol::sdk::SdkRefusal> {
     layerfs_machine::with_users::running(home, name, &layerfs_sandbox::users::MACHINE)
 }
 /// The process-wide cancel request a front end sets on a signal (#804 §6).
@@ -112,7 +114,7 @@ pub fn call_cli(
 
 /// A write input the CLI has not read yet.
 #[doc(hidden)]
-pub use layerfs_store::host_write::{Input as CliInput, InputKind as CliInputKind};
+pub use layerfs_store::admin::host_worker::write::{Input as CliInput, InputKind as CliInputKind};
 
 /// Whether the CLI defers the input of write `name` to `project`.
 #[doc(hidden)]
@@ -131,7 +133,3 @@ pub fn call_json(
 ) -> String {
     machinery::call_json(families(), home, scope, name, args, events, client)
 }
-
-// #828 compat: old public module paths, removed in wave 3.
-#[doc(hidden)]
-pub use crate::dispatch as calls; // #828 compat

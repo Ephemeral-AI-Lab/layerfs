@@ -11,7 +11,7 @@
 //! `state` and `bundle` beside it. Scratch folders are under the build's
 //! own temporary folder, or under `/tmp` where a test reads them from `/`.
 #![cfg(any(target_os = "linux", target_os = "macos"))]
-use layerfs_home::home::{self, paths, write_record};
+use layerfs_home::disk::{self, paths, write_record};
 use layerfs_home::names::MachineName;
 use layerfs_inspect::{FilesRequest, Side, HARD, SOFT};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
@@ -75,7 +75,7 @@ fn machine_in(parent: &Path, tag: &str) -> Machine {
     let layerfs = scratch.join("layerfs");
     let data = layerfs.join("data");
     // a worker's root: its run root is the guest's (#819 R)
-    home::guest::serve_root(&data);
+    disk::guest::serve_root(&data);
     let run = paths::run_root(&data).join("layerfs-0a1b2c3d-s1");
     for folder in ["tmp", "workspaces", "config", "overlay"] {
         std::fs::create_dir_all(run.join(folder)).unwrap();
@@ -130,8 +130,8 @@ fn sandbox(root: &Path, name: &str, directory: &Path) {
         name: (directory.file_name().unwrap().to_string_lossy()).into_owned(),
         container: "ab".repeat(32),
         runtime: "process",
-        uid: home::flock::euid(),
-        gid: home::flock::egid(),
+        uid: layerfs_home::lock::flock::euid(),
+        gid: layerfs_home::lock::flock::egid(),
         directory: directory.display().to_string(),
         process: (4_000_000, 1, format!("{:032x}", 7)),
         port: 1,
@@ -302,8 +302,8 @@ fn the_roots_are_the_layerfs_folders_ranked_by_role_then_the_machine() {
 
     // a home is its owner's own computer: its LayerFS folders, and no `/`
     let home = fx.scratch.join("home");
-    home::private_dir(&home).unwrap();
-    home::ensure(&home).unwrap();
+    disk::private_dir(&home).unwrap();
+    disk::ensure(&home).unwrap();
     for folder in ["store", "sandbox", "log", "secret"] {
         std::fs::create_dir_all(home.join(folder)).unwrap();
     }
@@ -578,8 +578,8 @@ fn a_home_reads_only_its_layerfs_folders() {
     let _turn = PERMITS.lock().unwrap_or_else(|poison| poison.into_inner());
     let fx = machine(layerfs_home::names::HOST_MACHINE);
     let home = fx.scratch.join("home");
-    home::private_dir(&home).unwrap();
-    home::ensure(&home).unwrap();
+    disk::private_dir(&home).unwrap();
+    disk::ensure(&home).unwrap();
     for folder in ["store/shop", "sandbox", "machine/box", "log", "secret"] {
         std::fs::create_dir_all(home.join(folder)).unwrap();
     }
@@ -708,7 +708,7 @@ fn a_walk_pages_by_name_and_answers_what_it_has_at_its_soft_budget() {
     // request that has used its four seconds before the walk starts
     // answers no entry, in time, and says why
     let _turn = PERMITS.lock().unwrap_or_else(|poison| poison.into_inner());
-    let asked = home::with_field(asked, "kind", t("machine_files"));
+    let asked = disk::with_field(asked, "kind", t("machine_files"));
     let (root, request) = (fx.data.clone(), asked.clone());
     let started = Instant::now();
     let late = layerfs_inspect::admit(move |budget| {

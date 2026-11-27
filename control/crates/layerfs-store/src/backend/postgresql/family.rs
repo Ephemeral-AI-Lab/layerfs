@@ -10,9 +10,8 @@
 use crate::admin::open::lease;
 use crate::admin::record::store::{self, StoreKind, StoreRecord};
 use crate::Related;
-use layerfs_home::home;
-use layerfs_home::op::{self, Op};
-use layerfs_home::outcome::refused;
+use layerfs_home::record::intent::{self, Op};
+use layerfs_home::reply::outcome::refused;
 use layerfs_protocol::sdk::SdkRefusal;
 use std::path::Path;
 
@@ -28,7 +27,7 @@ pub fn begin<T>(
     related: Related,
     check: impl FnOnce(&StoreRecord) -> Result<T>,
 ) -> Result<T> {
-    let lock = home::lock::take(home_dir)?;
+    let lock = layerfs_home::lock::home::take(home_dir)?;
     let store = store::lock(home_dir, name)?;
     let record = StoreRecord::of(home_dir, name)?;
     if record.kind()? != StoreKind::Postgresql {
@@ -44,7 +43,7 @@ pub fn begin<T>(
     // the old revision, and retires the sessions it held at it. A record
     // with no revision gets none: it stays on the direct route
     let replaced = record.login_revision().map(str::to_owned);
-    let record = record.with(op::FIELD, op.to_record().clone());
+    let record = record.with(intent::FIELD, op.to_record().clone());
     let record = match replaced {
         Some(_) => record.with_new_login_revision()?,
         None => record,
@@ -62,7 +61,7 @@ pub fn begin<T>(
 pub fn settle(home_dir: &Path, record: &StoreRecord, related: Related) -> Result<lease::Lease> {
     let name = record.name();
     crate::admin::open::close::close(&record.postgresql_key(home_dir, name))?;
-    let _lock = home::lock::take(home_dir)?;
+    let _lock = layerfs_home::lock::home::take(home_dir)?;
     let _store = store::lock(home_dir, name)?;
     if lease::held_here(home_dir, name) {
         return Err(refused(

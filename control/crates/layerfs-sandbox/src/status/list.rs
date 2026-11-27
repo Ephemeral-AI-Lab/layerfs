@@ -6,8 +6,8 @@
 use super::super::record::{SandboxRecord, WorkspaceRecord};
 use super::state::machine_state;
 use layerfs_home::json;
-use layerfs_home::outcome::refused;
-use layerfs_home::state::State;
+use layerfs_home::reply::outcome::refused;
+use layerfs_home::reply::state::State;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::collections::BTreeMap;
 use std::path::Path;

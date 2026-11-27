@@ -9,8 +9,8 @@
 use crate::route::machine::Host;
 use crate::CommandIdentity;
 use crate::MountedWorkspace;
-use layerfs_home::helpers::lock;
-use layerfs_home::outcome::refused;
+use layerfs_home::lock::mutex::lock;
+use layerfs_home::reply::outcome::refused;
 use layerfs_protocol::daemon::WorkspaceToken;
 use layerfs_protocol::sdk::SdkRefusal;
 use std::collections::BTreeMap;

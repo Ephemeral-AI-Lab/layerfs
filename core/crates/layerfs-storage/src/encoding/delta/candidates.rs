@@ -28,7 +28,7 @@
 //! altogether. The measured coverage curve is flat above 8,192 slots.
 
 use crate::location::SignatureRow;
-use crate::source::Source;
+use crate::location::Source;
 
 use layerfs_content::ObjectId;
 

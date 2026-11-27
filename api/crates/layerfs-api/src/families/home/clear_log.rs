@@ -1,7 +1,7 @@
 //! `home.clear_log`: clears this home's call log.
 use crate::dispatch::table::{call, Call};
 use crate::dispatch::{Context, Form};
-use layerfs_home::outcome::Outcome;
+use layerfs_home::reply::outcome::Outcome;
 use layerfs_protocol::sdk::SdkValue;
 
 /// Its answer: nothing to say in the short form.
@@ -21,7 +21,7 @@ pub(crate) const CALL: Call = call(
 
 /// Runs `home.clear_log`.
 fn run(context: &mut Context<'_>, _args: &SdkValue) -> Outcome {
-    let lines = layerfs_home::logs::reset(&context.home)?;
+    let lines = layerfs_home::log::calls::reset(&context.home)?;
     Ok(SdkValue::map([
         ("outcome", SdkValue::text("cleared")),
         (

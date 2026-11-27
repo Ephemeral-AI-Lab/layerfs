@@ -9,7 +9,7 @@ use crate::history::MAIN;
 use crate::lookup::{self as args, branch_node, invalid, refuse, short, Answer};
 use crate::store::{PortError, Store, StorePorts};
 use layerfs_content::compare::{as_text, EntryFacts, TreeTable, MAXIMUM_TEXT_BYTES};
-use layerfs_content::filesystem::path::PathName;
+use layerfs_content::filesystem::name::path::PathName;
 use layerfs_content::filesystem::{FilesystemRootId, SymlinkTarget};
 use layerfs_content::object::inode_leaf::InodeKind;
 use layerfs_content::{AuthenticatedObjects, ContentError, ObjectId};

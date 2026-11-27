@@ -454,7 +454,7 @@ fn merge_inner(store: &Arc<Store>, stack: &LayerStackRecord, merge: &Merge<'_>) 
     // File lengths from the Store catalogue a window at a time, as a Commit
     // counts them, never from each changed file's root (#364).
     let mut refused = None;
-    let logical = layerfs_content::filesystem::statistics::logical_size_after_with(
+    let logical = layerfs_content::filesystem::construction::statistics::logical_size_after_with(
         &reader,
         ours,
         merged.root,

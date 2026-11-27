@@ -61,10 +61,13 @@ fn audit(reader: &SqliteHandles) -> Vec<Observation> {
 fn project(writer: &SqliteHandles, n: u8) {
     use layerfs_content::{
         filesystem::{
-            attributes::PortableMetadata,
-            directory::{encode_directory_page, DirectoryPage},
-            inode::{encode_inode_page, InodePage},
-            scope_for_seed, FilesystemRoot,
+            scope_for_seed,
+            tree::{
+                attribute::PortableMetadata,
+                directory::{encode_directory_page, DirectoryPage},
+                inode::{encode_inode_page, InodePage},
+            },
+            FilesystemRoot,
         },
         inode_leaf::{InodeKind, InodeMetadata, InodeValue},
     };

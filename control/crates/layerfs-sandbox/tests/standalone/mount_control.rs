@@ -6,7 +6,7 @@ mod held_writer;
 #[allow(dead_code)]
 #[path = "../../../../../engine/crates/layerfs-daemon/tests/support/install/host.rs"]
 mod support;
-use layerfs_daemon::control::Service;
+use layerfs_daemon::workspace::Service;
 use layerfs_history::{BranchId, CommitOutcome, WorkspaceId};
 use layerfs_protocol::daemon::{Activity, ControlCode, Reply, Request, WorkspaceToken};
 use layerfs_sandbox::internal::Control;
@@ -313,7 +313,7 @@ fn an_original_local_unknown_blocks_another_commit_and_normal_unmount() {
     assert!(observed.local.unwrap().captured.is_some());
     assert!(
         matches!(f.service.execute_control(&Request::Commit(layerfs_protocol::daemon::CommitControl { token, force: false, message: None, expected: None })),
-        Err(layerfs_daemon::control::Failure::Custody(value)) if value.code == ControlCode::Unknown && value.published.is_none())
+        Err(layerfs_daemon::workspace::Failure::Custody(value)) if value.code == ControlCode::Unknown && value.published.is_none())
     );
     assert!(
         matches!(client.call(Request::Unmount(layerfs_protocol::daemon::UnmountControl { token, discard: true })).unwrap(),Reply::Refused(value) if value.code==ControlCode::Unknown)
@@ -398,7 +398,7 @@ fn a_store_unknown_before_publication_folds_back_and_admits_a_commit() {
     close(&mut client, token);
     let original = worker.join();
     let failed = match &original.outcome {
-        Err(layerfs_daemon::control::Failure::Commit(failed)) => failed,
+        Err(layerfs_daemon::workspace::Failure::Commit(failed)) => failed,
         other => panic!("{:?}", other.as_ref().err()),
     };
     assert!(failed.locally_settled && !failed.uncertain());
@@ -525,7 +525,7 @@ fn product_control_commit_captures_the_frontier_releases_its_owners_and_is_then_
                 message: None,
                 expected: None,
             })),
-        Err(layerfs_daemon::control::Failure::Rejected(
+        Err(layerfs_daemon::workspace::Failure::Rejected(
             ControlCode::Invalid,
             _
         ))
@@ -625,7 +625,7 @@ fn product_control_commit_captures_the_frontier_releases_its_owners_and_is_then_
 }
 #[test]
 fn forced_unmount_refuses_a_workspace_without_a_connection_before_any_effect() {
-    use layerfs_daemon::control::Failure;
+    use layerfs_daemon::workspace::Failure;
     let f = fixture::Fixture::new("control-force-unattached");
     let branch = f.host.project.branch.branch.id;
     let last = identity(91);
@@ -703,7 +703,7 @@ fn forced_unmount_refuses_a_workspace_without_a_connection_before_any_effect() {
 #[test]
 fn a_definite_commit_failure_whose_capture_is_not_resolved_answers_unknown() {
     use {
-        layerfs_daemon::control::Failure,
+        layerfs_daemon::workspace::Failure,
         layerfs_store_service::store::{CommitError, CommitPhase},
     };
     let f = fixture::Fixture::new("control-unresolved");
@@ -801,7 +801,7 @@ fn a_definite_commit_failure_whose_capture_is_not_resolved_answers_unknown() {
 #[test]
 fn an_unresolved_moved_head_failure_is_answered_and_not_dropped() {
     use layerfs_history::{error::MovedState, HistoryError};
-    use {layerfs_daemon::control::Failure, layerfs_store_service::store::CommitError};
+    use {layerfs_daemon::workspace::Failure, layerfs_store_service::store::CommitError};
     let f = fixture::Fixture::new("control-unresolved-moved");
     let record = f.host.project.branch.branch.clone();
     let branch = record.id;

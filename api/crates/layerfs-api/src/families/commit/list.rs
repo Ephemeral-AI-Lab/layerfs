@@ -3,9 +3,9 @@ use crate::dispatch::guard::scope::Rule;
 use crate::dispatch::table::Kind::{Int, Name, Project, Text};
 use crate::dispatch::table::{a, call, opt, Call};
 use crate::dispatch::{Context, Form, Paging, Part};
-use layerfs_home::outcome::Outcome;
+use layerfs_home::reply::outcome::Outcome;
 use layerfs_protocol::sdk::SdkValue;
-use layerfs_store::calls::commit::{list, CommitList};
+use layerfs_store::data::commit::{list, CommitList};
 
 /// One Commit; on main, one publication with the Branch it came from.
 const ROW: Form = Form::of(

@@ -13,10 +13,10 @@
 use super::super::frame::{StageFrame, StageStep};
 use super::send::{left, log_left, Copy, Left};
 use crate::admin::route::executor::Worker;
-use layerfs_home::events::Events;
-use layerfs_home::outcome::{refused, Outcome};
-use layerfs_home::trace;
-use layerfs_machine::worker::Unreached;
+use layerfs_home::log::trace;
+use layerfs_home::reply::events::Events;
+use layerfs_home::reply::outcome::{refused, Outcome};
+use layerfs_machine::route::Unreached;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::sync::mpsc;
 use std::time::Duration;
@@ -133,7 +133,7 @@ impl Parts {
         // framed here: the request carries this thread's home id and step
         // timing; the part's buffer is freed once it is framed
         let op = "project.stage";
-        let request = layerfs_machine::worker::request(op, self.request(StageStep::Write(part)));
+        let request = layerfs_machine::route::request(op, self.request(StageStep::Write(part)));
         let request = match request {
             Ok(request) => request,
             Err(refusal) => return Err(self.failed.get_or_insert(refusal).clone()),
@@ -261,7 +261,7 @@ impl Parts {
             machine: &self.machine,
             copy: &self.id,
             phase: "send",
-            sent_ms: layerfs_home::home::now_ms(),
+            sent_ms: layerfs_home::disk::now_ms(),
             timeout_ms: self.timeout_ms,
         };
         log_left(&self.home, &left, message);

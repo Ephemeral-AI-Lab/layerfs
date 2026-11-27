@@ -5,7 +5,7 @@ use crate::dispatch::table::{call, Call};
 use crate::dispatch::Context;
 use crate::dispatch::{Form, Part, Section};
 #[cfg(feature = "machine")]
-use layerfs_home::outcome::Outcome;
+use layerfs_home::reply::outcome::Outcome;
 #[cfg(feature = "machine")]
 use layerfs_protocol::sdk::SdkValue;
 

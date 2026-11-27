@@ -8,13 +8,13 @@
 //! repairs it (a record that does not parse, a symlink in place of a
 //! folder): its message then says what to do by hand.
 use super::findings::Findings;
-use layerfs_home::home::{paths, read_record, RECORD_VERSION};
-use layerfs_home::outcome::failed;
-use layerfs_home::outcome::shell_word;
-use layerfs_machine::record::MachineRecord;
+use layerfs_home::disk::{paths, read_record, RECORD_VERSION};
+use layerfs_home::reply::outcome::failed;
+use layerfs_home::reply::outcome::shell_word;
+use layerfs_machine::record::machine::MachineRecord;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_sandbox::record::SandboxRecord;
-use layerfs_store::record::StoreRecord;
+use layerfs_store::admin::record::store::StoreRecord;
 use std::collections::BTreeSet;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
@@ -229,7 +229,7 @@ fn execs(workspaces: &Path, name: &str, findings: &mut Findings) -> Result<()> {
                 format!("rm -r {}", shell(&folder)),
             );
         }
-        let records = match layerfs_sandbox::exec::record::listed(
+        let records = match layerfs_sandbox::record::exec::listed(
             workspaces.parent().unwrap_or(workspaces),
             Some(&id),
         ) {
@@ -396,7 +396,7 @@ fn file_mode(path: &Path, entity: (&str, &str), findings: &mut Findings) {
     }
 }
 
-/// `path` as one shell word ([`layerfs_home::outcome::shell_word`]).
+/// `path` as one shell word ([`layerfs_home::reply::outcome::shell_word`]).
 pub(crate) fn shell(path: &Path) -> String {
     shell_word(&path.display().to_string())
 }

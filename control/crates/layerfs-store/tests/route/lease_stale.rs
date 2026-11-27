@@ -3,7 +3,7 @@
 //! logs it once, keeps the live holders' leases, and a lease already gone
 //! is no failure. Replaces the inline `remove_stale` test that sat in
 //! product source.
-use layerfs_home::home::paths;
+use layerfs_home::disk::paths;
 use layerfs_store::admin::open::lease::{holders, read_holders};
 
 /// Above `i32::MAX`: names no single process, so never alive.

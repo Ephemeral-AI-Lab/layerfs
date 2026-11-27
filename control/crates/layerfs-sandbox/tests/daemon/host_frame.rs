@@ -5,8 +5,8 @@ use layerfs_home::json::{parse, print};
 use layerfs_protocol::sdk::SdkValue;
 use layerfs_sandbox::deploy::Choice;
 use layerfs_sandbox::route::machine::{decode, encode, Call, Message, Op, Sent, OPS};
-use layerfs_store::project::record::ProjectRecord;
-use layerfs_store::record::StoreRecord;
+use layerfs_store::admin::record::store::StoreRecord;
+use layerfs_store::data::project::record::project::ProjectRecord;
 
 fn sent(call: Call, message: Message) -> Sent {
     Sent {
@@ -179,7 +179,7 @@ fn a_frame_carries_the_postgresql_selection() {
         },
         Message::Absent,
     );
-    with.postgresql = Some(layerfs_store::open_args::PgSelection {
+    with.postgresql = Some(layerfs_store::admin::open::args::PgSelection {
         url: Some("postgresql://u:pw@h/d".to_owned()),
         schema: Some("layerfs".to_owned()),
         synchronous_commit: Some("off".to_owned()),

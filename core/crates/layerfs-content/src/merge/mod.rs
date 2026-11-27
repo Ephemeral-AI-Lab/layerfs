@@ -16,11 +16,3 @@ pub use roots::merge_roots;
 pub use rule::lww::{Rule, Rules};
 pub use rule::revert::{revert_units, RevertInput, Reverted};
 pub use rule::units::{decide_units, unit_changes, MergeUnit, UnitChange, UnitReport, Units};
-
-// #828 compat: old public module paths, removed in wave 3.
-#[doc(hidden)]
-pub use crate::merge::decide::markers; // #828 compat
-#[doc(hidden)]
-pub use crate::merge::decide::text; // #828 compat
-#[doc(hidden)]
-pub use crate::merge::rule::lww; // #828 compat

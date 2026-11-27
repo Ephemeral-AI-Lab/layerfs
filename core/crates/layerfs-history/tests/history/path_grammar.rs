@@ -2,7 +2,7 @@
 //! public contract. Moved out of `contract/path.rs`: product source holds no
 //! tests (the product-boundary guard).
 
-use layerfs_history::path::{
+use layerfs_history::catalog::path::{
     governs, path_key, trace_key, NormalizedPath, MAXIMUM_PATH_BYTES, MAXIMUM_PATH_COMPONENTS,
 };
 use layerfs_history::LayerStackId;

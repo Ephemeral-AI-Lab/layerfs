@@ -4,7 +4,7 @@ mod target {
 }
 use crate::bucket as backup_target;
 use crate::peer;
-use layerfs_home::home::{self, paths, write_entity};
+use layerfs_home::disk::{self, paths, write_entity};
 use layerfs_protocol::sdk::SdkValue;
 use peer::{Mode, Server};
 use std::collections::BTreeMap;
@@ -23,7 +23,7 @@ impl Fixture {
             std::process::id(),
             NEXT.fetch_add(1, Ordering::Relaxed)
         ));
-        home::ensure(&home).unwrap();
+        disk::ensure(&home).unwrap();
         layerfs_store::backup::secret::write(&home, "production", "mock-secret-key").unwrap();
         let server = Server::new(mode);
         write_entity(

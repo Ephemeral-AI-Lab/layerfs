@@ -5,7 +5,7 @@ use crate::dispatch::table::Kind::Name;
 use crate::dispatch::table::{a, call, Call, PROGRESS};
 use crate::dispatch::Context;
 use crate::doctor::{self, FORM};
-use layerfs_home::outcome::Outcome;
+use layerfs_home::reply::outcome::Outcome;
 use layerfs_inspect::{Kind, Options};
 use layerfs_protocol::sdk::SdkValue;
 

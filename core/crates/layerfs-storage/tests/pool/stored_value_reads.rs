@@ -311,7 +311,7 @@ fn one_demand_of_many_leaves_looks_up_their_values_together() {
 /// `mtime` only in its low bytes and nanoseconds by `bump`.
 fn inline_leaf(first_serial: u64, bump: u32) -> FinalizedObject {
     use layerfs_content::{
-        filesystem::attributes::portable::PortableMetadata, inode_leaf::InodeMetadata,
+        filesystem::tree::attribute::portable::PortableMetadata, inode_leaf::InodeMetadata,
     };
     let rows: Vec<_> = (0..ROWS)
         .map(|row| InodeLeafRow {

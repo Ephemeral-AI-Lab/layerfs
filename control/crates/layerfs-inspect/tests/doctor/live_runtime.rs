@@ -1,7 +1,7 @@
 //! Opt-in negative observations against exclusively owned, real runtime fixtures.
 #![cfg(all(unix, feature = "machine"))]
 use crate::doctor_own;
-use layerfs_home::home::{paths, private_dir, read_record, write_record};
+use layerfs_home::disk::{paths, private_dir, read_record, write_record};
 use layerfs_inspect::{Kind, Options};
 use layerfs_protocol::sdk::SdkValue;
 use std::{

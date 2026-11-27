@@ -10,11 +10,11 @@ use crate::admin::route::executor::{self, Executor};
 use crate::backend::postgresql::check;
 use crate::backend::postgresql::connect::{self, StoreConnect};
 use crate::StoreUsers;
-use layerfs_home::events::Events;
 use layerfs_home::names::{MachineName, StoreName};
-use layerfs_home::outcome::shell_word;
-use layerfs_home::outcome::{refused, with_fix, with_next, Outcome, FIX};
-use layerfs_machine::worker::Unreached;
+use layerfs_home::reply::events::Events;
+use layerfs_home::reply::outcome::shell_word;
+use layerfs_home::reply::outcome::{refused, with_fix, with_next, Outcome, FIX};
+use layerfs_machine::route::Unreached;
 use layerfs_persistence::diagnostic::ConnectionStep;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
@@ -22,7 +22,7 @@ use std::path::Path;
 pub use crate::close_idle;
 
 /// `store.compact`: reclaim one Store's dead bytes, answering the
-/// flattened report (`layerfs_store::report::compact_report`). A refusal
+/// flattened report (`layerfs_store::admin::maintenance::compact_report::compact_report`). A refusal
 /// gets the call that clears it as its `fix` (spec v19): starting a sqlite
 /// Store's machine whose worker was not reached, or replacing a worker of
 /// another build (the stop forced when Sandboxes are on the machine); the
@@ -113,9 +113,9 @@ fn with_store_fix(
     };
     let fix = match refusal.code.as_str() {
         "Unavailable" => match machine() {
-            Some(machine) if layerfs_machine::worker::is_mismatch(&refusal) => {
+            Some(machine) if layerfs_machine::route::is_mismatch(&refusal) => {
                 let on = users.sandboxes_on(home, &machine).map_or(0, |on| on.len());
-                Some(layerfs_machine::state::replace_worker(&machine, on))
+                Some(layerfs_machine::status::state::replace_worker(&machine, on))
             }
             Some(machine) => Some(format!(
                 "layerfs machine start {machine}",
@@ -163,7 +163,7 @@ pub struct RepairRequest {
 const REPAIR: &str = "store.repair_mount_holders";
 
 /// `store.repair_mount_holders`: first-class explicit operator repair of
-/// one Branch's mount intents ([`layerfs_store::repair`]). `list` and
+/// one Branch's mount intents ([`layerfs_store::admin::maintenance::repair_mount_holders`]). `list` and
 /// `preview` page the holders, each with its row `state` and the
 /// `liveness` admission would give it now; `settle` refuses a holder still
 /// `live` unless forced; `release` retains a settled row as the durable done
@@ -173,14 +173,14 @@ const REPAIR: &str = "store.repair_mount_holders";
 /// sent this home's place view; a PostgreSQL Store runs here, as its calls
 /// do.
 pub fn repair(home: &Path, request: &RepairRequest) -> Outcome {
-    let limit = layerfs_home::cursor::limit(REPAIR, request.limit, 100)?;
+    let limit = layerfs_home::reply::cursor::limit(REPAIR, request.limit, 100)?;
     let filters = [
         ("project", SdkValue::text(&request.project)),
         ("branch", SdkValue::text(&request.branch)),
         ("action", SdkValue::text(&request.action)),
     ];
     let carried = (request.cursor.as_deref())
-        .map(|made| layerfs_home::cursor::resume(REPAIR, made, &filters))
+        .map(|made| layerfs_home::reply::cursor::resume(REPAIR, made, &filters))
         .transpose()?;
     let target = crate::admin::route::resolve::target(home, &request.project)?;
     let sent = crate::admin::maintenance::repair_mount_holders::Repair {
@@ -241,7 +241,7 @@ fn paged(answer: SdkValue, filters: &[(&str, SdkValue)]) -> SdkValue {
             ("next", SdkValue::Null) => ("next_cursor".to_owned(), SdkValue::Null),
             ("next", place) => (
                 "next_cursor".to_owned(),
-                SdkValue::Text(layerfs_home::cursor::make(REPAIR, place, filters)),
+                SdkValue::Text(layerfs_home::reply::cursor::make(REPAIR, place, filters)),
             ),
             (_, value) => (name, value),
         })
@@ -511,7 +511,7 @@ fn runs_postgresql_sandboxes(home: &Path, store: &str, machine: &str) -> Result<
     #[cfg(not(feature = "machine"))]
     {
         let _ = store;
-        match layerfs_machine::record::MachineRecord::read(home, machine)? {
+        match layerfs_machine::record::machine::MachineRecord::read(home, machine)? {
             Some(_) => Ok(()),
             None => Err(refused("NotFound", format!("no machine named {machine}"))),
         }

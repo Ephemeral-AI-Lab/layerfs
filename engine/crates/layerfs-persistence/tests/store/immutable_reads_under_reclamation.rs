@@ -106,11 +106,12 @@ fn free_pages(h: &SqliteHandles) {
                 },
                 position: Some(position),
                 kind: InodeKind::RegularFile,
-                metadata: layerfs_content::filesystem::attributes::portable::PortableMetadata {
-                    mode: 0o644,
-                    mtime_seconds: 1_700_000_000,
-                    mtime_nanoseconds: 0,
-                },
+                metadata:
+                    layerfs_content::filesystem::tree::attribute::portable::PortableMetadata {
+                        mode: 0o644,
+                        mtime_seconds: 1_700_000_000,
+                        mtime_nanoseconds: 0,
+                    },
                 target_root: None,
                 host_path: Some(vec![b'p'; 3500]),
                 host: Some(HostIdentity {

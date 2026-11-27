@@ -1,5 +1,5 @@
 //! `store.list` (call surface 2.0): every Store, from the home's records.
-//! Each item is [`crate::get::summary`] in its records-only state; each
+//! Each item is [`crate::admin::status::get::summary`] in its records-only state; each
 //! machine's state is derived once for all its Stores. Nothing is probed
 //! unless `--with stats` asks for sizes or `--with format` for formats.
 use crate::admin::record::store::StoreRecord;
@@ -8,9 +8,10 @@ use crate::admin::status::get::summary;
 use crate::admin::status::state;
 use crate::backend::sqlite::family::step_on;
 use crate::backend::sqlite::step_request::StoreStep;
-use layerfs_home::home::{observed, paths};
-use layerfs_home::outcome::Outcome;
-use layerfs_home::state::State;
+use layerfs_home::disk::paths;
+use layerfs_home::record::observed;
+use layerfs_home::reply::outcome::Outcome;
+use layerfs_home::reply::state::State;
 use layerfs_protocol::sdk::SdkValue;
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -50,7 +51,7 @@ pub fn list(home: &Path, machine: Option<&str>, stats: bool, machines: state::Ma
 }
 
 /// [`list`], with `format` each item's `format` section (#804,
-/// [`crate::formats`]), read without opening the Store; a machine that did
+/// [`crate::admin::status::formats`]), read without opening the Store; a machine that did
 /// not answer is not asked again for its other Stores.
 pub fn list_with(
     home: &Path,

@@ -13,8 +13,8 @@ use crate::admin::route::executor::{plan, Executor};
 use crate::admin::route::resolve::Target;
 use crate::data::StoreOp;
 use layerfs_history::{BranchId, CommitId};
-use layerfs_home::events::Events;
-use layerfs_home::outcome::{refused, Outcome};
+use layerfs_home::reply::events::Events;
+use layerfs_home::reply::outcome::{refused, Outcome};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 
@@ -44,7 +44,7 @@ pub fn store_call(
     // the lease is taken under the Store's lock with the record read there:
     // a move or remove that started since `target` was read refuses it
     let (lease, record) = lease::claim(&home, &target.store)?;
-    layerfs_home::trace::step("lease");
+    layerfs_home::log::trace::step("lease");
     if let StoreRef::Postgres { .. } = target.store_ref {
         return postgresql(&home, target, method, (args, &record), lease);
     }

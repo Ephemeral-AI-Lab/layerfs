@@ -4,8 +4,8 @@
 //! one line. With `LAYERFS_TRACE_STEP` set too, a call appends one line per
 //! step, the worker's sent back in its answer; unset, none, and the answer
 //! is the same.
-use layerfs_home::trace;
-use layerfs_machine::worker::{
+use layerfs_home::log::trace;
+use layerfs_machine::route::{
     self, read_frame, read_frame_within, write_frame, Endpoint, Hello, MAX_HELLO, PROTOCOL,
 };
 use layerfs_protocol::sdk::SdkValue;
@@ -70,7 +70,7 @@ fn one_worker_call_is_one_traced_connection() {
     let (dir, trace) = traced("connection");
 
     let endpoint = stand_in();
-    let outcome = worker::call(&endpoint, "file.read", SdkValue::Null, &mut |_| {});
+    let outcome = route::call(&endpoint, "file.read", SdkValue::Null, &mut |_| {});
     assert_eq!(outcome.unwrap(), SdkValue::text("served"));
     let text = std::fs::read_to_string(&trace).unwrap();
     let lines: Vec<&str> = text.lines().collect();
@@ -94,7 +94,7 @@ fn one_worker_call_is_one_traced_connection() {
         address: gone,
         secret: "k".to_owned(),
     };
-    let refusal = worker::call(&endpoint, "file.stat", SdkValue::Null, &mut |_| {}).unwrap_err();
+    let refusal = route::call(&endpoint, "file.stat", SdkValue::Null, &mut |_| {}).unwrap_err();
     assert_eq!(refusal.code, "Unavailable", "{refusal:?}");
     let text = std::fs::read_to_string(&trace).unwrap();
     let last = text.lines().nth(1).unwrap();
@@ -159,7 +159,7 @@ fn a_stepped_call_traces_its_steps_and_the_workers() {
     let endpoint = served(&dir);
     let ping = || {
         trace::stepped("worker.ping", || {
-            worker::call(&endpoint, "worker.ping", SdkValue::Null, &mut |_| {})
+            route::call(&endpoint, "worker.ping", SdkValue::Null, &mut |_| {})
         })
     };
 
@@ -188,7 +188,7 @@ fn a_stepped_call_traces_its_steps_and_the_workers() {
         "worker.result",
     ];
     assert_eq!(names, caller, "{text}");
-    let asked = layerfs_home::home::with_field(request, "trace_step", SdkValue::Bool(true));
+    let asked = layerfs_home::disk::with_field(request, "trace_step", SdkValue::Bool(true));
     let answer = raw_ping(&endpoint, asked);
     let Some(SdkValue::List(sent)) = answer.get("steps") else {
         panic!("no steps in {answer:?}");
@@ -203,7 +203,7 @@ fn a_stepped_call_traces_its_steps_and_the_workers() {
     // caller's own steps only
     let old = stand_in();
     let outcome = trace::stepped("file.read", || {
-        worker::call(&old, "file.read", SdkValue::Null, &mut |_| {})
+        route::call(&old, "file.read", SdkValue::Null, &mut |_| {})
     });
     assert_eq!(outcome.unwrap(), SdkValue::text("served"));
     let text = std::fs::read_to_string(&trace).unwrap();

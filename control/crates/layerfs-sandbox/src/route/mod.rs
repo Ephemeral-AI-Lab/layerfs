@@ -8,7 +8,3 @@ pub mod direct;
 pub mod inspect;
 #[doc(hidden)]
 pub mod machine;
-
-// #828 compat: the old `route` module (now `machine::send`), removed in wave 3.
-#[doc(hidden)]
-pub use machine::send::*; // #828 compat

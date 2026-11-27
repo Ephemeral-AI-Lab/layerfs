@@ -1,7 +1,7 @@
 //! The host worker's PostgreSQL lane (#819 P-B): PostgreSQL reads and
 //! single-change PostgreSQL writes, handed over by an ordinary thread once
 //! their request is read and checked ([`HostServer::lane_request`]), run
-//! on held sessions ([`layerfs_store::postgresql::pool`]).
+//! on held sessions ([`layerfs_store::backend::postgresql::pool`]).
 //!
 //! A lane thread starts the oldest queued call whose Store has a free slot
 //! of the call's kind, so a call of a busy Store waits in the queue, on no
@@ -173,7 +173,7 @@ impl HostServer {
             }));
             pool::release_held();
             if result.is_err() {
-                let _ = layerfs_home::trace::steps_take();
+                let _ = layerfs_home::log::trace::steps_take();
                 log("a host PostgreSQL call panicked; its answer was lost");
             }
             drop(stream);
@@ -196,7 +196,7 @@ impl HostServer {
                 (Some(open), served)
             }
             HandOver::Full(open, request) => {
-                let refusal = layerfs_home::outcome::refused(
+                let refusal = layerfs_home::reply::outcome::refused(
                     "Unavailable",
                     format!(
                         "the host worker holds {} PostgreSQL calls not yet \

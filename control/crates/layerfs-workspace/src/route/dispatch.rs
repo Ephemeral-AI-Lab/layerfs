@@ -6,7 +6,7 @@
 //! (layerfs-project#106). It matches on the one table of host operations
 //! (`host::Call`, R1).
 use crate::machine::serve as workspace;
-use layerfs_home::outcome::Outcome;
+use layerfs_home::reply::outcome::Outcome;
 use layerfs_sandbox::route::machine::{Call, Host};
 
 /// Runs one host operation once: a Workspace operation here, any other in
@@ -29,7 +29,7 @@ pub fn call(host: Host, call: Call) -> Outcome {
         Some(_) => workspace::by_name(&host, call.path())?,
         None => None,
     };
-    layerfs_home::trace::step("by_name");
+    layerfs_home::log::trace::step("by_name");
     match call {
         Call::Mount { branch, name } => workspace::mount(&host, branch.as_deref(), name.as_deref()),
         Call::Commit {

@@ -3,10 +3,11 @@
 //! on a machine at a time, and [`PruneGate`], which `machine.prune` holds while
 //! it reads those locks and removes, so a copy cannot start writing meanwhile.
 use crate::image::cache;
-use layerfs_home::events::Events;
-use layerfs_home::home::{self, flock, private_dir, read_record, write_record};
-use layerfs_home::outcome::{failed, refused};
-use layerfs_home::process;
+use layerfs_home::disk::{self, private_dir, read_record, write_record};
+use layerfs_home::lock::flock;
+use layerfs_home::record::process;
+use layerfs_home::reply::events::Events;
+use layerfs_home::reply::outcome::{failed, refused};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::fs::{File, OpenOptions};
 use std::os::unix::fs::OpenOptionsExt;
@@ -157,7 +158,7 @@ impl ImageLock {
         if let Ok(Some(record)) = read_record(path) {
             let _ = write_record(
                 path,
-                &home::with_field(record, "phase", SdkValue::text(phase)),
+                &disk::with_field(record, "phase", SdkValue::text(phase)),
             );
         }
     }
@@ -165,7 +166,7 @@ impl ImageLock {
     /// Wraps `file` with its owner record path and writes the owner record.
     fn with_record(file: File, home: &Path, machine: &str, hex: &str, id: &str) -> Result<Self> {
         let path = Self::record_path(home, machine, hex);
-        let now = home::now_ms();
+        let now = disk::now_ms();
         let mut fields = process::identity();
         fields.extend([
             ("machine", SdkValue::text(machine)),

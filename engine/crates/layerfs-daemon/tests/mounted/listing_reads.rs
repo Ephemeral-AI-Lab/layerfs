@@ -13,7 +13,7 @@
 #![cfg(target_os = "linux")]
 use crate::installed;
 use crate::mounted;
-use layerfs_store_service::bootstrap::{open_store_observed, OpenedStore};
+use layerfs_store_service::store::open::{open_store_observed, OpenedStore};
 use mounted::Harness;
 use std::{
     hash::{DefaultHasher, Hash, Hasher},

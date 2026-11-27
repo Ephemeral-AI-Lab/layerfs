@@ -4,10 +4,10 @@
 //! `layerfs-inspect`'s, passed in by the caller.
 use crate::deploy::Side;
 use crate::record::SandboxRecord;
-use layerfs_home::home::paths;
-use layerfs_home::outcome::{failed, refused, Outcome};
+use layerfs_home::disk::paths;
+use layerfs_home::reply::outcome::{failed, refused, Outcome};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
-use layerfs_store::place::{self, Executor};
+use layerfs_store::admin::route::executor::{self, Executor};
 use std::io::ErrorKind;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::{Component, Path, PathBuf};
@@ -34,13 +34,13 @@ pub fn ask(
     args: SdkValue,
     serve: Serve,
 ) -> Outcome {
-    let request = layerfs_home::home::with_field(args, "kind", SdkValue::text(kind));
+    let request = layerfs_home::disk::with_field(args, "kind", SdkValue::text(kind));
     match on_owner(home, machine)? {
         Executor::Local => {
             let home = home.to_owned();
             admit(move |budget| serve(&Side::Home(&home), &request, budget))
         }
-        Executor::Worker(mut worker) => worker.read(OP, request, place::READ),
+        Executor::Worker(mut worker) => worker.read(OP, request, executor::READ),
     }
 }
 
@@ -164,7 +164,7 @@ impl Budget {
 /// Store, no write, and no refusal while a machine operation holds the
 /// machine (`place::on_machine_read`).
 pub fn on_owner(home: &Path, machine: &str) -> Result<Executor, SdkRefusal> {
-    place::on_machine_read(home, machine)
+    executor::on_machine_read(home, machine)
 }
 
 /// Runs `work` as one inspect request of this process: under a permit, on

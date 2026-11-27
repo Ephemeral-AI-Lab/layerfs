@@ -13,9 +13,9 @@ use crate::{
         EncodedRecord,
     },
     error::{StorageError, StorageResult},
+    location::Source,
     pack::layout::PackLane,
     policy::METADATA_INDEX_VALUES,
-    source::Source,
 };
 use layerfs_content::{
     inode_leaf::{PoolingLeaf, INODE_VALUE_BYTES},

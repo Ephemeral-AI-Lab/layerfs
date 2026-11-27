@@ -3,9 +3,9 @@
 use crate::dispatch::table::Kind::{Name, Project};
 use crate::dispatch::table::{a, call, opt, Call};
 use crate::dispatch::{Context, Form};
-use layerfs_home::outcome::Outcome;
+use layerfs_home::reply::outcome::Outcome;
 use layerfs_protocol::sdk::SdkValue;
-use layerfs_store::calls::project::{stats, ProjectStats};
+use layerfs_store::data::project::status::stats::{stats, ProjectStats};
 
 /// The counts and size; `partial` when the count stopped at its work
 /// bound; the counted `commit` and its `root` in the long form.

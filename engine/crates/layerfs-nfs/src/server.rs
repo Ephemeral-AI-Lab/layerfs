@@ -49,11 +49,11 @@ pub struct ExportConfig {
     /// when the export releases.
     pub companion_spill_dir: Option<std::path::PathBuf>,
     /// Resident memory budget for AppleDouble companion bodies before spilling
-    /// to [`Self::companion_spill_dir`]; [`crate::apple_double::RESIDENT_BYTES`]
+    /// to [`Self::companion_spill_dir`]; [`crate::apple_double::companions::RESIDENT_BYTES`]
     /// by default.
     pub companion_resident_bytes: usize,
     /// Maximum AppleDouble companion index entries held at once;
-    /// [`crate::apple_double::HELD`] by default.
+    /// [`crate::apple_double::companions::HELD`] by default.
     pub companions_held: usize,
 }
 impl ExportConfig {

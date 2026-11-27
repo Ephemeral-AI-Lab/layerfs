@@ -3,9 +3,9 @@ use crate::dispatch::guard::scope::Rule;
 use crate::dispatch::table::Kind::{Name, Project};
 use crate::dispatch::table::{a, call, opt, Call};
 use crate::dispatch::{Context, Form};
-use layerfs_home::outcome::Outcome;
+use layerfs_home::reply::outcome::Outcome;
 use layerfs_protocol::sdk::SdkValue;
-use layerfs_store::calls::commit::{get, CommitGet};
+use layerfs_store::data::commit::{get, CommitGet};
 
 /// `branch` is the Branch the Commit was made on; a publication of main
 /// answers its `source_branch` and `source_commit`.

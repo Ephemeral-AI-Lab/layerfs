@@ -9,13 +9,13 @@ use crate::data::project::frame::{
 };
 use crate::data::project::record::project::ProjectRecord;
 use layerfs_history::{GcScopeKind, HistoryCatalog, HistoryError, LayerStackId};
-use layerfs_home::home::{now_ms, paths};
-use layerfs_home::outcome::{failed, refused, Outcome};
+use layerfs_home::disk::{now_ms, paths};
+use layerfs_home::reply::outcome::{failed, refused, Outcome};
 use layerfs_protocol::sdk::hex;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
-use layerfs_store_service::history::admission as store_admission;
-use layerfs_store_service::history::deletion::{delete_stack_with, Deletion};
-use layerfs_store_service::history::lookup;
+use layerfs_store_service::history::gc_admission as store_admission;
+use layerfs_store_service::history::project_delete::{delete_stack_with, Deletion};
+use layerfs_store_service::lookup;
 use std::path::Path;
 
 use super::run::remove_tree;
@@ -190,7 +190,7 @@ pub fn remove_worker_entry(
     let mut removed = None;
     for name in names {
         let record = paths::project_record(root, store, &name);
-        let Some(value) = layerfs_home::home::read_record(&record)? else {
+        let Some(value) = layerfs_home::disk::read_record(&record)? else {
             continue;
         };
         let matches = ProjectRecord::from_record(store, &name, value).stack_id() == Some(stack)

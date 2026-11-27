@@ -11,7 +11,7 @@ use crate::support;
 use layerfs_content::{
     encode_whole_file_payload,
     file::mapping::{self, ExtentNode, ExtentSlice, FileState},
-    filesystem::attributes::PortableMetadata,
+    filesystem::tree::attribute::PortableMetadata,
     inode_leaf::{
         encode_inode_value, InodeKind, InodeLeaf, InodeLeafRow, InodeMetadata, InodeValue,
         LEAF_ROW_BYTES,

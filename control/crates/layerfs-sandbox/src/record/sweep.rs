@@ -39,7 +39,7 @@
 //! the next sweep. The Workspace mount points of a run folder
 //! (`workspaces/`) are never entered while it is only listed.
 use crate::record::SandboxRecord;
-use layerfs_home::home::{log_swept, paths};
+use layerfs_home::disk::{log_swept, paths};
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
@@ -147,7 +147,7 @@ pub fn worker_start(root: &Path) -> Swept {
             continue;
         }
         // read again under its guard: a call that holds it may change it
-        let Ok(_guard) = layerfs_store::project::discovery::guard(&folder) else {
+        let Ok(_guard) = layerfs_store::data::project::record::discovery::guard(&folder) else {
             continue;
         };
         if !ended() {

@@ -3,7 +3,7 @@
 //! `{ phase, done, total }` (no piece counts), sent while the transfer
 //! runs, each phase ending on its exact count, and a failed transfer ending
 //! on what it moved.
-use layerfs_home::events::Events;
+use layerfs_home::reply::events::Events;
 use layerfs_protocol::sdk::SdkValue;
 use layerfs_store::backup::bucket::progress as bucket;
 use layerfs_store::backup::jobs::progress::Shown;

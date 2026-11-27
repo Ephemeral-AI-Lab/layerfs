@@ -8,7 +8,7 @@
 use layerfs_api::home::{self, paths, read_record, write_record};
 use layerfs_home::names::BucketName;
 use layerfs_protocol::sdk::SdkValue;
-use layerfs_store::backup::record::{BucketConnect, BucketRecord};
+use layerfs_store::backup::bucket::record::{BucketConnect, BucketRecord};
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
 use std::os::unix::fs::PermissionsExt;

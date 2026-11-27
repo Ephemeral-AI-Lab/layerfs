@@ -13,9 +13,9 @@
 //! outcome is known or [`leave`] when it is not. A marker refuses no lease
 //! and no Store call (`StoreRecord::unblocked`).
 use crate::admin::record::store::{self, StoreRecord};
-use layerfs_home::home::with_field;
-use layerfs_home::op::{self, Op, Standing};
-use layerfs_home::time;
+use layerfs_home::disk::with_field;
+use layerfs_home::record::intent::{self, Op, Standing};
+use layerfs_home::reply::time;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 
@@ -132,7 +132,9 @@ pub fn begin(home: &Path, store: &str, name: &str, phase: &str, args: SdkValue) 
     {
         record.unheld()?;
     }
-    record.with(op::FIELD, op.to_record().clone()).write(home)?;
+    record
+        .with(intent::FIELD, op.to_record().clone())
+        .write(home)?;
     Ok(op)
 }
 
@@ -156,7 +158,9 @@ pub fn mark(
     {
         return Ok(None);
     }
-    record.with(op::FIELD, op.to_record().clone()).write(home)?;
+    record
+        .with(intent::FIELD, op.to_record().clone())
+        .write(home)?;
     Ok(Some(op))
 }
 
@@ -200,8 +204,8 @@ pub fn replace(home: &Path, store: &str, id: &str, op: Option<&Op>) -> Result<()
         return Ok(());
     }
     match op {
-        Some(op) => record.with(op::FIELD, op.to_record().clone()),
-        None => record.without(op::FIELD),
+        Some(op) => record.with(intent::FIELD, op.to_record().clone()),
+        None => record.without(intent::FIELD),
     }
     .write(home)
 }

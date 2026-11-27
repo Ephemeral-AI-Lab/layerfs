@@ -71,7 +71,7 @@ fn connected(home: &Path, name: &str, url: &str, extra: &[(&str, SdkValue)], pas
     let fields = fields.into_iter().map(|(k, v)| (k.to_owned(), v)).collect();
     write_record(&paths::store_record(home, name), &SdkValue::Map(fields)).unwrap();
     if password {
-        layerfs_store::postgresql::login::save(home, name, "hunter2-secret").unwrap();
+        layerfs_store::backend::postgresql::login::save(home, name, "hunter2-secret").unwrap();
     }
 }
 

@@ -14,7 +14,7 @@ use crate::dispatch::table::{
     Kind::{Bool, Int, Name, Project, Text},
 };
 use crate::dispatch::Context;
-use layerfs_home::outcome::Outcome;
+use layerfs_home::reply::outcome::Outcome;
 use layerfs_protocol::sdk::SdkValue;
 use layerfs_store::admin::with_users::RepairRequest;
 

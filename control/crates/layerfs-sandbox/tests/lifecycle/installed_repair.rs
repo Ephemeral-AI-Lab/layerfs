@@ -1,17 +1,17 @@
 //! `sandbox.create`'s `installed` step repairs an incomplete SQLite project
 //! record (missing `manifest`/`installed`, no `op`) from the local Store file
 //! before launching the daemon (#749).
-use layerfs_home::home::{paths, private_dir};
+use layerfs_home::disk::{paths, private_dir};
 use layerfs_home::names::StoreName;
 use layerfs_protocol::sdk::SdkValue;
 use layerfs_sandbox::lifecycle::serve;
 use layerfs_sandbox::route::machine::{Deploy, Host, Message};
-use layerfs_store::backup::restored;
-use layerfs_store::project::add::{add_project, ProjectAdd};
-use layerfs_store::project::discovery;
-use layerfs_store::project::record::ProjectRecord;
-use layerfs_store::record::StoreRecord;
-use layerfs_store::sqlite::create::create;
+use layerfs_store::admin::record::store::StoreRecord;
+use layerfs_store::backend::sqlite::create::create;
+use layerfs_store::data::project::init::sqlite::{add_project, ProjectAdd};
+use layerfs_store::data::project::record::discovery;
+use layerfs_store::data::project::record::project::ProjectRecord;
+use layerfs_store::data::project::record::restored;
 
 #[test]
 fn sandbox_create_repairs_an_incomplete_sqlite_project_record() {
@@ -39,7 +39,7 @@ fn sandbox_create_repairs_an_incomplete_sqlite_project_record() {
         store_record: None,
     })
     .unwrap();
-    layerfs_store::open::close_idle(std::time::Duration::ZERO);
+    layerfs_store::admin::open::close::close_idle(std::time::Duration::ZERO);
 
     let stack = added.get_text("stack").unwrap().to_owned();
     ProjectRecord::from_record(

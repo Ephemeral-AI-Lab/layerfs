@@ -20,8 +20,8 @@
 //!   branch page it visits once.
 use crate::metadata;
 
-use layerfs_content::filesystem::attributes::portable::PortableMetadata;
-use layerfs_content::filesystem::inode::{
+use layerfs_content::filesystem::tree::attribute::portable::PortableMetadata;
+use layerfs_content::filesystem::tree::inode::{
     apply_inode_values, decode_inode_page, lookup, lookup_many, InodePage, InodeReadWork,
     InodeTable,
 };

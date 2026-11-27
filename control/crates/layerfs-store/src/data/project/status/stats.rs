@@ -1,7 +1,7 @@
 //! `project.stats` through the ordinary Store-call route, answering its
 //! call's full map (the keys of its long form; the dispatcher shapes it).
 use crate::admin::route::methods::{next_fields, on_project, StoreOp};
-use layerfs_home::{events::Events, outcome::Outcome};
+use layerfs_home::reply::{events::Events, outcome::Outcome};
 use layerfs_protocol::sdk::SdkValue;
 use std::path::Path;
 

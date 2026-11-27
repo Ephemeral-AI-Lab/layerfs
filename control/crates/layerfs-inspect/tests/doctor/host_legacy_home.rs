@@ -1,7 +1,7 @@
 //! Host naming compatibility for development homes, including a read-only diagnosis.
 use crate::doctor_own;
 
-use layerfs_home::home::{self, private_dir, write_record};
+use layerfs_home::disk::{self, private_dir, write_record};
 use layerfs_inspect::{Kind, Options};
 use layerfs_protocol::sdk::SdkValue;
 use std::path::Path;
@@ -26,7 +26,7 @@ fn development_home_reports_each_record_in_one_read_only_finding() {
         ]),
     );
     assert!(
-        matches!(home::detect(&root).unwrap(), home::Layout::Current(file) if file.layout == 3)
+        matches!(disk::detect(&root).unwrap(), disk::Layout::Current(file) if file.layout == 3)
     );
     let original = std::fs::read(&file).unwrap();
     let samples = [
@@ -76,7 +76,7 @@ fn development_home_reports_each_record_in_one_read_only_finding() {
         expected.push(path.to_string());
     }
     expected.sort();
-    let failure = home::open(&root).unwrap_err();
+    let failure = disk::open(&root).unwrap_err();
     assert_eq!(failure.code, "Unsupported");
     let report = doctor_own::own(
         &root,
@@ -121,12 +121,12 @@ fn compatible_development_home_can_reopen_and_retire_a_local_run() {
     assert_eq!(std::fs::read(&file).unwrap(), before);
     assert!(!root.join("layerfs.lock").exists());
 
-    let opened = home::open(&root).unwrap();
+    let opened = disk::open(&root).unwrap();
     assert_eq!(opened.id, id);
-    let sandbox = home::paths::run_root(&root).join("test-sandbox");
+    let sandbox = disk::paths::run_root(&root).join("test-sandbox");
     private_dir(&sandbox).unwrap();
-    assert_eq!(home::open(&root).unwrap().id, id);
+    assert_eq!(disk::open(&root).unwrap().id, id);
     std::fs::remove_dir(&sandbox).unwrap();
-    assert_eq!(home::open(&root).unwrap().id, id);
+    assert_eq!(disk::open(&root).unwrap().id, id);
     std::fs::remove_dir_all(root).unwrap();
 }

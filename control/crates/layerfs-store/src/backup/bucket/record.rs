@@ -8,9 +8,9 @@
 use super::secret;
 use crate::backup::bucket::{Credentials, Driver, RemoteError};
 use crate::backup::copy::Provider;
-use layerfs_home::home::{self, paths, read_record, write_entity};
+use layerfs_home::disk::{self, paths, read_record, write_entity};
 use layerfs_home::names::BucketName;
-use layerfs_home::outcome::{refused, View};
+use layerfs_home::reply::outcome::{refused, View};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 
@@ -134,7 +134,7 @@ impl BucketRecord {
     /// This record with key id `access_key`; every other field is kept as
     /// read.
     pub fn with_access_key(&self, access_key: &str) -> Self {
-        let fields = home::with_field(
+        let fields = disk::with_field(
             self.fields.clone(),
             "access_key",
             SdkValue::text(access_key),
@@ -173,7 +173,7 @@ impl BucketRecord {
                 "Failed",
                 format!("bucket {name}'s record names no access key; connect it again at its URL with its key"),
             );
-            return Err(layerfs_home::outcome::with_fix(
+            return Err(layerfs_home::reply::outcome::with_fix(
                 refusal,
                 self.connect_again(),
             ));
@@ -192,8 +192,8 @@ impl BucketRecord {
     pub fn connect_again(&self) -> String {
         format!(
             "layerfs backup connect {} {} --access-key <key> --key-stdin",
-            layerfs_home::outcome::shell_word(&self.name),
-            layerfs_home::outcome::shell_word(&self.url())
+            layerfs_home::reply::outcome::shell_word(&self.name),
+            layerfs_home::reply::outcome::shell_word(&self.url())
         )
     }
 

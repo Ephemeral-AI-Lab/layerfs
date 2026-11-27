@@ -4,9 +4,9 @@ use crate::dispatch::guard::scope::Rule;
 use crate::dispatch::table::Kind::{Int, Name, Project, Text};
 use crate::dispatch::table::{a, call, opt, Call};
 use crate::dispatch::{Context, Form, Paging};
-use layerfs_home::outcome::Outcome;
+use layerfs_home::reply::outcome::Outcome;
 use layerfs_protocol::sdk::SdkValue;
-use layerfs_store::calls::file::{read, FileRead};
+use layerfs_store::data::file::{read, FileRead};
 
 /// `text` for a text file (an empty one `""`); `binary` and `size` for one
 /// that is not text (the short form shows `size` only then, the long form

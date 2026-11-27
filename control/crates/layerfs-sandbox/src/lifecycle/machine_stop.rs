@@ -6,10 +6,11 @@ use crate::record::{discovery, reopen, SandboxRecord};
 use crate::route::direct;
 use crate::status::inventory;
 use crate::users::MACHINE;
-use layerfs_home::home::{self, lock, paths};
-use layerfs_home::op::Op;
-use layerfs_home::outcome::{failed, refused, Outcome};
-use layerfs_machine::record::MachineRecord;
+use layerfs_home::disk::{self, paths};
+use layerfs_home::lock::home as lock;
+use layerfs_home::record::intent::Op;
+use layerfs_home::reply::outcome::{failed, refused, Outcome};
+use layerfs_machine::record::machine::MachineRecord;
 use layerfs_machine::MachineUsers;
 use layerfs_machine::{force_record, machine_refusal as refusal, machine_spec, Phases};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
@@ -175,20 +176,20 @@ pub(crate) fn force_stop(home: &Path, name: &str, mut phases: Phases<'_, '_>) ->
             ("stopped_sandboxes", stopped),
             ("refused_sandboxes", skipped),
         ] {
-            error.detail = home::with_field(
+            error.detail = disk::with_field(
                 error.detail,
                 key,
                 SdkValue::List(list.into_iter().map(SdkValue::Text).collect()),
             );
         }
-        error.detail = home::with_field(
+        error.detail = disk::with_field(
             error.detail,
             "unknown",
             SdkValue::List(unknown.into_iter().map(SdkValue::Text).collect()),
         );
         if !custody.is_empty() {
             error.detail =
-                home::with_field(error.detail, "custody_errors", SdkValue::List(custody));
+                disk::with_field(error.detail, "custody_errors", SdkValue::List(custody));
         }
         return Err(error);
     }

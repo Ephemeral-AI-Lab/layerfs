@@ -3,12 +3,12 @@
 //! the `InUse`/`Busy` refusals built from them, with their texts. Layout 3: a
 //! Sandbox is read from `sandbox/<name>/` alone; a layout 2 folder under a
 //! machine is never read.
-use layerfs_home::home::{paths, write_record};
+use layerfs_home::disk::{paths, write_record};
 use layerfs_home::json::parse;
 use layerfs_home::names::HOST_MACHINE;
 use layerfs_protocol::sdk::SdkValue;
 use layerfs_sandbox::status::inventory;
-use layerfs_store::record::StoreRecord;
+use layerfs_store::admin::record::store::StoreRecord;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -260,7 +260,7 @@ fn the_checks_refuse_in_use_with_the_same_texts() {
 
 #[test]
 fn a_move_checks_the_stores_side() {
-    use layerfs_store::sqlite::transfer::resolve::can_move;
+    use layerfs_store::backend::sqlite::move_leftover::can_move;
     let home = home();
     let store = |name: &str, text: &str| StoreRecord::from_record(name, parse(text).unwrap());
     let on_dev = store("shop", r#"{"name":"shop","kind":"sqlite","machine":"dev"}"#);
@@ -371,7 +371,7 @@ fn a_nameless_machines_state_shows_its_refusals_chain() {
     let refusal = inventory::can_remove_machine(&home, "dev").unwrap_err();
     assert_eq!(refusal.code, "InUse");
     assert_eq!(refusal.detail.get_text("fix"), Some(chain));
-    let read = layerfs_machine::record::MachineRecord::read(&home, "dev").unwrap();
+    let read = layerfs_machine::record::machine::MachineRecord::read(&home, "dev").unwrap();
     let state = inventory::machine_state(&home, "dev", read.as_ref()).unwrap();
     let fields = state.write(SdkValue::Map(Vec::new()));
     assert_eq!(fields.get_text("reason"), Some("outdated"), "{fields:?}");
@@ -382,7 +382,7 @@ fn a_nameless_machines_state_shows_its_refusals_chain() {
         &paths::machine_record(&bare, "dev"),
         r#"{"platform":"lima","state":"running"}"#,
     );
-    let read = layerfs_machine::record::MachineRecord::read(&bare, "dev").unwrap();
+    let read = layerfs_machine::record::machine::MachineRecord::read(&bare, "dev").unwrap();
     let state = inventory::machine_state(&bare, "dev", read.as_ref()).unwrap();
     let fields = state.write(SdkValue::Map(Vec::new()));
     assert_eq!(fields.get_text("fix"), Some("layerfs machine remove dev"));

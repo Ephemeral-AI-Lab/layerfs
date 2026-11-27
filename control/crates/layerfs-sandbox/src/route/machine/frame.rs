@@ -7,11 +7,11 @@
 //! untyped request had. What opens its Store is [`Host::open_args`].
 use super::call::{Call, Deploy, Host, Message, Op, Started};
 use crate::deploy::Choice;
-use layerfs_home::outcome::refused;
+use layerfs_home::reply::outcome::refused;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
-use layerfs_store::open_args::{OpenArgs, PgSelection};
-use layerfs_store::project::record::ProjectRecord;
-use layerfs_store::record::StoreRecord;
+use layerfs_store::admin::open::args::{OpenArgs, PgSelection};
+use layerfs_store::admin::record::store::StoreRecord;
+use layerfs_store::data::project::record::project::ProjectRecord;
 
 /// One host operation as a caller sends it to its machine's worker.
 pub struct Sent {

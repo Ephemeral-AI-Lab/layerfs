@@ -7,7 +7,7 @@
 //! The 1.1 `runtime.*` and `backend.*` tables are gone (#536 step 2).
 use crate::lifecycle::registry;
 use crate::route::machine::{Call, Host, Message};
-use layerfs_home::outcome::{refused, Outcome};
+use layerfs_home::reply::outcome::{refused, Outcome};
 use layerfs_protocol::sdk::SdkValue;
 
 /// Runs one Sandbox operation once; a Commit `message` is checked for every
@@ -40,7 +40,7 @@ pub fn call(
 }
 
 /// [`call`] for the Sandbox's own calls that never close it (its start, its
-/// reads and a cancel), as a [`crate::route::Local`]: a Close through it is
+/// reads and a cancel), as a [`crate::route::machine::send::Local`]: a Close through it is
 /// refused, since only the control-layer workspace crate's dispatch, which
 /// drains the Sandbox's Workspaces, may run one.
 pub fn unclosing(host: Host, call: Call) -> Outcome {
@@ -100,10 +100,10 @@ fn listed(answer: SdkValue, directory: &std::path::Path) -> Outcome {
         let name = SdkValue::opt_text(record.and_then(|r| r.name()).map(str::to_owned));
         let created = (record.and_then(|r| r.created())).map_or(SdkValue::Null, SdkValue::Int);
         let running = running_in(item.get_text("workspace"));
-        let item = layerfs_home::home::with_field(item, "path", path);
-        let item = layerfs_home::home::with_field(item, "name", name);
-        let item = layerfs_home::home::with_field(item, "created", created);
-        layerfs_home::home::with_field(item, "running", running)
+        let item = layerfs_home::disk::with_field(item, "path", path);
+        let item = layerfs_home::disk::with_field(item, "name", name);
+        let item = layerfs_home::disk::with_field(item, "created", created);
+        layerfs_home::disk::with_field(item, "running", running)
     };
     let listed = SdkValue::Map(
         fields

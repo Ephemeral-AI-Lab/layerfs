@@ -6,9 +6,9 @@
 //! intent.
 use layerfs_history::records::{GcIntent, GcIntentKind, GcScopeKind};
 use layerfs_history::{HistoryName, LayerStackId, NamedSnapshot};
-use layerfs_home::events::Events;
-use layerfs_home::home::{layout, paths};
+use layerfs_home::disk::{layout, paths};
 use layerfs_home::names::{ProjectRef, StoreName};
+use layerfs_home::reply::events::Events;
 use layerfs_protocol::sdk::SdkValue;
 use layerfs_store::admin::open::args::OpenArgs;
 use layerfs_store::admin::open::service::with_service;
@@ -20,7 +20,7 @@ use layerfs_store::data::project::delete::worker::admit_project;
 use layerfs_store::data::project::frame::DeleteAdmitFrame;
 use layerfs_store::data::project::init::sqlite::{add_project, ProjectAdd};
 use layerfs_store::Related;
-use layerfs_store_service::history::lookup;
+use layerfs_store_service::lookup;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 

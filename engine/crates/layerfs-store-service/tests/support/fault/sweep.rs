@@ -42,7 +42,7 @@ use super::adversary::{
 };
 use super::fault_proxy::{Fault, FaultProxy, Window};
 use layerfs_content::filesystem::{
-    path::LogicalPath, read::FilesystemRead, root::FilesystemRootId,
+    name::path::LogicalPath, read::FilesystemRead, root::FilesystemRootId,
 };
 use layerfs_history::{CommitId, ForkSource};
 use layerfs_persistence::Handles;

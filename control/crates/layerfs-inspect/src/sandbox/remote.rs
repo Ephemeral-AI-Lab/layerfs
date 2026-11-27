@@ -6,9 +6,9 @@
 use super::{local, read, Budget, Checks, Observed};
 use crate::sandbox::workspace::{Listing, Seen};
 use layerfs_home::names::{MachineName, SandboxName};
-use layerfs_home::outcome::{refused, Outcome};
-use layerfs_home::state::BlockedBy;
-use layerfs_machine::worker::{diagnostic_connect, DiagnosticOperation, Endpoint};
+use layerfs_home::reply::outcome::{refused, Outcome};
+use layerfs_home::reply::state::BlockedBy;
+use layerfs_machine::route::{diagnostic_connect, DiagnosticOperation, Endpoint};
 use layerfs_protocol::sdk::SdkValue;
 use layerfs_sandbox::record::SandboxRecord;
 use std::path::Path;
@@ -32,7 +32,7 @@ pub(super) fn remote(
     if MachineName::parse(machine).is_err() {
         return;
     }
-    let endpoint = match layerfs_home::secrets::worker_secret(home, machine) {
+    let endpoint = match layerfs_home::secret::keys::worker_secret(home, machine) {
         Ok(Some(endpoint)) => Endpoint {
             address: endpoint.address,
             secret: endpoint.secret,
@@ -53,7 +53,10 @@ pub(super) fn remote(
                 ROUTE,
                 format!("machine {machine}'s worker record is malformed or cannot be read; replacing the worker force-stops {on} Sandbox{} on it", if on == 1 { "" } else { "es" }),
             );
-            checks.fix(ROUTE, layerfs_machine::state::replace_worker(machine, on));
+            checks.fix(
+                ROUTE,
+                layerfs_machine::status::state::replace_worker(machine, on),
+            );
             checks.evidence(
                 ROUTE,
                 SdkValue::map([
@@ -85,7 +88,10 @@ pub(super) fn remote(
                 ROUTE,
                 format!("machine {machine}'s worker refused its saved secret; replacing the worker force-stops {on} Sandbox{} on it", if on == 1 { "" } else { "es" }),
             );
-            checks.fix(ROUTE, layerfs_machine::state::replace_worker(machine, on));
+            checks.fix(
+                ROUTE,
+                layerfs_machine::status::state::replace_worker(machine, on),
+            );
             checks.evidence(
                 ROUTE,
                 SdkValue::map([
@@ -121,7 +127,7 @@ pub(super) fn remote(
         // `on` is at least 1, so the stop is forced
         checks.fix(
             COMPATIBLE,
-            layerfs_machine::state::replace_worker(machine, on),
+            layerfs_machine::status::state::replace_worker(machine, on),
         );
         checks.evidence(
             COMPATIBLE,
@@ -227,12 +233,12 @@ pub fn worker_diagnose(root: &Path, args: SdkValue) -> Outcome {
     if let Some(record) = read(root, name, &mut checks) {
         local(root, &record, &budget, &mut checks, false, &mut seen);
     }
-    let report = layerfs_home::home::with_field(
+    let report = layerfs_home::disk::with_field(
         checks.to_wire(),
         "workspaces",
         SdkValue::List(seen.workspaces.iter().map(Seen::to_sdk).collect()),
     );
-    Ok(layerfs_home::home::with_field(
+    Ok(layerfs_home::disk::with_field(
         report,
         "listing",
         SdkValue::text(seen.listing.word()),

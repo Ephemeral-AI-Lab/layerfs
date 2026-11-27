@@ -29,10 +29,10 @@ use crate::admin::record::store::{StoreRecord, StoreRef};
 use crate::admin::route::executor::{self, Executor, Worker};
 use crate::backend::sqlite::family::{self, progress};
 use crate::Related;
-use layerfs_home::events::Events;
-use layerfs_home::home::paths;
-use layerfs_home::op::{Op, Standing};
-use layerfs_home::outcome::{refused, Outcome};
+use layerfs_home::disk::paths;
+use layerfs_home::record::intent::{Op, Standing};
+use layerfs_home::reply::events::Events;
+use layerfs_home::reply::outcome::{refused, Outcome};
 use layerfs_persistence::upgrade::{
     upgrade_postgresql, upgrade_sqlite, UpgradeError, UpgradeReport, UpgradeRequest,
 };
@@ -493,7 +493,7 @@ pub fn cancel_in_worker(args: &SdkValue) -> Outcome {
 }
 
 /// The worker's `store.format { store }`: the format section of the file
-/// under the worker's `root` (`crate::formats`), read from its header.
+/// under the worker's `root` (`crate::admin::status::formats`), read from its header.
 pub fn format_in_worker(root: &Path, args: &SdkValue) -> Outcome {
     let store = args
         .get_text("store")

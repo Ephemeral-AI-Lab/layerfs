@@ -26,8 +26,8 @@ use crate::encoding::codec::DecompressionWorkspace;
 use crate::encoding::pool::{delta, leaf, PoolReader};
 use crate::error::{StorageError, StorageResult};
 use crate::location::ObjectLocation;
+use crate::location::Source;
 use crate::policy::StorageCapacities;
-use crate::source::Source;
 
 use super::memo::Known;
 use super::read::PooledCaches;
@@ -126,7 +126,7 @@ pub struct BranchChain {
 /// chain element whose locator came from a chain hint, which carries no role
 /// (#758), checked once its bytes are authenticated.
 fn declared_role(canonical: &[u8]) -> Option<ObjectRole> {
-    use layerfs_content::filesystem::sorted::format as sorted;
+    use layerfs_content::filesystem::tree::pages::format as sorted;
     let value = layerfs_content::object::decode_bytes_object(canonical).ok()?;
     let (magic, role) = (value.get(..8)?, *value.get(10)?);
     if magic == sorted::DIRECTORY_MAGIC {

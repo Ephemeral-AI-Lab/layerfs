@@ -23,7 +23,7 @@ use crate::backend::error::BackendError;
 use crate::backend::seam::Param;
 use layerfs_content::{
     filesystem::{
-        qualify::{qualify_root, QualificationWork, RootContext},
+        topology::{qualify_root, QualificationWork, RootContext},
         FilesystemRoot, FilesystemRootId, InodeScope,
     },
     FinalizedObject, ObjectId, ObjectRole,

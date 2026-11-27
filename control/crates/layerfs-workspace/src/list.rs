@@ -10,14 +10,14 @@
 //! `refused` with its refusal in `message`). Rows are ordered by Sandbox,
 //! then name, and paged by cursor: a cursor carries the `--sandbox` filter
 //! and the last row's place.
-use layerfs_home::home::paths;
+use layerfs_home::disk::paths;
 use layerfs_home::json;
-use layerfs_home::outcome::{refused, Outcome};
-use layerfs_home::state::State;
+use layerfs_home::reply::outcome::{refused, Outcome};
+use layerfs_home::reply::state::State;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_sandbox::record::discovery;
 use layerfs_sandbox::record::{sandboxes, SandboxRecord, WorkspaceRecord};
-use layerfs_store::place::{self, Executor};
+use layerfs_store::admin::route::executor::{self, Executor};
 use std::collections::BTreeMap;
 use std::path::Path;
 
@@ -60,7 +60,7 @@ fn row(sandbox: &str, project: Option<&str>, record: &SdkValue) -> Row {
         .unwrap_or("")
         .to_owned();
     let mounted = record.get_int("created").map_or(SdkValue::Null, |ms| {
-        SdkValue::Text(layerfs_home::time::iso(ms))
+        SdkValue::Text(layerfs_home::reply::time::iso(ms))
     });
     let item = SdkValue::map([
         ("workspace", SdkValue::Text(format!("{sandbox}:{name}"))),
@@ -242,7 +242,10 @@ pub fn list(home: &Path, request: &ListRequest) -> Outcome {
             continue;
         }
         let local = layerfs_sandbox::route::direct::forwarded(record)
-            || matches!(place::on_machine_read(home, machine), Ok(Executor::Local));
+            || matches!(
+                executor::on_machine_read(home, machine),
+                Ok(Executor::Local)
+            );
         if local {
             for value in records_in(&record.dir(home))? {
                 rows.push(row(name, record.project(), &value));
@@ -257,8 +260,8 @@ pub fn list(home: &Path, request: &ListRequest) -> Outcome {
             .map(|record| SdkValue::text(record.name()))
             .collect();
         let args = SdkValue::map([("sandboxes", SdkValue::List(names))]);
-        let answer = match place::on_machine_read(home, &machine) {
-            Ok(Executor::Worker(mut worker)) => worker.read(OP, args, place::READ),
+        let answer = match executor::on_machine_read(home, &machine) {
+            Ok(Executor::Worker(mut worker)) => worker.read(OP, args, executor::READ),
             Ok(Executor::Local) => Err(refused("Failed", "the machine runs here")),
             Err(refusal) => Err(refusal),
         };

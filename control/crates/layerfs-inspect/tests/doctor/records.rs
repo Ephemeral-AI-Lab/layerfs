@@ -5,7 +5,7 @@
 //! home (a `layerfs.json` of another layout) fails its layout check with the
 //! move fix; and the doctor writes nothing in the home. The check reads records only: it dials no worker or daemon.
 use crate::doctor_own;
-use layerfs_home::home::{paths, private_dir, write_entity, write_record};
+use layerfs_home::disk::{paths, private_dir, write_entity, write_record};
 use layerfs_inspect::{Kind, Options};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::collections::BTreeMap;
@@ -135,7 +135,7 @@ fn findings(report: &SdkValue) -> Vec<(String, String, String, String, String)> 
 #[test]
 fn a_clean_home_is_ok_with_no_findings() {
     let home = new_home("clean");
-    layerfs_home::home::open(&home).unwrap();
+    layerfs_home::disk::open(&home).unwrap();
     store(
         &home,
         "shop",
@@ -174,7 +174,7 @@ fn a_clean_home_is_ok_with_no_findings() {
 #[test]
 fn a_home_folder_is_0700_or_0701_and_the_message_names_both() {
     let home = new_home("modes-0701");
-    layerfs_home::home::open(&home).unwrap();
+    layerfs_home::disk::open(&home).unwrap();
     let native = SdkValue::map([
         ("name", t(layerfs_home::names::HOST_MACHINE)),
         ("platform", t("host")),
@@ -218,7 +218,7 @@ fn a_store_folder_others_may_pass_through_is_an_error_naming_chmod_700() {
     // #534: the daemon refuses a Store folder with any group/other bit, so
     // doctor must not call 0701 fine there; other home folders keep 0701.
     let home = new_home("store-0701");
-    layerfs_home::home::open(&home).unwrap();
+    layerfs_home::disk::open(&home).unwrap();
     store(
         &home,
         "shop",
@@ -258,7 +258,7 @@ fn a_symlinked_store_folder_is_an_error_that_does_not_change_the_target() {
     // the home's `store/` as a link: its own mode is 0777, not the folder's,
     // and the remedy must not chmod through the link into its target
     let home = new_home("store-link");
-    layerfs_home::home::open(&home).unwrap();
+    layerfs_home::disk::open(&home).unwrap();
     let elsewhere =
         std::env::temp_dir().join(format!("layerfs-doctor-link-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&elsewhere);
@@ -285,7 +285,7 @@ fn a_symlinked_store_entry_is_an_error_that_does_not_change_the_target() {
     // `store/<name>` as a link: the daemon refuses it, so doctor reports it;
     // the remedy is not a chmod, which would change the link's target
     let home = new_home("store-entry-link");
-    layerfs_home::home::open(&home).unwrap();
+    layerfs_home::disk::open(&home).unwrap();
     store(
         &home,
         "shop",
@@ -317,7 +317,7 @@ fn a_symlink_to_a_file_under_store_does_not_abort_other_findings() {
     // `store/<name>` linked to a regular file: must not fail `read_dir(.../project)`
     // with ENOTDIR and discard findings for the rest of the home
     let home = new_home("store-entry-file-link");
-    layerfs_home::home::open(&home).unwrap();
+    layerfs_home::disk::open(&home).unwrap();
     let native = SdkValue::map([
         ("name", t(layerfs_home::names::HOST_MACHINE)),
         ("platform", t("host")),
@@ -386,7 +386,7 @@ fn a_symlink_to_a_file_under_store_does_not_abort_other_findings() {
 #[test]
 fn a_dangling_symlink_under_store_is_an_error_that_keeps_scanning() {
     let home = new_home("store-entry-dangling-link");
-    layerfs_home::home::open(&home).unwrap();
+    layerfs_home::disk::open(&home).unwrap();
     let native = SdkValue::map([
         ("name", t(layerfs_home::names::HOST_MACHINE)),
         ("platform", t("host")),
@@ -453,7 +453,7 @@ fn a_home_that_does_not_exist_is_ok_and_stays_absent() {
 #[test]
 fn each_problem_gives_one_finding_naming_its_fix() {
     let home = new_home("problems");
-    layerfs_home::home::open(&home).unwrap();
+    layerfs_home::disk::open(&home).unwrap();
     // a record that does not parse
     let bad = paths::store_record(&home, "bad");
     private_dir(bad.parent().unwrap()).unwrap();
@@ -606,7 +606,7 @@ fn each_problem_gives_one_finding_naming_its_fix() {
 #[test]
 fn a_moves_copy_off_its_records_machine_is_one_warning_from_the_record() {
     let home = new_home("moved");
-    layerfs_home::home::open(&home).unwrap();
+    layerfs_home::disk::open(&home).unwrap();
     let boxed = SdkValue::map([("name", t("box")), ("platform", t("lima"))]);
     write_entity(&paths::machine_record(&home, "box"), &boxed).unwrap();
     // a move to box failed certain at `send`: box holds a partial copy
@@ -723,7 +723,7 @@ fn exec_record(home: &Path, wsid: &str, id: &str, pid: i64) -> PathBuf {
 #[test]
 fn exec_records_are_checked_and_left_as_they_are() {
     let home = new_home("execs");
-    layerfs_home::home::open(&home).unwrap();
+    layerfs_home::disk::open(&home).unwrap();
     store(
         &home,
         "shop",
@@ -800,7 +800,7 @@ fn exec_records_are_checked_and_left_as_they_are() {
 #[test]
 fn a_leftover_machine_native_folder_is_one_warning_with_its_removal() {
     let home = new_home("native-left");
-    layerfs_home::home::open(&home).unwrap();
+    layerfs_home::disk::open(&home).unwrap();
     let left = paths::machine_dir(&home, "native");
     private_dir(&left.join("run/layerfs-0123abcd-old")).unwrap();
     let report = doctor(&home).unwrap();
@@ -886,7 +886,7 @@ impl Drop for Mounted {
 #[test]
 fn a_leftover_machine_native_folder_with_a_mount_beneath_is_not_offered_rm() {
     let home = new_home("native-mounted");
-    layerfs_home::home::open(&home).unwrap();
+    layerfs_home::disk::open(&home).unwrap();
     let left = paths::machine_dir(&home, "native");
     let point = left.join("run/layerfs-0123abcd-old/workspaces/1");
     private_dir(&point).unwrap();

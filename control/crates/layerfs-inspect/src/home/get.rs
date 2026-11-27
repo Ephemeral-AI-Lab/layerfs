@@ -6,16 +6,14 @@
 //! its `reason` and `fix`, the build's `version`, the home's `generation`,
 //! and, only when asked, the platforms this computer supports (a probe)
 //! and the tree of everything in the home ([`crate::home_tree`]).
-use layerfs_home::home::layout::{detect, Layout};
-use layerfs_home::home::{generation, read_record, with_field};
+use layerfs_home::disk::layout::{detect, Layout};
+use layerfs_home::disk::{read_record, with_field};
 use layerfs_home::names::HOST_MACHINE;
-use layerfs_home::outcome::Outcome;
-use layerfs_home::state::{Reason, State};
+use layerfs_home::record::generation;
+use layerfs_home::reply::outcome::Outcome;
+use layerfs_home::reply::state::{Reason, State};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
-
-#[doc(hidden)]
-pub use super::init::init; // #828 compat
 
 /// The identity of the build making the call (`LAYERFS_BUILD_COMMIT` and
 /// `LAYERFS_BUILD_DIRTY` when it was compiled), compared with the Linux
@@ -88,10 +86,10 @@ pub fn get(home: &Path, build: Build<'_>, with: With) -> Outcome {
         Ok((Found::Foreign, layout)) => (
             State::broken(
                 Reason::Outdated,
-                Some(&layerfs_home::home::layout::foreign_fix(home)),
+                Some(&layerfs_home::disk::layout::foreign_fix(home)),
             ),
             layout,
-            Some(layerfs_home::home::layout::foreign(home).message),
+            Some(layerfs_home::disk::layout::foreign(home).message),
         ),
         // `detect` refuses only a read the system refused (permissions,
         // I/O), which may be a real 2.0 home: `failed` with the OS error,
@@ -103,7 +101,7 @@ pub fn get(home: &Path, build: Build<'_>, with: With) -> Outcome {
         ),
     };
     let ready = state == State::Ready;
-    let cache = match layerfs_machine::bundle::cache_root() {
+    let cache = match layerfs_machine::setup::bundle::cache_root() {
         Ok(path) => SdkValue::map([("path", SdkValue::text(path.display().to_string()))]),
         Err(_) => SdkValue::Null,
     };
@@ -148,7 +146,7 @@ fn platforms(home: &Path) -> Outcome {
 /// machine adapters to ask.
 #[cfg(not(feature = "machine"))]
 fn platforms(_home: &Path) -> Outcome {
-    Err(layerfs_home::outcome::refused(
+    Err(layerfs_home::reply::outcome::refused(
         "Unsupported",
         "this build has no machine adapters, so it lists no platforms",
     ))
@@ -227,7 +225,7 @@ impl HostDaemon {
     /// The host machine's daemon in `home` (a record that cannot be read
     /// leaves the default), or `None` when the user cache is unknown.
     pub fn of(home: &Path) -> Option<Self> {
-        use layerfs_machine::record::MachineRecord;
+        use layerfs_machine::record::machine::MachineRecord;
         let recorded = MachineRecord::read(home, layerfs_home::names::HOST_MACHINE)
             .ok()
             .flatten()
@@ -333,7 +331,7 @@ pub fn native_start(home: &Path, build: Build<'_>, refusal: SdkRefusal) -> SdkRe
         None => "layerfs home doctor".to_owned(),
     };
     let message = format!("{}. {said}", refusal.message);
-    layerfs_home::outcome::with_fix(SdkRefusal { message, ..refusal }, fix)
+    layerfs_home::reply::outcome::with_fix(SdkRefusal { message, ..refusal }, fix)
 }
 
 /// This build's own `layerfs-daemon`: the one beside the running program

@@ -2,8 +2,8 @@
 //! `sandbox.runtime`, and a forward's `sandbox.route` and
 //! `sandbox.forward_process`.
 use super::{cause, remove_fix, Checks};
-use layerfs_home::home::paths;
-use layerfs_home::state::BlockedBy;
+use layerfs_home::disk::paths;
+use layerfs_home::reply::state::BlockedBy;
 use layerfs_os::process::{self, LocalProcess};
 use layerfs_protocol::sdk::SdkValue;
 use layerfs_sandbox::record::SandboxRecord;

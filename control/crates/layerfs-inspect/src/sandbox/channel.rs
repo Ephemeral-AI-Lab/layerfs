@@ -4,11 +4,11 @@
 use super::{cause, remove_fix, Budget, Checks};
 use crate::doctor::report::NoVerdict;
 use crate::sandbox::workspace::{Listed, Listing};
-use layerfs_home::secrets;
+use layerfs_home::secret::keys;
 use layerfs_protocol::daemon::{DaemonPhase, HelloRequest, Reply, Request};
 use layerfs_protocol::duplex::{initiate_observed, ChannelError};
 use layerfs_protocol::sdk::{SdkCall, SdkValue};
-use layerfs_sandbox::daemon::channel::Control;
+use layerfs_sandbox::route::daemon::channel::exchange::Control;
 use std::net::{Shutdown, SocketAddr, TcpStream};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
@@ -63,16 +63,16 @@ pub(super) fn observe(
         .filter(|a| a.ip().is_loopback() && a.port() != 0);
     let (Some(endpoint), Ok(secret), Ok(peer), Ok(instance)) = (
         endpoint,
-        secrets::key::<32>(keys, "secret"),
-        secrets::key::<32>(keys, "peer"),
-        secrets::key::<32>(keys, "instance"),
+        keys::key::<32>(keys, "secret"),
+        keys::key::<32>(keys, "peer"),
+        keys::key::<32>(keys, "instance"),
     ) else {
         checks.fail(
             "sandbox.daemon_keys",
             "its daemon's saved endpoint or identities are malformed",
         );
         checks.fix("sandbox.daemon_keys", remove_fix(sandbox));
-        let readable = |key: &str| SdkValue::Bool(secrets::key::<32>(keys, key).is_ok());
+        let readable = |key: &str| SdkValue::Bool(keys::key::<32>(keys, key).is_ok());
         checks.evidence(
             "sandbox.daemon_keys",
             SdkValue::map([

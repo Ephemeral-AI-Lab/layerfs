@@ -3,7 +3,7 @@
 //! Needs LAYERFS_TEST_POSTGRES_URL, with a PostgreSQL URL and CREATEDB.
 use layerfs_api::Client;
 use layerfs_protocol::sdk::SdkValue;
-use layerfs_store::record::StoreRecord;
+use layerfs_store::admin::record::store::StoreRecord;
 use postgres::{Client as Postgres, Config, NoTls};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -23,11 +23,11 @@ impl Drop for Fixture {
     }
 }
 
-fn cli(home: &Path, method: &str, args: SdkValue) -> layerfs_home::outcome::Outcome {
+fn cli(home: &Path, method: &str, args: SdkValue) -> layerfs_home::reply::outcome::Outcome {
     layerfs_api::call_scoped(Some(home), None, method, args, &mut |_| {}, Client::Cli)
 }
 
-fn file(home: &Path, method: &str, path: &str) -> layerfs_home::outcome::Outcome {
+fn file(home: &Path, method: &str, path: &str) -> layerfs_home::reply::outcome::Outcome {
     cli(
         home,
         method,

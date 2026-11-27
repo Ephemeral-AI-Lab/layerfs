@@ -11,7 +11,7 @@
 //!
 //! This is the control-level end-to-end case T10.5 was missing: the
 //! persistence suite proves the reader, and this test drives the call the SDK
-//! and CLI actually reach (`layerfs_store::get::get`, the kind-neutral
+//! and CLI actually reach (`layerfs_store::admin::status::get::get`, the kind-neutral
 //! `store.get` route) against a real PostgreSQL Store. The
 //! rows a compaction leaves are written directly, so the test proves the
 //! projection, not a failpoint: a live owner is a real non-idle backend
@@ -24,8 +24,8 @@
 //! the one schema a 2.0 PostgreSQL Store uses (`layerfs`); a shared schema
 //! would collide with another run. Without the variable it reports NOT_RUN.
 use layerfs_history::HistoryCatalogConfig;
-use layerfs_home::events::Events;
-use layerfs_home::home;
+use layerfs_home::disk;
+use layerfs_home::reply::events::Events;
 use layerfs_persistence::{PostgresHandles, PostgresSelection};
 use layerfs_protocol::sdk::SdkValue;
 use layerfs_storage::StoragePolicy;
@@ -232,11 +232,11 @@ fn wait_gone(admin: &mut postgres::Client, pid: i32, start: &str) {
 fn machines(
     home: &Path,
     name: &str,
-) -> Result<layerfs_home::state::State, layerfs_protocol::sdk::SdkRefusal> {
+) -> Result<layerfs_home::reply::state::State, layerfs_protocol::sdk::SdkRefusal> {
     Ok(
-        match layerfs_machine::record::MachineRecord::read(home, name)? {
+        match layerfs_machine::record::machine::MachineRecord::read(home, name)? {
             Some(record) => record.status(false, 0),
-            None => layerfs_machine::state::unrecorded(name),
+            None => layerfs_machine::status::state::unrecorded(name),
         },
     )
 }
@@ -283,7 +283,7 @@ fn postgresql_store_status_projects_busy_leftover_and_idle() {
     .unwrap();
 
     let home = tempdir("home");
-    home::ensure(&home).unwrap();
+    disk::ensure(&home).unwrap();
     // `store.connect` records exactly this shape, its user in the record
     // and its password a secret of the home; `store.status` reads it. The login is the one
     // the client reads in the URL (a trust-auth server takes any password).
@@ -358,7 +358,7 @@ fn postgresql_store_status_projects_busy_leftover_and_idle() {
     };
     insert(&mut admin, &live);
 
-    let capture = layerfs_persistence::compact_metrics::CompactMetricsCapture::start();
+    let capture = layerfs_persistence::gc::metrics::CompactMetricsCapture::start();
     let busy = status(&home);
     assert_eq!(busy.get_text("state"), Some("busy"));
     let op = busy.get("op").unwrap();
@@ -369,7 +369,7 @@ fn postgresql_store_status_projects_busy_leftover_and_idle() {
             ("phase", SdkValue::text("build")),
             (
                 "started_at",
-                SdkValue::text(layerfs_home::time::iso(started_ms))
+                SdkValue::text(layerfs_home::reply::time::iso(started_ms))
             ),
         ]),
         "the op is the state's companion"

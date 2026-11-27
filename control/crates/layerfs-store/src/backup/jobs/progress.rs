@@ -9,7 +9,7 @@
 //! reaches its total says only that its bytes moved; the call has
 //! succeeded when it returns its result, never before.
 use crate::backup::bucket::progress::{observe, Progress, INTERVAL};
-use layerfs_home::events::Events;
+use layerfs_home::reply::events::Events;
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::sync::{Arc, Mutex, MutexGuard};
 

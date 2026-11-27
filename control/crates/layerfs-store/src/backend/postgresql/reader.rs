@@ -13,14 +13,14 @@
 //! first reads; a call that reads nothing on the host (exec, Commit,
 //! unmount, close) opens nothing. The caller's lease covers each call; the
 //! session itself holds none. The same reaper closes it after
-//! [`crate::open::IDLE`] unused, and [`forget`] when the Store closes. A held session is checked with one empty query before a call
+//! [`crate::admin::open::cache::IDLE`] unused, and [`forget`] when the Store closes. A held session is checked with one empty query before a call
 //! uses it; one that does not answer is dropped and a new one opens, so no
 //! call runs on a broken connection and none is retried.
 use crate::admin::open::args::{OpenArgs, PgSelection};
 use crate::admin::record::store::StoreRecord;
 use layerfs_history::HistoryCatalog as _;
-use layerfs_home::outcome::failed;
-use layerfs_home::outcome::refused;
+use layerfs_home::reply::outcome::failed;
+use layerfs_home::reply::outcome::refused;
 use layerfs_protocol::sdk::SdkRefusal;
 use std::path::Path;
 use std::path::PathBuf;
@@ -155,11 +155,11 @@ pub fn reach(
     let Some(handles) = held::session(key, record, postgresql)? else {
         return Ok(Err(OtherStore));
     };
-    let found = layerfs_store_service::history::lookup::project_in(project, |name| {
+    let found = layerfs_store_service::lookup::project_in(project, |name| {
         handles
             .history
             .layer_stack_named(name)
-            .map_err(layerfs_store_service::history::lookup::history)
+            .map_err(layerfs_store_service::lookup::history)
     });
     match found {
         Ok(_) => Ok(Ok(true)),
@@ -181,7 +181,7 @@ pub(crate) fn branch(
     (project, name): (&str, &str),
 ) -> Result<(layerfs_history::BranchId, Option<layerfs_history::CommitId>)> {
     let handles = held::session(key, record, postgresql)?.ok_or_else(|| another(record.name()))?;
-    use layerfs_store_service::history::lookup;
+    use layerfs_store_service::lookup;
     let stack = lookup::project_in(project, |wanted| {
         (handles.history.layer_stack_named(wanted)).map_err(lookup::history)
     })?;

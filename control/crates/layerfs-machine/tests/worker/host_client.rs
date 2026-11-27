@@ -1,5 +1,6 @@
 #![cfg(any(target_os = "macos", target_os = "linux"))]
-use layerfs_home::{disk, record::token::random};
+use layerfs_home::disk;
+use layerfs_home::record::token::random;
 use layerfs_machine::route::{
     host_check_peer, read_host_frame, write_host_frame, HostHello, HostPaths, ATTACHED,
     HOST_MAX_REQUEST, MAX_HELLO,

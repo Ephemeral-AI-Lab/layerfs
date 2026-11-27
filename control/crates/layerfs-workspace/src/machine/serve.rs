@@ -11,10 +11,12 @@
 //! it in place of the path, [`by_name`]).
 use super::values;
 use layerfs_history::{BranchId, CommitId, WorkspaceId};
-use layerfs_home::helpers::{lock, random, required};
+use layerfs_home::lock::mutex::lock;
 use layerfs_home::names::WorkspaceName;
-use layerfs_home::outcome::shell_word;
-use layerfs_home::outcome::{failed, with_next, Outcome};
+use layerfs_home::record::token::random;
+use layerfs_home::reply::outcome::shell_word;
+use layerfs_home::reply::outcome::{failed, with_next, Outcome};
+use layerfs_home::reply::values::required;
 use layerfs_protocol::daemon::{CommitControl, Reply};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_sandbox::internal::workspace;
@@ -51,7 +53,7 @@ pub fn mount(host: &Host, branch: Option<&str>, name: Option<&str>) -> Outcome {
     let sandbox = match host.sandbox.as_deref() {
         Some(id) if !id.is_empty() => id,
         _ => {
-            return Err(layerfs_home::outcome::refused(
+            return Err(layerfs_home::reply::outcome::refused(
                 "InvalidInput",
                 "workspace.mount names its Sandbox: `layerfs workspace mount <sandbox> <branch>`, with a Sandbox from `layerfs sandbox create` or `layerfs sandbox list`",
             ))
@@ -59,14 +61,14 @@ pub fn mount(host: &Host, branch: Option<&str>, name: Option<&str>) -> Outcome {
     };
     if branch == "main" {
         // main is the project's line of Layers, not a Branch (#535 terminal pass)
-        return Err(layerfs_home::outcome::refused(
+        return Err(layerfs_home::reply::outcome::refused(
             "InvalidInput",
             "main is the project's published line, not a Branch, and is not mounted: fork a Branch from it with `layerfs branch fork <project> <name>` and mount that",
         ));
     }
     let directory = layerfs_sandbox::record::discovery::sandbox_dir(host)?;
     let missing = || {
-        no_sandbox(layerfs_home::outcome::refused(
+        no_sandbox(layerfs_home::reply::outcome::refused(
             "NoSuchSandbox",
             format!("no Sandbox {sandbox} runs on this machine"),
         ))
@@ -85,7 +87,7 @@ pub fn mount(host: &Host, branch: Option<&str>, name: Option<&str>) -> Outcome {
         "NoSuchSandbox" => no_sandbox(refusal),
         _ => refusal,
     })?;
-    let _guard = layerfs_store::project::discovery::guard(&state.directory)?;
+    let _guard = layerfs_store::data::project::record::discovery::guard(&state.directory)?;
     // under the Sandbox's guard: a close may have removed it, or mounts filled it
     let Some(saved) = layerfs_sandbox::record::discovery::started(&directory)? else {
         return Err(missing());
@@ -94,7 +96,7 @@ pub fn mount(host: &Host, branch: Option<&str>, name: Option<&str>) -> Outcome {
     // checked again under the guard, where it holds
     free(sandbox, &workspaces, name.as_ref())?;
     if workspaces.len() >= WORKSPACES as usize {
-        let refusal = layerfs_home::outcome::refused(
+        let refusal = layerfs_home::reply::outcome::refused(
             "Capacity",
             format!(
                 "Sandbox {sandbox} already holds {WORKSPACES} Workspaces. Create a new Sandbox with `layerfs sandbox create` and mount there, or list this one's Workspaces with `layerfs workspace list --sandbox {sandbox}` and unmount the ones you are done with (`layerfs workspace unmount <workspace>`)"
@@ -104,7 +106,7 @@ pub fn mount(host: &Host, branch: Option<&str>, name: Option<&str>) -> Outcome {
             "layerfs workspace list --sandbox {sandbox}",
             sandbox = shell_word(sandbox)
         );
-        return Err(layerfs_home::outcome::with_fix(refusal, fix));
+        return Err(layerfs_home::reply::outcome::with_fix(refusal, fix));
     }
     let project = host.project.as_str();
     let id = WorkspaceId::from_authority(random()?).map_err(failed)?;
@@ -115,7 +117,7 @@ pub fn mount(host: &Host, branch: Option<&str>, name: Option<&str>) -> Outcome {
         // machine's current incarnation. The daemon that binds the mount
         // registers them beside its Workspace, so a later machine
         // incarnation or the Sandbox tombstone can prove the mount dead.
-        let home = layerfs_store::project::discovery::home_of(Some(&host.home))?;
+        let home = layerfs_store::data::project::record::discovery::home_of(Some(&host.home))?;
         let place = layerfs_sandbox::record::mount_place(&home, &directory, sandbox)?;
         workspace(&mut control)
             .placed(place)
@@ -170,7 +172,7 @@ fn free(
         return Ok(());
     };
     if (records.iter()).any(|(_, record)| record.name() == Some(name.as_str())) {
-        return Err(layerfs_home::outcome::refused(
+        return Err(layerfs_home::reply::outcome::refused(
             "Exists",
             format!("Sandbox {sandbox} already has a Workspace named {name}: pick another name, or unmount `{sandbox}:{name}` first"),
         ));
@@ -192,7 +194,7 @@ pub fn by_name(host: &Host, path: Option<&str>) -> Result<Option<String>, SdkRef
         .find(|(_, record)| record.name() == Some(name.as_str()));
     let Some((_, record)) = found else {
         let sandbox = host.sandbox.as_deref().unwrap_or("");
-        return Err(layerfs_home::outcome::refused(
+        return Err(layerfs_home::reply::outcome::refused(
             "NotMounted",
             format!("{sandbox}:{name} is not mounted"),
         ));
@@ -214,7 +216,7 @@ fn platform_of(record: &DaemonRecord) -> SdkValue {
 pub fn status(host: &Host, path: Option<&str>, under: Option<&str>) -> Outcome {
     let open = host.open_args();
     status_with(host, (path, under), &mut |branch, _| {
-        layerfs_store::service::head(&open, branch).ok()
+        layerfs_store::data::branch::head(&open, branch).ok()
     })
 }
 
@@ -292,7 +294,7 @@ pub fn commit(host: &Host, path: Option<&str>, force: bool, expected: Option<&st
             ("project", SdkValue::text(&host.project)),
             ("commit", SdkValue::text(text)),
         ]);
-        layerfs_store::service::call("branch.get_commit", &open, args)
+        layerfs_store::admin::open::service::call("branch.get_commit", &open, args)
     };
     commit_with(
         host,
@@ -304,7 +306,8 @@ pub fn commit(host: &Host, path: Option<&str>, force: bool, expected: Option<&st
                     ("project", SdkValue::text(&host.project)),
                     ("name", SdkValue::text(name?)),
                 ]);
-                let listed = layerfs_store::service::call("project.list_branches", &open, args);
+                let listed =
+                    layerfs_store::admin::open::service::call("project.list_branches", &open, args);
                 listed_head(&listed.ok()?, id)
             },
             &mut resolve,
@@ -352,7 +355,7 @@ fn moved_from_expected(
         layerfs_history::NodeId::Layer(moved.actual_base),
         layerfs_history::NodeId::Commit,
     ));
-    let refusal = layerfs_home::outcome::refused(
+    let refusal = layerfs_home::reply::outcome::refused(
         "Conflict",
         format!(
             "the Branch's head moved to {head} after --expected was checked; nothing was committed"
@@ -379,7 +382,7 @@ fn expected_id(text: &str, resolve: &mut Resolve<'_>) -> Result<String, SdkRefus
         }
     })?;
     found.get_text("commit").map(str::to_owned).ok_or_else(|| {
-        layerfs_home::outcome::refused("Failed", "the Store named no Commit for --expected")
+        layerfs_home::reply::outcome::refused("Failed", "the Store named no Commit for --expected")
     })
 }
 
@@ -419,13 +422,13 @@ pub fn commit_with(
         .map(|mount| mount.branch.clone());
     if let (Some(expected), Some(status)) = (expected, &status) {
         let head = head_of(status.binding.branch.id, branch.as_deref()).ok_or_else(|| {
-            layerfs_home::outcome::refused(
+            layerfs_home::reply::outcome::refused(
                 "Unavailable",
                 "the Branch's head could not be read to check --expected; nothing was committed",
             )
         })?;
         if head != expected {
-            let refusal = layerfs_home::outcome::refused(
+            let refusal = layerfs_home::reply::outcome::refused(
                 "Conflict",
                 format!(
                     "the Branch's head is {head}, not --expected {expected}; nothing was committed"
@@ -440,7 +443,7 @@ pub fn commit_with(
             layerfs_protocol::sdk::unhex(text)
                 .and_then(|bytes| layerfs_history::NodeId::from_slice(&bytes).ok())
                 .ok_or_else(|| {
-                    layerfs_home::outcome::refused(
+                    layerfs_home::reply::outcome::refused(
                         "Failed",
                         "the Store named no Commit id for --expected; nothing was committed",
                     )
@@ -465,8 +468,8 @@ pub fn commit_with(
         let branch = &mount.workspace.bound.binding.branch;
         layerfs_protocol::sdk::hex(branch.base_layer.as_slice())
     });
-    let value = layerfs_home::home::with_field(value, "baseLayer", SdkValue::opt_text(layer));
-    Ok(layerfs_home::home::with_field(
+    let value = layerfs_home::disk::with_field(value, "baseLayer", SdkValue::opt_text(layer));
+    Ok(layerfs_home::disk::with_field(
         value,
         "branch",
         SdkValue::opt_text(branch),
@@ -491,7 +494,7 @@ pub fn unmount(host: &Host, path: Option<&str>, discard: bool, force: bool) -> O
             return layerfs_sandbox::record::unmount_guard::repeat(&value);
         }
     }
-    let guard = layerfs_store::project::discovery::guard(&state.directory)?;
+    let guard = layerfs_store::data::project::record::discovery::guard(&state.directory)?;
     // Another process may have registered while this call waited for the
     // short admission section. Check again before sending anything.
     if let Some(value) = layerfs_sandbox::record::unmount_guard::find(&state, path)? {
@@ -568,11 +571,11 @@ pub fn unmount(host: &Host, path: Option<&str>, discard: bool, force: bool) -> O
     };
     if outcome.is_ok() {
         let cleanup = (|| {
-            let _guard = layerfs_store::project::discovery::guard(&state.directory)?;
+            let _guard = layerfs_store::data::project::record::discovery::guard(&state.directory)?;
             let _sandbox = layerfs_sandbox::record::lock_in(&state.directory, &state.id)?;
             let record = layerfs_sandbox::record::discovery::workspace_file(&state, token);
             match std::fs::remove_file(&record) {
-                Ok(()) => layerfs_home::home::generation::moved_above(&record),
+                Ok(()) => layerfs_home::record::generation::moved_above(&record),
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
                 Err(error) => return Err(failed(error)),
             }
@@ -612,7 +615,7 @@ fn dirty(
         .controls
         .lend()
         .and_then(|mut control| changed(&mut control, path, None));
-    layerfs_home::outcome::with_fix(
+    layerfs_home::reply::outcome::with_fix(
         dirty_fields(refusal, read.ok().as_ref()),
         format!(
             "layerfs workspace commit {}:{}",
@@ -624,7 +627,7 @@ fn dirty(
 
 /// The fields a Dirty `refusal` names for the next call, as `workspace
 /// status`'s short form lists them (call surface 2.0): `changes` (the first
-/// [`layerfs_home::helpers::SHOWN`] entries of the overlay read `read`, each `{ path, change,
+/// [`layerfs_home::reply::values::SHOWN`] entries of the overlay read `read`, each `{ path, change,
 /// type }`, `type` left out for a file), `changes_count` only beside a cut
 /// list (RC-A F3), and `pending_merge`. With no read, the daemon's own
 /// paths stand, each as `{ path }`.
@@ -645,7 +648,7 @@ pub fn dirty_fields(refusal: SdkRefusal, read: Option<&SdkValue>) -> SdkRefusal 
         },
     };
     let pending = refusal.detail.get_bool("pendingMerge");
-    let (shown, count) = layerfs_home::helpers::shown(entries, 0, partial);
+    let (shown, count) = layerfs_home::reply::values::shown(entries, 0, partial);
     let mut refusal = with_next(refusal, "changes", shown);
     if count != SdkValue::Null {
         refusal = with_next(refusal, "changes_count", count);

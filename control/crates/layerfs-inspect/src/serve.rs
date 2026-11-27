@@ -4,20 +4,20 @@
 //! folders are and [`in_worker`] is the worker's `inspect` operation, both
 //! through Sandbox's inspect route with [`serve`].
 use crate::Side;
-use layerfs_home::outcome::Outcome;
+use layerfs_home::reply::outcome::Outcome;
 use layerfs_protocol::sdk::SdkValue;
-use layerfs_sandbox::inspect::owner::Budget;
+use layerfs_sandbox::route::inspect::Budget;
 
 /// Runs inspect `kind` with `args` where machine `machine`'s run folders
-/// are ([`layerfs_sandbox::inspect::route::ask`]), matched by [`serve`].
+/// are ([`layerfs_sandbox::route::inspect::ask`]), matched by [`serve`].
 pub fn ask(home: &std::path::Path, machine: &str, kind: &'static str, args: SdkValue) -> Outcome {
-    layerfs_sandbox::inspect::route::ask(home, machine, kind, args, serve)
+    layerfs_sandbox::route::inspect::ask(home, machine, kind, args, serve)
 }
 
 /// The worker's `inspect` operation: one request under this process's
 /// admission, on the worker's `root`, matched by [`serve`].
 pub fn in_worker(root: &std::path::Path, args: SdkValue) -> Outcome {
-    layerfs_sandbox::inspect::route::in_worker(root, args, serve)
+    layerfs_sandbox::route::inspect::in_worker(root, args, serve)
 }
 
 /// One admitted request `{ kind, .. }` on `side`. A kind made of many
@@ -28,8 +28,8 @@ pub fn in_worker(root: &std::path::Path, args: SdkValue) -> Outcome {
 pub fn serve(side: &Side<'_>, request: &SdkValue, budget: &Budget) -> Outcome {
     use crate::files::{log, walk};
     use crate::machine::{files as machine, space, stats};
-    use layerfs_home::outcome::refused;
-    use layerfs_sandbox::inspect::overlay;
+    use layerfs_home::reply::outcome::refused;
+    use layerfs_sandbox::status::overlay;
     match request.get_text("kind").unwrap_or("") {
         log::MACHINE_LOG => log::machine(side, request),
         log::SANDBOX_LOG => log::sandbox(side, request),

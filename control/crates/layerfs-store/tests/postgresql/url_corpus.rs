@@ -21,7 +21,7 @@
 //! URL holding a `#` gets the `%23` hint, a fix gives the login apart
 //! exactly when the URL may hold one (or the Store is new), and every fix
 //! names the address `<url>` and the user `<user>`, never text of a URL.
-use layerfs_home::home::{self, paths, write_entity};
+use layerfs_home::disk::{self, paths, write_entity};
 use layerfs_home::names::StoreName;
 use layerfs_protocol::sdk::SdkValue;
 use layerfs_store::admin::record::store::StoreRecord;
@@ -60,7 +60,7 @@ const LOGIN_KEYS: [&str; 9] = [
 fn tempdir(tag: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("layerfs-url-corpus-{tag}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    home::ensure(&dir).unwrap();
+    disk::ensure(&dir).unwrap();
     dir
 }
 
@@ -281,7 +281,7 @@ fn store(home: &Path, url: &str) -> StoreRecord {
 /// The texts `store.get` shows of `record`'s URL.
 fn row_texts(record: &StoreRecord) -> Vec<String> {
     let home = record.home().unwrap();
-    let state = layerfs_home::state::State::Ready;
+    let state = layerfs_home::reply::state::State::Ready;
     let got = layerfs_store::admin::status::get::summary(home, record, &state, None, true).unwrap();
     let url = got.get_text("url").unwrap_or_default();
     // the hidden form is fixed text, none of the URL's

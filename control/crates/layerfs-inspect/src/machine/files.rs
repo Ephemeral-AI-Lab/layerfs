@@ -19,9 +19,9 @@
 //!   folders is `InvalidInput`.
 use super::super::files::roots;
 use super::super::files::walk::{answer, FilesRequest, Rules, Scope};
-use layerfs_home::home::with_field;
+use layerfs_home::disk::with_field;
 use layerfs_home::names::MachineName;
-use layerfs_home::outcome::{refused, Outcome};
+use layerfs_home::reply::outcome::{refused, Outcome};
 use layerfs_protocol::sdk::SdkValue;
 use layerfs_sandbox::backend::confined::View;
 use layerfs_sandbox::deploy::Side;
@@ -50,7 +50,7 @@ pub fn machine_files(home: &Path, machine: &MachineName, request: &FilesRequest)
     if request.path.is_some() {
         let mut sent = Vec::new();
         for sandbox in layerfs_sandbox::record::sandboxes(home)? {
-            if sandbox.machine() == name && layerfs_sandbox::direct::forwarded(&sandbox) {
+            if sandbox.machine() == name && layerfs_sandbox::route::direct::forwarded(&sandbox) {
                 if let SdkValue::List(items) = roots::recorded(&sandbox.dir(home))? {
                     sent.extend(items);
                 }

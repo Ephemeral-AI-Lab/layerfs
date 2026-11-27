@@ -221,5 +221,5 @@ fn code(status: std::process::ExitStatus) -> i32 {
     status
         .code()
         .or_else(|| status.signal().map(|signal| 128 + signal))
-        .unwrap_or(super::EXIT_FAILURE)
+        .unwrap_or(super::main::EXIT_FAILURE)
 }

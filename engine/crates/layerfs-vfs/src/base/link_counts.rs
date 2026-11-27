@@ -7,9 +7,9 @@
 //! listed serials. A serial's kind never changes, so the answer is a pure
 //! function of the directory's content root and is remembered under it.
 use crate::BaseView;
-use layerfs_content::filesystem::directory::root_shapes;
-use layerfs_content::filesystem::directory::{list_after, DirectoryReadWork};
-use layerfs_content::filesystem::inode::{lookup_many, InodeReadWork};
+use layerfs_content::filesystem::tree::directory::root_shapes;
+use layerfs_content::filesystem::tree::directory::{list_after, DirectoryReadWork};
+use layerfs_content::filesystem::tree::inode::{lookup_many, InodeReadWork};
 use layerfs_content::filesystem::{DirectoryRoot, FilesystemRead, FilesystemRootId, PathName};
 use layerfs_content::object::inode_leaf::{InodeKind, InodeValue};
 use layerfs_content::AuthenticatedObjects;

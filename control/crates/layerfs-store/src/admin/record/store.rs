@@ -6,11 +6,11 @@
 //! reads or writes a Store record's fields but through [`StoreRecord`].
 use crate::admin::record::intent;
 use crate::backup::copy::link::StoreLink;
-use layerfs_home::home::entity_lock::{self, EntityLock};
-use layerfs_home::home::{self, paths, read_record, with_field, write_entity};
-use layerfs_home::op::{self, Op};
-use layerfs_home::outcome::shell_word;
-use layerfs_home::outcome::{failed, refused, with_fix, with_next};
+use layerfs_home::disk::{self, paths, read_record, with_field, write_entity};
+use layerfs_home::lock::entity::{self, EntityLock};
+use layerfs_home::record::intent::{self as op, Op};
+use layerfs_home::reply::outcome::shell_word;
+use layerfs_home::reply::outcome::{failed, refused, with_fix, with_next};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 pub use layerfs_protocol::StoreKind;
 use std::path::Path;
@@ -141,7 +141,7 @@ pub struct StoreRecord {
 /// never before it, and never held across a worker call or a byte
 /// transfer. A Store with no folder is `NotFound`.
 pub fn lock(home: &Path, name: &str) -> Result<EntityLock> {
-    take_lock(home, name, entity_lock::WAIT)
+    take_lock(home, name, entity::WAIT)
 }
 
 /// A management slot must be available for other work while a record is held.
@@ -162,7 +162,7 @@ fn take_lock(home: &Path, name: &str, wait: std::time::Duration) -> Result<Entit
         return Err(refused("NotFound", format!("no Store named {name}")));
     }
     let held = format!("Store {name}'s lock was held");
-    entity_lock::take(&dir.join("lock"), wait, &held)
+    entity::take(&dir.join("lock"), wait, &held)
 }
 
 /// The record field listing the machines attached to a PostgreSQL Store.
@@ -232,7 +232,7 @@ impl StoreRecord {
     /// Checks the admission fence of this Store's local host, when it has one.
     pub(crate) fn admit_machine(&self, home: &Path) -> Result<()> {
         if let StoreRef::Sqlite { machine, .. } = self.store_ref()? {
-            layerfs_machine::record::MachineRecord::admit_host(home, machine)?;
+            layerfs_machine::record::machine::MachineRecord::admit_host(home, machine)?;
         }
         Ok(())
     }
@@ -305,7 +305,7 @@ impl StoreRecord {
 
     /// The record with a new [`Self::login_revision`].
     pub fn with_new_login_revision(self) -> Result<Self> {
-        let token = layerfs_protocol::sdk::hex(&layerfs_home::helpers::random()?[..16]);
+        let token = layerfs_protocol::sdk::hex(&layerfs_home::record::token::random()?[..16]);
         Ok(self.with(LOGIN_REVISION, SdkValue::text(token)))
     }
 
@@ -454,7 +454,7 @@ impl StoreRecord {
         for (field, value) in [
             ("machine", SdkValue::text(machine)),
             ("profile", SdkValue::text(PROFILE)),
-            ("created", SdkValue::Int(home::now_ms())),
+            ("created", SdkValue::Int(disk::now_ms())),
         ] {
             record = record.with(field, value);
         }
@@ -471,7 +471,7 @@ impl StoreRecord {
             ("cursor", SdkValue::Bytes(cursor.to_vec())),
             ("machine", SdkValue::text(machine)),
             ("profile", SdkValue::text(PROFILE)),
-            ("created", SdkValue::Int(home::now_ms())),
+            ("created", SdkValue::Int(disk::now_ms())),
         ]);
         Self::from_record(name, fields)
     }
@@ -493,7 +493,7 @@ impl StoreRecord {
             ("user", SdkValue::text(user)),
             ("schema", SdkValue::text(schema)),
             ("synchronous_commit", SdkValue::text(synchronous_commit)),
-            ("created", SdkValue::Int(home::now_ms())),
+            ("created", SdkValue::Int(disk::now_ms())),
         ]);
         Self::from_record(name, fields)
     }
@@ -531,7 +531,7 @@ pub(crate) fn forget_unread(
     name: &str,
     related: crate::Related,
 ) -> Result<Vec<String>> {
-    let _lock = home::lock::take(home)?;
+    let _lock = layerfs_home::lock::home::take(home)?;
     let _store = lock(home, name)?;
     let now = StoreRecord::of(home, name)?;
     if now.store_ref().is_ok() {
@@ -548,7 +548,7 @@ pub(crate) fn forget_unread(
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
         Err(error) => return Err(failed(error)),
     }
-    layerfs_home::home::generation::moved(home);
+    layerfs_home::record::generation::moved(home);
     let file = paths::store_file(home, name);
     if !file.exists() {
         return Ok(Vec::new());

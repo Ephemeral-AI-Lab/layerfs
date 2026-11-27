@@ -9,10 +9,10 @@ use crate::data::project::record::project::ProjectRecord;
 use crate::data::project::status::get;
 use crate::data::project::status::list::{self, ProjectList};
 use crate::StoreUsers;
-use layerfs_home::events::Events;
 use layerfs_home::names::ProjectRef;
-use layerfs_home::op::Standing;
-use layerfs_home::outcome::Outcome;
+use layerfs_home::record::intent::Standing;
+use layerfs_home::reply::events::Events;
+use layerfs_home::reply::outcome::Outcome;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 
@@ -65,14 +65,14 @@ pub fn delete(
                 let clear = left_init || unlisted(home, store, name).unwrap_or(false);
                 match clear {
                     true => intent::remove_entry(home, store, name)
-                        .map(|()| removed(layerfs_home::home::now_ms(), true)),
+                        .map(|()| removed(layerfs_home::disk::now_ms(), true)),
                     false => Err(refusal),
                 }
             }
             Ok(value) => {
                 let deleted_ms = value
                     .get_int("deleted_ms")
-                    .unwrap_or_else(layerfs_home::home::now_ms);
+                    .unwrap_or_else(layerfs_home::disk::now_ms);
                 Ok(removed(deleted_ms, value.get_bool("home_entry_removed")))
             }
             Err(refusal) => Err(refusal),
@@ -118,7 +118,7 @@ fn discard_copy(home: &Path, (store, name): (&str, &str), args: &SdkValue) {
     };
     let shown = crate::data::project::init::send::left(machine, copy);
     let log =
-        |outcome| layerfs_home::home::log_swept(home, "init_copy", Path::new(&shown), &outcome);
+        |outcome| layerfs_home::disk::log_swept(home, "init_copy", Path::new(&shown), &outcome);
     match discarded {
         Ok(out) if out.get_bool("discarded") => log(Ok(None)),
         // absent already, or held by the Init that still reads it
@@ -152,7 +152,7 @@ fn removed(deleted_ms: i64, home_entry_removed: bool) -> SdkValue {
         ("outcome", SdkValue::text("deleted")),
         (
             "deleted_at",
-            SdkValue::Text(layerfs_home::time::iso(deleted_ms)),
+            SdkValue::Text(layerfs_home::reply::time::iso(deleted_ms)),
         ),
     ])
 }

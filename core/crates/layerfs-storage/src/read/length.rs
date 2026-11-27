@@ -1,8 +1,7 @@
 //! Bounded file-length facts from the owning Store catalogue and small file states.
 use crate::{
     error::{StorageError, StorageResult},
-    location::ObjectLocation,
-    source::Source,
+    location::{ObjectLocation, Source},
     storage::Storage,
 };
 use layerfs_content::{file::mapping, policy::WHOLE_FILE_CANONICAL_OVERHEAD, ObjectId, ObjectRole};

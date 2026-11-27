@@ -19,7 +19,7 @@
 //!
 //! Nothing runs a daemon: a record names this test's own process.
 #![cfg(target_os = "macos")]
-use layerfs_home::home::{self, paths, write_record};
+use layerfs_home::disk::{self, paths, write_record};
 use layerfs_os::process::LocalProcess;
 use layerfs_protocol::sdk::SdkValue;
 use layerfs_sandbox::family::{remove, RemoveRequest, Removed};
@@ -38,8 +38,8 @@ fn t(s: &str) -> SdkValue {
 fn new_home(tag: &str) -> (PathBuf, String) {
     let dir = std::env::temp_dir().join(format!("lfs-names-{tag}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    home::private_dir(&dir).unwrap();
-    let id = home::ensure(&dir).unwrap().id;
+    disk::private_dir(&dir).unwrap();
+    let id = disk::ensure(&dir).unwrap().id;
     (dir, id[..8].to_owned())
 }
 
@@ -52,8 +52,8 @@ fn record(home: &Path, id: &str, name: &str, folder: &Path, pid: u32) -> DaemonR
         name: name.to_owned(),
         container: "ab".repeat(32),
         runtime: "process",
-        uid: home::flock::euid(),
-        gid: home::flock::egid(),
+        uid: layerfs_home::lock::flock::euid(),
+        gid: layerfs_home::lock::flock::egid(),
         directory: folder.display().to_string(),
         process: (
             process.pid,
@@ -113,7 +113,7 @@ fn rewrite(
 /// its `left`, joined.
 fn removed_alone(home: &Path, id: &str, force: bool) -> String {
     let mut sink = |_| {};
-    let mut events = layerfs_home::events::Events::new(&mut sink);
+    let mut events = layerfs_home::reply::events::Events::new(&mut sink);
     let request = RemoveRequest {
         name: id.to_owned(),
         force,
@@ -208,7 +208,7 @@ fn a_record_with_a_name_this_home_does_not_give_is_removed_by_its_records() {
         "{refusal:?}"
     );
     let mut sink = |_| {};
-    let mut events = layerfs_home::events::Events::new(&mut sink);
+    let mut events = layerfs_home::reply::events::Events::new(&mut sink);
     let request = RemoveRequest {
         name: "s1".to_owned(),
         force: false,
@@ -329,6 +329,6 @@ impl layerfs_sandbox::lifecycle::serve::WorkspaceDrain for NoDrain {
 fn local(
     host: layerfs_sandbox::route::machine::Host,
     call: layerfs_sandbox::route::machine::Call,
-) -> layerfs_home::outcome::Outcome {
+) -> layerfs_home::reply::outcome::Outcome {
     layerfs_sandbox::route::machine::dispatch::call(host, call, &NoDrain)
 }

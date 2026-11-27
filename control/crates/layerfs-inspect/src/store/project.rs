@@ -11,26 +11,26 @@
 use super::super::doctor::budget::Checks;
 use super::super::doctor::report::Node;
 use super::super::doctor::runner::{CheckId, Probe};
-use layerfs_home::home::paths;
-use layerfs_home::outcome::shell_word;
-use layerfs_home::outcome::{refused, Outcome as CallOutcome};
-use layerfs_home::state::BlockedBy;
+use layerfs_home::disk::paths;
+use layerfs_home::reply::outcome::shell_word;
+use layerfs_home::reply::outcome::{refused, Outcome as CallOutcome};
+use layerfs_home::reply::state::BlockedBy;
 use layerfs_protocol::sdk::{hex, unhex};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
-use layerfs_store::diagnostic::{
-    self, LayerStackId, Observation, Options, Outcome, ProjectCoverage,
+use layerfs_store::admin::record::identity::{self, Identity};
+use layerfs_store::admin::record::store::{StoreRecord, StoreRef};
+use layerfs_store::admin::route::executor::{self, Executor};
+use layerfs_store::backend::sqlite::diagnostic::{
+    LayerStackId, Observation, Options, Outcome, ProjectCoverage,
 };
-use layerfs_store::identity::{self, Identity};
-use layerfs_store::place::{self, Executor};
-use layerfs_store::project::live;
-use layerfs_store::project::record::ProjectRecord;
-use layerfs_store::record::{StoreRecord, StoreRef};
+use layerfs_store::data::project::record::project::ProjectRecord;
+use layerfs_store::data::project::status::live;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
 const RECORD: &str = "project.record";
 const LISTED: &str = "project.listed";
-const DATA: &str = diagnostic::PROJECT_CHECK;
+const DATA: &str = layerfs_store::backend::sqlite::diagnostic::PROJECT_CHECK;
 
 /// A project's checks, in the frozen order; the data walk is Full only.
 pub(crate) const CHECKS: &[CheckId] = &[
@@ -63,7 +63,7 @@ pub(crate) fn run(probe: &Probe<'_>, node: &mut Node) {
     match recorded {
         Ok((record, Some(project))) => {
             if opened_here(probe.home, &record, &project)
-                && !layerfs_store::backup::restored::complete(&project)
+                && !layerfs_store::data::project::record::restored::complete(&project)
             {
                 checks.fail(
                     RECORD,
@@ -114,9 +114,9 @@ fn opened_here(home: &Path, store: &StoreRecord, project: &ProjectRecord) -> boo
     matches!(store.store_ref(), Ok(StoreRef::Sqlite { .. }))
         && project
             .op()
-            .is_none_or(|op| op.name() != layerfs_store::project::op::INIT)
+            .is_none_or(|op| op.name() != layerfs_store::data::project::record::intent::INIT)
         && matches!(
-            place::on_machine_read(home, &store.machine().unwrap_or_default()),
+            executor::on_machine_read(home, &store.machine().unwrap_or_default()),
             Ok(Executor::Local)
         )
 }
@@ -191,7 +191,7 @@ fn not_made(home: &Path, store: &StoreRecord, id: &str, refusal: SdkRefusal, che
             refusal.message,
             by("store", store.name().to_owned(), "unsupported"),
         ),
-        (layerfs_store::state::OLD_STORE, _) => checks.waits(
+        (layerfs_store::admin::status::state::OLD_STORE, _) => checks.waits(
             id,
             refusal.message,
             by("store", store.name().to_owned(), "outdated"),
@@ -236,18 +236,20 @@ fn data(probe: &Probe<'_>, store: &StoreRecord, stack: LayerStackId, checks: &mu
     let mut found = Found::default();
     let mut progress = |done: u64, total: u64| (probe.progress)("data", done, total);
     let made = match store.store_ref() {
-        Ok(StoreRef::Postgres { .. }) => diagnostic::postgresql_project(
-            store,
-            &identity,
-            stack,
-            options,
-            &mut |o| found.observe(&o),
-            &mut progress,
-        ),
+        Ok(StoreRef::Postgres { .. }) => {
+            layerfs_store::backend::postgresql::diagnostic::postgresql_project(
+                store,
+                &identity,
+                stack,
+                options,
+                &mut |o| found.observe(&o),
+                &mut progress,
+            )
+        }
         Ok(StoreRef::Sqlite { .. }) => {
             let machine = store.machine().unwrap_or_default();
-            match place::on_machine_read(probe.home, &machine) {
-                Ok(Executor::Local) => diagnostic::sqlite_project(
+            match executor::on_machine_read(probe.home, &machine) {
+                Ok(Executor::Local) => layerfs_store::backend::sqlite::diagnostic::sqlite_project(
                     &paths::store_file(probe.home, store.name()),
                     &identity,
                     stack,
@@ -395,8 +397,8 @@ fn remote(
     stack: LayerStackId,
     found: &mut Found,
 ) -> Result<ProjectCoverage, SdkRefusal> {
-    use layerfs_machine::worker::{diagnostic_connect, Endpoint};
-    let saved = layerfs_home::secrets::worker_secret(probe.home, machine)?
+    use layerfs_machine::route::{diagnostic_connect, Endpoint};
+    let saved = layerfs_home::secret::keys::worker_secret(probe.home, machine)?
         .ok_or_else(|| refused("Unavailable", "it records no worker endpoint"))?;
     let endpoint = Endpoint {
         address: saved.address,
@@ -458,7 +460,7 @@ pub(super) fn in_worker(
         cancelled: None,
     };
     let mut found = Found::default();
-    let coverage = diagnostic::sqlite_project(
+    let coverage = layerfs_store::backend::sqlite::diagnostic::sqlite_project(
         &paths::store_file(root, name),
         identity,
         stack,

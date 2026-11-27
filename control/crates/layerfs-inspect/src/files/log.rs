@@ -1,16 +1,16 @@
 //! `machine.log` and `sandbox.log` (`logs.machine` and `logs.sandbox`
 //! before the call surface 2.0): a machine's worker log and a Sandbox's
 //! daemon log, one window per call (layerfs-project#178), read
-//! with `layerfs_home::tail` on the side that holds the file. They read
+//! with `layerfs_home::log::tail` on the side that holds the file. They read
 //! `worker.log` with `worker.1.log`, and `daemon.log`, and nothing else:
 //! never `log/uncertain.jsonl` (#179 D8) or any other file.
-use layerfs_home::home::paths;
+use layerfs_home::disk::paths;
+use layerfs_home::log::tail::{self, Pair};
 use layerfs_home::names::MachineName;
-use layerfs_home::outcome::{refused, Outcome};
-use layerfs_home::tail::{self, Pair};
+use layerfs_home::reply::outcome::{refused, Outcome};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_sandbox::deploy::Side;
-use layerfs_store::place::Executor;
+use layerfs_store::admin::route::executor::Executor;
 use std::path::Path;
 
 /// The file a Sandbox's daemon writes in its run folder (the backends'
@@ -84,7 +84,7 @@ fn no_worker(machine: Option<&str>) -> SdkRefusal {
 
 /// `machine.log(machine, { cursor, before, limit })`: one window of the
 /// machine's worker log, `{ lines: [{ text, continued? }], cursor,
-/// before?, has_more }` (`layerfs_home::tail::read`). A machine whose calls
+/// before?, has_more }` (`layerfs_home::log::tail::read`). A machine whose calls
 /// run in this process (the host machine, `macos-host` or `linux-host`) is
 /// `Unsupported`; one whose worker does not
 /// answer is `Unavailable`; nothing is started.
@@ -96,7 +96,7 @@ pub fn machine_log(home: &Path, machine: &MachineName, window: &Window) -> Outco
         window.before.is_some(),
         window.limit,
     )?;
-    if let Executor::Local = layerfs_sandbox::inspect::owner::on_owner(home, machine)? {
+    if let Executor::Local = layerfs_sandbox::route::inspect::on_owner(home, machine)? {
         return Err(no_worker(Some(machine)));
     }
     crate::ask(home, machine, MACHINE_LOG, window.request(None))
@@ -138,6 +138,6 @@ pub(crate) fn machine(side: &Side<'_>, args: &SdkValue) -> Outcome {
 /// [`sandbox_log`] on the side that holds the Sandbox's run folder.
 pub(crate) fn sandbox(side: &Side<'_>, args: &SdkValue) -> Outcome {
     let folder =
-        layerfs_sandbox::inspect::route::run_folder(side, args.get_text("sandbox").unwrap_or(""))?;
+        layerfs_sandbox::route::inspect::run_folder(side, args.get_text("sandbox").unwrap_or(""))?;
     Window::of(args).read(&Pair::of(folder.join(DAEMON_LOG)), "sandbox.log")
 }

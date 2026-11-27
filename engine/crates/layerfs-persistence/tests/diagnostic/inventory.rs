@@ -1,6 +1,8 @@
 //! B1 actual acquisition/auxiliary rows, including valid interrupted state.
 use crate::support;
-use layerfs_content::{filesystem::attributes::PortableMetadata, inode_leaf::InodeKind, ObjectId};
+use layerfs_content::{
+    filesystem::tree::attribute::PortableMetadata, inode_leaf::InodeKind, ObjectId,
+};
 use layerfs_history::HistoryCatalogConfig;
 use layerfs_persistence::{
     diagnostic::{Observation, Options, Outcome},

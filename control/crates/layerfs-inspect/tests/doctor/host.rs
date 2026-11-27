@@ -1,9 +1,9 @@
 //! The home's own checks observe records without opening or changing a home.
 use crate::doctor_own;
 use doctor_own::{complete, outcome, own, own_within};
-use layerfs_home::home::{paths, private_dir, write_entity, write_record};
+use layerfs_home::disk::{paths, private_dir, write_entity, write_record};
 use layerfs_home::names::HOST_MACHINE;
-use layerfs_home::op::Op;
+use layerfs_home::record::intent::Op;
 use layerfs_inspect::{Kind, Options};
 use layerfs_protocol::sdk::SdkValue;
 use std::collections::BTreeMap;
@@ -112,7 +112,7 @@ fn current_and_foreign_layouts_are_observed_without_writing_files() {
             assert!(contains(&report, "not a LayerFS 2.0 home"));
             assert_eq!(outcome(&report, "home.layout").as_deref(), Some("fail"));
             let check = row(&report, "home.layout");
-            let fix = layerfs_home::home::layout::foreign_fix(&home);
+            let fix = layerfs_home::disk::layout::foreign_fix(&home);
             assert_eq!(check.get_text("fix"), Some(fix.as_str()), "{check:?}");
             assert_eq!(outcome(&report, "home.records"), None, "{report:?}");
         } else {
@@ -132,7 +132,7 @@ fn malformed_layout_fails_with_the_move_fix_and_changes_nothing() {
         r#"{"layout":"bad"}"#,
         r#"{"layout":3,"id":"xyz"}"#,
     ] {
-        let home = home(layerfs_home::home::LAYOUT_VERSION);
+        let home = home(layerfs_home::disk::LAYOUT_VERSION);
         std::fs::write(home.join("layerfs.json"), text).unwrap();
         let before = tree(&home);
         let report = run(&home);
@@ -142,7 +142,7 @@ fn malformed_layout_fails_with_the_move_fix_and_changes_nothing() {
             "{text}"
         );
         let check = row(&report, "home.layout");
-        let fix = layerfs_home::home::layout::foreign_fix(&home);
+        let fix = layerfs_home::disk::layout::foreign_fix(&home);
         assert_eq!(check.get_text("fix"), Some(fix.as_str()), "{check:?}");
         // the records check waits on the layout: it does not apply
         assert_eq!(outcome(&report, "home.records"), None, "{report:?}");
@@ -152,7 +152,7 @@ fn malformed_layout_fails_with_the_move_fix_and_changes_nothing() {
 }
 #[test]
 fn a_layerfs_json_the_system_refuses_to_read_fails_with_the_os_error_and_no_fix() {
-    let home = home(layerfs_home::home::LAYOUT_VERSION);
+    let home = home(layerfs_home::disk::LAYOUT_VERSION);
     let file = home.join("layerfs.json");
     std::fs::remove_file(&file).unwrap();
     // a folder in its place: EISDIR, for root too
@@ -174,7 +174,7 @@ fn a_layerfs_json_the_system_refuses_to_read_fails_with_the_os_error_and_no_fix(
 }
 #[test]
 fn local_records_detect_missing_references_and_permissions_without_worker_dial() {
-    let home = home(layerfs_home::home::LAYOUT_VERSION);
+    let home = home(layerfs_home::disk::LAYOUT_VERSION);
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     listener.set_nonblocking(true).unwrap();
     write_entity(
@@ -215,7 +215,7 @@ fn local_records_detect_missing_references_and_permissions_without_worker_dial()
 }
 #[test]
 fn stale_lease_and_dead_op_remain_while_live_op_is_not_stale() {
-    let home = home(layerfs_home::home::LAYOUT_VERSION);
+    let home = home(layerfs_home::disk::LAYOUT_VERSION);
     let live = Op::begin("store.remove", "retire", SdkValue::Null).unwrap();
     for (name, op) in [
         ("live", live.to_record().clone()),
@@ -252,7 +252,7 @@ fn stale_lease_and_dead_op_remain_while_live_op_is_not_stale() {
 }
 #[test]
 fn arbitrary_version_value_is_not_echoed_and_timeout_is_incomplete() {
-    let home = home(layerfs_home::home::LAYOUT_VERSION);
+    let home = home(layerfs_home::disk::LAYOUT_VERSION);
     write_record(
         &paths::store_record(&home, "bad"),
         &SdkValue::map([("v", t("secret-token-value"))]),
@@ -278,8 +278,8 @@ fn arbitrary_version_value_is_not_echoed_and_timeout_is_incomplete() {
 #[test]
 fn runtime_mount_and_log_subtrees_are_outside_record_fingerprinting() {
     use std::os::unix::fs::PermissionsExt;
-    let home = home(layerfs_home::home::LAYOUT_VERSION);
-    layerfs_machine::record::MachineRecord::built_in(
+    let home = home(layerfs_home::disk::LAYOUT_VERSION);
+    layerfs_machine::record::machine::MachineRecord::built_in(
         layerfs_home::names::HOST_MACHINE,
         "0123456789abcdef0123456789abcdef",
     )
@@ -299,7 +299,7 @@ fn runtime_mount_and_log_subtrees_are_outside_record_fingerprinting() {
 #[test]
 fn concurrent_management_record_rewrites_leave_consistency_incomplete() {
     use std::sync::{atomic::AtomicBool, Arc};
-    let home = home(layerfs_home::home::LAYOUT_VERSION);
+    let home = home(layerfs_home::disk::LAYOUT_VERSION);
     for n in 0..128 {
         write_entity(
             &paths::machine_record(&home, &format!("m{n}")),
@@ -350,7 +350,7 @@ fn row(report: &SdkValue, id: &str) -> SdkValue {
 fn the_host_daemon_check_reads_the_recorded_daemon_and_its_build() {
     use layerfs_inspect::home::get::Build;
     use std::os::unix::fs::PermissionsExt;
-    let home = home(layerfs_home::home::LAYOUT_VERSION);
+    let home = home(layerfs_home::disk::LAYOUT_VERSION);
     let ours = "1111111111111111111111111111111111111111";
     let theirs = "2222222222222222222222222222222222222222";
     let daemon = home.join("layerfs-daemon");

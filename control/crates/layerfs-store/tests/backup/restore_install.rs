@@ -1,14 +1,15 @@
 //! The install step of `backup.restore` (#570 P1, review P2-1). The restore
 //! checks `store/<name>` when it starts, but the download between that check
 //! and the install is a long window: the folder can appear, or lose its
-//! privacy, while it runs, and `home::private_dir` keeps an existing folder's
+//! privacy, while it runs, and `disk::private_dir` keeps an existing folder's
 //! mode. The install therefore checks the target's folder again, under the
 //! home lock, before it links the Store into it: a folder that is not the
 //! daemon's private one is refused with `store.create`'s code and remedy and
 //! nothing is installed; a private one, and an absent one (made `0700`), are
 //! installed. These tests run in an ordinary user's process: no bucket, no
 //! install permission, no timing.
-use layerfs_home::home::{self, paths};
+use layerfs_home::disk;
+use layerfs_home::disk::paths;
 use layerfs_protocol::sdk::SdkRefusal;
 use layerfs_store::admin::record::store::StoreRecord;
 use layerfs_store::backup::jobs::restore::install;
@@ -28,8 +29,8 @@ fn scratch(label: &str) -> PathBuf {
         .mode(0o700)
         .create(&home)
         .unwrap();
-    home::layout::create(&home).unwrap();
-    home::private_dir(&home.join("store")).unwrap();
+    disk::layout::create(&home).unwrap();
+    disk::private_dir(&home.join("store")).unwrap();
     home
 }
 
@@ -54,7 +55,7 @@ fn related() -> Related {
 /// install.
 fn staged(home: &Path) -> PathBuf {
     let folder = home.join("store/.restore-fixture");
-    home::private_dir(&folder).unwrap();
+    disk::private_dir(&folder).unwrap();
     let file = folder.join("store.sqlite");
     std::fs::write(&file, b"the downloaded Store\n").unwrap();
     file
@@ -86,7 +87,7 @@ fn a_folder_made_unprivate_during_the_download_is_refused_before_the_install() {
         b"binding",
         &[7; 32],
     );
-    let _lock = home::lock::take(&home).unwrap();
+    let _lock = layerfs_home::lock::home::take(&home).unwrap();
 
     // the restore's own first check saw no folder; the download ran
     assert!(!directory.exists());
@@ -152,7 +153,7 @@ fn a_replaced_stores_folder_is_checked_again_before_the_install() {
     );
     existing.write(&home).unwrap();
     set_mode(&directory, 0o755);
-    let _lock = home::lock::take(&home).unwrap();
+    let _lock = layerfs_home::lock::home::take(&home).unwrap();
 
     let refusal = install(
         &home,
@@ -196,7 +197,7 @@ fn an_absent_folder_is_made_private_by_the_install() {
         b"binding",
         &[3; 32],
     );
-    let _lock = home::lock::take(&home).unwrap();
+    let _lock = layerfs_home::lock::home::take(&home).unwrap();
     assert!(!paths::store_dir(&home, store).exists());
 
     install(&home, store, "bucket", None, &record, &staged, related()).unwrap();

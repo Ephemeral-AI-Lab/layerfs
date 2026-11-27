@@ -1,7 +1,9 @@
 //! Bounded three-way ordered name merge; deletion work advances its resume key.
 use crate::{OverlayRead, SourceView, WorkspaceResult};
 use layerfs_content::filesystem::limits::MAXIMUM_NAME_BYTES;
-use layerfs_content::filesystem::sorted::format::{DIRECTORY_LEAF_SERIAL_BYTES, NAME_LENGTH_BYTES};
+use layerfs_content::filesystem::tree::pages::format::{
+    DIRECTORY_LEAF_SERIAL_BYTES, NAME_LENGTH_BYTES,
+};
 use layerfs_content::ContentError;
 use layerfs_overlay::{DirectoryEntry, DirectoryEntryWindow, PAGE_ROWS};
 

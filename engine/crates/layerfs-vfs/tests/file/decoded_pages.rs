@@ -3,7 +3,7 @@
 use crate::common;
 
 use common::name;
-use layerfs_content::filesystem::inode::{lookup, InodeReadWork, InodeTable};
+use layerfs_content::filesystem::tree::inode::{lookup, InodeReadWork, InodeTable};
 use layerfs_vfs::{BaseView, CanonicalCache, CanonicalClient, ClientWork};
 use std::sync::Arc;
 

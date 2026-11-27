@@ -8,8 +8,8 @@ mod target {
 }
 use crate::bucket as backup_target;
 use crate::peer;
-use layerfs_home::home::{self, paths, private_dir, write_entity, write_record};
-use layerfs_home::process;
+use layerfs_home::disk::{self, paths, private_dir, write_entity, write_record};
+use layerfs_home::record::process;
 use layerfs_inspect::{Kind, Options};
 use layerfs_protocol::{
     daemon::{Answer, Call, DaemonPhase, DaemonStatus, Reply, Request},
@@ -67,7 +67,7 @@ fn run(home: &Path) -> SdkValue {
 /// The doctor of Sandbox `sb` with its Workspaces.
 fn doctor(home: &Path) -> SdkValue {
     let mut sink = |_| {};
-    let mut events = layerfs_home::events::Events::new(&mut sink);
+    let mut events = layerfs_home::reply::events::Events::new(&mut sink);
     let thing = layerfs_inspect::Thing::new(Kind::Sandbox, "sb");
     layerfs_inspect::run(home, thing, &Options::default(), &mut events)
         .unwrap()
@@ -682,7 +682,7 @@ impl Backup {
     /// A bucket `production` on a fixture S3; `key` saves its secret.
     fn new(mode: Mode, key: bool, provider: &str) -> Self {
         let home = fresh("doctor-fixes-backup");
-        home::ensure(&home).unwrap();
+        disk::ensure(&home).unwrap();
         if key {
             layerfs_store::backup::secret::write(&home, "production", "mock-secret-key").unwrap();
         }
@@ -717,7 +717,7 @@ impl Backup {
         report
     }
     fn connect_again(&self) -> String {
-        layerfs_store::backup::record::BucketRecord::of(&self.home, "production")
+        layerfs_store::backup::bucket::record::BucketRecord::of(&self.home, "production")
             .unwrap()
             .connect_again()
     }
@@ -740,7 +740,7 @@ fn check<'a>(report: &'a SdkValue, id: &str) -> &'a SdkValue {
 #[test]
 fn a_missing_bucket_record_is_fixed_by_connecting_it() {
     let home = fresh("doctor-fixes-backup-none");
-    home::ensure(&home).unwrap();
+    disk::ensure(&home).unwrap();
     let mut checks = target::Checks::default();
     backup_target::diagnose(
         &home,
@@ -779,7 +779,7 @@ fn an_unsupported_provider_has_no_connect_again_fix() {
 #[test]
 fn an_unreadable_bucket_record_has_no_connect_fix() {
     let home = fresh("doctor-fixes-backup-bad-record");
-    home::ensure(&home).unwrap();
+    disk::ensure(&home).unwrap();
     let record = paths::bucket_record(&home, "production");
     std::fs::create_dir_all(record.parent().unwrap()).unwrap();
     std::fs::write(&record, b"{ not json").unwrap();
@@ -806,8 +806,8 @@ fn an_unreadable_bucket_record_has_no_connect_fix() {
 fn bucket_record_version_and_name_mismatch_are_distinguished() {
     let f = Backup::new(Mode::default(), true, "minio");
     let record = paths::bucket_record(&f.home, "production");
-    let saved = home::read_record(&record).unwrap().unwrap();
-    write_record(&record, &home::with_field(saved, "v", SdkValue::Int(99))).unwrap();
+    let saved = disk::read_record(&record).unwrap().unwrap();
+    write_record(&record, &disk::with_field(saved, "v", SdkValue::Int(99))).unwrap();
     let report = f.report();
     let row = check(&report, "bucket.configuration");
     assert_eq!(row.get_text("fix"), Some(&*f.connect_again()));
@@ -818,8 +818,8 @@ fn bucket_record_version_and_name_mismatch_are_distinguished() {
 
     let f = Backup::new(Mode::default(), true, "minio");
     let record = paths::bucket_record(&f.home, "production");
-    let saved = home::read_record(&record).unwrap().unwrap();
-    write_entity(&record, &home::with_field(saved, "name", t("other"))).unwrap();
+    let saved = disk::read_record(&record).unwrap().unwrap();
+    write_entity(&record, &disk::with_field(saved, "name", t("other"))).unwrap();
     let report = f.report();
     let row = check(&report, "bucket.configuration");
     assert_eq!(row.get_text("fix").unwrap_or(""), "");
@@ -833,10 +833,10 @@ fn bucket_record_version_and_name_mismatch_are_distinguished() {
 fn invalid_client_configuration_has_no_connect_again_fix() {
     let f = Backup::new(Mode::default(), true, "minio");
     let record = paths::bucket_record(&f.home, "production");
-    let saved = home::read_record(&record).unwrap().unwrap();
+    let saved = disk::read_record(&record).unwrap().unwrap();
     write_entity(
         &record,
-        &home::with_field(saved, "region", t("not_a_region")),
+        &disk::with_field(saved, "region", t("not_a_region")),
     )
     .unwrap();
     let report = f.report();

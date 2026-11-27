@@ -1,7 +1,7 @@
 //! The host worker's retained write outcomes: the on-disk store of write
 //! outcomes its caller may not know (`machine/<host>/retained/`). The
 //! worker writes them ([`keep`]); the doctor reads them ([`retained`]).
-use layerfs_home::outcome::{refused, Outcome};
+use layerfs_home::reply::outcome::{refused, Outcome};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 
@@ -11,7 +11,7 @@ use std::path::Path;
 /// removes a checked record with `rm`; at [`RETAINED_CAP`] the worker
 /// removes the oldest `undelivered` ones, never an `uncertain` one.
 pub fn retained_dir(home: &Path) -> std::path::PathBuf {
-    layerfs_home::home::paths::machine_dir(home, layerfs_home::names::HOST_MACHINE).join("retained")
+    layerfs_home::disk::paths::machine_dir(home, layerfs_home::names::HOST_MACHINE).join("retained")
 }
 
 /// The most kept outcomes. A new one at the cap first removes the oldest
@@ -42,7 +42,7 @@ pub fn keep(
         return Err(refused("InvalidInput", "an unusable request id"));
     }
     let dir = retained_dir(home);
-    layerfs_home::home::private_dir(&dir)?;
+    layerfs_home::disk::private_dir(&dir)?;
     let path = dir.join(format!("{request_id}.json"));
     if path.exists() {
         return Ok(());
@@ -67,7 +67,7 @@ pub fn keep(
     let record = SdkValue::map([
         ("request_id", SdkValue::text(request_id)),
         ("kind", SdkValue::text(kind)),
-        ("at", SdkValue::Int(layerfs_home::home::now_ms())),
+        ("at", SdkValue::Int(layerfs_home::disk::now_ms())),
         ("pid", SdkValue::Int(i64::from(std::process::id()))),
         ("method", SdkValue::opt_text(request.get_text("method"))),
         ("store", SdkValue::opt_text(request.get_text("store"))),
@@ -77,7 +77,7 @@ pub fn keep(
         ("outcome", outcome),
     ]);
     let part = dir.join(format!(".{request_id}.part"));
-    let written = layerfs_home::home::host_socket::private_file(&part, false)
+    let written = layerfs_home::socket::private_file(&part, false)
         .and_then(|mut file| {
             file.set_len(0)?;
             file.write_all(layerfs_home::json::print(&record).as_bytes())

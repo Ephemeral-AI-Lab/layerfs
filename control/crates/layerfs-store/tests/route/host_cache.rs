@@ -1,8 +1,8 @@
 //! Real Store admission, maintenance fences, and process cache limits.
 #![cfg(any(target_os = "macos", target_os = "linux"))]
-use layerfs_home::home::{layout, paths};
+use layerfs_home::disk::{layout, paths};
 use layerfs_home::names::StoreName;
-use layerfs_home::op::{Op, FIELD};
+use layerfs_home::record::intent::{Op, FIELD};
 use layerfs_persistence::{PersistenceConfig, SqliteHandles, SqlitePersistenceProfile};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_store::admin::open::args::{OpenArgs, PgSelection};
@@ -83,13 +83,10 @@ fn a_warm_hit_checks_the_current_fence_and_binding() {
     let id = fence.id().to_owned();
     home.update("shop", |r| r.with(FIELD, fence.to_record().clone()));
     assert_eq!(stats(&home.0, "shop").unwrap_err().code, "Busy");
-    assert!(
-        host::close_host(&home.0, "shop", |_| Err(layerfs_home::outcome::refused(
-            "Conflict",
-            "wrong operation"
-        )))
-        .is_err()
-    );
+    assert!(host::close_host(&home.0, "shop", |_| Err(
+        layerfs_home::reply::outcome::refused("Conflict", "wrong operation")
+    ))
+    .is_err());
     assert_eq!(host::host_store_count(&home.0), 1);
     let report = host::close_host(&home.0, "shop", |record| {
         assert_eq!(record.op().unwrap().id(), id);

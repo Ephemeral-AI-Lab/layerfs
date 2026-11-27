@@ -2,7 +2,9 @@
 //! in the SDK's process (layerfs-store-service).
 mod dispatch;
 pub(crate) use dispatch::{admits, dispatch};
-pub(crate) use layerfs_store_service::operator::{snapshot, workspaces, WorkspaceView};
+pub(crate) use layerfs_store_service::families::operator::list_workspaces::{
+    snapshot, workspaces, WorkspaceView,
+};
 
 mod get_storage;
 mod list_changed;

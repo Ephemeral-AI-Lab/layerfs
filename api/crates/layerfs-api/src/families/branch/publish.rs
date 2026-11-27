@@ -3,9 +3,9 @@ use crate::dispatch::guard::scope::Rule;
 use crate::dispatch::table::Kind::{Bool, Name, Project};
 use crate::dispatch::table::{a, call, opt, Call};
 use crate::dispatch::{Context, Form, Policy};
-use layerfs_home::outcome::Outcome;
+use layerfs_home::reply::outcome::Outcome;
 use layerfs_protocol::sdk::SdkValue;
-use layerfs_store::calls::branch::{publish, BranchPublish};
+use layerfs_store::data::branch::{publish, BranchPublish};
 
 /// `commit` is main's new head; `previous` is main's head before, when
 /// that was not the Branch's base.

@@ -6,7 +6,7 @@ use layerfs_history::{BranchId, HistoryCatalogConfig, HistoryName, LayerStackId}
 use layerfs_persistence::{PersistenceConfig, SqlitePersistenceProfile};
 use layerfs_project::store::{InitRequest, ProjectApi, SealedProject};
 use layerfs_storage::StoragePolicy;
-use layerfs_store_service::install::install_local;
+use layerfs_store_service::store::install::install_local;
 use layerfs_telemetry::timer::Timing;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};

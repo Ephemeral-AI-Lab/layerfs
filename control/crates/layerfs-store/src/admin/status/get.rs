@@ -1,8 +1,8 @@
 //! `store.get` and each `store.list` item (call surface 2.0): a Store's
-//! record and its records-only state ([`crate::state::recorded`]), with no
+//! record and its records-only state ([`crate::admin::status::state::recorded`]), with no
 //! probe. `--with live` reads the Store where it lives ([`crate::live`]);
 //! `--with stats` opens it for its counters ([`crate::stats`]); `--with
-//! format` reads its format without opening it ([`crate::formats`], #804).
+//! format` reads its format without opening it ([`crate::admin::status::formats`], #804).
 //!
 //! The answer is one full map, the long form's keys: the dispatcher makes
 //! the short form from it. A sqlite Store answers `machine`, `profile` and
@@ -15,11 +15,12 @@ use crate::admin::record::intent;
 use crate::admin::record::store::{StoreRecord, StoreRef};
 use crate::admin::status::state;
 use crate::backup::copy::link::StoreLink;
-use layerfs_home::events::Events;
-use layerfs_home::home::{observed, paths};
-use layerfs_home::outcome::{failed, Outcome};
-use layerfs_home::state::State;
-use layerfs_home::time;
+use layerfs_home::disk::paths;
+use layerfs_home::record::observed;
+use layerfs_home::reply::events::Events;
+use layerfs_home::reply::outcome::{failed, Outcome};
+use layerfs_home::reply::state::State;
+use layerfs_home::reply::time;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 
@@ -144,7 +145,7 @@ pub fn summary(
 ) -> Result<SdkValue> {
     let store = record.name();
     let projects = project_names(home, store)?;
-    let (shown, shown_count) = layerfs_home::helpers::shown_names(&projects);
+    let (shown, shown_count) = layerfs_home::reply::values::shown_names(&projects);
     let (engine, sqlite) = match record.store_ref() {
         Ok(StoreRef::Postgres { .. }) => ("postgresql", false),
         Ok(StoreRef::Sqlite { .. }) => ("sqlite", true),
@@ -220,14 +221,14 @@ pub fn summary(
         ("created_at", at(record.to_record().get_int("created"))),
         ("last_transfer", last_transfer(record)),
     ]);
-    Ok(layerfs_home::helpers::map_of(fields))
+    Ok(layerfs_home::reply::values::map_of(fields))
 }
 
 /// `store.get(store)`: the Store's record and its records-only state. With
 /// `live`, the state, its companion and `observed_at` come from a read of
 /// the Store where it lives, and the `live` section holds what that read
 /// found; with `stats`, the `stats` section holds its counters; with
-/// `format`, the `format` section holds its format ([`crate::formats`]).
+/// `format`, the `format` section holds its format ([`crate::admin::status::formats`]).
 pub fn get(
     home: &Path,
     events: &mut Events<'_>,

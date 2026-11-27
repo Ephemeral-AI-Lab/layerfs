@@ -7,7 +7,7 @@ use crate::backup::bucket::record::BucketConnect;
 use crate::backup::bucket::{Credentials, Driver, RemoteError};
 use crate::backup::providers::r2::{self, R2Settings};
 use crate::backup::providers::s3::{self, MinioSettings, DEFAULT_PART_SIZE};
-use layerfs_home::outcome::refused;
+use layerfs_home::reply::outcome::refused;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 
 /// The file name of every Store on a remote, under the Store's name.

@@ -10,7 +10,7 @@
 //! variable it reports NOT_RUN.
 use layerfs_history::records::{GcIntent, GcIntentKind, GcScopeKind};
 use layerfs_history::{HistoryCatalogConfig, PlaceAuthority};
-use layerfs_home::home;
+use layerfs_home::disk;
 use layerfs_home::names::ProjectRef;
 use layerfs_persistence::{PostgresHandles, PostgresSelection};
 use layerfs_protocol::sdk::SdkValue;
@@ -165,7 +165,7 @@ fn initialized(
     drop(setup);
 
     let home = tempdir("home");
-    home::ensure(&home).unwrap();
+    disk::ensure(&home).unwrap();
     // `store.connect`'s record shape, which `project.init` dials with: the
     // address alone and the user in the record (the URL after its user
     // part), the password saved under the Store's name (a trust-auth server
@@ -191,7 +191,7 @@ fn initialized(
         .with("cursor", SdkValue::Bytes(vec![71; 32]));
     record.write(&home).unwrap();
     let mut sink = |_| {};
-    let mut events = layerfs_home::events::Events::new(&mut sink);
+    let mut events = layerfs_home::reply::events::Events::new(&mut sink);
     init(
         &home,
         &mut events,
@@ -206,7 +206,7 @@ fn initialized(
     let open = OpenArgs::of_record(&home, "pgs", &record).unwrap();
     let branch = branch_named(&open, "app", "main").unwrap();
     let stack = with_service(&open, |service| {
-        Ok(layerfs_store_service::history::lookup::project(&service.store, "app")?.id)
+        Ok(layerfs_store_service::lookup::project(&service.store, "app")?.id)
     })
     .unwrap();
 

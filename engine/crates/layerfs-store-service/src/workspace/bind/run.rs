@@ -5,9 +5,11 @@ use crate::store::{
 };
 use crate::OwnerClient;
 use layerfs_content::filesystem::{
-    attributes::{read_portable, AttributeReadWork},
-    directory::decode_directory_page,
-    inode::read::{lookup, InodeReadWork, InodeTable},
+    tree::{
+        attribute::{read_portable, AttributeReadWork},
+        directory::decode_directory_page,
+        inode::read::{lookup, InodeReadWork, InodeTable},
+    },
     FilesystemRootId, InodeScope,
 };
 use layerfs_content::{AuthenticatedObjects, ContentError, ContentResult};

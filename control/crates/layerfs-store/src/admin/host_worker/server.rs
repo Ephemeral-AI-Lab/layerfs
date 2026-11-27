@@ -1,7 +1,7 @@
 //! Host worker on the real home, with separate admission for management
 //! and for streamed writes.
-use layerfs_home::outcome::{failed, refused, Outcome};
-use layerfs_machine::worker::{HostHello, HostPaths, HOST_HELD_WRITES};
+use layerfs_home::reply::outcome::{failed, refused, Outcome};
+use layerfs_machine::route::{HostHello, HostPaths, HOST_HELD_WRITES};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use nix::poll::{poll, PollFd, PollFlags};
 use std::collections::VecDeque;
@@ -213,7 +213,7 @@ impl HostServer {
                 other => other,
             };
             if result.is_err() {
-                let _ = layerfs_home::trace::steps_take();
+                let _ = layerfs_home::log::trace::steps_take();
                 log("a host connection panicked; its answer was lost");
             }
             drop(stream);
@@ -278,7 +278,7 @@ impl HostServer {
         mut wake_read: UnixStream,
         unpublish: &dyn Fn(),
     ) -> io::Result<()> {
-        let mut limited = layerfs_machine::worker::accept::Limited {
+        let mut limited = layerfs_machine::route::accept::Limited {
             every: Duration::from_secs(10),
             kinds: Vec::new(),
         };
@@ -357,7 +357,7 @@ impl HostServer {
                 }
                 if events.contains(PollFlags::POLLIN) {
                     if let Err(error) = self.accept(listener, lane) {
-                        let Some(kind) = layerfs_machine::worker::accept::passing(&error) else {
+                        let Some(kind) = layerfs_machine::route::accept::passing(&error) else {
                             return Err(error);
                         };
                         if limited.due(kind).is_some() {
@@ -560,7 +560,7 @@ impl HostServer {
         };
         let summary = SdkValue::map([
             ("store", SdkValue::text(store)),
-            ("at", SdkValue::Int(layerfs_home::home::now_ms())),
+            ("at", SdkValue::Int(layerfs_home::disk::now_ms())),
             ("status", SdkValue::text(status)),
             ("closed", closed),
             ("wal_remaining", wal.map_or(SdkValue::Null, SdkValue::Bool)),
@@ -569,7 +569,7 @@ impl HostServer {
         ]);
         // The home logger opens and closes its file per record and rotates
         // it under its own log lock. No worker admission lock is held here.
-        if let Err(error) = layerfs_home::home::log_line(&self.home, "worker-close.jsonl", &summary)
+        if let Err(error) = layerfs_home::disk::log_line(&self.home, "worker-close.jsonl", &summary)
         {
             log(&format!(
                 "could not record Store {store}'s close outcome: {}",
@@ -680,7 +680,7 @@ fn run(
     home: PathBuf,
     home_id: String,
     unpublish: &dyn Fn(),
-) -> io::Result<layerfs_machine::worker::accept::Served> {
+) -> io::Result<layerfs_machine::route::accept::Served> {
     for listener in &listeners {
         listener.set_nonblocking(true)?;
     }
@@ -691,7 +691,7 @@ fn run(
         hello,
         home,
         home_id,
-        identity: layerfs_home::process::identity(),
+        identity: layerfs_home::record::process::identity(),
         activity: Mutex::new(Activity::new()),
         queued: Default::default(),
         writable: Condvar::new(),
@@ -726,12 +726,12 @@ fn run(
     server.close_drained_stores();
     served?;
     let requests = server.lock().answered;
-    Ok(layerfs_machine::worker::accept::Served { requests })
+    Ok(layerfs_machine::route::accept::Served { requests })
 }
 
 /// Runs the host worker with the real home and its lifetime lock.
 /// This entry runs in its own process, above the Store and machine crates.
-pub fn serve_host(home: &Path) -> Result<layerfs_machine::worker::accept::Served, SdkRefusal> {
+pub fn serve_host(home: &Path) -> Result<layerfs_machine::route::accept::Served, SdkRefusal> {
     // before any request, which may carry a PostgreSQL password, is read
     crate::admin::host_worker::postgresql::limit_core_dumps();
     let paths = HostPaths::new(home)?;
@@ -744,8 +744,8 @@ pub fn serve_host(home: &Path) -> Result<layerfs_machine::worker::accept::Served
     let run = (|| {
         let hello = HostHello::own(&paths)?;
         let listeners = {
-            let _home = layerfs_home::home::lock::take(home)?;
-            layerfs_machine::record::MachineRecord::admit_host(
+            let _home = layerfs_home::lock::home::take(home)?;
+            layerfs_machine::record::machine::MachineRecord::admit_host(
                 home,
                 layerfs_home::names::HOST_MACHINE,
             )?;

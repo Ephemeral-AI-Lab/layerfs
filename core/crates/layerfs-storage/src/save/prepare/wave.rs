@@ -6,10 +6,9 @@ use crate::{
         pool::{program_page::is_program_role, read::PooledCaches, PoolReader},
     },
     error::{StorageError, StorageResult},
-    location::ObjectLocation,
+    location::{ObjectLocation, Source},
     policy::READ_OBJECT_LIMIT,
     read::hint_failure,
-    source::Source,
 };
 use layerfs_content::{FinalizedObject, ObjectId, ObjectRole};
 use std::collections::{BTreeMap, BTreeSet};

@@ -69,7 +69,7 @@ pub const REFRESH: &str = "LAYERFS_NFS_REFRESH";
 /// than its serial are skipped. Each chmod asks the mode the client shows
 /// and is marked with exactly that mode first, so the export answers it
 /// without a change; a client chmod to another mode is still applied, and
-/// stays (see `layerfs_nfs::refresh`). Stops when the export is gone.
+/// stays (see `layerfs_nfs::kernel::refresh`). Stops when the export is gone.
 fn refresh(root: &std::path::Path, refresher: &layerfs_nfs::Refresher, paths: &[(u64, PathBuf)]) {
     use std::os::unix::fs::{MetadataExt, PermissionsExt};
     for (serial, path) in paths {
@@ -589,7 +589,7 @@ impl Service {
     /// After a Commit installed another root: the export's descriptors of the
     /// replaced tree are closed, and the inodes the install made stale that
     /// the client may cache are refreshed through the mount point (see
-    /// `layerfs_nfs::refresh`): a mode-preserving chmod of each, at most
+    /// `layerfs_nfs::kernel::refresh`): a mode-preserving chmod of each, at most
     /// [`REFRESHED`], on a thread of its own after this returns, so the
     /// Commit reply never waits on the client. Best effort: a walk that stops
     /// at the bound, a chmod that fails or one the client never sends leaves

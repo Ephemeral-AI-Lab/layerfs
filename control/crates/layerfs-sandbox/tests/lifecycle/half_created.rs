@@ -15,8 +15,8 @@
 //!
 //! Nothing runs a daemon: a `sleep` stands for one.
 #![cfg(any(target_os = "linux", target_os = "macos"))]
-use layerfs_home::home::{self, paths, read_record, write_record};
-use layerfs_home::op::Op;
+use layerfs_home::disk::{self, paths, read_record, write_record};
+use layerfs_home::record::intent::Op;
 use layerfs_protocol::sdk::SdkValue;
 use layerfs_sandbox::family::{remove, RemoveRequest, Removed};
 use std::path::{Path, PathBuf};
@@ -29,8 +29,8 @@ fn t(s: &str) -> SdkValue {
 fn new_home(tag: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("lfs-half-{tag}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    home::private_dir(&dir).unwrap();
-    home::ensure(&dir).unwrap();
+    disk::private_dir(&dir).unwrap();
+    disk::ensure(&dir).unwrap();
     dir
 }
 
@@ -40,7 +40,7 @@ fn ended_create(phase: &str) -> SdkValue {
     let op = Op::begin("sandbox.create", phase, SdkValue::Null)
         .unwrap()
         .as_uncertain();
-    home::with_field(
+    disk::with_field(
         op.to_record().clone(),
         "owner",
         SdkValue::map([("pid", SdkValue::Int(0))]),
@@ -54,7 +54,7 @@ fn removed(
     force: bool,
 ) -> Result<Removed, layerfs_protocol::sdk::SdkRefusal> {
     let mut sink = |_| {};
-    let mut events = layerfs_home::events::Events::new(&mut sink);
+    let mut events = layerfs_home::reply::events::Events::new(&mut sink);
     let request = RemoveRequest {
         name: name.to_owned(),
         force,
@@ -175,8 +175,8 @@ fn half_created(home: &Path, name: &str, pid: u32) -> PathBuf {
         name: given,
         container: "ab".repeat(32),
         runtime: "process",
-        uid: home::flock::euid(),
-        gid: home::flock::egid(),
+        uid: layerfs_home::lock::flock::euid(),
+        gid: layerfs_home::lock::flock::egid(),
         directory: folder.display().to_string(),
         process: (
             process.pid,
@@ -245,7 +245,7 @@ fn a_half_created_native_sandbox_has_its_daemon_stopped_or_kept() {
     let record = read_record(&paths::sandbox_record(&home, "s1"))
         .unwrap()
         .unwrap();
-    let record = home::with_field(record, "generation", t(generation));
+    let record = disk::with_field(record, "generation", t(generation));
     write_record(&paths::sandbox_record(&home, "s1"), &record).unwrap();
     match removed(&home, "s1", true) {
         Ok(Removed::Stopped { unmounted, left }) => {
@@ -285,7 +285,7 @@ fn a_forced_remove_goes_on_when_its_tombstone_cannot_be_written() {
     let record = read_record(&paths::sandbox_record(&home, "s1"))
         .unwrap()
         .unwrap();
-    let record = home::with_field(record, "generation", t("p1:sandbox:0000000000000001:00"));
+    let record = disk::with_field(record, "generation", t("p1:sandbox:0000000000000001:00"));
     write_record(&paths::sandbox_record(&home, "s1"), &record).unwrap();
     let retired = paths::sandbox_retired_dir(&home, layerfs_home::names::HOST_MACHINE);
     std::fs::create_dir_all(retired.parent().unwrap()).unwrap();
@@ -326,10 +326,10 @@ fn ended(home: &Path, name: &str, generation: &str) -> PathBuf {
     let record = read_record(&paths::sandbox_record(home, name))
         .unwrap()
         .unwrap();
-    let record = home::with_field(record, "generation", t(generation));
-    let record = home::with_field(record, "id", t(name));
+    let record = disk::with_field(record, "generation", t(generation));
+    let record = disk::with_field(record, "id", t(name));
     write_record(&paths::sandbox_record(home, name), &record).unwrap();
-    layerfs_home::secrets::save_daemon_keys(
+    layerfs_home::secret::keys::save_daemon_keys(
         &paths::sandbox_dir(home, name),
         &SdkValue::map([
             ("endpoint", SdkValue::Null),
@@ -401,6 +401,6 @@ impl layerfs_sandbox::lifecycle::serve::WorkspaceDrain for NoDrain {
 fn local(
     host: layerfs_sandbox::route::machine::Host,
     call: layerfs_sandbox::route::machine::Call,
-) -> layerfs_home::outcome::Outcome {
+) -> layerfs_home::reply::outcome::Outcome {
     layerfs_sandbox::route::machine::dispatch::call(host, call, &NoDrain)
 }

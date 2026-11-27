@@ -1,8 +1,8 @@
 //! Read-only host worker health and evidence for management calls.
 use super::super::doctor::budget::{Budget, Checks};
-use layerfs_home::home::paths;
+use layerfs_home::disk::paths;
+use layerfs_machine::route::{HostObservation, HostPaths, HostProbe};
 use layerfs_machine::status::worker::{evidence, observe};
-use layerfs_machine::worker::{HostObservation, HostPaths, HostProbe};
 use layerfs_protocol::sdk::SdkValue;
 use std::path::Path;
 use std::time::Duration;
@@ -19,7 +19,7 @@ pub(crate) fn holder(home: &Path, store: &str, live: &[u32], budget: &Budget) ->
     let HostObservation::Ready(reply) = observe(home, budget.limit(TIMEOUT)) else {
         return None;
     };
-    let owner = layerfs_store::lease::Owner::decode(&reply)?;
+    let owner = layerfs_store::admin::open::lease::Owner::decode(&reply)?;
     let pid = u32::try_from(reply.get_int("pid")?).ok()?;
     (live.contains(&pid) && owner.holds(home, store).ok() == Some(true)).then_some(pid)
 }
@@ -99,10 +99,10 @@ pub(super) fn diagnose(home: &Path, budget: &Budget, checks: &mut Checks) {
 /// whether or not a worker runs, and never starts or replaces one.
 pub(super) fn retained(home: &Path, checks: &mut Checks) {
     const SHOWN: usize = 5;
-    match layerfs_store::host_write::retained(home, SHOWN) {
+    match layerfs_store::admin::host_worker::retained::retained(home, SHOWN) {
         Ok((0, _)) => checks.pass(RETAINED, "no write outcome is kept for a caller"),
         Ok((count, records)) => {
-            let dir = layerfs_store::host_write::retained_dir(home);
+            let dir = layerfs_store::admin::host_worker::retained::retained_dir(home);
             checks.notice(
                 RETAINED,
                 format!(
@@ -110,7 +110,7 @@ pub(super) fn retained(home: &Path, checks: &mut Checks) {
                     dir.display()
                 ),
             );
-            let dir = layerfs_home::outcome::shell_word(&dir.to_string_lossy());
+            let dir = layerfs_home::reply::outcome::shell_word(&dir.to_string_lossy());
             checks.fix(RETAINED, format!("rm {dir}/*.json"));
             checks.evidence(
                 RETAINED,

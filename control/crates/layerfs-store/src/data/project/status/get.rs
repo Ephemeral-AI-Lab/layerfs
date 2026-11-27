@@ -13,8 +13,8 @@ use crate::data::project::record::project::ProjectRecord;
 use crate::data::project::status::live;
 use crate::data::project::status::state::{self, Listing};
 use layerfs_home::names::ProjectRef;
-use layerfs_home::outcome::{refused, Outcome};
-use layerfs_home::state::State;
+use layerfs_home::reply::outcome::{refused, Outcome};
+use layerfs_home::reply::state::State;
 use layerfs_protocol::sdk::SdkValue;
 use std::path::Path;
 

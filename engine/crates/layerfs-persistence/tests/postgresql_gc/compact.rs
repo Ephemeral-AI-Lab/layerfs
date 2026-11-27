@@ -210,11 +210,14 @@ fn save_objects(handles: &PostgresHandles, objects: &[FinalizedObject]) -> Objec
 fn filesystem_root(handles: &PostgresHandles, seed: u8) -> ObjectId {
     use layerfs_content::{
         filesystem::{
-            attributes::PortableMetadata,
-            directory::{encode_directory_page, DirectoryPage},
-            inode::{encode_inode_page, InodePage},
             root::profile_id,
-            scope_for_seed, FilesystemRoot,
+            scope_for_seed,
+            tree::{
+                attribute::PortableMetadata,
+                directory::{encode_directory_page, DirectoryPage},
+                inode::{encode_inode_page, InodePage},
+            },
+            FilesystemRoot,
         },
         inode_leaf::{InodeKind, InodeMetadata, InodeValue},
     };
@@ -2537,8 +2540,8 @@ fn an_unrecorded_schema_at_the_store_scratch_name_is_exists() {
 /// key: those derive from the catalog identity (`blake3("layerfs/advisory/v1")`).
 const PARK_KEY: i64 = 0x4c46_5350_4331;
 
-fn init_meta(mode: u32) -> layerfs_content::filesystem::attributes::PortableMetadata {
-    layerfs_content::filesystem::attributes::PortableMetadata {
+fn init_meta(mode: u32) -> layerfs_content::filesystem::tree::attribute::PortableMetadata {
+    layerfs_content::filesystem::tree::attribute::PortableMetadata {
         mode,
         mtime_seconds: 0,
         mtime_nanoseconds: 0,

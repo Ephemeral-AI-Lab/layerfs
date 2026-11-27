@@ -135,7 +135,7 @@ impl Visibility {
         }
         self.markers
             .iter()
-            .filter(|marker| layerfs_history::path::governs(&marker.path, relative))
+            .filter(|marker| layerfs_history::catalog::path::governs(&marker.path, relative))
             .map(|marker| marker.frontier_serial)
             .max()
     }
@@ -246,7 +246,7 @@ impl Visibility {
                 continue;
             }
             if walked.iter().any(|hidden| {
-                layerfs_history::path::governs(hidden.as_bytes(), relative.as_bytes())
+                layerfs_history::catalog::path::governs(hidden.as_bytes(), relative.as_bytes())
             }) {
                 // Already counted when the governing hidden directory was walked.
                 continue;

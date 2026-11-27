@@ -155,11 +155,11 @@ fn acquire_and_verify(
                 seen_files.insert(path, body);
             }
             InodeKind::Symlink => {
-                let portable = layerfs_content::filesystem::attributes::read::read_portable(
+                let portable = layerfs_content::filesystem::tree::attribute::read::read_portable(
                     &reader,
                     inode.value.metadata_root,
                     InodeKind::Symlink,
-                    &mut layerfs_content::filesystem::attributes::read::AttributeReadWork::default(
+                    &mut layerfs_content::filesystem::tree::attribute::read::AttributeReadWork::default(
                     ),
                 )
                 .unwrap();

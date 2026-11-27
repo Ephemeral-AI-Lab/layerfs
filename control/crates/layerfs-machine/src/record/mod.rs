@@ -5,8 +5,4 @@
 pub(crate) mod adapter_spec;
 #[cfg(feature = "machine")]
 pub(crate) mod built_ins;
-#[doc(hidden)]
 pub mod machine;
-
-#[doc(hidden)]
-pub use machine::*; // #828 compat

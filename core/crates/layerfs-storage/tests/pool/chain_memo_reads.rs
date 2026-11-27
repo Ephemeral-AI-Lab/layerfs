@@ -16,16 +16,16 @@
 //!   its end.
 use crate::metadata;
 
-use layerfs_content::filesystem::attributes::portable::PortableMetadata;
-use layerfs_content::filesystem::inode::apply_inode_values;
+use layerfs_content::filesystem::tree::attribute::portable::PortableMetadata;
+use layerfs_content::filesystem::tree::inode::apply_inode_values;
 use layerfs_content::filesystem::{FilesystemObjects, MAXIMUM_SCRATCH_BYTES};
 use layerfs_content::object::inode_leaf::{InodeKind, InodeMetadata, InodeValue};
 use layerfs_content::{ContentResult, FinalizedConsumer, FinalizedObject, ObjectId, ObjectRole};
 use layerfs_storage::encoding::delta::read::{BodyCaches, ChainCounters, Resolver};
 use layerfs_storage::encoding::pool::PoolReader;
 use layerfs_storage::encoding::{DecompressionWorkspace, GroupCache, PackAcquisition, PackCache};
+use layerfs_storage::location::Source;
 use layerfs_storage::location::{ObjectLocation, SignatureRow};
-use layerfs_storage::source::Source;
 use layerfs_storage::{Storage, StorageCapacities, StorageError, StoragePolicy, StorageResult};
 use std::sync::Arc;
 

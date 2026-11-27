@@ -12,9 +12,7 @@ use layerfs_protocol::daemon::{
     Activity, ConflictReport, ControlCode, MergedCommit, MountPlace, Reply, Request, WorkspaceToken,
 };
 use layerfs_storage::Save;
-use layerfs_store_service::history::lookup::{
-    no_branch as missing_branch, no_project as missing_project,
-};
+use layerfs_store_service::lookup::{no_branch as missing_branch, no_project as missing_project};
 use layerfs_store_service::store::{
     BindError, BindIntent, BindPhase, BindRequest, BoundWorkspace, CapturedConstruction,
     CommitError, CommitFailure, CommitOptions, CommitSuccess, NamedBindRequest,

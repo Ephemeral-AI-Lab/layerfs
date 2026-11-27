@@ -3,7 +3,7 @@
 //! is refused with the fix that moves it aside) and says which it did
 //! (`outcome`: `created` or `unchanged`).
 use super::get::{state, Found};
-use layerfs_home::outcome::{refused, Outcome};
+use layerfs_home::reply::outcome::{refused, Outcome};
 use layerfs_protocol::sdk::SdkValue;
 use std::path::Path;
 
@@ -13,14 +13,14 @@ use std::path::Path;
 /// that is not a LayerFS 2.0 home (`Unsupported`, with the fix that moves
 /// it aside).
 pub fn init(home: &Path) -> Outcome {
-    if layerfs_home::home::guest::is_root(home) {
+    if layerfs_home::disk::guest::is_root(home) {
         return Err(refused(
             "InvalidInput",
             "a machine's worker root is not a home; run `layerfs home init` on the host",
         ));
     }
     let (before, _) = state(home)?;
-    let file = layerfs_home::home::open(home)?;
+    let file = layerfs_home::disk::open(home)?;
     #[cfg(feature = "machine")]
     layerfs_machine::ensure_built_ins(home, &file.id)?;
     let outcome = match before {

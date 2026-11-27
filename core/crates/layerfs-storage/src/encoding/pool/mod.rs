@@ -12,7 +12,3 @@ pub mod read;
 pub use counters::PoolReadCounters;
 pub use leaf::{PooledRecord, POOLED_DELTA_TAG, POOLED_FULL_TAG};
 pub use read::PoolReader;
-
-// #828 compat: old public module paths, removed in wave 3.
-#[doc(hidden)]
-pub use crate::encoding::pool::program_page as branch; // #828 compat

@@ -15,13 +15,13 @@ use crate::deploy::{self, Choice, Side};
 use crate::image::cache::{self as cache, SidecarInfo};
 use crate::image::copy::lock::ImageLock;
 use crate::rootfs;
-use layerfs_home::home;
+use layerfs_home::disk;
 use layerfs_home::names::MachineName;
-use layerfs_home::outcome::shell_word;
-use layerfs_home::outcome::{failed, refused, Outcome};
-use layerfs_home::state::{Reason, State};
+use layerfs_home::reply::outcome::shell_word;
+use layerfs_home::reply::outcome::{failed, refused, Outcome};
+use layerfs_home::reply::state::{Reason, State};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
-use layerfs_store::place::{self, Executor};
+use layerfs_store::admin::route::executor::{self, Executor};
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::ErrorKind;
 use std::path::Path;
@@ -50,7 +50,7 @@ pub fn host_only(machine: &str) -> SdkRefusal {
 /// What the refusal already carries stays beside `what`, its `fix` (`layerfs
 /// machine start <m>`) among it (RC-B F2).
 pub fn stopped(refusal: SdkRefusal) -> SdkRefusal {
-    let detail = layerfs_home::home::with_field(refusal.detail, "what", SdkValue::text("machine"));
+    let detail = layerfs_home::disk::with_field(refusal.detail, "what", SdkValue::text("machine"));
     SdkRefusal { detail, ..refusal }
 }
 
@@ -68,7 +68,7 @@ pub fn host_mode(executor: &Executor) -> bool {
 pub fn list(home: &Path, name: &MachineName, docker: bool) -> Outcome {
     let machine = name.as_str();
     let choice = deploy::choose(home, machine, None)?;
-    let executor = place::on_machine(home, machine)?;
+    let executor = executor::on_machine(home, machine)?;
     if host_mode(&executor) {
         return Ok(SdkValue::map([
             ("machine", SdkValue::text(machine)),
@@ -96,11 +96,11 @@ pub fn list(home: &Path, name: &MachineName, docker: bool) -> Outcome {
     let images: Vec<SdkValue> = merged(answer.get("images"))
         .into_iter()
         .map(|(id, found)| {
-            home::with_field(item(home, machine, &id, found), "sandboxes", users(&id))
+            disk::with_field(item(home, machine, &id, found), "sandboxes", users(&id))
         })
         .collect();
     if !docker {
-        return Ok(home::with_field(answer, "images", SdkValue::List(images)));
+        return Ok(disk::with_field(answer, "images", SdkValue::List(images)));
     }
     // the host's Docker images this machine could copy, minus those it holds ready
     let held: Vec<(String, Vec<String>)> = images
@@ -121,9 +121,9 @@ pub fn list(home: &Path, name: &MachineName, docker: bool) -> Outcome {
     let docker = crate::image::copy::docker::Docker::of(home)?;
     let (docker, available) =
         crate::image::copy::docker::candidates(&docker, &architecture, free, &held);
-    let answer = layerfs_home::home::with_field(answer, "images", SdkValue::List(images));
-    let answer = layerfs_home::home::with_field(answer, "docker", docker);
-    Ok(layerfs_home::home::with_field(
+    let answer = layerfs_home::disk::with_field(answer, "images", SdkValue::List(images));
+    let answer = layerfs_home::disk::with_field(answer, "docker", docker);
+    Ok(layerfs_home::disk::with_field(
         answer,
         "available",
         SdkValue::List(available),
@@ -206,11 +206,11 @@ fn item(home: &Path, machine: &str, id: &str, found: Found) -> SdkValue {
         ])
     });
     for (field, value) in state.fields() {
-        row = home::with_field(row, field, value);
+        row = disk::with_field(row, field, value);
     }
-    row = home::with_field(row, "message", message);
+    row = disk::with_field(row, "message", message);
     let staged = found.part.map_or(SdkValue::Null, SdkValue::Int);
-    home::with_field(row, "staged_bytes", staged)
+    disk::with_field(row, "staged_bytes", staged)
 }
 
 /// The bytes of a [`list`] answer's image cache that `machine prune --unused`
@@ -311,7 +311,7 @@ fn listing(machine: &str, side: &Side<'_>, choice: &Choice) -> Outcome {
     let published: BTreeSet<String> = rows.iter().map(|r| r.sidecar.id.clone()).collect();
     let mut images: Vec<SdkValue> = rows
         .into_iter()
-        .map(|row| home::with_field(env_names(row.to_value()), "staged", SdkValue::Bool(false)))
+        .map(|row| disk::with_field(env_names(row.to_value()), "staged", SdkValue::Bool(false)))
         .collect();
     append_cache_leftovers(&dir, &published, &mut images)?;
     images.sort_by(|a, b| {
@@ -352,7 +352,7 @@ fn env_names(row: SdkValue) -> SdkValue {
             }
             (_, value) => (field, value),
         });
-    home::with_field(row, "config", SdkValue::Map(config.collect()))
+    disk::with_field(row, "config", SdkValue::Map(config.collect()))
 }
 
 /// Appends what copies left in `dir`: a staged `.recv-<hex>.part` as

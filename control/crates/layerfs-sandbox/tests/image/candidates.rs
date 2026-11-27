@@ -115,8 +115,9 @@ fn a_docker_failure_never_fails_the_listing() {
 /// `sandbox create --image` answer `layerfs machine start <m>`.
 #[test]
 fn a_stopped_machine_keeps_its_start_fix() {
-    let refusal = layerfs_home::outcome::refused("Unavailable", "machine lab is not running");
-    let refusal = layerfs_home::outcome::with_fix(refusal, "layerfs machine start lab");
+    let refusal =
+        layerfs_home::reply::outcome::refused("Unavailable", "machine lab is not running");
+    let refusal = layerfs_home::reply::outcome::with_fix(refusal, "layerfs machine start lab");
     let refusal = layerfs_sandbox::image::list::stopped(refusal);
     assert_eq!(refusal.code, "Unavailable");
     assert_eq!(

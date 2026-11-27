@@ -2,8 +2,8 @@
 //! `UpToDate` rule, the `/`-boundary subtree, and the per-project scope.
 use crate::support;
 
+use layerfs_history::catalog::path::{path_key, trace_key, NormalizedPath};
 use layerfs_history::error::Missing;
-use layerfs_history::path::{path_key, trace_key, NormalizedPath};
 use layerfs_history::records::{
     CommitMeta, CommitOutcome, CommitRecord, CommitRequest, CommitVia, ForkRequest, ForkSource,
     PathRemovalKind, PathRemovalRequest, StackInitialization,
@@ -167,7 +167,7 @@ fn marker_frontier_and_up_to_date_follow_the_store_position() {
     assert_eq!(markers[0].frontier_serial, 6);
     assert_eq!(markers[1].frontier_serial, 6);
     // `ab` is not governed by the `a` marker.
-    assert!(!layerfs_history::path::governs(b"a", b"ab"));
+    assert!(!layerfs_history::catalog::path::governs(b"a", b"ab"));
 
     // The mount's one read (#768): the node's serial with every marker of
     // its project, the same rows the two separate reads return; another

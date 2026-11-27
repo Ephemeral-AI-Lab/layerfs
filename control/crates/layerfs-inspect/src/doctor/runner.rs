@@ -20,8 +20,8 @@
 use super::budget::Budget;
 use super::report::{Coverage, Kind, NoVerdict, Node, NotChecked, Report, Thing, Verdict};
 use crate::home::get::Build;
-use layerfs_home::events::Events;
-use layerfs_home::state::{BlockedBy, State};
+use layerfs_home::reply::events::Events;
+use layerfs_home::reply::state::{BlockedBy, State};
 use layerfs_protocol::sdk::SdkRefusal;
 use std::cell::RefCell;
 use std::path::Path;
@@ -203,7 +203,7 @@ pub fn run_with(
     }
     Ok(Report {
         tree,
-        observed_ms: layerfs_home::home::now_ms(),
+        observed_ms: layerfs_home::disk::now_ms(),
     })
 }
 

@@ -14,17 +14,19 @@
 //! entry and its cgroup's small files on the side that runs it, never
 //! anything inside the Sandbox's own root or namespaces.
 use super::live::{self, Checked, DEADLINE};
-use layerfs_home::home::{self, paths};
+use layerfs_home::disk;
+use layerfs_home::disk::paths;
 use layerfs_home::names::{MachineName, StoreName};
-use layerfs_home::outcome::Outcome;
-use layerfs_machine::record::MachineRecord;
+use layerfs_home::reply::outcome::Outcome;
+use layerfs_machine::record::machine::MachineRecord;
 use layerfs_protocol::sdk::SdkValue;
-use layerfs_sandbox::inspect::process::{self, NOT_OBSERVED};
+use layerfs_sandbox::status::stats as process;
+use layerfs_sandbox::status::stats::NOT_OBSERVED;
 use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 use {
     super::kernel,
-    layerfs_sandbox::{deploy::Side, inspect::owner::Budget},
+    layerfs_sandbox::{deploy::Side, route::inspect::Budget},
 };
 
 /// The inspect kind.
@@ -148,7 +150,7 @@ pub(super) fn placed(home: &Path, name: &str) -> Result<Placed, layerfs_protocol
         .or(built_in)
         .unwrap_or("")
         .to_owned();
-    let stores = (layerfs_store::record::stores(home)?.iter())
+    let stores = (layerfs_store::admin::record::store::stores(home)?.iter())
         .filter(|store| store.machine().ok().as_deref() == Some(name))
         .map(|store| store.name().to_owned())
         .collect();
@@ -222,7 +224,7 @@ pub(crate) fn serve(side: &Side<'_>, request: &SdkValue, budget: &Budget) -> Out
     let int = |value: Option<i64>| value.map_or(SdkValue::Null, SdkValue::Int);
     let size = |bytes: Option<u64>| int(bytes.and_then(|bytes| i64::try_from(bytes).ok()));
     let memory = kernel::memory();
-    let disk = home::filesystem(root).ok();
+    let disk = disk::filesystem(root).ok();
     let (kernel, cpu_reason) = kernel::cpu();
     let mut reasons: Vec<&str> = memory.reason.into_iter().collect();
     if disk.is_none() {
@@ -287,7 +289,7 @@ pub(crate) fn serve(side: &Side<'_>, request: &SdkValue, budget: &Budget) -> Out
         .map(|(name, row)| item(name, row));
 
     let mut answer = vec![
-        ("observed_at", SdkValue::Int(home::now_ms())),
+        ("observed_at", SdkValue::Int(disk::now_ms())),
         ("worker", worker),
         (
             "resources",

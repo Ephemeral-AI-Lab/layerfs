@@ -176,7 +176,7 @@ fn the_next_backup_create_or_restore_removes_stale_staging() {
     // a create that runs holds the Store's create lock: its snapshots stay
     let left = staged(&home);
     {
-        let _running = layerfs_store::backup::create::Creating::take(&home, "shop").unwrap();
+        let _running = layerfs_store::backup::jobs::create::Creating::take(&home, "shop").unwrap();
         let (code, _) = call(&home, "backup.create", &backup).unwrap_err();
         assert_eq!(code, "Busy");
         assert!(left.iter().all(|path| path.is_file()));
@@ -213,7 +213,7 @@ fn the_next_backup_create_or_restore_removes_stale_staging() {
     ];
     let left = staged(&home);
     {
-        let _running = layerfs_store::backup::create::Creating::take(&home, "shop").unwrap();
+        let _running = layerfs_store::backup::jobs::create::Creating::take(&home, "shop").unwrap();
         let _ = call(&home, "backup.restore", &restore).unwrap_err();
         assert!(
             left.iter().all(|path| path.is_file()),

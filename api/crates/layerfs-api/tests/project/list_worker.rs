@@ -8,14 +8,14 @@
 //! project.get answers the same, never a refusal.
 use layerfs_api::home::{self, paths, write_record};
 use layerfs_history::LayerStackId;
-use layerfs_machine::worker::{self, read_frame, read_frame_within, write_frame, Hello, MAX_HELLO};
+use layerfs_machine::route::{self, read_frame, read_frame_within, write_frame, Hello, MAX_HELLO};
 use layerfs_protocol::sdk::hex;
 use layerfs_protocol::sdk::SdkValue;
-use layerfs_store::open_args::OpenArgs;
-use layerfs_store::project::record::ProjectRecord;
-use layerfs_store::record::StoreRecord;
-use layerfs_store::service::with_service;
-use layerfs_store_service::history::deletion::delete_stack;
+use layerfs_store::admin::open::args::OpenArgs;
+use layerfs_store::admin::open::service::with_service;
+use layerfs_store::admin::record::store::StoreRecord;
+use layerfs_store::data::project::record::project::ProjectRecord;
+use layerfs_store_service::history::project_delete::delete_stack;
 use std::net::TcpListener;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -190,7 +190,7 @@ fn fake_lost_worker(listener: TcpListener) -> Seen {
                 continue;
             };
             let ready = Hello {
-                protocol: Some(worker::PROTOCOL),
+                protocol: Some(route::PROTOCOL),
                 bundle: None,
             };
             if write_frame(&mut stream, &ready.to_frame()).is_err() {
@@ -222,7 +222,7 @@ fn fake_worker(
                 continue;
             };
             let ready = Hello {
-                protocol: Some(worker::PROTOCOL),
+                protocol: Some(route::PROTOCOL),
                 bundle: None,
             };
             if write_frame(&mut stream, &ready.to_frame()).is_err() {

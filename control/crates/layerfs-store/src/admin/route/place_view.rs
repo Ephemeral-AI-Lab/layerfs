@@ -18,8 +18,8 @@
 //! scans a Store, a Workspace or a content pack.
 use crate::admin::open::args::OpenArgs;
 use layerfs_history::PlaceView;
-use layerfs_home::home::{paths, read_record};
-use layerfs_machine::record::MachineRecord;
+use layerfs_home::disk::{paths, read_record};
+use layerfs_machine::record::machine::MachineRecord;
 use layerfs_protocol::sdk::SdkValue;
 use std::path::Path;
 
@@ -92,7 +92,8 @@ pub fn from_open(open: &OpenArgs) -> Option<PlaceView> {
 /// The view as the worker frame carries it, when home has one.
 #[must_use]
 pub fn encoded_from_home(home: &Path) -> Option<SdkValue> {
-    from_home(home).map(|view| layerfs_store_service::history::admission::encode_place_view(&view))
+    from_home(home)
+        .map(|view| layerfs_store_service::history::gc_admission::encode_place_view(&view))
 }
 
 /// The tombstones dir holds, as (Sandbox name, retired generation). A

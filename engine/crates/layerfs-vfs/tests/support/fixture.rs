@@ -1,11 +1,12 @@
 //! Shared content-built full-root fixture; test memory is external to product.
 #![allow(dead_code)]
 use layerfs_content::filesystem::{
-    attributes::{
+    build_filesystem, scope_for_seed,
+    tree::attribute::{
         build_attribute_tree, emit_value, AttributeEntry, AttributeKey, PortableMetadata,
     },
-    build_filesystem, scope_for_seed, DirectoryUpdate, FilesystemInput, FilesystemObjects,
-    FilesystemResources, FilesystemRootId, InodeScope, InodeUpdate, PathName, SymlinkTarget,
+    DirectoryUpdate, FilesystemInput, FilesystemObjects, FilesystemResources, FilesystemRootId,
+    InodeScope, InodeUpdate, PathName, SymlinkTarget,
 };
 use layerfs_content::object::inode_leaf::{InodeKind, InodeValue};
 use layerfs_content::{

@@ -84,7 +84,7 @@ fn init_creates_a_home_then_leaves_it_and_get_reads_it_without_a_log_line() {
     assert_eq!(first.get("unchanged"), Some(&SdkValue::Bool(false)));
     assert_eq!(
         first.get("layout"),
-        Some(&SdkValue::Int(layerfs_home::home::LAYOUT_VERSION))
+        Some(&SdkValue::Int(layerfs_home::disk::LAYOUT_VERSION))
     );
     assert_eq!(first.get_text("version"), Some(env!("CARGO_PKG_VERSION")));
     assert!(home.join("layerfs.json").is_file());
@@ -107,7 +107,7 @@ fn init_creates_a_home_then_leaves_it_and_get_reads_it_without_a_log_line() {
     assert_eq!(got.get("message"), Some(&SdkValue::Null));
     assert_eq!(
         got.get("layout"),
-        Some(&SdkValue::Int(layerfs_home::home::LAYOUT_VERSION))
+        Some(&SdkValue::Int(layerfs_home::disk::LAYOUT_VERSION))
     );
     assert_eq!(got.get_text("mode"), Some("0700"));
     let _ = std::fs::remove_dir_all(&home);
@@ -162,7 +162,7 @@ fn a_foreign_home_is_outdated_and_init_refuses_it_with_the_move_fix() {
         assert_eq!(got.get_text("state"), Some("broken"), "{name}");
         assert_eq!(got.get_text("reason"), Some("outdated"), "{name}");
         assert_eq!(got.get_text("fix"), Some(fix.as_str()), "{name}");
-        let message = layerfs_home::home::layout::foreign(&home).message;
+        let message = layerfs_home::disk::layout::foreign(&home).message;
         assert_eq!(got.get_text("message"), Some(message.as_str()), "{text}");
         let refused =
             layerfs_api::call(Some(&home), "home.init", SdkValue::Null, &mut |_| {}).unwrap_err();

@@ -7,8 +7,8 @@
 //! processes of this kernel. Each command has an exec id, a stop handle and,
 //! on the side that keeps its Workspace's record, a record while it runs
 //! (`super::record`), through which another process cancels it.
-use layerfs_home::helpers::required;
-use layerfs_home::outcome::{refused, Outcome};
+use layerfs_home::reply::outcome::{refused, Outcome};
+use layerfs_home::reply::values::required;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_sandbox::exec::id::ExecId;
 use layerfs_sandbox::exec::output::{Place, Spool};
@@ -56,7 +56,7 @@ fn run(
     slot: ExecSlot<'_>,
 ) -> Result<(i32, Spool, Spool), SdkRefusal> {
     let runtime = state.runtime()?;
-    let stepped = layerfs_home::trace::stepping();
+    let stepped = layerfs_home::log::trace::stepping();
     if stepped {
         layerfs_sandbox::trace::begin();
     }
@@ -74,10 +74,10 @@ fn run(
     );
     if stepped {
         for (name, took) in layerfs_sandbox::trace::take() {
-            layerfs_home::trace::step_of(name, took);
+            layerfs_home::log::trace::step_of(name, took);
         }
     }
-    layerfs_home::trace::step("command");
+    layerfs_home::log::trace::step("command");
     ran
 }
 
@@ -137,7 +137,7 @@ pub fn checked_env(env: &[String]) -> Result<(), SdkRefusal> {
 pub fn exec(host: &Host, exec: &Exec<'_>) -> Outcome {
     let begun = std::time::Instant::now();
     let state = sandbox(host)?;
-    layerfs_home::trace::step("registry");
+    layerfs_home::log::trace::step("registry");
     let path = required(exec.path, "path")?;
     let command = required(exec.command, "command")?;
     checked_env(exec.env)?;
@@ -206,7 +206,7 @@ pub fn exec(host: &Host, exec: &Exec<'_>) -> Outcome {
         spawned: &mut spawned,
     };
     let arguments = vec!["bash".into(), "-c".into(), command.into()];
-    layerfs_home::trace::step("exec_record");
+    layerfs_home::log::trace::step("exec_record");
     let ran = run(
         &state,
         (&start, place.as_ref()),
@@ -217,7 +217,7 @@ pub fn exec(host: &Host, exec: &Exec<'_>) -> Outcome {
         Some(running) => running.end()?,
         None => false,
     };
-    layerfs_home::trace::step("exec_record_end");
+    layerfs_home::log::trace::step("exec_record_end");
     let (code, stdout, stderr) = ran?;
     let mut result = vec![
         ("exit_code", SdkValue::Int(i64::from(code))),

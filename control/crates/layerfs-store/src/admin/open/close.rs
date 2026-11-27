@@ -5,8 +5,8 @@ use super::checkpoint::wal_remaining;
 use crate::admin::open::args::OpenArgs;
 use crate::admin::open::lease::{self, Lease};
 use crate::admin::open::service::{self as direct, Completion, Route, Slot};
-use layerfs_home::home::paths;
-use layerfs_home::outcome::{refused, with_next};
+use layerfs_home::disk::paths;
+use layerfs_home::reply::outcome::{refused, with_next};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -14,9 +14,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 /// Starts the reaper thread once per process: every 5 s it closes the open
-/// Stores, the PostgreSQL host sessions ([`crate::postgresql::reader`]) and
+/// Stores, the PostgreSQL host sessions ([`crate::backend::postgresql::reader`]) and
 /// a host worker's held PostgreSQL read sessions
-/// ([`crate::postgresql::pool`]) unused for [`IDLE`].
+/// ([`crate::backend::postgresql::pool`]) unused for [`IDLE`].
 pub fn reaper() {
     REAPER.call_once(|| {
         std::thread::spawn(|| loop {

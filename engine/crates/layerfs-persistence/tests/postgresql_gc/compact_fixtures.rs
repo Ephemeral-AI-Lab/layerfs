@@ -25,10 +25,13 @@ use layerfs_content::{
     encode_whole_file_payload,
     file::mapping::{self, ExtentNode, ExtentSlice, FileState},
     filesystem::{
-        attributes::PortableMetadata,
-        directory::{encode_directory_page, DirectoryPage},
         root::profile_id,
-        scope_for_seed, FilesystemRoot, PathName,
+        scope_for_seed,
+        tree::{
+            attribute::PortableMetadata,
+            directory::{encode_directory_page, DirectoryPage},
+        },
+        FilesystemRoot, PathName,
     },
     inode_leaf::{
         encode_inode_value, InodeKind, InodeLeaf, InodeLeafRow, InodeMetadata, InodeValue,
@@ -36,8 +39,8 @@ use layerfs_content::{
     },
     FinalizedObject, ObjectId, ObjectRole,
 };
+use layerfs_history::catalog::path::NormalizedPath;
 use layerfs_history::error::{HistoryError, Missing};
-use layerfs_history::path::NormalizedPath;
 use layerfs_history::{
     AddLayerOutcome, AddLayerRequest, BranchId, CommitId, CommitMeta, CommitOutcome, CommitRequest,
     CommitStatistics, CommitVia, FileDigest, ForkRequest, ForkSource, HistoryCatalog,

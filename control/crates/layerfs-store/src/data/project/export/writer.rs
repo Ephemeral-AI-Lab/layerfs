@@ -3,8 +3,8 @@
 //! `{ phase, done, total }`.
 use crate::data::project::init::staged;
 use crate::data::project::init::tree::{Reader, Record};
-use layerfs_home::events::Events;
-use layerfs_home::outcome::refused;
+use layerfs_home::reply::events::Events;
+use layerfs_home::reply::outcome::refused;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::path::Path;
 use std::time::{Duration, Instant};

@@ -227,7 +227,10 @@ fn writes_guard_the_head_and_edit_rm_mkdir_and_apply_take_their_new_options() {
             ("expected", t(&at)),
         ],
     );
-    assert_eq!(layerfs_home::outcome::public_code(&stale.code), "Conflict");
+    assert_eq!(
+        layerfs_home::reply::outcome::public_code(&stale.code),
+        "Conflict"
+    );
     let SdkValue::Text(current) = next(&stale, "commit") else {
         panic!("{stale:?}")
     };
@@ -259,7 +262,7 @@ fn writes_guard_the_head_and_edit_rm_mkdir_and_apply_take_their_new_options() {
     };
     let ambiguous = edit(&[]).unwrap_err();
     assert_eq!(
-        layerfs_home::outcome::public_code(&ambiguous.code),
+        layerfs_home::reply::outcome::public_code(&ambiguous.code),
         "InvalidInput"
     );
     assert_eq!(next(&ambiguous, "matches"), SdkValue::Int(3));
@@ -269,7 +272,10 @@ fn writes_guard_the_head_and_edit_rm_mkdir_and_apply_take_their_new_options() {
     let read = ok(&home, "file.read", &[p(), dev(), ("path", t("/a.txt"))]);
     assert_eq!(read.get_text("text"), Some("yy yy yy\n"));
     let none = edit(&[]).unwrap_err();
-    assert_eq!(layerfs_home::outcome::public_code(&none.code), "NotFound");
+    assert_eq!(
+        layerfs_home::reply::outcome::public_code(&none.code),
+        "NotFound"
+    );
     // mkdir with an octal mode; rm of a folder that is not empty
     ok(
         &home,
@@ -280,7 +286,7 @@ fn writes_guard_the_head_and_edit_rm_mkdir_and_apply_take_their_new_options() {
     assert_eq!(stat.get_text("mode"), Some("0750"));
     let full = refused(&home, "file.rm", &[p(), dev(), ("path", t("/d"))]);
     assert_eq!(
-        layerfs_home::outcome::public_code(&full.code),
+        layerfs_home::reply::outcome::public_code(&full.code),
         "InvalidInput"
     );
     assert!(fix(&full).ends_with("--recursive"), "{full:?}");
@@ -749,7 +755,7 @@ fn at_names_a_commit_never_a_branch() {
         for bad in ["main", "dev", &at[..7]] {
             let refusal = refused(&home, name, &args(bad));
             assert_eq!(
-                layerfs_home::outcome::public_code(&refusal.code),
+                layerfs_home::reply::outcome::public_code(&refusal.code),
                 "InvalidInput",
                 "{name} --at {bad}: {refusal:?}"
             );
@@ -765,7 +771,7 @@ fn at_names_a_commit_never_a_branch() {
             &[p(), dev(), ("pattern", t(pattern)), ("at", t("main"))],
         );
         assert_eq!(
-            layerfs_home::outcome::public_code(&refusal.code),
+            layerfs_home::reply::outcome::public_code(&refusal.code),
             "InvalidInput",
             "{name}: {refusal:?}"
         );

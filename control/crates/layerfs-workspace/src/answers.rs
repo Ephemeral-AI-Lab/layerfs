@@ -3,9 +3,8 @@
 //! row's full long map, which the call boundary shapes into the short or
 //! long form. They read nothing.
 use super::route::send::Mounted;
-use layerfs_home::helpers;
-use layerfs_home::outcome::shell_word;
-use layerfs_home::state::{Reason, State};
+use layerfs_home::reply::outcome::shell_word;
+use layerfs_home::reply::state::{Reason, State};
 use layerfs_protocol::sdk::SdkValue;
 
 fn take(value: &SdkValue, name: &str) -> SdkValue {
@@ -60,9 +59,10 @@ pub fn committed(answer: &SdkValue) -> SdkValue {
     let made = take(answer, "commit");
     let merged = take(answer, "merged");
     let cut = answer.get_bool("lwwTruncated");
-    let (overwritten, overwritten_count) = helpers::shown(paths(&take(answer, "lww")), 0, cut);
+    let (overwritten, overwritten_count) =
+        layerfs_home::reply::values::shown(paths(&take(answer, "lww")), 0, cut);
     let created = made.get_int("time").map_or(SdkValue::Null, |ms| {
-        SdkValue::Text(layerfs_home::time::iso(ms))
+        SdkValue::Text(layerfs_home::reply::time::iso(ms))
     });
     let root = match unchanged {
         true => take(answer, "root"),
@@ -165,7 +165,7 @@ pub fn state(activity: &str, phase: Option<&str>, since_ms: Option<i64>, ws: &st
 /// `workspace.status` of handle `ws`: `{ changes, changes_count, partial,
 /// branch_moved, state, op, reason, fix, branch, commit, base_layer,
 /// branch_head, activity, overlay, pending_merge }`. `changes` is the
-/// first [`helpers::SHOWN`] entries of the daemon's one bounded read, each `{ path,
+/// first [`layerfs_home::reply::values::SHOWN`] entries of the daemon's one bounded read, each `{ path,
 /// change, type }`; `changes_count` is the number read, given only past
 /// those shown; `partial` says the read hit its bound.
 pub fn status(answer: &SdkValue, ws: &str) -> SdkValue {
@@ -174,7 +174,7 @@ pub fn status(answer: &SdkValue, ws: &str) -> SdkValue {
         _ => Vec::new(),
     };
     let partial = answer.get_bool("partial");
-    let (changes, changes_count) = helpers::shown(entries, 0, partial);
+    let (changes, changes_count) = layerfs_home::reply::values::shown(entries, 0, partial);
     let activity = snake(answer.get_text("activity").unwrap_or("Idle"));
     let overlay = take(answer, "overlay");
     let pending = overlay.get_bool("pendingMerge");

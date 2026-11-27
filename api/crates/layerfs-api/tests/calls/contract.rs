@@ -16,8 +16,8 @@
 //! Every package has landed: [`PENDING_MUST_BE_EMPTY`] holds the pending
 //! file empty.
 use layerfs_api::{json, Asked, Call, Form, Kind, Paging, Part, Place, Section};
-use layerfs_home::outcome::{public_code, CODES, FOLDS};
-use layerfs_home::state::{Reason, State, WORDS};
+use layerfs_home::reply::outcome::{public_code, CODES, FOLDS};
+use layerfs_home::reply::state::{Reason, State, WORDS};
 use layerfs_protocol::sdk::SdkValue;
 use std::path::{Path, PathBuf};
 
@@ -775,7 +775,7 @@ fn the_shaping_rules_hold_on_a_made_up_answer() {
 #[test]
 fn observed_at_is_news_only_when_unknown_or_live() {
     const SEEN: Form = Form::of(&["state"], &["observed_at"], &["state", "observed_at"])
-        .short_when(&[layerfs_api::calls::form::OBSERVED]);
+        .short_when(&[layerfs_api::dispatch::answer::form::OBSERVED]);
     let live = [Section::own("live", &["holders"])];
     let at = || SdkValue::text("2026-11-19T00:00:00Z");
     let answer = |state: &str, with: &[&str], detail| {
@@ -848,9 +848,9 @@ fn the_codes_and_their_fold_are_the_specification_s() {
     // the refusal's keys
     let long = texts(at(shape, "long"));
     assert_eq!(long, ["error", "message", "fix", "detail"]);
-    let refusal = layerfs_home::outcome::with_next(
-        layerfs_home::outcome::with_fix(
-            layerfs_home::outcome::refused("HeadMoved", "the head moved"),
+    let refusal = layerfs_home::reply::outcome::with_next(
+        layerfs_home::reply::outcome::with_fix(
+            layerfs_home::reply::outcome::refused("HeadMoved", "the head moved"),
             "layerfs branch get shop/api main",
         ),
         "commit",
@@ -872,7 +872,7 @@ fn the_codes_and_their_fold_are_the_specification_s() {
             r#""detail":{"code":"HeadMoved"}}"#
         )
     );
-    let plain = layerfs_home::outcome::refused("InvalidInput", "no");
+    let plain = layerfs_home::reply::outcome::refused("InvalidInput", "no");
     assert_eq!(
         json::print(&layerfs_api::refusal::value(&plain, false)),
         r#"{"error":"InvalidInput","message":"no"}"#
@@ -948,7 +948,7 @@ fn the_states_their_companions_and_the_progress_event_are_the_specification_s() 
     let mut seen = Vec::new();
     {
         let mut sink = |event: SdkValue| seen.push(event);
-        let mut events = layerfs_home::events::Events::new(&mut sink);
+        let mut events = layerfs_home::reply::events::Events::new(&mut sink);
         events.phase("copy", Some(3), Some(10), Vec::new());
     }
     let event = at(&seen[0], "progress");
@@ -1299,7 +1299,7 @@ fn store_upgrade_and_the_format_section_are_the_specification_s() {
     assert_eq!(section.place, Place::Item);
     assert_eq!(section.keys, ["format"]);
     // the cancel refusal folds into Failed, its own code kept as detail.code
-    let folded = layerfs_api::refusal::public(layerfs_home::outcome::refused(
+    let folded = layerfs_api::refusal::public(layerfs_home::reply::outcome::refused(
         "Cancelled",
         "cancelled before COMMIT; nothing changed",
     ));

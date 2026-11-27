@@ -26,7 +26,3 @@ pub use tree::{
     new_bindings, root_changes, same_value, subtree, ChangeKind, ChangedDirectories, EntryFacts,
     PathChange, RootChanges, TreeTable,
 };
-
-// #828 compat: old public module paths, removed in wave 3.
-#[doc(hidden)]
-pub use crate::compare::pages as sorted; // #828 compat

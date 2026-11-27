@@ -9,9 +9,3 @@ pub mod output;
 pub(crate) mod pending;
 pub mod remote;
 pub mod settle;
-
-// #828 compat: old public module paths, removed in wave 3.
-#[doc(hidden)]
-pub use crate::exec::settle as cancel; // #828 compat
-#[doc(hidden)]
-pub use crate::record::exec as record; // #828 compat

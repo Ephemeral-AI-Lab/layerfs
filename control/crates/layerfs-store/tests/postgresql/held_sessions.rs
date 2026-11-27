@@ -8,7 +8,7 @@
 //! it reports NOT_RUN. The sessions are process-wide: run with
 //! `--test-threads 1`.
 use layerfs_history::HistoryCatalogConfig;
-use layerfs_home::home;
+use layerfs_home::disk;
 use layerfs_home::names::ProjectRef;
 use layerfs_persistence::{PostgresHandles, PostgresSelection};
 use layerfs_protocol::sdk::SdkValue;
@@ -190,7 +190,7 @@ fn connected(source: &str) -> (Database, Temp, OpenArgs) {
     let database = Database::create(source);
     let url = database.url();
     let home = tempdir("home");
-    home::ensure(&home).unwrap();
+    disk::ensure(&home).unwrap();
     let read: postgres::Config = url.parse().expect("a URL");
     let user = read.get_user().unwrap_or("postgres");
     let password = read.get_password().map_or("unused".to_owned(), |password| {
@@ -216,7 +216,7 @@ fn connected(source: &str) -> (Database, Temp, OpenArgs) {
     let folder = tempdir("folder");
     std::fs::write(folder.join("a.txt"), b"a\n").unwrap();
     let mut sink = |_| {};
-    let mut events = layerfs_home::events::Events::new(&mut sink);
+    let mut events = layerfs_home::reply::events::Events::new(&mut sink);
     init(
         &home,
         &mut events,
@@ -234,7 +234,7 @@ fn connected(source: &str) -> (Database, Temp, OpenArgs) {
     (database, home, open)
 }
 
-fn ok(_: &layerfs_store_service::StoreService) -> layerfs_home::outcome::Outcome {
+fn ok(_: &layerfs_store_service::StoreService) -> layerfs_home::reply::outcome::Outcome {
     Ok(SdkValue::Null)
 }
 
@@ -434,7 +434,7 @@ fn three_stores_meet_the_process_bound_and_evict_idle_sessions() {
 
 /// A worker's `store.postgresql_read` of `/a.txt` in project `app`, as the
 /// CLI sends it, at login revision `revision`.
-fn read_at(home: &std::path::Path, revision: &str) -> layerfs_home::outcome::Outcome {
+fn read_at(home: &std::path::Path, revision: &str) -> layerfs_home::reply::outcome::Outcome {
     let saved = layerfs_store::backend::postgresql::login::read(home, "pgs")
         .unwrap()
         .expect("a saved login");
@@ -465,7 +465,7 @@ fn an_upgrade_renews_the_login_revision() {
     read_at(&home, "r1").expect("a read at r1");
     let held = database.pids();
     assert_eq!(held.len(), 1, "one held session");
-    let op = layerfs_home::op::Op::begin("upgrade", "check", SdkValue::Null).unwrap();
+    let op = layerfs_home::record::intent::Op::begin("upgrade", "check", SdkValue::Null).unwrap();
     let related = layerfs_store::Related {
         store_idle: idle,
         store_idle_except: None,
@@ -485,7 +485,7 @@ fn an_upgrade_renews_the_login_revision() {
     // the upgrade ends (its `op` goes): a call admitted at the old revision
     // is refused `Conflict`, and the session held before it serves nothing
     record
-        .without(layerfs_home::op::FIELD)
+        .without(layerfs_home::record::intent::FIELD)
         .write(&home)
         .unwrap();
     let late = read_at(&home, "r1").unwrap_err();

@@ -17,9 +17,11 @@ use crate::{
 use layerfs_content::{
     compare::{tree::join, Memo},
     filesystem::{
-        directory::read::{list_after, DirectoryReadWork},
-        path::PathName,
-        sorted::DirectoryRoot,
+        name::path::PathName,
+        tree::{
+            directory::read::{list_after, DirectoryReadWork},
+            pages::DirectoryRoot,
+        },
     },
     merge::Rule,
     object::inode_leaf::InodeKind,

@@ -12,7 +12,7 @@
 //! Nothing runs: a Sandbox is its record and its run folder, which is all
 //! a read uses. Scratch folders are under the build's own temporary folder.
 #![cfg(any(target_os = "linux", target_os = "macos"))]
-use layerfs_home::home::{self, paths, write_record};
+use layerfs_home::disk::{self, paths, write_record};
 use layerfs_inspect::{FilesRequest, Side, HARD, SOFT};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_sandbox::record::{DaemonRecord, Local, WorkspaceRecord};
@@ -61,8 +61,8 @@ fn fixture(tag: &str, uid: u32) -> Fixture {
     let _ = std::fs::remove_dir_all(&scratch);
     let home = scratch.join("home");
     std::fs::create_dir_all(&scratch).unwrap();
-    home::private_dir(&home).unwrap();
-    home::ensure(&home).unwrap();
+    disk::private_dir(&home).unwrap();
+    disk::ensure(&home).unwrap();
     let run = paths::run_root(&home).join("layerfs-0a1b2c3d-s1");
     for folder in ["tmp", "workspaces", "config", "overlay"] {
         std::fs::create_dir_all(run.join(folder)).unwrap();
@@ -87,7 +87,7 @@ fn sandbox(root: &Path, name: &str, directory: &Path, uid: u32) {
         container: "ab".repeat(32),
         runtime: "process",
         uid,
-        gid: home::flock::egid(),
+        gid: layerfs_home::lock::flock::egid(),
         directory: directory.display().to_string(),
         process: (4_000_000, 1, format!("{:032x}", 7)),
         port: 1,
@@ -110,7 +110,7 @@ fn sandbox(root: &Path, name: &str, directory: &Path, uid: u32) {
 }
 
 fn me() -> u32 {
-    home::flock::euid()
+    layerfs_home::lock::flock::euid()
 }
 
 fn args(fields: &[(&str, SdkValue)]) -> SdkValue {
@@ -508,7 +508,7 @@ fn a_page_past_its_soft_budget_answers_what_it_has_with_reason_deadline() {
     // seconds before the walk starts answers no entry, in time, and says
     // why; its helper ends and frees its permit
     let _turn = PERMITS.lock().unwrap_or_else(|poison| poison.into_inner());
-    let asked = home::with_field(asked, "kind", t("sandbox_files"));
+    let asked = disk::with_field(asked, "kind", t("sandbox_files"));
     let (home, request) = (fx.home.clone(), asked.clone());
     let started = Instant::now();
     let late = layerfs_inspect::admit(move |budget| {

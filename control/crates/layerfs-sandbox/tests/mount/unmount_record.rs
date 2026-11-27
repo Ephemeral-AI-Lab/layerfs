@@ -10,7 +10,7 @@ use layerfs_sandbox::record::unmount_guard::{
     admits, begin_at, cancel, find_in, finish, forceable, repeat, retryable,
 };
 use layerfs_sandbox::{OperationCause, OperationFailure};
-use layerfs_store::project::discovery;
+use layerfs_store::data::project::record::discovery;
 use std::{
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},

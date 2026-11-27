@@ -9,7 +9,7 @@
 //! id with) prints the five memory numbers, with no new system call
 //! binding; its processor ticks need `host_statistics`, an `unsafe` call
 //! this crate forbids, so they are not read.
-use layerfs_sandbox::inspect::process::KernelStat;
+use layerfs_sandbox::status::stats::KernelStat;
 
 /// The processors this process may run on.
 pub(super) fn cpus() -> Option<i64> {

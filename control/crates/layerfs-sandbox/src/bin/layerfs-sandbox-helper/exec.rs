@@ -163,7 +163,7 @@ fn start(process: &OneThread, command: &mut Command, group: Option<&File>) -> io
         let error = command.exec();
         let code = error.raw_os_error().unwrap_or(nix::libc::EIO);
         let _ = (&told).write_all(&code.to_ne_bytes());
-        std::process::exit(super::EXIT_FAILURE)
+        std::process::exit(super::main::EXIT_FAILURE)
     };
     drop(told);
     let child = pid(child);

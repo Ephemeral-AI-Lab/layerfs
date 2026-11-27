@@ -3,7 +3,7 @@
 //! makes when the caller names none. It names the command's record
 //! (`workspace/<id>/exec/<exec id>.json`) and its cgroup, so it is one plain
 //! path component.
-use layerfs_home::outcome::refused;
+use layerfs_home::reply::outcome::refused;
 use layerfs_protocol::sdk::SdkRefusal;
 
 /// The longest exec id.
@@ -31,7 +31,7 @@ impl ExecId {
 
     /// A new id made by control: `exec-<16 hex>`.
     pub fn mint() -> Result<Self, SdkRefusal> {
-        let bytes = layerfs_home::helpers::random()?;
+        let bytes = layerfs_home::record::token::random()?;
         let id = u64::from_be_bytes(bytes[..8].try_into().expect("eight bytes"));
         Ok(Self(format!("exec-{id:016x}")))
     }

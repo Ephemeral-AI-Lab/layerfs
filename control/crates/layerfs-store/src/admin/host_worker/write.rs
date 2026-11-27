@@ -12,12 +12,12 @@
 //!
 //! A PostgreSQL write's request carries the Store's saved password and the
 //! record's login revision, as a PostgreSQL read's does
-//! ([`crate::host_postgresql`]): every copy of the request the CLI makes is
+//! ([`crate::admin::host_worker::postgresql`]): every copy of the request the CLI makes is
 //! overwritten once sent or dropped, and the worker dials with it and reads
 //! no secret itself. A PostgreSQL Store whose record holds no login
 //! revision, or whose host machine is stopped, keeps its writes direct.
 use crate::admin::route::resolve::Target;
-use layerfs_home::outcome::{refused, Outcome};
+use layerfs_home::reply::outcome::{refused, Outcome};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::cell::RefCell;
 use std::io::Read;
@@ -164,7 +164,7 @@ pub fn likely(home: &Path, project: &str) -> bool {
         return false;
     };
     (host_sqlite(&target) || host_postgresql(home, &target))
-        && layerfs_machine::worker::HostPaths::new(home).is_ok_and(|paths| paths.fits())
+        && layerfs_machine::route::HostPaths::new(home).is_ok_and(|paths| paths.fits())
 }
 
 /// No host worker on this platform.
@@ -192,7 +192,7 @@ fn host_postgresql(home: &Path, target: &Target) -> bool {
     ) && layerfs_machine::in_process().is_some()
         && target.record.login_revision().is_some()
         && target.record.unblocked().is_ok()
-        && layerfs_machine::record::MachineRecord::admit_host(
+        && layerfs_machine::record::machine::MachineRecord::admit_host(
             home,
             layerfs_home::names::HOST_MACHINE,
         )
@@ -208,7 +208,7 @@ pub(crate) fn routed(
     method: &str,
     args: &mut Vec<(String, SdkValue)>,
 ) -> Option<Outcome> {
-    use layerfs_machine::worker::HostPaths;
+    use layerfs_machine::route::HostPaths;
 
     let mut input = take(method);
     let direct = |args: &mut Vec<(String, SdkValue)>, input: Option<Input>| {
@@ -253,7 +253,7 @@ pub(crate) fn routed(
         header.push(("password".to_owned(), SdkValue::text(saved.password())));
     }
     // a header that goes direct takes its copy of the password with it
-    let header = layerfs_home::wipe::Guard::new(SdkValue::Map(header), postgresql);
+    let header = layerfs_home::secret::wipe::Guard::new(SdkValue::Map(header), postgresql);
     let paths = match HostPaths::new(home) {
         Ok(paths) => paths,
         Err(error) => return Some(Err(error)),
@@ -295,7 +295,7 @@ pub(crate) fn routed(
             // its last byte is read, never after the answer
             drop(file);
             let mut source = Some(source);
-            let mut send = |sender: &mut layerfs_machine::worker::StreamSender<'_>| {
+            let mut send = |sender: &mut layerfs_machine::route::StreamSender<'_>| {
                 crate::admin::host_worker::stream::send(kind, &mut source, sender)
             };
             paths.call_streamed(OP, header, &mut send, valid_answer)

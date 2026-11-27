@@ -9,9 +9,9 @@ use crate::{
         GroupCache,
     },
     error::{StorageError, StorageResult},
+    location::Source,
     policy::{StorageCapacities, READ_CANONICAL_BYTES_LIMIT},
     port::PersistenceError,
-    source::Source,
 };
 use layerfs_content::ObjectId;
 use std::{

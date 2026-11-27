@@ -17,7 +17,7 @@
 //! its owner's locks).
 use crate::record::DaemonRecord;
 use crate::status::stats;
-use layerfs_home::home::with_field;
+use layerfs_home::disk::with_field;
 use layerfs_protocol::sdk::SdkValue;
 use std::path::Path;
 

@@ -163,7 +163,8 @@ pub fn commit(reply: &CommitReply) -> Result<SdkValue, SdkRefusal> {
                         .map(|conflict| SdkValue::text(&conflict.path))
                         .collect();
                     let total = report.conflicts.len();
-                    let (conflicts, count) = layerfs_home::helpers::shown(paths, total, false);
+                    let (conflicts, count) =
+                        layerfs_home::reply::values::shown(paths, total, false);
                     let mut next = vec![("commit", head(report.head)), ("conflicts", conflicts)];
                     if count != SdkValue::Null {
                         next.push(("conflicts_count", count));

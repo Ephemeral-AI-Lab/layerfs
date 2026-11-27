@@ -1,7 +1,7 @@
 //! A Sandbox's start, connection and mount failures read as words, never
 //! Rust `Debug` text (UI pass 1 FAIL 1: a native start answered
 //! "LaunchFailure { phase: Listener, … Protocol(…) }"), and so does
-//! `layerfs_home::outcome::failed`, which most refusals of an unexpected
+//! `layerfs_home::reply::outcome::failed`, which most refusals of an unexpected
 //! failure go through.
 use layerfs_history::WorkspaceId;
 use layerfs_protocol::daemon::{Call, ControlCode, ControlRefusal, Request, WorkspaceToken};
@@ -95,10 +95,10 @@ fn a_connection_failure_and_a_daemon_refusal_read_as_words() {
 #[test]
 fn an_unexpected_failure_refusal_is_its_display() {
     let error = std::io::Error::new(std::io::ErrorKind::NotFound, "the file is gone");
-    let refusal = layerfs_home::outcome::failed(error);
+    let refusal = layerfs_home::reply::outcome::failed(error);
     assert_eq!(refusal.code, "Failed");
     assert_eq!(refusal.message, "the file is gone");
-    let quoted = layerfs_home::outcome::failed("a \"quoted\" word".to_owned());
+    let quoted = layerfs_home::reply::outcome::failed("a \"quoted\" word".to_owned());
     assert_eq!(quoted.message, "a \"quoted\" word");
 }
 
@@ -125,14 +125,14 @@ fn a_sandbox_whose_daemon_ended_names_its_daemon() {
 /// open refusal, keeps the refusal.
 #[test]
 fn a_close_goes_on_without_an_old_format_store() {
-    use layerfs_home::outcome::{refused, with_fix};
+    use layerfs_home::reply::outcome::{refused, with_fix};
     use layerfs_sandbox::route::machine::send::opened_for;
     use layerfs_sandbox::route::machine::Op;
     let version = "SQLite Store schema version 2 (before each Commit recorded its attempt, \
 #776): not supported by this release and not migrated; create a new Store";
     let old = || {
         with_fix(
-            refused(layerfs_store::state::OLD_STORE, version),
+            refused(layerfs_store::admin::status::state::OLD_STORE, version),
             "layerfs store remove shop",
         )
     };

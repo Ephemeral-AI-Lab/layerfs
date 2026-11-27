@@ -28,7 +28,7 @@
 //! anywhere else. A source that under-declares would otherwise let an operation
 //! succeed while rows it never read stayed unapplied.
 //!
-//! [`FilesystemInput`]: crate::filesystem::input::FilesystemInput
+//! [`FilesystemInput`]: crate::filesystem::construction::input::resident::FilesystemInput
 
 mod check;
 pub(crate) mod prepared;

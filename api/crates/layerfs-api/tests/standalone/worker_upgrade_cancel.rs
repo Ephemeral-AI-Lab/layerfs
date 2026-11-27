@@ -6,8 +6,8 @@
 #[path = "../support/worker_store.rs"]
 mod worker_store;
 
-use layerfs_home::events::Events;
 use layerfs_home::names::StoreName;
+use layerfs_home::reply::events::Events;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use worker_store::placed;
 

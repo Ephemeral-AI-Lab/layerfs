@@ -59,15 +59,15 @@ use crate::admin::record::store::StoreRecord;
 use crate::admin::route::executor::{self, Executor};
 use crate::data::project::record::project::ProjectRecord;
 use layerfs_history::{GcScopeKind, HistoryError, LayerStackId};
-use layerfs_home::events::Events;
-use layerfs_home::home::{now_ms, paths};
+use layerfs_home::disk::{now_ms, paths};
 use layerfs_home::names::ProjectRef;
-use layerfs_home::outcome::{failed, refused, Outcome};
+use layerfs_home::reply::events::Events;
+use layerfs_home::reply::outcome::{failed, refused, Outcome};
 use layerfs_protocol::sdk::{hex, unhex};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
-use layerfs_store_service::history::admission as store_admission;
-use layerfs_store_service::history::deletion::{delete_stack_with, Deletion};
-use layerfs_store_service::history::lookup;
+use layerfs_store_service::history::gc_admission as store_admission;
+use layerfs_store_service::history::project_delete::{delete_stack_with, Deletion};
+use layerfs_store_service::lookup;
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
@@ -149,7 +149,7 @@ impl Intent {
     /// The intent of project `project` of Store `store`, or `None`.
     pub fn read(home: &Path, store: &str, project: &str) -> Result<Option<Self>> {
         let path = Self::path(home, store, project);
-        let Some(value) = layerfs_home::home::read_record(&path)? else {
+        let Some(value) = layerfs_home::disk::read_record(&path)? else {
             return Ok(None);
         };
         let malformed = || {
@@ -578,7 +578,7 @@ pub fn delete_with(
 pub(super) fn remove_tree(entry: &Path) -> Result<()> {
     match fs::remove_dir_all(entry) {
         Ok(()) => {
-            layerfs_home::home::generation::moved_above(entry);
+            layerfs_home::record::generation::moved_above(entry);
             Ok(())
         }
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),

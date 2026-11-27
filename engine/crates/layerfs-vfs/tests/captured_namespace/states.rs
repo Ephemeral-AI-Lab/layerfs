@@ -10,7 +10,7 @@ use crate::harness;
 use crate::oracle;
 use crate::producer;
 use harness::Bench;
-use layerfs_content::filesystem::attributes::{read_portable, AttributeReadWork};
+use layerfs_content::filesystem::tree::attribute::{read_portable, AttributeReadWork};
 use layerfs_content::{object::inode_leaf::decode_inode_value, ConstructionPolicy, ContentError};
 use layerfs_overlay::{IndexedOperationRecordScope, Inode};
 use layerfs_telemetry::timer::Timing;

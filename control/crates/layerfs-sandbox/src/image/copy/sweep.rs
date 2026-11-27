@@ -25,7 +25,7 @@ use crate::image::copy::load::{existing_home_id, owned_for_home_id, remove_conta
 use crate::image::copy::lock::{ImageLock, PruneGate};
 use crate::record::sweep::{Bounds, Budget, BOUNDS};
 use crate::rootfs::{self, Temporary};
-use layerfs_home::home::log_swept as log;
+use layerfs_home::disk::log_swept as log;
 use layerfs_protocol::sdk::SdkValue;
 use std::path::Path;
 use std::time::{Duration, Instant};

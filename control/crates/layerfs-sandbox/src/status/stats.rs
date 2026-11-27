@@ -52,13 +52,13 @@ const MOST_GROUPS: usize = 256;
 
 /// Whether the process `daemon` names is that process and runs: its id
 /// with its start time and boot when the record holds them, as
-/// `layerfs_home::process::alive_as` matches them. `Err` when the record
+/// `layerfs_home::record::process::alive_as` matches them. `Err` when the record
 /// names no process (a record of the retired docker backend).
 pub fn live(daemon: &DaemonRecord) -> Result<bool, &'static str> {
     let pid = (daemon.pid())
         .and_then(|pid| u32::try_from(pid).ok())
         .ok_or(NO_PID)?;
-    Ok(layerfs_home::process::alive_as(
+    Ok(layerfs_home::record::process::alive_as(
         pid,
         daemon.start().and_then(|start| start.parse().ok()),
         (daemon.boot()).and_then(|boot| u128::from_str_radix(boot, 16).ok()),

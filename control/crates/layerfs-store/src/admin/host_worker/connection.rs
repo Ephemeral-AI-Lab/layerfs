@@ -2,7 +2,7 @@
 //! its operation and the answer, within absolute deadlines. A PostgreSQL
 //! request goes to the PostgreSQL queue and a streamed write to the write
 //! queue; the guest worker's connections are `layerfs-api`'s.
-use layerfs_home::outcome::refused;
+use layerfs_home::reply::outcome::refused;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::time::{Duration, Instant};
 
@@ -50,7 +50,7 @@ pub(crate) fn serve_host_connection(
     if secret {
         crate::admin::host_worker::postgresql::harden();
     }
-    let request = layerfs_home::wipe::Guard::new(request, secret);
+    let request = layerfs_home::secret::wipe::Guard::new(request, secret);
     let request = request.get();
     let mut refusal = None;
     if !management {
@@ -103,7 +103,7 @@ fn read_host_request(
     socket: &std::os::unix::net::UnixStream,
     management: bool,
 ) -> Option<SdkValue> {
-    use layerfs_machine::worker::{
+    use layerfs_machine::route::{
         host_check_peer, read_host_frame, write_host_frame, HOST_MAX_REQUEST, MAX_HELLO,
     };
 
@@ -114,7 +114,7 @@ fn read_host_request(
             MAX_HELLO,
             // From this thread's turn, not the accept: a connection that
             // waited in the queue behind long calls is still greeted (§16.1 C7).
-            Instant::now() + layerfs_machine::worker::HELLO_WAIT,
+            Instant::now() + layerfs_machine::route::HELLO_WAIT,
         )
         .is_err()
     {
@@ -139,7 +139,7 @@ fn answer_host_request(
     admitted: &mut bool,
     refusal: Option<SdkRefusal>,
 ) -> bool {
-    use layerfs_home::trace;
+    use layerfs_home::log::trace;
 
     let Some(request_id) = request
         .get_text("request_id")
@@ -245,10 +245,10 @@ pub(crate) fn reply(
     socket: &std::os::unix::net::UnixStream,
     request_id: &str,
     traced: bool,
-    outcome: layerfs_home::outcome::Outcome,
+    outcome: layerfs_home::reply::outcome::Outcome,
 ) -> bool {
-    use layerfs_home::trace;
-    use layerfs_machine::worker::{write_host_frame, HOST_MAX_REPLY};
+    use layerfs_home::log::trace;
+    use layerfs_machine::route::{write_host_frame, HOST_MAX_REPLY};
 
     let answer = match outcome {
         Ok(value) => ("ok", value),
@@ -282,7 +282,7 @@ pub(crate) fn reply(
 /// "go": true}`): sent when a write thread starts reading it, so the
 /// caller never streams into a queue; whether it was delivered.
 pub(crate) fn go(socket: &std::os::unix::net::UnixStream, request_id: &str) -> bool {
-    use layerfs_machine::worker::{write_host_frame, HOST_MAX_REPLY};
+    use layerfs_machine::route::{write_host_frame, HOST_MAX_REPLY};
     let frame = SdkValue::map([
         ("request_id", SdkValue::text(request_id)),
         ("go", SdkValue::Bool(true)),

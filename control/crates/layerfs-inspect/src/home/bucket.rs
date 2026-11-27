@@ -4,9 +4,9 @@
 //! does not apply, or that a failed check of the bucket kept from running,
 //! is left out of the report.
 use crate::doctor::budget::{Budget, Checks};
-use layerfs_home::outcome::shell_word;
+use layerfs_home::reply::outcome::shell_word;
 use layerfs_protocol::sdk::SdkValue;
-use layerfs_store::backup::record::BucketRecord;
+use layerfs_store::backup::bucket::record::BucketRecord;
 use layerfs_store::backup::{
     bucket::RemoteError,
     s3_api::{DiagnosticObject, S3Client},
@@ -56,7 +56,7 @@ pub(super) fn diagnose(
         }
     };
     let fields = record.to_record();
-    if fields.get_int("v") != Some(layerfs_home::home::RECORD_VERSION) {
+    if fields.get_int("v") != Some(layerfs_home::disk::RECORD_VERSION) {
         checks.fail(
             "bucket.configuration",
             "backup alias record version is invalid",
@@ -70,7 +70,7 @@ pub(super) fn diagnose(
                 ("cause", SdkValue::text("version")),
                 (
                     "expected_v",
-                    SdkValue::Int(layerfs_home::home::RECORD_VERSION),
+                    SdkValue::Int(layerfs_home::disk::RECORD_VERSION),
                 ),
             ]),
         );
@@ -122,7 +122,7 @@ pub(super) fn diagnose(
             );
             // the connect-again fix the same record's backup calls carry
             // (V20-7, V21-4; RC-A F4)
-            let fix = refusal.detail.get_text(layerfs_home::outcome::FIX);
+            let fix = refusal.detail.get_text(layerfs_home::reply::outcome::FIX);
             let fix = fix.map(str::to_owned);
             checks.fail("bucket.credentials", refusal.message);
             if let Some(fix) = fix {
@@ -196,7 +196,7 @@ pub(super) fn diagnose(
             return;
         }
     }
-    let token = match layerfs_home::helpers::random() {
+    let token = match layerfs_home::record::token::random() {
         Ok(bytes) => layerfs_protocol::sdk::hex(&bytes),
         Err(_) => {
             checks.fail(

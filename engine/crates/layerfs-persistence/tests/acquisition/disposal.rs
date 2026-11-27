@@ -44,7 +44,7 @@ fn root() -> NewEntry {
         },
         position: Some(0),
         kind: InodeKind::Directory,
-        metadata: layerfs_content::filesystem::attributes::PortableMetadata {
+        metadata: layerfs_content::filesystem::tree::attribute::PortableMetadata {
             mode: 0o644,
             mtime_seconds: 0,
             mtime_nanoseconds: 0,
@@ -63,7 +63,7 @@ fn file(position: u64) -> NewEntry {
         },
         position: Some(position),
         kind: InodeKind::RegularFile,
-        metadata: layerfs_content::filesystem::attributes::PortableMetadata {
+        metadata: layerfs_content::filesystem::tree::attribute::PortableMetadata {
             mode: 0o644,
             mtime_seconds: 0,
             mtime_nanoseconds: 0,

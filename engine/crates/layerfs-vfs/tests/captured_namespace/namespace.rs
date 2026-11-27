@@ -7,7 +7,7 @@ use crate::producer;
 use harness::Bench;
 use layerfs_content::{
     filesystem::{
-        inode::codec::{decode_inode_page, encode_inode_page, InodePage},
+        tree::inode::codec::{decode_inode_page, encode_inode_page, InodePage},
         FilesystemRead, FilesystemRootId,
     },
     AuthenticatedObjects, ObjectId,

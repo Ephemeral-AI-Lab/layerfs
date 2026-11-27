@@ -16,8 +16,8 @@
 //! runs once: a refused or failed call returns its own error, nothing is sent
 //! again.
 use crate::admin::open::args::{OpenArgs, ROUTING};
-use layerfs_home::helpers::lock;
-use layerfs_home::outcome::{failed, refused, with_fix, Outcome};
+use layerfs_home::lock::mutex::lock;
+use layerfs_home::reply::outcome::{failed, refused, with_fix, Outcome};
 use layerfs_protocol::sdk::{SdkCall, SdkRefusal, SdkValue};
 use layerfs_store_service::{OpenRefusal, StoreService};
 use std::collections::BTreeMap;
@@ -163,7 +163,7 @@ fn overlay_directory() -> Result<PathBuf, SdkRefusal> {
     let directory = std::env::temp_dir().join(format!(
         "layerfs-store-{}-{}",
         std::process::id(),
-        layerfs_protocol::sdk::hex(&layerfs_home::helpers::random()?[..12])
+        layerfs_protocol::sdk::hex(&layerfs_home::record::token::random()?[..12])
     ));
     let mut builder = std::fs::DirBuilder::new();
     #[cfg(unix)]
@@ -199,17 +199,17 @@ pub(crate) fn is_one_shot_read(method: &str) -> bool {
 /// Checks the authoritative record's binding on the only session this read uses.
 pub(crate) fn postgres_read(method: &str, args: &OpenArgs, fields: SdkValue) -> Outcome {
     let service = open_postgres_read(args)?;
-    layerfs_home::trace::step("store_open");
+    layerfs_home::log::trace::step("store_open");
     let outcome = dispatch(&service, method, fields);
-    layerfs_home::trace::step("call");
+    layerfs_home::log::trace::step("call");
     drop(service);
-    layerfs_home::trace::step("store_close");
+    layerfs_home::log::trace::step("store_close");
     outcome
 }
 
 /// A PostgreSQL read service over one new session, Full-checked against
 /// the authoritative record's binding: one call's (P-A), or a host
-/// worker's held session (#819 P-B, [`crate::postgresql::pool`]).
+/// worker's held session (#819 P-B, [`crate::backend::postgresql::pool`]).
 pub(crate) fn open_postgres_read(args: &OpenArgs) -> Result<StoreService, SdkRefusal> {
     let identity = crate::admin::record::identity::identity(args)?;
     crate::backend::postgresql::open::open_read_only(args.postgresql.as_ref(), &identity)
@@ -217,7 +217,7 @@ pub(crate) fn open_postgres_read(args: &OpenArgs) -> Result<StoreService, SdkRef
 }
 
 /// A writable PostgreSQL service over new sessions, held by a host worker
-/// between CLI writes (#819 P-B, [`crate::postgresql::pool`]), with its own
+/// between CLI writes (#819 P-B, [`crate::backend::postgresql::pool`]), with its own
 /// private overlay directory, which the caller removes after closing it.
 pub(crate) fn open_postgres_write(args: &OpenArgs) -> Result<(StoreService, PathBuf), SdkRefusal> {
     let identity = crate::admin::record::identity::identity(args)?;

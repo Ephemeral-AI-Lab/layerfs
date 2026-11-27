@@ -4,14 +4,14 @@
 //! the record's `incoming_on` names that machine; and a `store move` to
 //! `native` asks a machine's worker once for each piece: a lost answer is
 //! the call's outcome, never asked again.
-use layerfs_home::events::Events;
-use layerfs_home::home::{paths, private_dir, write_entity, write_record};
+use layerfs_home::disk::{paths, private_dir, write_entity, write_record};
 use layerfs_home::names::StoreName;
-use layerfs_machine::worker::{read_frame, read_frame_within, write_frame, Hello, MAX_HELLO};
+use layerfs_home::reply::events::Events;
+use layerfs_machine::route::{read_frame, read_frame_within, write_frame, Hello, MAX_HELLO};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
-use layerfs_store::record::StoreRecord;
-use layerfs_store::sqlite::transfer::step::{StepFrame, StoreStep};
-use layerfs_store::sqlite::{create, remove, transfer::phases};
+use layerfs_store::admin::record::store::StoreRecord;
+use layerfs_store::backend::sqlite::step_request::{StepFrame, StoreStep};
+use layerfs_store::backend::sqlite::{create, move_phases, remove};
 use layerfs_store::Related;
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
@@ -63,7 +63,7 @@ fn box_machine(home: &Path, address: &str) {
 /// root in this process.
 fn home_with_box(tag: &str) -> (PathBuf, PathBuf) {
     let home = new_dir(tag);
-    layerfs_home::home::open(&home).unwrap();
+    layerfs_home::disk::open(&home).unwrap();
     let root = new_dir(&format!("{tag}-root"));
     private_dir(&root).unwrap();
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -187,7 +187,7 @@ fn steals_the_target(root: &Path) -> String {
             let Some(frame) = StepFrame::decode(&args).ok() else {
                 continue;
             };
-            let answer = match layerfs_store::sqlite::transfer::steps::run(&root, &frame) {
+            let answer = match layerfs_store::backend::sqlite::step_run::run(&root, &frame) {
                 Ok(value) => {
                     // another writer takes the target's name between the check
                     // and the install
@@ -218,7 +218,7 @@ fn steals_the_target(root: &Path) -> String {
 #[test]
 fn a_certain_install_failure_keeps_the_target_in_the_record() {
     let home = new_dir("install");
-    layerfs_home::home::open(&home).unwrap();
+    layerfs_home::disk::open(&home).unwrap();
     let root = new_dir("install-root");
     private_dir(&root).unwrap();
     let address = steals_the_target(&root);
@@ -229,7 +229,7 @@ fn a_certain_install_failure_keeps_the_target_in_the_record() {
 
     let mut sink = |_: SdkValue| {};
     let mut events = Events::new(&mut sink);
-    let refused = phases::move_to(&home, &mut events, "shop", "box", related()).unwrap_err();
+    let refused = move_phases::move_to(&home, &mut events, "shop", "box", related()).unwrap_err();
 
     assert_eq!(refused.code, "Exists", "{}", refused.message);
     assert!(
@@ -321,7 +321,7 @@ fn flaky(root: &Path, drops: u32) -> (String, Arc<AtomicU32>) {
                     continue;
                 }
             }
-            let answer = match layerfs_store::sqlite::transfer::steps::run(&root, &frame) {
+            let answer = match layerfs_store::backend::sqlite::step_run::run(&root, &frame) {
                 Ok(value) => SdkValue::map([("value", value)]),
                 Err(refusal) => SdkValue::map([(
                     "refused",
@@ -343,7 +343,7 @@ fn flaky(root: &Path, drops: u32) -> (String, Arc<AtomicU32>) {
 #[test]
 fn a_pull_reads_each_piece_once() {
     let home = new_dir("lost");
-    layerfs_home::home::open(&home).unwrap();
+    layerfs_home::disk::open(&home).unwrap();
     let root = new_dir("lost-root");
     private_dir(&root).unwrap();
     let (address, reads) = flaky(&root, 1);
@@ -352,7 +352,7 @@ fn a_pull_reads_each_piece_once() {
 
     let mut sink = |_: SdkValue| {};
     let mut events = Events::new(&mut sink);
-    let refused = phases::move_to(
+    let refused = move_phases::move_to(
         &home,
         &mut events,
         "shop",

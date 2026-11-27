@@ -10,11 +10,11 @@
 //! calls settle only what the Store's admission proves unowned.
 use crate::record::SandboxRecord;
 use layerfs_history::BranchId;
-use layerfs_home::outcome::shell_word;
+use layerfs_home::reply::outcome::shell_word;
 use layerfs_protocol::sdk::SdkValue;
 use layerfs_protocol::sdk::{hex, unhex};
 use layerfs_protocol::StoreKind;
-use layerfs_store::open_args::OpenArgs;
+use layerfs_store::admin::open::args::OpenArgs;
 use std::path::Path;
 
 /// The Branch a mounted Workspace is bound to: its id, as the process that
@@ -64,11 +64,11 @@ fn end_one(open: Result<&OpenArgs, &str>, workspace: &Bound) -> Result<(), Strin
         Branch::Id(branch) => *branch,
         Branch::Named(name) => {
             let project = open.project.as_deref().unwrap_or_default();
-            layerfs_store::service::branch_named(open, project, name)
+            layerfs_store::data::branch::branch_named(open, project, name)
                 .map_err(|refusal| refusal.message)?
         }
     };
-    layerfs_store::service::end_mount(open, branch, *id)
+    layerfs_store::admin::route::mount_intents::end_mount(open, branch, *id)
         .map(drop)
         .map_err(|refusal| refusal.message)
 }
@@ -147,7 +147,8 @@ fn taken(item: &SdkValue) -> Bound {
 /// Store call there opens it.
 pub fn store_of(home: &Path, record: &SandboxRecord) -> Result<OpenArgs, String> {
     let project = record.project().unwrap_or_default();
-    let target = layerfs_store::resolve::target(home, project).map_err(|r| r.message)?;
+    let target =
+        layerfs_store::admin::route::resolve::target(home, project).map_err(|r| r.message)?;
     let mut open = OpenArgs::of_record(home, &target.store, &target.record)
         .map_err(|refusal| refusal.message)?;
     open.project = Some(target.project);
@@ -159,7 +160,8 @@ pub fn store_of(home: &Path, record: &SandboxRecord) -> Result<OpenArgs, String>
 /// owner gone (another boot of the kernel that ran it, for a sqlite Store),
 /// and never for an intent the Store marked uncertain.
 pub fn remedy(home: &Path, record: &SandboxRecord) -> String {
-    let target = layerfs_store::resolve::target(home, record.project().unwrap_or_default());
+    let target =
+        layerfs_store::admin::route::resolve::target(home, record.project().unwrap_or_default());
     let (store, kind) = match &target {
         Ok(target) => (shell_word(&target.store), target.store_ref.kind()),
         Err(_) => ("<store>".to_owned(), StoreKind::Sqlite),
@@ -168,7 +170,7 @@ pub fn remedy(home: &Path, record: &SandboxRecord) -> String {
         format!("`layerfs store compact {store}` adopts it unless the Store marked it uncertain");
     let machine = record.machine();
     // a built-in machine with no record yet has the platform of its name
-    let platform = layerfs_machine::record::MachineRecord::read(home, machine)
+    let platform = layerfs_machine::record::machine::MachineRecord::read(home, machine)
         .ok()
         .flatten()
         .and_then(|found| found.platform_name().map(str::to_owned))

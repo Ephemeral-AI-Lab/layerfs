@@ -71,7 +71,7 @@ fn visible_trees(
 pub fn remove_file(service: &StoreService, args: &SdkValue) -> Answer {
     let stack = project(service, args)?;
     let requested = text(args, "path")?;
-    let normalized = layerfs_history::path::NormalizedPath::new(requested)
+    let normalized = layerfs_history::catalog::path::NormalizedPath::new(requested)
         .map_err(|why| invalid(format!("path: {why}")))?;
     // The marker is project-wide, so the path need not exist on main: it may
     // exist only on a Branch, or never have existed. Spec 4.3 authorizes one

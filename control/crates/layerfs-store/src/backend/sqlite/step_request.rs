@@ -2,7 +2,7 @@
 //! request [`steps::run`](super::steps::run) takes, and the `store.file`
 //! frame it travels in to a worker, `{ op, args: { store, store_record?,
 //! ... } }`, encoded by the caller and decoded once in the worker.
-use layerfs_home::outcome::refused;
+use layerfs_home::reply::outcome::refused;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -156,7 +156,7 @@ impl StepFrame {
         }
         SdkValue::map([
             ("op", SdkValue::text(self.step.name())),
-            ("args", layerfs_home::helpers::map_of(fields)),
+            ("args", layerfs_home::reply::values::map_of(fields)),
         ])
     }
 

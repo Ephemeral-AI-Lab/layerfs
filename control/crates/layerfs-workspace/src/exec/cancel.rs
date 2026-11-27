@@ -3,7 +3,7 @@
 //! recorded for a Workspace ([`every`]). One command's cancel, a stale
 //! record's end and what close and unmount do with running commands are
 //! the Sandbox's (`layerfs_sandbox::exec::settle`).
-use layerfs_home::outcome::refused;
+use layerfs_home::reply::outcome::refused;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_sandbox::exec::id::ExecId;
 use layerfs_sandbox::exec::settle::{cancel, grace, stop, unreached, Outcome, Remote, GRACE_MS};
@@ -27,7 +27,7 @@ pub fn call(
     path: Option<&str>,
     (exec_id, grace_ms): (Option<&str>, Option<i64>),
     workspace: Option<&str>,
-) -> layerfs_home::outcome::Outcome {
+) -> layerfs_home::reply::outcome::Outcome {
     let id = exec_id.map(ExecId::parse).transpose()?;
     let grace = grace(grace_ms)?;
     let state = layerfs_sandbox::lifecycle::registry::sandbox(host)?;
@@ -42,7 +42,7 @@ pub fn call(
         })?;
         return Ok(stop(&handle, grace)?.answer());
     }
-    let path = layerfs_home::helpers::required(path, "path")?;
+    let path = layerfs_home::reply::values::required(path, "path")?;
     let token = state.token(path)?;
     let workspace = layerfs_protocol::sdk::hex(&token.workspace.to_bytes());
     let commands = every(

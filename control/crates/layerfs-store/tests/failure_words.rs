@@ -79,7 +79,7 @@ fn a_history_failure_keeps_the_history_crates_words() {
 /// header says schema version 2, so the test follows its wording.
 #[test]
 fn an_old_format_store_is_named_by_its_version_refusal() {
-    use layerfs_home::outcome::refused;
+    use layerfs_home::reply::outcome::refused;
     use layerfs_store::admin::status::state::{outdated_fix, outdated_status, OLD_STORE};
     let Some(raised) = schema_2_open_refusal() else {
         return;
@@ -129,7 +129,7 @@ fn schema_2_open_refusal() -> Option<layerfs_protocol::sdk::SdkRefusal> {
     let _ = std::fs::remove_dir_all(&home);
     std::fs::create_dir_all(&home).unwrap();
     std::fs::set_permissions(&home, std::fs::Permissions::from_mode(0o700)).unwrap();
-    layerfs_home::home::open(&home).unwrap();
+    layerfs_home::disk::open(&home).unwrap();
     let name = layerfs_home::names::StoreName::parse("shop").unwrap();
     if let Err(refusal) = layerfs_store::backend::sqlite::create::create(&home, &name, None) {
         assert!(
@@ -139,7 +139,7 @@ fn schema_2_open_refusal() -> Option<layerfs_protocol::sdk::SdkRefusal> {
         eprintln!("NOT RUN: this filesystem cannot hold a directly opened Store");
         return None;
     }
-    let file = layerfs_home::home::paths::store_file(&home, "shop");
+    let file = layerfs_home::disk::paths::store_file(&home, "shop");
     let mut bytes = std::fs::read(&file).unwrap();
     bytes[60..64].copy_from_slice(&36u32.to_be_bytes());
     std::fs::write(&file, bytes).unwrap();

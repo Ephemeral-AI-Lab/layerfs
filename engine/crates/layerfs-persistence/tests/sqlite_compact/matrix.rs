@@ -153,11 +153,14 @@ fn save_objects(handles: &SqliteHandles, objects: &[FinalizedObject]) -> ObjectI
 fn filesystem_root(handles: &SqliteHandles, seed: u8) -> ObjectId {
     use layerfs_content::{
         filesystem::{
-            attributes::PortableMetadata,
-            directory::{encode_directory_page, DirectoryPage},
-            inode::{encode_inode_page, InodePage},
             root::profile_id,
-            scope_for_seed, FilesystemRoot,
+            scope_for_seed,
+            tree::{
+                attribute::PortableMetadata,
+                directory::{encode_directory_page, DirectoryPage},
+                inode::{encode_inode_page, InodePage},
+            },
+            FilesystemRoot,
         },
         inode_leaf::{InodeKind, InodeMetadata, InodeValue},
     };

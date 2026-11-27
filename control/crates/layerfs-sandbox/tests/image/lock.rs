@@ -12,8 +12,8 @@
 //! really waiting while the first is really sending.
 use crate::fixture;
 use fixture::{Scratch, Tar};
-use layerfs_home::events::Events;
-use layerfs_home::home;
+use layerfs_home::disk;
+use layerfs_home::reply::events::Events;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_sandbox::image::cache::{self as cache, architecture};
 use layerfs_sandbox::image::copy::docker::{self, Docker};
@@ -254,7 +254,7 @@ fn setup(name: &str) -> (Scratch, Standin, PathBuf) {
     fs::create_dir_all(&home).unwrap();
     // the home is opened, as every call opens it before a copy: a folder
     // holding a lock record and no `layerfs.json` is not a 2.0 home
-    home::open(&home).unwrap();
+    disk::open(&home).unwrap();
     standin.image(ID, &["demo/app:1"], architecture(), 4000);
     standin.export(&filtered(&export()));
     (scratch, standin, home)
@@ -392,7 +392,7 @@ fn another_machine_is_another_lock() {
     );
     assert_eq!(standin.exports(), 1);
     // the record names the machine that holds the lock, not the other one
-    let record = home::read_record(&ImageLock::record_path(&home, "docker", HEX))
+    let record = disk::read_record(&ImageLock::record_path(&home, "docker", HEX))
         .unwrap()
         .expect("the holder's record");
     assert_eq!(record.get_text("machine"), Some("docker"));
@@ -416,7 +416,7 @@ fn a_dead_owner_is_taken_over_and_a_reused_pid_holds_nothing() {
     // a record left by a copy whose pid another process now holds: the pid
     // is alive, the process is not that copy, and no lock is held
     fs::create_dir_all(record.parent().unwrap()).unwrap();
-    home::write_record(
+    disk::write_record(
         &record,
         &SdkValue::map([
             ("pid", SdkValue::Int(std::process::id() as i64)),
@@ -440,7 +440,7 @@ fn a_dead_owner_is_taken_over_and_a_reused_pid_holds_nothing() {
         "a record alone is not a lock"
     );
     assert!(phases(&events, "lock").is_empty(), "no wait on a dead name");
-    let mine = home::read_record(&record).unwrap().unwrap();
+    let mine = disk::read_record(&record).unwrap().unwrap();
     assert_eq!(mine.get_int("pid"), Some(std::process::id() as i64));
     assert_ne!(
         mine.get_text("pid_start"),
@@ -491,7 +491,7 @@ fn a_dead_owner_is_taken_over_and_a_reused_pid_holds_nothing() {
         start.elapsed() < Duration::from_secs(10),
         "a dead owner is taken over at once"
     );
-    let mine = home::read_record(&record).unwrap().unwrap();
+    let mine = disk::read_record(&record).unwrap().unwrap();
     assert_eq!(mine.get_int("pid"), Some(std::process::id() as i64));
     drop(taken);
 }

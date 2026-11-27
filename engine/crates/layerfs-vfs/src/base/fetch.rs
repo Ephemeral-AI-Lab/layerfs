@@ -4,7 +4,9 @@ use layerfs_content::file::cdc::MAXIMUM_CHUNK_BYTES;
 use layerfs_content::file::mapping::{
     chunk_canonical_len, decode_node_with_context, ExtentNode, FileState, READ_NAVIGATION_WAVE,
 };
-use layerfs_content::filesystem::attributes::{read_portable, AttributeReadWork, PortableMetadata};
+use layerfs_content::filesystem::tree::attribute::{
+    read_portable, AttributeReadWork, PortableMetadata,
+};
 use layerfs_content::object::inode_leaf::{InodeKind, InodeMetadata};
 use layerfs_content::{AuthenticatedObjects, ContentError, ContentResult, ObjectId};
 use std::ops::Range;
@@ -130,7 +132,7 @@ pub struct ClientWork {
     /// remembered without a Store demand.
     pub seeded_lengths: u64,
     /// The shared decoded-page cache's hits, misses, evictions and charge.
-    pub decoded: layerfs_content::filesystem::decoded::DecodedWork,
+    pub decoded: layerfs_content::filesystem::tree::pages::decoded::DecodedWork,
 }
 /// A runtime-backed authenticated object provider with bounded immutable caching.
 /// Upstream implements its public demand-window/authority contract; allocation
@@ -529,7 +531,9 @@ impl AuthenticatedObjects for CanonicalClient {
         Ok(values)
     }
 
-    fn decoded_pages(&self) -> Option<&layerfs_content::filesystem::decoded::DecodedPages> {
+    fn decoded_pages(
+        &self,
+    ) -> Option<&layerfs_content::filesystem::tree::pages::decoded::DecodedPages> {
         Some(&self.cache.decoded)
     }
     fn read_canonical_batch(&self, ids: &[ObjectId]) -> ContentResult<Vec<Vec<u8>>> {

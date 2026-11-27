@@ -6,9 +6,9 @@ use super::super::statement::rows::{cell, many, one, unsigned};
 use super::super::statement::transaction::Transaction;
 use super::super::{graph::layerstack, params};
 use crate::backend::seam::{Record as Row, Value};
+use layerfs_history::catalog::path::trace_key;
 use layerfs_history::error::{HistoryError, HistoryResult, Missing};
 use layerfs_history::identity::{LayerStackId, NodeId};
-use layerfs_history::path::trace_key;
 use layerfs_history::records::{
     PathRemovalKind, PathRemovalOutcome, PathRemovalRecord, PathRemovalRequest,
 };

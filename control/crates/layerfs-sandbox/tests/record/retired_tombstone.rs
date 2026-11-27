@@ -6,7 +6,7 @@
 //! outcome. Each case drives `sandbox.remove`, the close its side runs, or
 //! `sandbox.create`, never the tombstone write alone. Nothing runs a daemon.
 #![cfg(any(target_os = "linux", target_os = "macos"))]
-use layerfs_home::home::{self, paths, read_record, write_record};
+use layerfs_home::disk::{self, paths, read_record, write_record};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_sandbox::family::{remove, RemoveRequest, Removed};
 use layerfs_sandbox::route::machine::{Host, Message};
@@ -27,15 +27,15 @@ fn t(s: &str) -> SdkValue {
 fn new_home(tag: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("lfs-tomb-{tag}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    home::private_dir(&dir).unwrap();
-    home::ensure(&dir).unwrap();
+    disk::private_dir(&dir).unwrap();
+    disk::ensure(&dir).unwrap();
     dir
 }
 
 /// `sandbox.remove(name, { force })`.
 fn removed(home: &Path, name: &str, force: bool) -> Result<Removed, SdkRefusal> {
     let mut sink = |_| {};
-    let mut events = layerfs_home::events::Events::new(&mut sink);
+    let mut events = layerfs_home::reply::events::Events::new(&mut sink);
     let request = RemoveRequest {
         name: name.to_owned(),
         force,
@@ -105,7 +105,7 @@ fn sandbox(home: &Path, name: &str, machine: &str, daemon: SdkValue, extra: &[(&
 /// A native daemon record this build does not read (no `port`), under the
 /// name this home gives Sandbox `name`.
 fn unread_daemon(home: &Path, name: &str) -> SdkValue {
-    let id = home::opened(home).unwrap().id;
+    let id = disk::opened(home).unwrap().id;
     let given = format!("{}{name}", layerfs_home::names::provider_prefix(&id));
     SdkValue::map([
         ("runtime", t("process")),
@@ -129,8 +129,8 @@ fn docker_daemon() -> SdkValue {
 /// image archive are never run here; `false` (the home removed) where the
 /// Store's filesystem is unsupported.
 fn native_store(home: &Path) -> bool {
-    use layerfs_store::project::add::{add_project, ProjectAdd};
-    match layerfs_store::sqlite::create::create(home, "shop", None) {
+    use layerfs_store::data::project::init::sqlite::{add_project, ProjectAdd};
+    match layerfs_store::backend::sqlite::create::create(home, "shop", None) {
         Ok(_) => {}
         Err(refusal) if refusal.code == "Unsupported" => {
             eprintln!("NOT_RUN: unsupported Store filesystem: {refusal:?}");
@@ -151,12 +151,12 @@ fn native_store(home: &Path) -> bool {
         store_record: None,
     })
     .unwrap();
-    layerfs_store::open::close_idle(std::time::Duration::ZERO);
+    layerfs_store::admin::open::close::close_idle(std::time::Duration::ZERO);
     let machine = paths::machine_record(home, layerfs_home::names::HOST_MACHINE);
     let record = read_record(&machine).unwrap().unwrap_or(SdkValue::Null);
-    let record = home::with_field(record, "daemon", t("/bin/sh"));
-    let record = home::with_field(record, "image_archive", t("/bin/sh"));
-    let record = home::with_field(record, "platform", t(layerfs_home::names::HOST_MACHINE));
+    let record = disk::with_field(record, "daemon", t("/bin/sh"));
+    let record = disk::with_field(record, "image_archive", t("/bin/sh"));
+    let record = disk::with_field(record, "platform", t(layerfs_home::names::HOST_MACHINE));
     write_record(&machine, &record).unwrap();
     true
 }
@@ -374,9 +374,9 @@ static SENT: std::sync::Mutex<Option<Option<(String, String)>>> = std::sync::Mut
 fn started_here(
     host: Host,
     call: layerfs_sandbox::route::machine::Call,
-) -> layerfs_home::outcome::Outcome {
+) -> layerfs_home::reply::outcome::Outcome {
     let layerfs_sandbox::route::machine::Call::Create { place, .. } = call else {
-        return Err(layerfs_home::outcome::refused(
+        return Err(layerfs_home::reply::outcome::refused(
             "UnknownMethod",
             "not a create",
         ));
@@ -409,7 +409,7 @@ fn a_recreate_drops_the_older_tombstone() {
         return;
     }
 
-    let id = home::opened(&home).unwrap().id;
+    let id = disk::opened(&home).unwrap().id;
     let old = format!("p1:{id}.sandbox:0000000000000010:aa");
     layerfs_sandbox::record::SandboxTombstone {
         name: "s1".to_owned(),
@@ -420,7 +420,7 @@ fn a_recreate_drops_the_older_tombstone() {
     .write(&home)
     .unwrap();
     let mut sink = |_| {};
-    let mut events = layerfs_home::events::Events::new(&mut sink);
+    let mut events = layerfs_home::reply::events::Events::new(&mut sink);
     let request = layerfs_sandbox::family::CreateRequest {
         project: "shop/api".to_owned(),
         name: "s1".to_owned(),
@@ -457,6 +457,6 @@ impl layerfs_sandbox::lifecycle::serve::WorkspaceDrain for NoDrain {
 fn local(
     host: layerfs_sandbox::route::machine::Host,
     call: layerfs_sandbox::route::machine::Call,
-) -> layerfs_home::outcome::Outcome {
+) -> layerfs_home::reply::outcome::Outcome {
     layerfs_sandbox::route::machine::dispatch::call(host, call, &NoDrain)
 }

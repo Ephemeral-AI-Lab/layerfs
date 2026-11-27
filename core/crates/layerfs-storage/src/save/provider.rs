@@ -84,7 +84,7 @@ impl Save<'_> {
             } = &mut *state;
             packer.seal_pending(ids, compression, next_pack, *pack_end)?;
         }
-        use crate::source::Source;
+        use crate::location::Source;
         let declared = ids.iter().try_fold(0usize, |bytes, id| {
             let length = if let Some(value) = state
                 .pending

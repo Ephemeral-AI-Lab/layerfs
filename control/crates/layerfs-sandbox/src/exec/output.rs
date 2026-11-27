@@ -14,8 +14,8 @@
 //! command's stream only as fast as this sink takes it (an 8 KiB window),
 //! so a slow disk holds the command back. No total is capped: a spilled
 //! stream is bounded by free space.
-use layerfs_home::helpers::lock;
-use layerfs_home::outcome::{failed, refused};
+use layerfs_home::lock::mutex::lock;
+use layerfs_home::reply::outcome::{failed, refused};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
@@ -92,7 +92,7 @@ impl Spool {
                 let name = std::env::temp_dir().join(format!(
                     "layerfs-exec-{}",
                     layerfs_protocol::sdk::hex(
-                        &layerfs_home::helpers::random()
+                        &layerfs_home::record::token::random()
                             .map_err(|refusal| io::Error::other(refusal.message))?[..12]
                     )
                 ));
@@ -217,7 +217,7 @@ pub fn fields(stdout: Spool, stderr: Spool) -> Result<Vec<(&'static str, SdkValu
     }
     let id = format!(
         "out_{}",
-        layerfs_protocol::sdk::hex(&layerfs_home::helpers::random()?[..12])
+        layerfs_protocol::sdk::hex(&layerfs_home::record::token::random()?[..12])
     );
     lock(outputs())?.insert(id.clone(), spooled);
     result.push(("output", SdkValue::Text(id)));

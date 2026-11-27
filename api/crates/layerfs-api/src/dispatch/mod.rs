@@ -26,9 +26,3 @@ pub use run::call::{asks_detail, call, call_scoped, close, home, Client, DETAIL,
 pub(crate) use run::call::{call_cli, cli_defers};
 pub use run::call_json::call_json;
 pub use table::{find, table_json, Arg, Call, CallRef, Calls, Families, Family, Kind, Redact, Run};
-
-// #828 compat: old public module paths, removed in wave 3.
-#[doc(hidden)]
-pub use answer::{form, keys, refusal, shape}; // #828 compat
-#[doc(hidden)]
-pub use guard::scope; // #828 compat

@@ -14,7 +14,7 @@ use layerfs_storage::port::acquisition::{HostIdentity, NewEntry};
 /// Rows are written and read only by the live operation owning them, so the
 /// column's content stays private to one running binary.
 pub(crate) fn metadata_blob(
-    metadata: &layerfs_content::filesystem::attributes::PortableMetadata,
+    metadata: &layerfs_content::filesystem::tree::attribute::PortableMetadata,
 ) -> [u8; 32] {
     let mut blob = [0_u8; 32];
     blob[0..4].copy_from_slice(&metadata.mode.to_be_bytes());
@@ -29,13 +29,13 @@ pub(crate) fn metadata_parse(
     blob: &[u8],
     kind: layerfs_content::inode_leaf::InodeKind,
 ) -> Result<
-    layerfs_content::filesystem::attributes::PortableMetadata,
+    layerfs_content::filesystem::tree::attribute::PortableMetadata,
     crate::backend::error::BackendError,
 > {
     if blob.len() != 32 || blob[16..].iter().any(|byte| *byte != 0) {
         return Err(crate::backend::error::BackendError::Integrity);
     }
-    let metadata = layerfs_content::filesystem::attributes::PortableMetadata {
+    let metadata = layerfs_content::filesystem::tree::attribute::PortableMetadata {
         mode: u32::from_be_bytes(
             blob[0..4]
                 .try_into()

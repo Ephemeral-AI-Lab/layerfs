@@ -4,7 +4,7 @@ use crate::dispatch::table::Kind::Name;
 use crate::dispatch::table::{call, opt, Call};
 use crate::dispatch::{Context, Form, Part, Section};
 use layerfs_home::names::MachineName;
-use layerfs_home::outcome::Outcome;
+use layerfs_home::reply::outcome::Outcome;
 use layerfs_protocol::sdk::SdkValue;
 
 /// One item: a Store as `store.get` answers it, its name first.
@@ -82,5 +82,5 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let machine = machine.as_ref().map(MachineName::as_str);
     let machines = layerfs_sandbox::users::reads();
     let (stats, format) = (context.with("stats"), context.with("format"));
-    layerfs_store::list::list_with(&context.home, machine, stats, format, machines)
+    layerfs_store::admin::status::list::list_with(&context.home, machine, stats, format, machines)
 }

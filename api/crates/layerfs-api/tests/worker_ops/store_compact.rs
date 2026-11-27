@@ -3,16 +3,17 @@
 //! that machine's worker, which compacts the file under its own root and
 //! sends each phase back. Nothing is opened, rebuilt or left under the
 //! caller's home.
-use layerfs_home::events::Events;
-use layerfs_home::home::{self, paths};
+use layerfs_home::disk;
+use layerfs_home::disk::paths;
 use layerfs_home::names::{ProjectRef, StoreName};
-use layerfs_machine::worker::{self, Endpoint};
+use layerfs_home::reply::events::Events;
+use layerfs_machine::route::{self, Endpoint};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
-use layerfs_store::open_args::OpenArgs;
-use layerfs_store::project::add::{add_project, ProjectAdd};
-use layerfs_store::record::StoreRecord;
-use layerfs_store::service::with_service;
-use layerfs_store::sqlite::create::create;
+use layerfs_store::admin::open::args::OpenArgs;
+use layerfs_store::admin::open::service::with_service;
+use layerfs_store::admin::record::store::StoreRecord;
+use layerfs_store::backend::sqlite::create::create;
+use layerfs_store::data::project::init::sqlite::{add_project, ProjectAdd};
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -26,7 +27,7 @@ fn tempdir(tag: &str) -> PathBuf {
         NEXT.fetch_add(1, Ordering::Relaxed)
     ));
     let _ = std::fs::remove_dir_all(&directory);
-    home::layout::create(&directory).unwrap();
+    disk::layout::create(&directory).unwrap();
     directory
 }
 
@@ -49,7 +50,7 @@ fn text(value: &str) -> SdkValue {
 fn move_store_file(from: &Path, to: &Path, store: &str) {
     let source = paths::store_dir(from, store);
     let target = paths::store_dir(to, store);
-    home::private_dir(&target).unwrap();
+    disk::private_dir(&target).unwrap();
     for entry in std::fs::read_dir(&source).unwrap() {
         let entry = entry.unwrap();
         let name = entry.file_name().to_string_lossy().into_owned();
@@ -81,7 +82,7 @@ fn serve(root: &Path) -> Endpoint {
     let served = root.to_path_buf();
     std::thread::spawn(move || layerfs_api::worker::serve::serve(listener, "k".to_owned(), served));
     for _ in 0..200 {
-        if worker::ping(&endpoint).is_ok() {
+        if route::ping(&endpoint).is_ok() {
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(10));
@@ -92,7 +93,11 @@ fn serve(root: &Path) -> Endpoint {
 fn compact(home: &Path) -> (Result<SdkValue, SdkRefusal>, Vec<SdkValue>) {
     let mut seen = Vec::new();
     let mut sink = |event| seen.push(event);
-    let outcome = layerfs_store::compact::compact(home, &mut Events::new(&mut sink), "shop");
+    let outcome = layerfs_store::admin::maintenance::compact::compact(
+        home,
+        &mut Events::new(&mut sink),
+        "shop",
+    );
     (outcome, seen)
 }
 
@@ -163,7 +168,7 @@ fn a_store_on_another_machine_is_compacted_by_its_worker() {
     let before = std::fs::metadata(paths::store_file(&root, "shop"))
         .unwrap()
         .len();
-    home::write_record(
+    disk::write_record(
         &paths::machine_record(&home, "box"),
         &SdkValue::map([
             ("name", text("box")),
@@ -173,7 +178,7 @@ fn a_store_on_another_machine_is_compacted_by_its_worker() {
     )
     .unwrap();
     let endpoint = serve(&root);
-    home::write_record(
+    disk::write_record(
         &paths::worker_record(&home, "box"),
         &SdkValue::map([
             ("address", text(&endpoint.address.to_string())),
@@ -182,10 +187,10 @@ fn a_store_on_another_machine_is_compacted_by_its_worker() {
     )
     .unwrap();
     let record_path = paths::store_record(&home, "shop");
-    let record = home::read_record(&record_path).unwrap().unwrap();
-    home::write_record(
+    let record = disk::read_record(&record_path).unwrap().unwrap();
+    disk::write_record(
         &record_path,
-        &home::with_field(record, "machine", text("box")),
+        &disk::with_field(record, "machine", text("box")),
     )
     .unwrap();
 
@@ -259,7 +264,7 @@ fn a_store_on_another_machine_is_compacted_by_its_worker() {
 fn the_worker_operation_needs_a_sqlite_store_record() {
     let root = tempdir("frames");
     let endpoint = serve(&root);
-    let call = |args: SdkValue| worker::call(&endpoint, "store.compact", args, &mut |_| {});
+    let call = |args: SdkValue| route::call(&endpoint, "store.compact", args, &mut |_| {});
     let refusal = call(SdkValue::map([("name", text("shop"))])).unwrap_err();
     assert_eq!(refusal.code, "InvalidInput", "{}", refusal.message);
     assert_eq!(refusal.message, "store.compact names its Store");
@@ -300,7 +305,7 @@ fn a_worker_without_the_store_file_answers_not_found_and_makes_nothing() {
         ("kind", text("sqlite")),
         ("machine", text(layerfs_home::names::HOST_MACHINE)),
     ]);
-    let refusal = worker::call(
+    let refusal = route::call(
         &endpoint,
         "store.compact",
         SdkValue::map([("store", text("shop")), ("store_record", sqlite)]),

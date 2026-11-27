@@ -5,9 +5,9 @@ use crate::dispatch::guard::scope::Rule;
 use crate::dispatch::table::Kind::{Name, Project, Text};
 use crate::dispatch::table::{a, call, opt, Call, MESSAGE};
 use crate::dispatch::{Context, Policy};
-use layerfs_home::outcome::Outcome;
+use layerfs_home::reply::outcome::Outcome;
 use layerfs_protocol::sdk::SdkValue;
-use layerfs_store::calls::file::{mkdir, FileMkdir};
+use layerfs_store::data::file::{mkdir, FileMkdir};
 
 /// Its table entry.
 pub(crate) const CALL: Call = call(

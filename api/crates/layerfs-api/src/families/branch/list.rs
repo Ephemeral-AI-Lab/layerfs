@@ -4,9 +4,9 @@ use crate::dispatch::guard::scope::NAMESPACE;
 use crate::dispatch::table::Kind::{Int, Project, Text};
 use crate::dispatch::table::{a, call, opt, Call};
 use crate::dispatch::{Context, Form, Paging, Part};
-use layerfs_home::outcome::Outcome;
+use layerfs_home::reply::outcome::Outcome;
 use layerfs_protocol::sdk::SdkValue;
-use layerfs_store::calls::branch::{list, BranchList};
+use layerfs_store::data::branch::{list, BranchList};
 
 /// One Branch: `commit` is its head, or the Commit it was forked at while
 /// it has none of its own; main is a row.

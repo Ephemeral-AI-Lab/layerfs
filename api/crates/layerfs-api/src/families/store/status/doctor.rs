@@ -6,10 +6,10 @@ use crate::dispatch::table::Kind::Name;
 use crate::dispatch::table::{a, call, opt, Call, PROGRESS};
 use crate::dispatch::Context;
 use crate::doctor::{self, FORM};
-use layerfs_home::outcome::{refused, Outcome};
+use layerfs_home::reply::outcome::{refused, Outcome};
 use layerfs_inspect::{Kind, Options};
 use layerfs_protocol::sdk::SdkValue;
-use {layerfs_protocol::StoreKind, layerfs_store::record::StoreRecord};
+use {layerfs_protocol::StoreKind, layerfs_store::admin::record::store::StoreRecord};
 
 /// Its table entry.
 pub(crate) const CALL: Call = call(

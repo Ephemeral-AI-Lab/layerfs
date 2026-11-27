@@ -4,8 +4,8 @@
 //! (#176 I02).
 use crate::fixture;
 use fixture::{pax_record, Scratch, Tar};
-use layerfs_home::events::Events;
-use layerfs_home::home;
+use layerfs_home::disk;
+use layerfs_home::reply::events::Events;
 use layerfs_protocol::sdk::SdkValue;
 use layerfs_sandbox::image::cache::{self as cache, CHUNK};
 use layerfs_sandbox::image::copy::docker::Docker;
@@ -208,7 +208,7 @@ impl TestImage {
     fn make_home(&mut self, name: &str) -> (PathBuf, String) {
         let home = self.scratch.base.join(name);
         fs::create_dir_all(&home).unwrap();
-        let id = home::ensure(&home).unwrap().id;
+        let id = disk::ensure(&home).unwrap().id;
         self.homes.push(id.clone());
         (home, id)
     }
@@ -794,7 +794,7 @@ fn real_docker_next_copy_sweeps_a_killed_copy_without_touching_active() {
     let mut img_active = TestImage::build("m1-active", true);
     let mut img_next = TestImage::build("m1-next", false);
     let (home, _) = img_killed.make_home("home-m1");
-    let home_id = home::ensure(&home).unwrap().id;
+    let home_id = disk::ensure(&home).unwrap().id;
     img_active.homes.push(home_id.clone());
     img_next.homes.push(home_id);
     let docker = real_docker();
@@ -902,7 +902,7 @@ fn cleanup_owned_reports_failed_when_removal_fails() {
     let scratch = Scratch::new("lp176-cleanup-fail");
     let home = scratch.base.join("home");
     fs::create_dir_all(&home).unwrap();
-    let home_id = home::ensure(&home).unwrap().id;
+    let home_id = disk::ensure(&home).unwrap().id;
     let cname = format!("layerfs-export-{}-docker-deadbeef00000001", &home_id[..8]);
     let img_id = "sha256:1111111111111111111111111111111111111111111111111111111111111111";
     let vol_id = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";

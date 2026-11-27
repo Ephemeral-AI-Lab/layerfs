@@ -3,7 +3,7 @@
 //! in the home.
 use crate::dispatch::table::{call, Call};
 use crate::dispatch::{Context, Form, Part, Section};
-use layerfs_home::outcome::Outcome;
+use layerfs_home::reply::outcome::Outcome;
 use layerfs_inspect::home::get::{Build, With};
 use layerfs_protocol::sdk::SdkValue;
 

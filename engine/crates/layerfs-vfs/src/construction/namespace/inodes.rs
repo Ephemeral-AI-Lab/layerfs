@@ -7,11 +7,11 @@ use crate::{
 };
 use layerfs_content::{
     filesystem::{
-        attributes::{
+        name::symlink::emit_symlink,
+        tree::attribute::{
             patch::{visit_keys_counted, AttributePatchWork},
             portable_root, read_portable, AttributeReadWork, PortableMetadata,
         },
-        symlink::emit_symlink,
         FilesystemObjects, SymlinkTarget,
     },
     object::inode_leaf::{InodeKind as CanonicalKind, InodeMetadata, InodeValue},

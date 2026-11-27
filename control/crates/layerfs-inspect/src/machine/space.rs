@@ -18,12 +18,14 @@
 //! entries or the request's soft budget, and then answers `complete:
 //! false` with what it counted, each number a lower bound.
 use super::{live, stats};
-use layerfs_home::home::{self, paths};
+use layerfs_home::disk;
+use layerfs_home::disk::paths;
 use layerfs_home::names::{MachineName, StoreName};
-use layerfs_home::outcome::Outcome;
+use layerfs_home::reply::outcome::Outcome;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_sandbox::deploy::Side;
-use layerfs_sandbox::inspect::{owner::Budget, route};
+use layerfs_sandbox::route::inspect as route;
+use layerfs_sandbox::route::inspect::Budget;
 use std::collections::HashSet;
 use std::fs::Metadata;
 use std::io::ErrorKind;
@@ -103,7 +105,7 @@ pub(crate) fn serve(side: &Side<'_>, request: &SdkValue, budget: &Budget) -> Out
         StoreName::parse(store)?;
     }
     let sandboxes = live::names(request)?;
-    let disk = home::filesystem(root).ok();
+    let disk = disk::filesystem(root).ok();
     let mut walk = Walk {
         budget,
         left: ENTRIES,
@@ -182,7 +184,7 @@ pub(crate) fn serve(side: &Side<'_>, request: &SdkValue, budget: &Budget) -> Out
         ),
     ]);
     let mut answer = vec![
-        ("observed_at", SdkValue::Int(home::now_ms())),
+        ("observed_at", SdkValue::Int(disk::now_ms())),
         ("disk", disk),
         ("layerfs", size(layerfs)),
         ("outside", opt(outside)),

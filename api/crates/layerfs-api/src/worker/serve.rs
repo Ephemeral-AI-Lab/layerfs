@@ -4,8 +4,8 @@
 //! `layerfs-machine` `worker`.
 //!
 //! A connection starts with a small frame `{ secret }`: the worker reads at
-//! most [`MAX_HELLO`](layerfs_machine::worker::MAX_HELLO) bytes, all of them
-//! within one [`HELLO_WAIT`](layerfs_machine::worker::HELLO_WAIT), and answers
+//! most [`MAX_HELLO`](layerfs_machine::route::MAX_HELLO) bytes, all of them
+//! within one [`HELLO_WAIT`](layerfs_machine::route::HELLO_WAIT), and answers
 //! `{ ready: true, protocol, bundle }` ([`Hello`]), or refuses a wrong
 //! secret and closes, before it reads anything larger. A caller of another
 //! build sends nothing more and closes. Then a request `{ op, args }`, read with at most
@@ -39,9 +39,9 @@
 pub use layerfs_store::admin::host_worker::server::serve_host;
 
 pub use super::connection::REQUEST_WAIT;
-pub use layerfs_machine::worker::accept::Served;
-use layerfs_machine::worker::accept::{passing, Limited};
-use layerfs_machine::worker::{Hello, HELLO_WAIT};
+pub use layerfs_machine::route::accept::Served;
+use layerfs_machine::route::accept::{passing, Limited};
+use layerfs_machine::route::{Hello, HELLO_WAIT};
 use layerfs_protocol::sdk::SdkValue;
 use std::io::Write;
 use std::net::{TcpListener, TcpStream};
@@ -99,7 +99,7 @@ pub(crate) struct Server {
 /// id and orders against nothing: it is only reported, and a host whose
 /// record names another value skips its reconcile.
 fn incarnation() -> String {
-    layerfs_home::helpers::ordered_token("", "worker", &[])
+    layerfs_home::record::token::ordered_token("", "worker", &[])
 }
 
 /// Serves `listener` until it fails or the process is ended (`machine.stop`;
@@ -133,13 +133,13 @@ pub fn serve_with_incarnation(
 /// line the worker logs; a table that cannot be written is logged, not
 /// fatal: each Sandbox start then refuses with its own reason.
 pub fn prepare_network(address: std::net::SocketAddr) -> String {
-    layerfs_sandbox::launch::network::serving_on(address);
+    layerfs_sandbox::lifecycle::network::serving_on(address);
     network_table()
 }
 
 #[cfg(target_os = "linux")]
 fn network_table() -> String {
-    match layerfs_sandbox::launch::network::worker_start() {
+    match layerfs_sandbox::lifecycle::network::worker_start() {
         Ok(pool) => format!("Sandbox networks: table inet layerfs written for pool {pool}"),
         Err(why) => format!("Sandbox networks: the table was not written: {why}"),
     }
@@ -170,7 +170,7 @@ impl Server {
             secret,
             root,
             ready: Hello::own().to_frame(),
-            started: layerfs_home::home::now_ms(),
+            started: layerfs_home::disk::now_ms(),
             incarnation: supplied
                 .filter(|value| !value.is_empty())
                 .unwrap_or_else(incarnation),
@@ -225,7 +225,7 @@ impl Server {
         }
         // Before the first request: an incarnation the worker cannot record
         // is a start that never serves.
-        layerfs_home::home::write_entity(
+        layerfs_home::disk::write_entity(
             &self.root.join("worker-incarnation.json"),
             &SdkValue::map([("incarnation", SdkValue::text(&self.incarnation))]),
         )
@@ -235,12 +235,12 @@ impl Server {
                 refusal.message
             ))
         })?;
-        layerfs_home::home::guest::serve_root(&self.root);
+        layerfs_home::disk::guest::serve_root(&self.root);
         // what earlier Sandbox starts and removals left in this machine's
         // run root goes before the first request (spec v20), inside its
         // bound, after the records of daemons that ended (the machine
         // stopped); its outcome is in `log/sweep.jsonl`
-        layerfs_sandbox::sweep::worker_start(&self.root);
+        layerfs_sandbox::record::sweep::worker_start(&self.root);
         let server = Arc::new(self);
         let mut limited = Limited {
             every: server.waits.log_every,

@@ -23,7 +23,7 @@ pub use super::lifecycle::remove::{remove, RemoveRequest, Removed};
 use super::record::SandboxRecord;
 pub use super::status::get::{get, Down, GetRequest, Got, ListedWorkspace};
 pub use super::status::list::{list, ListRequest, Listed, ListedSandbox};
-use layerfs_home::outcome::refused;
+use layerfs_home::reply::outcome::refused;
 use layerfs_protocol::sdk::SdkRefusal;
 use std::path::Path;
 

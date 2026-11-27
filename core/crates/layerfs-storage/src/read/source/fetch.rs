@@ -3,11 +3,10 @@
 use super::{super::Diagnostics, locator_cache::LocatorCache};
 use crate::{
     error::{StorageError, StorageResult},
-    location::{ObjectLocation, PackDomain, PackInfo, SignatureRow},
+    location::{ObjectLocation, PackDomain, PackInfo, SignatureRow, Source},
     pack::layout,
     policy::{DEPENDENCY_PACK_CACHE_BYTES, READ_OBJECT_LIMIT, SINGLETON_PACK_LIMIT},
     port::PackPersistence,
-    source::Source,
 };
 use layerfs_content::{inode_leaf::INODE_VALUE_BYTES, ObjectId};
 use std::{

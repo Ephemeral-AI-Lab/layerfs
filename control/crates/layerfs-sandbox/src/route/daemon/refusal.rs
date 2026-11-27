@@ -78,7 +78,7 @@ pub fn refusal(failure: &OperationFailure) -> Option<SdkRefusal> {
                     (ATTEMPTED, SdkValue::Bool(true)),
                 ]),
             })
-            .map(|refusal| layerfs_home::outcome::with_next(refusal, ATTEMPTED, SdkValue::Bool(true)))
+            .map(|refusal| layerfs_home::reply::outcome::with_next(refusal, ATTEMPTED, SdkValue::Bool(true)))
         }
         _ => None,
     }
@@ -119,7 +119,7 @@ pub fn wire(failure: Box<crate::WireFailure>) -> SdkRefusal {
 /// `attempted: true` in its detail and flat beside `error`, so the short
 /// form shows it too. Nothing is resent.
 pub fn uncertain(error: impl std::fmt::Display, attempted: bool) -> SdkRefusal {
-    let refusal = layerfs_home::outcome::failed(error);
+    let refusal = layerfs_home::reply::outcome::failed(error);
     match attempted {
         false => refusal,
         true => with_attempted(refusal),
@@ -133,8 +133,8 @@ fn with_attempted(mut refusal: SdkRefusal) -> SdkRefusal {
         refusal.message = format!("{}; {sent}", refusal.message);
     }
     refusal.detail =
-        layerfs_home::home::with_field(refusal.detail, ATTEMPTED, SdkValue::Bool(true));
-    layerfs_home::outcome::with_next(refusal, ATTEMPTED, SdkValue::Bool(true))
+        layerfs_home::disk::with_field(refusal.detail, ATTEMPTED, SdkValue::Bool(true));
+    layerfs_home::reply::outcome::with_next(refusal, ATTEMPTED, SdkValue::Bool(true))
 }
 
 /// The key that marks an uncertain refusal: its request was sent.
@@ -152,7 +152,7 @@ fn unreadable(request: &layerfs_protocol::daemon::Request) -> SdkRefusal {
     );
     let said = "the Sandbox's daemon answered in a form this LayerFS build cannot read: it runs another build, which `layerfs home doctor` names";
     let refusal = match read {
-        true => layerfs_home::outcome::refused("Failed", said),
+        true => layerfs_home::reply::outcome::refused("Failed", said),
         false => SdkRefusal {
             code: "Unknown".to_owned(),
             message: format!(
@@ -161,7 +161,7 @@ fn unreadable(request: &layerfs_protocol::daemon::Request) -> SdkRefusal {
             detail: SdkValue::map([("outcome", SdkValue::text("unknown"))]),
         },
     };
-    layerfs_home::outcome::with_fix(refusal, "layerfs home doctor")
+    layerfs_home::reply::outcome::with_fix(refusal, "layerfs home doctor")
 }
 
 /// A retained teardown stage as the machine's unmount record writes it.

@@ -6,7 +6,7 @@
 use crate::client;
 use crate::rig;
 use client::Client;
-use layerfs_daemon::control::{ExportServing, ExportServingConfig, Failure, Helper, Mounter};
+use layerfs_daemon::workspace::{ExportServing, ExportServingConfig, Failure, Helper, Mounter};
 use layerfs_history::WorkspaceId;
 use layerfs_protocol::daemon::{CommitControl, ControlCode, Reply, Request, UnmountControl};
 use std::{

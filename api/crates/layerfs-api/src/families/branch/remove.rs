@@ -3,9 +3,9 @@
 use crate::dispatch::table::Kind::{Name, Project};
 use crate::dispatch::table::{a, call, Call};
 use crate::dispatch::{Context, Form};
-use layerfs_home::outcome::Outcome;
+use layerfs_home::reply::outcome::Outcome;
 use layerfs_protocol::sdk::SdkValue;
-use layerfs_store::calls::branch::{remove, BranchRemove};
+use layerfs_store::data::branch::{remove, BranchRemove};
 
 /// A soft removal, through the Branch's Store marker.
 const FORM: Form = Form::of(&["ok"], &[], &["ok", "outcome", "branch", "removed_at"]);

@@ -32,7 +32,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::source::Source;
+use crate::location::Source;
 
 use layerfs_content::{ObjectId, ObjectRole};
 

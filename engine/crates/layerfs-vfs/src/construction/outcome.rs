@@ -163,6 +163,7 @@ pub struct CapturedNamespaceCustody {
 pub struct CapturedNamespaceAttempt {
     pub result: ContentResult<FilesystemResult>,
     /// Optional post-Save accounting input, valid with the same operation owner.
-    pub logical_changes: Option<layerfs_content::filesystem::statistics::LogicalChanges>,
+    pub logical_changes:
+        Option<layerfs_content::filesystem::construction::statistics::LogicalChanges>,
     pub custody: CapturedNamespaceCustody,
 }

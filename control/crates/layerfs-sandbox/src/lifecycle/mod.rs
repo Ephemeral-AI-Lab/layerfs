@@ -30,7 +30,3 @@ pub use launch::{ProviderCreate, ProviderFailure, ProviderSandbox};
 pub use startup::SandboxApi;
 #[cfg(unix)]
 pub use startup::{SandboxCause, SandboxPhase};
-
-// #828 compat: the old `lifecycle` module (now `serve`), removed in wave 3.
-#[doc(hidden)]
-pub use serve::*; // #828 compat

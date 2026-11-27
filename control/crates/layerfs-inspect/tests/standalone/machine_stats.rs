@@ -13,15 +13,15 @@
 //! child that ended. The inspect permits are the process's, so every test
 //! that asks takes one lock.
 #![cfg(any(target_os = "linux", target_os = "macos"))]
-use layerfs_home::home::{self, paths, write_record};
+use layerfs_home::disk::{self, paths, write_record};
 use layerfs_home::names::MachineName;
 use layerfs_os::process::LocalProcess;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_sandbox::deploy::Side;
-use layerfs_sandbox::inspect::owner::{HARD, SOFT};
-use layerfs_sandbox::inspect::process;
-use layerfs_sandbox::inspect::process::KernelStat;
 use layerfs_sandbox::record::{DaemonRecord, Local};
+use layerfs_sandbox::route::inspect::{HARD, SOFT};
+use layerfs_sandbox::status::stats as process;
+use layerfs_sandbox::status::stats::KernelStat;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -54,14 +54,14 @@ fn scratch(tag: &str) -> PathBuf {
         NEXT.fetch_add(1, Ordering::Relaxed)
     ));
     let _ = std::fs::remove_dir_all(&dir);
-    home::private_dir(&dir).unwrap();
+    disk::private_dir(&dir).unwrap();
     dir
 }
 
 /// A new home.
 fn new_home(tag: &str) -> PathBuf {
     let dir = scratch(tag);
-    home::ensure(&dir).unwrap();
+    disk::ensure(&dir).unwrap();
     dir
 }
 
@@ -88,8 +88,8 @@ fn daemon(process: LocalProcess, runtime: &'static str, directory: &Path) -> Dae
         name: "layerfs-0a1b2c3d-s".to_owned(),
         container: "ab".repeat(32),
         runtime,
-        uid: home::flock::euid(),
-        gid: home::flock::egid(),
+        uid: layerfs_home::lock::flock::euid(),
+        gid: layerfs_home::lock::flock::egid(),
         directory: directory.display().to_string(),
         process: (
             process.pid,
@@ -143,7 +143,7 @@ fn native() -> MachineName {
 }
 
 fn now() -> i64 {
-    home::now_ms()
+    disk::now_ms()
 }
 
 fn listed<'a>(answer: &'a SdkValue, field: &str) -> &'a [SdkValue] {
@@ -548,7 +548,7 @@ fn machine_stats_of_native_is_read_in_this_process_with_no_worker() {
         want.push("reason");
     }
     assert_eq!(keys, want);
-    let disk = home::filesystem(&home).unwrap();
+    let disk = disk::filesystem(&home).unwrap();
     assert_eq!(int("disk_total"), disk.total as i64);
     let data_disk = stats.get("data_disk").unwrap();
     let SdkValue::Map(fields) = data_disk else {
@@ -624,10 +624,10 @@ fn machine_stats_of_native_is_read_in_this_process_with_no_worker() {
     assert_eq!(raw.get("worker"), Some(&SdkValue::Null), "{raw:?}");
     assert!(raw.get("resources").unwrap().get("scope").is_none());
     assert_eq!(listed(&raw, "stores").len(), 1);
-    let request = home::with_field(request, "kind", t("machine_stats"));
+    let request = disk::with_field(request, "kind", t("machine_stats"));
     let served = layerfs_inspect::admit(move |budget| {
         let root = scratch("served");
-        home::guest::serve_root(&root);
+        disk::guest::serve_root(&root);
         layerfs_inspect::serve(&Side::Worker(&root), &request, budget)
     })
     .unwrap();
@@ -815,7 +815,7 @@ fn a_worker_s_rows_read_each_sandbox_s_record_on_its_side() {
     // daemon, one whose record is not readable, one not recorded there
     let root = scratch("rows");
     // a worker's root: its run root is the guest's (#819 R)
-    home::guest::serve_root(&root);
+    disk::guest::serve_root(&root);
     let run = paths::run_root(&root);
     assert_eq!(run, root.join("machine/linux-guest/run"));
     sandbox(&root, "ns", "box", Some(&daemon(me(), "namespaces", &run)));

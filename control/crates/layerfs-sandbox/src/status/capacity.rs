@@ -13,9 +13,9 @@ use crate::route::daemon::channel::fence::Fence;
 use crate::route::daemon::channel::operator;
 use crate::route::daemon::channel::pool::{Controls, Dial};
 use crate::route::direct;
-use layerfs_home::home::paths;
-use layerfs_home::outcome::{failed, refused};
-use layerfs_home::secrets;
+use layerfs_home::disk::paths;
+use layerfs_home::reply::outcome::{failed, refused};
+use layerfs_home::secret::keys;
 use layerfs_protocol::daemon::{CapacityModel, Request};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::net::SocketAddr;
@@ -79,7 +79,7 @@ pub fn endpoint(home: &Path, sandbox: &SandboxRecord) -> Option<SocketAddr> {
     if let Some(forward) = sandbox.daemon().and_then(direct::forward_of) {
         return Some(forward);
     }
-    let keys = secrets::daemon_keys(&paths::sandbox_dir(home, sandbox.name()))
+    let keys = keys::daemon_keys(&paths::sandbox_dir(home, sandbox.name()))
         .ok()
         .flatten()?;
     keys.get_text("endpoint")?.parse().ok()
@@ -113,13 +113,13 @@ fn query(
     sandbox: &SandboxRecord,
     endpoint: SocketAddr,
 ) -> Result<SdkValue, SdkRefusal> {
-    let keys = secrets::daemon_keys(&paths::sandbox_dir(home, sandbox.name()))?
+    let keys = keys::daemon_keys(&paths::sandbox_dir(home, sandbox.name()))?
         .ok_or_else(|| refused("NoSuchSandbox", "the Sandbox has no daemon keys"))?;
     let dial = Dial {
         endpoint,
-        secret: secrets::key(&keys, "secret")?,
-        peer: secrets::key(&keys, "peer")?,
-        instance: secrets::key(&keys, "instance")?,
+        secret: keys::key(&keys, "secret")?,
+        peer: keys::key(&keys, "peer")?,
+        instance: keys::key(&keys, "instance")?,
     };
     let (mut control, fence) = dial.open_within(WAIT)?;
     let answer = exchange(&mut control);

@@ -26,23 +26,3 @@ mod server;
 pub use kernel::Released;
 pub use procedures::program::TRANSFER_WINDOW;
 pub use server::{Count, ExportConfig, Refresher, Server};
-
-// #828 compat: old public module paths, removed in wave 3.
-#[doc(hidden)]
-pub use crate::apple_double::codec as apple_double_codec; // #828 compat
-#[doc(hidden)]
-pub use crate::kernel::mutation as change; // #828 compat
-#[doc(hidden)]
-pub use crate::kernel::names; // #828 compat
-#[doc(hidden)]
-pub use crate::kernel::read; // #828 compat
-#[doc(hidden)]
-pub use crate::kernel::refresh; // #828 compat
-#[doc(hidden)]
-pub use crate::protocol::attributes; // #828 compat
-#[doc(hidden)]
-pub use crate::protocol::handle; // #828 compat
-#[doc(hidden)]
-pub use crate::protocol::rpc; // #828 compat
-#[doc(hidden)]
-pub use crate::protocol::xdr; // #828 compat

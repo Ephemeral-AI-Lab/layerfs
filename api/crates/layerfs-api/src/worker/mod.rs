@@ -7,7 +7,7 @@ pub mod fault;
 pub(crate) mod ops;
 pub mod serve;
 
-pub use layerfs_machine::worker::*;
+pub use layerfs_machine::route::*;
 #[cfg(all(feature = "machine", any(target_os = "macos", target_os = "linux")))]
 pub use layerfs_store::admin::host_worker::server::serve_host;
 pub use serve::{prepare_network, serve, serve_with_incarnation};

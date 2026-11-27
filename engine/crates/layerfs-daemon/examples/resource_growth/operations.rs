@@ -3,7 +3,10 @@ use super::{allocation, bytes, produce};
 use layerfs_content::{filesystem::PathName, ContentResult, FinalizedConsumer, FinalizedObject};
 use layerfs_history::CommitOutcome;
 use layerfs_storage::Save;
-use layerfs_store_service::{bootstrap::OpenedStore, store::BoundWorkspace, Owner};
+use layerfs_store_service::{
+    store::{open::OpenedStore, BoundWorkspace},
+    Owner,
+};
 use layerfs_telemetry::timer::Timing;
 use std::{
     fs::File,

@@ -66,7 +66,7 @@ fn ok(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> SdkValue {
 /// and the machines attached to it, its password saved in the home (a
 /// test login; nothing is dialled with it here).
 fn pg_record(home: &Path, attached: &[&str]) {
-    layerfs_store::postgresql::login::save(home, "pg", "not-a-real-password").unwrap();
+    layerfs_store::backend::postgresql::login::save(home, "pg", "not-a-real-password").unwrap();
     let mut fields = vec![
         ("name", t("pg")),
         ("kind", t("postgresql")),

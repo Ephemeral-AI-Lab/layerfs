@@ -18,7 +18,7 @@
 #[allow(dead_code)]
 #[path = "../tests/support/rig.rs"]
 mod rig;
-use layerfs_daemon::control::{ExportServing, ExportServingConfig, Helper, Mounter};
+use layerfs_daemon::workspace::{ExportServing, ExportServingConfig, Helper, Mounter};
 use layerfs_history::WorkspaceId;
 use layerfs_protocol::daemon::{CommitControl, Reply, Request, UnmountControl};
 use std::{net::TcpListener, path::PathBuf, sync::Arc, time::Duration};

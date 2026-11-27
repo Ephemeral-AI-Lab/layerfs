@@ -9,7 +9,7 @@
 use crate::admin::open::args::{OpenArgs, PgSelection};
 use crate::admin::record::identity as stores;
 use crate::admin::record::identity::{Identity, Kind};
-use layerfs_home::outcome::{refused, Outcome};
+use layerfs_home::reply::outcome::{refused, Outcome};
 use layerfs_protocol::sdk::SdkRefusal;
 use layerfs_store_service::{OpenRefusal, StoreService};
 use std::path::Path;
@@ -20,7 +20,7 @@ pub const DEFAULT_SYNCHRONOUS_COMMIT: &str = "local";
 
 /// `synchronous_commit` as the call or record names it: off, local (the
 /// default), remote_write, on or remote_apply
-/// ([`crate::postgresql::connect::synchronous_commit`]). A record keeps the
+/// ([`crate::backend::postgresql::connect::synchronous_commit`]). A record keeps the
 /// value it was connected with.
 pub fn setting_of(given: Option<&str>) -> Result<String, SdkRefusal> {
     let given = given.unwrap_or(DEFAULT_SYNCHRONOUS_COMMIT);
@@ -152,10 +152,10 @@ pub(crate) fn new_session_refused(store: &str, refusal: SdkRefusal) -> SdkRefusa
     };
     let fix = format!(
         "layerfs store get {} --with live",
-        layerfs_home::outcome::shell_word(store)
+        layerfs_home::reply::outcome::shell_word(store)
     );
     let message = format!("{said}; nothing was sent and nothing was committed");
-    layerfs_home::outcome::with_fix(SdkRefusal { message, ..refusal }, fix)
+    layerfs_home::reply::outcome::with_fix(SdkRefusal { message, ..refusal }, fix)
 }
 
 /// How [`no_session`] says that no connection was made.
@@ -301,7 +301,7 @@ pub(crate) fn open_postgres_held(
     let mut chosen = selection(url, schema, sync);
     let opened =
         StoreService::open_postgres(&chosen, &identity.binding, identity.cursor_key, template);
-    layerfs_home::wipe::text(std::mem::take(&mut chosen.url));
+    layerfs_home::secret::wipe::text(std::mem::take(&mut chosen.url));
     opened.map_err(open_refusal)
 }
 
@@ -315,7 +315,7 @@ pub(crate) fn open_read_only(
     let opened =
         StoreService::open_postgres_read_only(&chosen, &identity.binding, identity.cursor_key);
     // this copy of the URL may hold the login (#819 P-B)
-    layerfs_home::wipe::text(std::mem::take(&mut chosen.url));
+    layerfs_home::secret::wipe::text(std::mem::take(&mut chosen.url));
     opened.map_err(open_refusal)
 }
 

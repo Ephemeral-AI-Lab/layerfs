@@ -1,7 +1,7 @@
 //! `project.hide_path` through the ordinary Store-call route, answering its
 //! call's full map (the keys of its long form; the dispatcher shapes it).
 use crate::admin::route::methods::{on_project, StoreOp};
-use layerfs_home::{events::Events, outcome::Outcome};
+use layerfs_home::reply::{events::Events, outcome::Outcome};
 use layerfs_protocol::sdk::SdkValue;
 use std::path::Path;
 
@@ -38,7 +38,7 @@ pub fn hide_path(home: &Path, events: &mut Events<'_>, request: &ProjectHidePath
         true => path.to_owned(),
         false => format!("/{path}"),
     };
-    let hidden_at = (value.get_int("removed_ms")).map(layerfs_home::time::iso);
+    let hidden_at = (value.get_int("removed_ms")).map(layerfs_home::reply::time::iso);
     Ok(SdkValue::map([
         ("ok", SdkValue::Bool(true)),
         ("unchanged", SdkValue::Bool(unchanged)),

@@ -23,12 +23,12 @@ use crate::image::copy::docker::{self, Docker, Failure, Inspected};
 pub use crate::image::copy::lock::ImageLock;
 use crate::image::list::{refused_with, stopped};
 use crate::image::tar::{Filtered, TarReport};
-use layerfs_home::events::Events;
-use layerfs_home::home;
-use layerfs_home::outcome::shell_word;
-use layerfs_home::outcome::{failed, refused, with_fix, Outcome};
+use layerfs_home::disk;
+use layerfs_home::reply::events::Events;
+use layerfs_home::reply::outcome::shell_word;
+use layerfs_home::reply::outcome::{failed, refused, with_fix, Outcome};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
-use layerfs_store::place::Worker;
+use layerfs_store::admin::route::executor::Worker;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::io::Read;
@@ -374,13 +374,13 @@ pub struct Cleanup {
 
 /// Reads `home`'s 32-hex id without creating files when `home` is empty.
 pub(crate) fn existing_home_id(home: &Path) -> Result<Option<String>> {
-    if home::guest::is_root(home) {
-        return Ok(Some(home::guest::file(home)?.id));
+    if disk::guest::is_root(home) {
+        return Ok(Some(disk::guest::file(home)?.id));
     }
-    match home::detect(home)? {
-        home::Layout::Current(file) => Ok(Some(file.id)),
-        home::Layout::Empty => Ok(None),
-        home::Layout::Foreign => Err(home::layout::foreign(home)),
+    match disk::detect(home)? {
+        disk::Layout::Current(file) => Ok(Some(file.id)),
+        disk::Layout::Empty => Ok(None),
+        disk::Layout::Foreign => Err(disk::layout::foreign(home)),
     }
 }
 
@@ -390,11 +390,11 @@ pub(crate) fn existing_home_id(home: &Path) -> Result<Option<String>> {
 /// one could not be reached since MIG; lp176_image_lock
 /// `a_folder_that_is_no_home_is_refused_before_an_export`).
 fn home_id(home: &Path) -> Result<String> {
-    existing_home_id(home)?.ok_or_else(|| home::layout::foreign(home))
+    existing_home_id(home)?.ok_or_else(|| disk::layout::foreign(home))
 }
 
 fn export_nonce() -> Result<String> {
-    let bytes = layerfs_home::helpers::random()?;
+    let bytes = layerfs_home::record::token::random()?;
     Ok(layerfs_protocol::sdk::hex(&bytes[..8]))
 }
 
@@ -828,10 +828,10 @@ pub fn machine_load(
     name: &layerfs_home::names::MachineName,
     image: &str,
 ) -> Outcome {
-    use layerfs_store::place::{self, Executor};
+    use layerfs_store::admin::route::executor::{self, Executor};
     let machine = name.as_str();
     let choice = crate::deploy::choose(home, machine, None)?;
-    let mut executor = place::on_machine(home, machine)?;
+    let mut executor = executor::on_machine(home, machine)?;
     if crate::image::list::host_mode(&executor) {
         return Err(crate::image::list::host_only(machine));
     }

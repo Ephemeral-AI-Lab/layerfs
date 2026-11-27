@@ -8,13 +8,13 @@
 #[path = "../support/doctor_own.rs"]
 mod doctor_own;
 use doctor_own::{own, own_within, rows};
-use layerfs_home::events::Events;
-use layerfs_home::home::{self, paths, private_dir, write_entity, write_record};
+use layerfs_home::disk::{self, paths, private_dir, write_entity, write_record};
 use layerfs_home::names::MachineName;
 use layerfs_home::names::HOST_MACHINE;
+use layerfs_home::reply::events::Events;
 use layerfs_inspect::{Kind, Options};
-use layerfs_machine::record::MachineRecord;
-use layerfs_machine::worker::{read_frame_within, write_frame, MAX_HELLO, PROTOCOL};
+use layerfs_machine::record::machine::MachineRecord;
+use layerfs_machine::route::{read_frame_within, write_frame, MAX_HELLO, PROTOCOL};
 use layerfs_protocol::sdk::SdkValue;
 use std::net::TcpListener;
 use std::os::unix::fs::PermissionsExt;
@@ -178,7 +178,7 @@ fn home_layout_findings_carry_evidence_and_the_move_fix() {
     let layout = found(&report, "home.layout", "not a LayerFS 2.0 home");
     assert_eq!(
         fix(&layout),
-        layerfs_home::home::layout::foreign_fix(&foreign)
+        layerfs_home::disk::layout::foreign_fix(&foreign)
     );
     keys(&layout, &["path", "layout"]);
     assert_eq!(ev_text(&layout, "layout"), Some("foreign"));
@@ -468,7 +468,7 @@ impl Fixture {
         let root = env.dir("machine");
         std::fs::create_dir_all(root.join("bin")).unwrap();
         let home = root.join("home");
-        let id = home::ensure(&home).unwrap().id;
+        let id = disk::ensure(&home).unwrap().id;
         std::env::set_var("PATH", root.join("bin"));
         std::env::set_var("LAYERFS_TOOL_FALLBACKS", "");
         let socket = root.join("e.sock");

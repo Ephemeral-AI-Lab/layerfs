@@ -7,7 +7,7 @@ use layerfs_history::records::GcScopeKind;
 use layerfs_history::{BranchId, ForkRequest, ForkSource, HistoryName, LayerStackId, WorkspaceId};
 use layerfs_protocol::daemon::{MountPlace, Reply, Request, WorkspaceToken};
 use layerfs_protocol::sdk::SdkValue;
-use layerfs_store_service::history::{lookup, removal};
+use layerfs_store_service::{history::removal, lookup};
 
 /// The fixture's Store with a `work` Branch forked from the project's head.
 fn work(f: &fixture::Fixture) -> (LayerStackId, BranchId) {

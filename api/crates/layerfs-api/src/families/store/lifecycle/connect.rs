@@ -7,9 +7,9 @@ use crate::dispatch::table::Kind::{Bool, Content, Name, Text};
 use crate::dispatch::table::{a, call, opt, Call};
 use crate::dispatch::{Context, Form};
 use layerfs_home::names::StoreName;
-use layerfs_home::outcome::{refused, Outcome};
+use layerfs_home::reply::outcome::{refused, Outcome};
 use layerfs_protocol::sdk::SdkValue;
-use layerfs_store::postgresql::connect::StoreConnect;
+use layerfs_store::backend::postgresql::connect::StoreConnect;
 
 /// Its answer: the projects a first connect found, else `ok`; never the
 /// password. A dry run's (`outcome: tested`) shows the checks in the

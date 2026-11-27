@@ -13,7 +13,7 @@ use crate::admin::open::args::OpenArgs;
 use crate::admin::record::store::{required, StoreKind, StoreRecord, StoreRef};
 use crate::data::project::record::discovery;
 use layerfs_history::{HistoryCatalogConfig, HistoryName};
-use layerfs_home::outcome::{failed, refused};
+use layerfs_home::reply::outcome::{failed, refused};
 use layerfs_persistence::{PersistenceConfig, SealedStore, SqlitePersistenceProfile};
 use layerfs_project::store::{CreateRequest, ProjectApi};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
@@ -46,12 +46,12 @@ pub fn store_dir(home: &Path, store: &str) -> Result<PathBuf> {
             format!("a Store name is 1-63 lowercase letters, digits, _ . - (not {store:?})"),
         )
     })?;
-    Ok(layerfs_home::home::paths::store_dir(home, store))
+    Ok(layerfs_home::disk::paths::store_dir(home, store))
 }
 
 fn record_path(home: &Path, store: &str) -> Result<PathBuf> {
     store_dir(home, store)?;
-    Ok(layerfs_home::home::paths::store_record(home, store))
+    Ok(layerfs_home::disk::paths::store_record(home, store))
 }
 
 /// Store `store`'s record in `home` (`store/<name>/record.json`).
@@ -202,14 +202,16 @@ fn create_empty(
 ) -> Result<SealedStore> {
     use std::os::unix::fs::PermissionsExt;
     // the one ownership rule an install uses too: this call's own `mkdir`
-    *made = match layerfs_store_service::install::make_private_directory(global).map_err(failed)? {
-        layerfs_store_service::install::Made::ThisCall => MadeDirectory::ThisCall,
-        layerfs_store_service::install::Made::AlreadyThere => MadeDirectory::AlreadyThere,
+    *made = match layerfs_store_service::store::install::make_private_directory(global)
+        .map_err(failed)?
+    {
+        layerfs_store_service::store::install::Made::ThisCall => MadeDirectory::ThisCall,
+        layerfs_store_service::store::install::Made::AlreadyThere => MadeDirectory::AlreadyThere,
     };
-    layerfs_store_service::kernel_guard::check(destination)
+    layerfs_store_service::store::kernel_guard::check(destination)
         .map_err(|reason| refused("Unsupported", reason.0))?;
-    let (target, _) = layerfs_store_service::install::paths(destination).map_err(failed)?;
-    layerfs_store_service::install::absent(&target)
+    let (target, _) = layerfs_store_service::store::install::paths(destination).map_err(failed)?;
+    layerfs_store_service::store::install::absent(&target)
         .map_err(|error| refused("Exists", format!("{}: {error}", target.display())))?;
     let mut name = target.as_os_str().to_owned();
     name.push(".creating");
@@ -239,7 +241,7 @@ fn create_empty(
         // a daemon opens only a Store file only its user can read
         std::fs::set_permissions(&temporary, std::fs::Permissions::from_mode(0o600))
             .map_err(failed)?;
-        layerfs_store_service::install::absent(&target).map_err(failed)?;
+        layerfs_store_service::store::install::absent(&target).map_err(failed)?;
         std::fs::rename(&temporary, &target).map_err(failed)?;
         Ok(sealed)
     })();

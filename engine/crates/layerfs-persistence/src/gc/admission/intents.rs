@@ -43,11 +43,11 @@ pub(super) use crate::history::statement::{
 };
 pub(super) use crate::history::{counters::position, graph::branch, graph::layerstack};
 pub(super) use crate::history::{index::paths, params, place_evidence, place_tokens};
+pub(super) use layerfs_history::catalog::path::trace_key;
 pub(super) use layerfs_history::error::{
     GcHolder, HistoryError, HistoryResult, Missing, MountHolders, OpConflict,
 };
 pub(super) use layerfs_history::identity::{BranchId, CatalogId, LayerStackId};
-pub(super) use layerfs_history::path::trace_key;
 pub(super) use layerfs_history::records::{
     GcAuditAfter, GcAuditPage, GcBranchAuditPage, GcDeletion, GcIntent, GcIntentDone, GcIntentKind,
     GcReconcile, GcScopeKind, PathRemovalKind, PathRemovalOutcome, PathRemovalRequest,

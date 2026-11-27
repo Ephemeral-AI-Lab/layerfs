@@ -5,8 +5,8 @@
 #[path = "../support/doctor_own.rs"]
 mod doctor_own;
 use doctor_own::complete;
-use layerfs_home::home::{paths, private_dir, write_entity, write_record};
-use layerfs_home::process;
+use layerfs_home::disk::{paths, private_dir, write_entity, write_record};
+use layerfs_home::record::process;
 use layerfs_inspect::{Kind, Options};
 use layerfs_protocol::{
     daemon::{Answer, Call, DaemonPhase, DaemonStatus, Reply, Request},
@@ -590,7 +590,7 @@ fn invalid_references_and_missing_runtime_are_reported_independently() {
 fn worker_fixture_server() {
     let root = PathBuf::from(std::env::var_os("LFS_DOCTOR_TEST_ROOT").unwrap());
     let listener = TcpListener::bind(std::env::var("LFS_DOCTOR_TEST_ADDRESS").unwrap()).unwrap();
-    layerfs_home::home::guest::serve_root(&root);
+    layerfs_home::disk::guest::serve_root(&root);
     std::fs::write(root.join("ready"), b"ready").unwrap();
     layerfs_api::worker::serve::serve(listener, "worker-secret".into(), root).unwrap();
 }
@@ -682,8 +682,8 @@ fn incorrect_peer_close_keeps_authentication_unknown_without_echoing_keys() {
     sandbox(&home, layerfs_home::names::HOST_MACHINE, local_record());
     let (_, server) = daemon(&home, Mode::Pages);
     let file = paths::sandbox_control(&home, "sb");
-    let keys = layerfs_home::home::read_record(&file).unwrap().unwrap();
-    let keys = layerfs_home::home::with_field(
+    let keys = layerfs_home::disk::read_record(&file).unwrap().unwrap();
+    let keys = layerfs_home::disk::with_field(
         keys,
         "peer",
         SdkValue::Bytes(duplex::public_key(&[53; 32]).unwrap().to_vec()),
@@ -705,7 +705,7 @@ fn incorrect_peer_close_keeps_authentication_unknown_without_echoing_keys() {
 /// what is on it from the home's records.
 fn doctor(home: &Path) -> SdkValue {
     let mut sink = |_| {};
-    let mut events = layerfs_home::events::Events::new(&mut sink);
+    let mut events = layerfs_home::reply::events::Events::new(&mut sink);
     let thing = layerfs_inspect::Thing::new(Kind::Sandbox, "sb");
     let report = layerfs_inspect::run(home, thing, &Options::default(), &mut events);
     report.unwrap().to_sdk()
@@ -811,7 +811,7 @@ fn a_lost_daemon_blocks_its_workspaces_without_trying_them() {
 /// A worker on `vm1` whose one `doctor.sandbox` report names Workspace
 /// `sb:agent` from a daemon list it never asked for.
 fn not_asking_worker(home: &Path) -> std::thread::JoinHandle<()> {
-    use layerfs_machine::worker::{read_frame_within, write_frame, MAX_HELLO, PROTOCOL};
+    use layerfs_machine::route::{read_frame_within, write_frame, MAX_HELLO, PROTOCOL};
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let address = listener.local_addr().unwrap().to_string();
     write_record(

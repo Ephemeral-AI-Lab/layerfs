@@ -4,8 +4,8 @@
 //! `CompactReceipt`; the live read reads only the `<store>.compact-op`
 //! sidecar and never opens the Store database.
 use layerfs_content::ObjectId;
-use layerfs_home::events::Events;
-use layerfs_home::home::{paths, private_dir, write_entity};
+use layerfs_home::disk::{paths, private_dir, write_entity};
+use layerfs_home::reply::events::Events;
 use layerfs_persistence::{
     CompactKeptWaste, CompactPath, CompactReceipt, CompactResidue, CompactZeroReason, KeptWaste,
 };
@@ -132,11 +132,11 @@ fn receipt() -> CompactReceipt {
 fn machines(
     home: &Path,
     name: &str,
-) -> Result<layerfs_home::state::State, layerfs_protocol::sdk::SdkRefusal> {
+) -> Result<layerfs_home::reply::state::State, layerfs_protocol::sdk::SdkRefusal> {
     Ok(
-        match layerfs_machine::record::MachineRecord::read(home, name)? {
+        match layerfs_machine::record::machine::MachineRecord::read(home, name)? {
             Some(record) => record.status(false, 0),
-            None => layerfs_machine::state::unrecorded(name),
+            None => layerfs_machine::status::state::unrecorded(name),
         },
     )
 }
@@ -170,7 +170,7 @@ fn a_capped_reference_list_shows_its_first_ids_and_counts_them_all() {
     let wire = layerfs_store::admin::maintenance::compact_report::compact_report("s", &capped);
     assert_eq!(
         texts(wire.get("delta_base_references").unwrap()).len(),
-        layerfs_home::helpers::SHOWN
+        layerfs_home::reply::values::SHOWN
     );
     assert_eq!(
         wire.get_int("delta_base_references_count"),
@@ -204,7 +204,7 @@ fn a_mark_over_the_delta_base_cap_counts_the_cap() {
     );
     assert_eq!(
         texts(wire.get("delta_base_references").unwrap()).len(),
-        layerfs_home::helpers::SHOWN
+        layerfs_home::reply::values::SHOWN
     );
     let waste = wire.get("kept_waste").unwrap();
     assert_eq!(waste.get_int("delta_bases_bytes"), Some(12));
@@ -263,7 +263,7 @@ fn the_report_is_flat_with_byte_totals_named_bytes() {
 #[test]
 fn a_live_read_emits_bounded_busy_and_unresolved_metrics() {
     let home = store_home();
-    let capture = layerfs_persistence::compact_metrics::CompactMetricsCapture::start();
+    let capture = layerfs_persistence::gc::metrics::CompactMetricsCapture::start();
     // Idle: no compaction record, so no `compact.status` sample.
     let _ = live(&home);
     // A live owner is `busy`; a gone one is `unresolved`.
@@ -303,7 +303,7 @@ fn a_returned_leftover_is_unresolved_even_with_a_live_owner_pid() {
 #[test]
 fn a_live_read_shows_the_sidecar_phase_and_state_and_remembers_a_leftover() {
     let home = store_home();
-    let generation = || layerfs_home::home::generation::read(&home);
+    let generation = || layerfs_home::record::generation::read(&home);
 
     // No op: ready, no phases; the observation moves no generation.
     let before = generation();
@@ -325,7 +325,7 @@ fn a_live_read_shows_the_sidecar_phase_and_state_and_remembers_a_leftover() {
     assert_eq!(text(op.get("phase").unwrap()), "build");
     assert_eq!(
         text(op.get("started_at").unwrap()),
-        layerfs_home::time::iso(1234)
+        layerfs_home::reply::time::iso(1234)
     );
     assert_eq!(
         texts(busy.get("live").unwrap().get("phases").unwrap()),

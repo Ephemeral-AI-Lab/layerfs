@@ -5,9 +5,9 @@ use crate::admin::{host_worker::handoff, record::intent};
 use crate::backend::sqlite::family::{advance, begin_maintenance, ended, settle, step_on};
 use crate::backend::sqlite::step_request::StoreStep;
 use crate::Related;
-use layerfs_home::home::{self, paths};
-use layerfs_home::op::{Op, Standing};
-use layerfs_home::outcome::{failed, refused, Outcome};
+use layerfs_home::disk::paths;
+use layerfs_home::record::intent::{Op, Standing};
+use layerfs_home::reply::outcome::{failed, refused, Outcome};
 use layerfs_protocol::sdk::SdkValue;
 use std::path::Path;
 
@@ -58,7 +58,7 @@ pub fn remove(home: &Path, name: &str, related: Related) -> Outcome {
     if let Some((left, _)) = &leftover_executor {
         fields.push(("leftover", SdkValue::text(&left.on)));
     }
-    let args = layerfs_home::helpers::map_of(fields);
+    let args = layerfs_home::reply::values::map_of(fields);
     let mut op = Op::begin(intent::REMOVE, "check", args)?;
     let worker = handoff::observe(home, &record);
     let (previous, worker) = begin_maintenance(home, name, &op, related, worker, |record| {
@@ -124,10 +124,10 @@ pub fn remove(home: &Path, name: &str, related: Related) -> Outcome {
         );
         return Err(refusal);
     }
-    let _lock = home::lock::take(home)?;
+    let _lock = layerfs_home::lock::home::take(home)?;
     let _store = store::lock(home, name)?;
     std::fs::remove_dir_all(paths::store_dir(home, name)).map_err(failed)?;
-    layerfs_home::home::generation::moved(home);
+    layerfs_home::record::generation::moved(home);
     Ok(answer(name, Vec::new()))
 }
 
@@ -142,14 +142,14 @@ fn answer(name: &str, left: Vec<String>) -> SdkValue {
         let left = left.into_iter().map(SdkValue::Text).collect();
         fields.push(("left", SdkValue::List(left)));
     }
-    layerfs_home::helpers::map_of(fields)
+    layerfs_home::reply::values::map_of(fields)
 }
 
 /// Whether machine `machine`'s record has no 2.0 name (RV3 FAIL 1), or a
 /// live read found its VM gone (area 10): this build reaches nothing on
 /// it, so a Store on it goes by its records alone.
 fn nameless(home: &Path, machine: &str) -> Result<bool, layerfs_protocol::sdk::SdkRefusal> {
-    let record = layerfs_machine::record::MachineRecord::read(home, machine)?;
+    let record = layerfs_machine::record::machine::MachineRecord::read(home, machine)?;
     Ok(record.is_some_and(|record| record.gone()))
 }
 
@@ -165,7 +165,7 @@ fn forget_on_nameless(
     machine: &str,
     related: Related,
 ) -> Result<Vec<String>, layerfs_protocol::sdk::SdkRefusal> {
-    let _lock = home::lock::take(home)?;
+    let _lock = layerfs_home::lock::home::take(home)?;
     let _store = store::lock(home, name)?;
     let now = store::StoreRecord::of(home, name)?;
     if now.machine().ok().as_deref() != Some(machine) || !nameless(home, machine)? {
@@ -181,8 +181,8 @@ fn forget_on_nameless(
     let leftover =
         crate::backend::sqlite::move_leftover::leftover(&now).filter(|l| l.on != machine);
     std::fs::remove_dir_all(paths::store_dir(home, name)).map_err(failed)?;
-    layerfs_home::home::generation::moved(home);
-    let on = layerfs_machine::record::MachineRecord::read(home, machine)?;
+    layerfs_home::record::generation::moved(home);
+    let on = layerfs_machine::record::machine::MachineRecord::read(home, machine)?;
     let mut left = vec![match on.is_some_and(|record| record.nameless()) {
         true => format!(
             "machine {machine}'s record has no 2.0 name, so only Store {name}'s records were \

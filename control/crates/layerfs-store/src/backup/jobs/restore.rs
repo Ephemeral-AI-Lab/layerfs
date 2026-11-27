@@ -12,11 +12,12 @@ use crate::backup::copy as remote;
 use crate::backup::copy::link::StoreLink;
 use crate::data::project::record::restored::{records, Found, Restored};
 use crate::Related;
-use layerfs_home::events::Events;
-use layerfs_home::home::flock::{try_lock, unlock};
-use layerfs_home::home::{self, paths};
-use layerfs_home::op::Op;
-use layerfs_home::outcome::{failed, refused, Outcome};
+use layerfs_home::disk;
+use layerfs_home::disk::paths;
+use layerfs_home::lock::flock::{try_lock, unlock};
+use layerfs_home::record::intent::Op;
+use layerfs_home::reply::events::Events;
+use layerfs_home::reply::outcome::{failed, refused, Outcome};
 use layerfs_protocol::sdk::hex;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::fs::{File, OpenOptions};
@@ -58,7 +59,7 @@ pub fn restore(
     // `store.create` and every opener require, refused with its own code and
     // remedy (#570 P1). Absent: the install makes it `0700`, as before.
     if paths::store_dir(&home, store).exists() {
-        layerfs_store_service::kernel_guard::check(&paths::store_file(&home, store))
+        layerfs_store_service::store::kernel_guard::check(&paths::store_file(&home, store))
             .map_err(|reason| refused("Unsupported", reason.0))?;
     }
     let bucket = request.bucket.as_str();
@@ -86,7 +87,7 @@ pub fn restore(
             let identity = crate::admin::record::identity::identity_in(record)?;
             // refused before the download too; checked again before the install
             {
-                let _lock = home::lock::take(&home)?;
+                let _lock = layerfs_home::lock::home::take(&home)?;
                 let _store = crate::admin::record::store::lock(&home, store)?;
                 replaceable(&home, store, bucket, record, related)?;
             }
@@ -123,7 +124,7 @@ pub fn restore(
         }
     };
     // the first 20; `projects_count` only when there were more
-    let (projects, count) = layerfs_home::helpers::shown_names(&projects);
+    let (projects, count) = layerfs_home::reply::values::shown_names(&projects);
     Ok(SdkValue::map([
         ("ok", SdkValue::Bool(true)),
         ("projects", projects),
@@ -169,7 +170,7 @@ fn run(
 ) -> Result<(remote::Loaded, Vec<String>)> {
     let cursor = match &identity {
         Some(identity) => identity.cursor_key,
-        None => layerfs_home::helpers::random()?,
+        None => layerfs_home::record::token::random()?,
     };
     let mut shown = Shown::new();
     shown.phase(events, "check");
@@ -221,7 +222,7 @@ fn run(
     // rebuilt refuses the restore with the Store not yet installed, rather
     // than installing one and leaving a record short
     shown.phase(events, "install");
-    let _lock = home::lock::take(home)?;
+    let _lock = layerfs_home::lock::home::take(home)?;
     let projects = records(home, store, &restored, &found.projects)?;
     let link = StoreLink::new(
         file,
@@ -270,7 +271,7 @@ fn run(
 ///
 /// The target's folder is checked again first: the download is a long
 /// window, in which `store/<name>` can appear or lose its privacy after the
-/// restore's own first check, and `home::private_dir` keeps an existing
+/// restore's own first check, and `disk::private_dir` keeps an existing
 /// folder's mode. This is `store.create`'s guard, its code and its remedy
 /// (#570 P1).
 pub fn install(
@@ -283,7 +284,7 @@ pub fn install(
     related: Related,
 ) -> Result<()> {
     if paths::store_dir(home, store).exists() {
-        layerfs_store_service::kernel_guard::check(&paths::store_file(home, store))
+        layerfs_store_service::store::kernel_guard::check(&paths::store_file(home, store))
             .map_err(|reason| refused("Unsupported", reason.0))?;
     }
     // a Store replaced here is checked and replaced under its lock, which
@@ -296,7 +297,7 @@ pub fn install(
     let now = StoreRecord::read(home, store)?;
     match (&existing, now) {
         (None, None) if !destination.exists() => {
-            home::private_dir(&paths::store_dir(home, store))?;
+            disk::private_dir(&paths::store_dir(home, store))?;
             // a link never replaces a Store that appeared meanwhile
             std::fs::hard_link(staged, &destination).map_err(failed)?;
             record.write(home)?;
@@ -338,13 +339,13 @@ struct Staging(std::path::PathBuf, File);
 
 impl Staging {
     fn make(home: &Path) -> Result<Self> {
-        let random = layerfs_home::helpers::random()?;
+        let random = layerfs_home::record::token::random()?;
         let parent = home.join("store");
         let dir = parent.join(format!(".restore-{}", hex(&random[..12])));
         // under the home lock no folder is between its creation and its lock
-        let _lock = home::lock::take(home)?;
+        let _lock = layerfs_home::lock::home::take(home)?;
         sweep(&parent);
-        home::private_dir(&dir)?;
+        disk::private_dir(&dir)?;
         let lock = OpenOptions::new()
             .write(true)
             .create_new(true)

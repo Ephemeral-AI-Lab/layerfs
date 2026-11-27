@@ -8,7 +8,9 @@ use layerfs_content::{
     compare::{DirectoryMemo, EntryFacts, TreeTable},
     file::{mapping::FILE_STATE_CANONICAL_BYTES, FileView},
     filesystem::{
-        directory::read::lookup, path::PathName, sorted::DirectoryRoot, FilesystemRootId,
+        name::path::PathName,
+        tree::{directory::read::lookup, pages::DirectoryRoot},
+        FilesystemRootId,
     },
     object::inode_leaf::InodeKind,
     policy::WHOLE_FILE_CANONICAL_OVERHEAD,

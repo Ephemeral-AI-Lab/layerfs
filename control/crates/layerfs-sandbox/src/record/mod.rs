@@ -4,7 +4,7 @@
 //! and the machine-level retired tombstone
 //! `machine/<machine>/sandbox-retired/<name>.json` (`tombstone`), written
 //! before a close or remove deletes the Sandbox record. Each is typed field
-//! by field; its codec, on `layerfs_home::home::fields`, is the only place it
+//! by field; its codec, on `layerfs_home::record::fields`, is the only place it
 //! meets a value, and keeps the JSON as read.
 mod daemon;
 #[doc(hidden)]

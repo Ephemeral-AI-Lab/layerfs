@@ -142,7 +142,7 @@ fn the_worker_refuses_a_frame_in_its_old_order() {
 /// run that is live on this machine unless `returned`.
 fn compact_record(file: &std::path::Path, returned: bool) {
     // where the kernel names no boot the owner is matched by its id alone
-    let (start, boot) = match layerfs_home::process::me() {
+    let (start, boot) = match layerfs_home::record::process::me() {
         Some((start, boot)) => (start.to_string(), format!("{boot:032x}")),
         None => (String::new(), String::new()),
     };
@@ -174,7 +174,7 @@ fn a_live_compaction_on_the_machine_refuses_the_steps_that_copy_or_delete_the_fi
     use layerfs_store::backend::sqlite::step_run;
     let root = std::env::temp_dir().join(format!("layerfs-steps-busy-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
-    let file = layerfs_home::home::paths::store_file(&root, "s");
+    let file = layerfs_home::disk::paths::store_file(&root, "s");
     std::fs::create_dir_all(file.parent().unwrap()).unwrap();
     std::fs::write(&file, b"not a store").unwrap();
     compact_record(&file, false);

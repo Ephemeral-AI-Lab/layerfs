@@ -1,9 +1,9 @@
 //! A restored Store's project records (#668) without a bucket, a daemon or
 //! root: the record a restore writes, read back the way `sandbox.create`
-//! reads a project (`layerfs_store::project::discovery::project`, then the
+//! reads a project (`layerfs_store::data::project::record::discovery::project`, then the
 //! installed manifest).
 use layerfs_history::{BranchId, LayerStackId};
-use layerfs_home::home::{paths, private_dir};
+use layerfs_home::disk::{paths, private_dir};
 use layerfs_protocol::provision::manifest::{ProviderKind, StoreProfile};
 use layerfs_protocol::sdk::SdkValue;
 use layerfs_store::admin::record::identity::{Identity, Kind};

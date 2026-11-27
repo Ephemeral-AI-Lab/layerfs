@@ -17,7 +17,7 @@ mod write;
 
 use crate::dispatch::Calls;
 use layerfs_protocol::sdk::SdkValue;
-use layerfs_store::calls::file::Guard;
+use layerfs_store::data::file::Guard;
 
 /// Its calls, in the order help lists them.
 pub(crate) fn calls() -> Calls {

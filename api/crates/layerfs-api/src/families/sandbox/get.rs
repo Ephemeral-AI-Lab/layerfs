@@ -6,13 +6,13 @@
 use crate::dispatch::table::Kind::Name;
 use crate::dispatch::table::{a, call, Call};
 use crate::dispatch::{Context, Form, Part, Section};
-use layerfs_home::outcome::Outcome;
-use layerfs_home::time::iso;
+use layerfs_home::reply::outcome::Outcome;
+use layerfs_home::reply::time::iso;
 use layerfs_protocol::sdk::SdkValue;
 use layerfs_sandbox::family::{get, GetRequest, Got, ListedWorkspace};
-use layerfs_sandbox::inspect::process::shown_usage;
 use layerfs_sandbox::record::SandboxRecord;
-use layerfs_sandbox::state::activity;
+use layerfs_sandbox::status::state::activity;
+use layerfs_sandbox::status::stats::shown_usage;
 
 /// One command running in a Workspace.
 const COMMAND: Form = Form::of(&["exec"], &[], &["exec", "started_at", "program", "tag"]);
@@ -202,7 +202,7 @@ fn workspace(listed: &ListedWorkspace) -> SdkValue {
 
 /// `--with stats`: null unless the Sandbox is ready.
 fn stats(got: &Got) -> SdkValue {
-    if got.state != layerfs_home::state::State::Ready {
+    if got.state != layerfs_home::reply::state::State::Ready {
         return SdkValue::Null;
     }
     let process = |name: &str| {

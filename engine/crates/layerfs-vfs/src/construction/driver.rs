@@ -12,7 +12,9 @@ use crate::{
 };
 use layerfs_content::{
     filesystem::{
-        statistics::LogicalChanges, update::update_filesystem_streamed_backed_counted,
+        construction::{
+            operation::update_filesystem_streamed_backed_counted, statistics::LogicalChanges,
+        },
         update_filesystem_streamed_backed, FilesystemObjects, FilesystemResources,
         FilesystemRootId, StreamedFilesystemInput,
     },

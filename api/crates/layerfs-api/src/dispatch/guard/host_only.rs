@@ -10,8 +10,8 @@ macro_rules! host_only {
         fn run(
             _context: &mut crate::dispatch::Context<'_>,
             _args: &layerfs_protocol::sdk::SdkValue,
-        ) -> layerfs_home::outcome::Outcome {
-            Err(layerfs_home::outcome::refused(
+        ) -> layerfs_home::reply::outcome::Outcome {
+            Err(layerfs_home::reply::outcome::refused(
                 "Unsupported",
                 concat!("machine.", $call, " runs on the host"),
             ))

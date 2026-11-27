@@ -3,9 +3,9 @@
 use crate::dispatch::table::Kind::Name;
 use crate::dispatch::table::{a, call, Call, PROGRESS};
 use crate::dispatch::{Context, Form, Part};
-use layerfs_home::outcome::Outcome;
+use layerfs_home::reply::outcome::Outcome;
 use layerfs_protocol::sdk::SdkValue;
-use layerfs_store::backup::family::BackupRestore;
+use layerfs_store::backup::bucket::connect::BackupRestore;
 
 /// Its answer: the projects found in it, or `ok` for an empty Store.
 const FORM: Form = Form::of(

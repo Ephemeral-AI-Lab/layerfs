@@ -3,7 +3,7 @@ use crate::{
     BaseFacts, JobOutcome, NamespaceJob, Need, Operation, Outcome, SourceView, Time, Workspace,
     WorkspaceError, WorkspaceResult,
 };
-use layerfs_content::{filesystem::identity::MAXIMUM_INODE_SERIAL, ContentError};
+use layerfs_content::{filesystem::name::identity::MAXIMUM_INODE_SERIAL, ContentError};
 use layerfs_overlay::OverlayError;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

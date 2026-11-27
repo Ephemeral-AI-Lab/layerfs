@@ -14,8 +14,7 @@ use layerfs_history::WorkspaceId;
 use layerfs_overlay::{KernelCookieOffer, KernelMount, OverlayError, ProfileConfig, Publication};
 use layerfs_storage::ReservationBlocks;
 use layerfs_store_service::{
-    bootstrap::open_store,
-    store::{BindRequest, BoundWorkspace},
+    store::{open::open_store, BindRequest, BoundWorkspace},
     Owner, OwnerClient, OwnerConfig,
 };
 use layerfs_vfs::ports::mount::{

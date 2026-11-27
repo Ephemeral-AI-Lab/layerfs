@@ -10,8 +10,8 @@ use super::step_request::{StepFrame, StoreStep};
 use crate::admin::status::get::hex_text;
 use crate::backup::bucket::pieces;
 use crate::backup::copy::heads::heads;
-use layerfs_home::home::paths;
-use layerfs_home::outcome::{failed, refused, Outcome};
+use layerfs_home::disk::paths;
+use layerfs_home::reply::outcome::{failed, refused, Outcome};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
@@ -153,7 +153,7 @@ pub fn run_observed(root: &Path, frame: &StepFrame, progress: &mut dyn FnMut(u64
             let identity = crate::admin::record::identity::identity_of(record)?;
             let directory = paths::store_dir(root, store);
             if let Some(parent) = directory.parent() {
-                layerfs_home::home::private_dir(parent)?;
+                layerfs_home::disk::private_dir(parent)?;
             }
             let policy = layerfs_storage::StoragePolicy::frozen_default();
             let (created, made) =
@@ -241,7 +241,7 @@ pub fn run_observed(root: &Path, frame: &StepFrame, progress: &mut dyn FnMut(u64
                     })
             })?;
             let digest = digest(&staged, None)?;
-            Ok(layerfs_home::home::with_field(
+            Ok(layerfs_home::disk::with_field(
                 digest,
                 "sqlite",
                 SdkValue::text(sealed.sqlite_version),
@@ -286,7 +286,7 @@ pub fn run_observed(root: &Path, frame: &StepFrame, progress: &mut dyn FnMut(u64
                     format!("a Store file is already at {}", file.display()),
                 ));
             }
-            layerfs_home::home::private_dir(&paths::store_dir(root, store))?;
+            layerfs_home::disk::private_dir(&paths::store_dir(root, store))?;
             let mut handle = std::fs::OpenOptions::new()
                 .write(true)
                 .create(true)

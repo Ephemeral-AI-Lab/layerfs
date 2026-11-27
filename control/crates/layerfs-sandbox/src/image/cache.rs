@@ -16,8 +16,9 @@ use crate::image::prune::lowers;
 use crate::rootfs;
 use crate::route::machine::Deploy;
 use crate::Image;
-use layerfs_home::home::{self, paths};
-use layerfs_home::outcome::{failed, refused, Outcome};
+use layerfs_home::disk;
+use layerfs_home::disk::paths;
+use layerfs_home::reply::outcome::{failed, refused, Outcome};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use sha2::{Digest, Sha256};
 use std::fs::{self, OpenOptions};
@@ -95,7 +96,7 @@ pub fn architecture() -> &'static str {
 pub fn free(path: &Path) -> Option<u64> {
     path.ancestors()
         .find(|p| p.exists())
-        .and_then(|p| home::filesystem_available(p).ok())
+        .and_then(|p| disk::filesystem_available(p).ok())
 }
 
 /// One image's sidecar: what `machine.images` lists for it.
@@ -155,7 +156,7 @@ impl Sidecar {
 
     /// The sidecar of image `hex` in `cache`, if there is one.
     pub fn read(cache: &Path, hex: &str) -> Result<Option<Self>, SdkRefusal> {
-        Ok(home::read_record(&sidecar_path(cache, hex))?
+        Ok(disk::read_record(&sidecar_path(cache, hex))?
             .as_ref()
             .and_then(Self::from_value))
     }
@@ -163,7 +164,7 @@ impl Sidecar {
     /// Writes it beside its image's directory (one rename).
     pub fn write(&self, cache: &Path) -> Result<(), SdkRefusal> {
         let hex = &self.id["sha256:".len()..];
-        home::write_record(&sidecar_path(cache, hex), &self.to_value())
+        disk::write_record(&sidecar_path(cache, hex), &self.to_value())
     }
 }
 
@@ -180,7 +181,7 @@ impl SidecarInfo {
     /// Its JSON record, including optional `variant` and `config`.
     pub fn to_value(&self) -> SdkValue {
         let opt_text = |v: &Option<String>| v.clone().map_or(SdkValue::Null, SdkValue::Text);
-        home::with_field(self.sidecar.to_value(), "variant", opt_text(&self.variant))
+        disk::with_field(self.sidecar.to_value(), "variant", opt_text(&self.variant))
     }
 
     /// Reads one from its JSON record; `None` when it names no valid Id.
@@ -192,7 +193,7 @@ impl SidecarInfo {
 
     /// The extended sidecar of image `hex` in `cache`, if there is one.
     pub fn read(cache: &Path, hex: &str) -> Result<Option<Self>, SdkRefusal> {
-        Ok(home::read_record(&sidecar_path(cache, hex))?
+        Ok(disk::read_record(&sidecar_path(cache, hex))?
             .as_ref()
             .and_then(Self::from_value))
     }
@@ -200,7 +201,7 @@ impl SidecarInfo {
     /// Writes it beside its image's directory (one rename).
     pub fn write(&self, cache: &Path) -> Result<(), SdkRefusal> {
         let hex = &self.sidecar.id["sha256:".len()..];
-        home::write_record(&sidecar_path(cache, hex), &self.to_value())
+        disk::write_record(&sidecar_path(cache, hex), &self.to_value())
     }
 }
 
@@ -270,7 +271,7 @@ pub fn touch(side: &Side<'_>, archive: Option<&str>, image: &str) -> Result<(), 
             variant: None,
         },
     };
-    info.sidecar.last_used = Some(utc(home::now_ms()));
+    info.sidecar.last_used = Some(utc(disk::now_ms()));
     info.write(&cache)
 }
 

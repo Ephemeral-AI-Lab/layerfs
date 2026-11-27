@@ -887,7 +887,7 @@ impl BoundWorkspace {
         directories: Option<&mut ChangedDirectories>,
     ) -> Result<u64, CommitError> {
         with_file_lengths(reader, |lengths| {
-            layerfs_content::filesystem::statistics::logical_size_and_directories(
+            layerfs_content::filesystem::construction::statistics::logical_size_and_directories(
                 reader,
                 FilesystemRootId(before),
                 after,

@@ -4,9 +4,9 @@
 //! `Effects` stands in for the Store so the home state machine is tested
 //! without opening one.
 use layerfs_history::LayerStackId;
-use layerfs_home::home::{paths, write_record};
+use layerfs_home::disk::{paths, write_record};
 use layerfs_home::names::StoreName;
-use layerfs_home::outcome::{failed, refused};
+use layerfs_home::reply::outcome::{failed, refused};
 use layerfs_protocol::sdk::hex;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use layerfs_store::data::project::delete::run::{
@@ -14,7 +14,7 @@ use layerfs_store::data::project::delete::run::{
 };
 use layerfs_store::data::project::delete::worker::{remove_project_entry, remove_worker_entry};
 use layerfs_store::data::project::frame::DeleteEntryFrame;
-use layerfs_store_service::history::deletion::Deletion;
+use layerfs_store_service::history::project_delete::Deletion;
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 
@@ -32,7 +32,7 @@ fn home(tag: &str) -> PathBuf {
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&directory);
-    layerfs_home::home::layout::create(&directory).unwrap();
+    layerfs_home::disk::layout::create(&directory).unwrap();
     directory
 }
 
@@ -722,7 +722,7 @@ fn a_worker_reply_names_the_stack_and_deleted_ms() {
 fn a_listing_unknown_names_the_project() {
     use layerfs_history::HistoryError;
     use layerfs_store::data::project::delete::run::listed_unknown;
-    use layerfs_store_service::history::lookup::published;
+    use layerfs_store_service::lookup::published;
     use layerfs_store_service::store::PortError;
     use std::sync::Arc;
 

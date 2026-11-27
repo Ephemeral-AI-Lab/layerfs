@@ -4,8 +4,8 @@
 //! `project.init` into a project volume is gone (#536 step 2).
 use super::super::frame::InitFrame;
 use super::sqlite::ProjectAdd;
-use layerfs_home::helpers::required;
-use layerfs_home::outcome::{refused, Outcome};
+use layerfs_home::reply::outcome::{refused, Outcome};
+use layerfs_home::reply::values::required;
 use std::path::Path;
 use std::time::{Duration, Instant};
 

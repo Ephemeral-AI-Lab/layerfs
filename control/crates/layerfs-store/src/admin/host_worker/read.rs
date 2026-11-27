@@ -1,6 +1,6 @@
 //! The native CLI worker's bounded, read-only Store protocol.
 use layerfs_home::names::{ProjectName, StoreName};
-use layerfs_home::outcome::{refused, Outcome};
+use layerfs_home::reply::outcome::{refused, Outcome};
 use layerfs_protocol::sdk::SdkValue;
 use std::cell::Cell;
 use std::path::Path;
@@ -32,7 +32,7 @@ pub fn with_cli<T>(enabled: bool, call: impl FnOnce() -> T) -> T {
 }
 
 /// One allowlisted read method, shared with the PostgreSQL route
-/// ([`crate::host_postgresql`]).
+/// ([`crate::admin::host_worker::postgresql`]).
 #[derive(Clone, Copy)]
 pub(crate) enum Method {
     Read,
@@ -83,9 +83,9 @@ impl Method {
             },
             Self::Stat => true,
             Self::List => {
-                args.get_int("pageSize")
-                    .is_some_and(|size| (1..=layerfs_home::cursor::MAX_LIMIT).contains(&size))
-                    && args.get_int("pagePos").is_none_or(|pos| pos >= 0)
+                args.get_int("pageSize").is_some_and(|size| {
+                    (1..=layerfs_home::reply::cursor::MAX_LIMIT).contains(&size)
+                }) && args.get_int("pagePos").is_none_or(|pos| pos >= 0)
             }
         }
     }
@@ -151,7 +151,7 @@ pub(crate) fn routed(
     fields: &[(String, SdkValue)],
 ) -> Option<Outcome> {
     use crate::admin::record::store::StoreRef;
-    use layerfs_machine::worker::{HostPaths, HOST_MAX_REPLY, HOST_MAX_REQUEST};
+    use layerfs_machine::route::{HostPaths, HOST_MAX_REPLY, HOST_MAX_REQUEST};
 
     if !cli() {
         return None;

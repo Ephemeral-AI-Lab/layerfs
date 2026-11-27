@@ -13,12 +13,12 @@
 use super::findings::Findings;
 use super::scan::{shell, Scanned};
 use crate::home::get::Build;
-use layerfs_home::home::paths;
-use layerfs_home::op::{Op, Standing};
-use layerfs_home::outcome::shell_word;
+use layerfs_home::disk::paths;
+use layerfs_home::record::intent::{Op, Standing};
+use layerfs_home::reply::outcome::shell_word;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
-use layerfs_store::lease;
-use layerfs_store::record::{StoreRecord, StoreRef};
+use layerfs_store::admin::open::lease;
+use layerfs_store::admin::record::store::{StoreRecord, StoreRef};
 use std::path::Path;
 
 /// The built-in machines exist with or without a record.
@@ -54,7 +54,7 @@ pub(super) fn check_local(
         let entity = ("store", name);
         let op = store.op();
         if let Some(op) = &op {
-            let clear = layerfs_store::intent::clearing(op, name);
+            let clear = layerfs_store::admin::record::intent::clearing(op, name);
             intent(entity, op, &format!("layerfs {clear}"), findings);
         }
         match store.store_ref() {
@@ -145,7 +145,7 @@ fn machines(scanned: &Scanned, build: Build<'_>, findings: &mut Findings) {
             ]));
         }
         if let Some(op) = machine.op() {
-            let clear = layerfs_machine::state::settle(name, &op);
+            let clear = layerfs_machine::status::state::settle(name, &op);
             intent(entity, &op, &clear, findings);
         }
     }
@@ -156,7 +156,7 @@ fn sandboxes(scanned: &Scanned, findings: &mut Findings) {
     for sandbox in &scanned.sandboxes {
         let name = sandbox.name();
         let entity = ("sandbox", name);
-        let fix = layerfs_sandbox::state::remove_fix(name);
+        let fix = layerfs_sandbox::status::state::remove_fix(name);
         if let Some(op) = sandbox.op() {
             intent(entity, &op, &fix, findings);
         }
@@ -247,7 +247,7 @@ fn intent(entity: (&str, &str), op: &Op, clear: &str, findings: &mut Findings) {
 /// machine that holds the copy is not asked, so this is the one finding of
 /// a target's partial copy.
 fn leftover(store: &StoreRecord, machine: &str, findings: &mut Findings) {
-    let Some(left) = layerfs_store::sqlite::transfer::resolve::leftover(store) else {
+    let Some(left) = layerfs_store::backend::sqlite::move_leftover::leftover(store) else {
         return;
     };
     let name = store.name();

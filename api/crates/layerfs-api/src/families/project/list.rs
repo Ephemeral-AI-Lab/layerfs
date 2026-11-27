@@ -3,9 +3,9 @@ use crate::dispatch::table::Kind::{Int, Name, Text};
 use crate::dispatch::table::{call, opt, Call};
 use crate::dispatch::{Context, Form, Paging, Part, Section};
 use layerfs_home::names::StoreName;
-use layerfs_home::outcome::Outcome;
+use layerfs_home::reply::outcome::Outcome;
 use layerfs_protocol::sdk::SdkValue;
-use layerfs_store::project::read::ProjectList;
+use layerfs_store::data::project::status::list::ProjectList;
 
 /// One project: its state when not ready, with that state's companion;
 /// `commit` is main's head.
