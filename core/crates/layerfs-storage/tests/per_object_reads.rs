@@ -33,6 +33,8 @@ struct Faulty {
     inner: Arc<dyn PackPersistence>,
     missing: Option<i64>,
     fail_at: Option<usize>,
+    /// Takes packs up to 256 KiB whole, as PostgreSQL.
+    whole: bool,
     log: Mutex<Vec<(&'static str, Vec<i64>)>>,
 }
 impl Faulty {
@@ -41,6 +43,7 @@ impl Faulty {
             inner,
             missing: None,
             fail_at: None,
+            whole: false,
             log: Mutex::new(Vec::new()),
         }
     }
@@ -139,8 +142,40 @@ impl PackPersistence for Faulty {
     fn publish(&self, batch: &Publication) -> Result<Published, PersistenceError> {
         self.inner.publish(batch)
     }
+    /// Classified as PostgreSQL's: one call; the missing pack is that read's
+    /// `Missing`, every other read answered as alone.
+    fn read_groups_classified(
+        &self,
+        reads: &[GroupRead],
+        out: &mut Vec<Result<GroupReadAnswer, PersistenceError>>,
+    ) -> Result<(), PersistenceError> {
+        let packs: Vec<i64> = reads.iter().map(|read| read.pack.pack_id).collect();
+        let at = {
+            let mut log = self.log.lock().unwrap();
+            log.push(("read_groups_classified", packs));
+            log.len() - 1
+        };
+        if self.fail_at == Some(at) {
+            return Err(PersistenceError::Uncertain);
+        }
+        out.clear();
+        for read in reads {
+            if self.missing == Some(read.pack.pack_id) {
+                out.push(Err(PersistenceError::Missing));
+                continue;
+            }
+            let mut one = Vec::new();
+            self.inner
+                .read_groups(std::slice::from_ref(read), &mut one)?;
+            out.push(one.pop().ok_or(PersistenceError::Malformed));
+        }
+        Ok(())
+    }
     fn whole_pack_bytes(&self) -> usize {
-        self.inner.whole_pack_bytes()
+        match self.whole {
+            true => 256 * 1024,
+            false => self.inner.whole_pack_bytes(),
+        }
     }
     fn batched_chain_reads(&self) -> bool {
         self.inner.batched_chain_reads()
@@ -148,19 +183,22 @@ impl PackPersistence for Faulty {
 }
 
 /// How reads reach the Store: the plain memory engine (one call per unit, as
-/// SQLite) or the chain provider that batches chains and groups (as
-/// PostgreSQL).
+/// SQLite), the chain provider that batches chains and groups (as
+/// PostgreSQL), or the plain engine taking a cohort's packs whole in one call
+/// (PostgreSQL's whole-pack batch).
 #[derive(Clone, Copy, Debug)]
 enum Route {
     Plain,
     Batched,
+    Whole,
 }
+const ROUTES: [Route; 3] = [Route::Plain, Route::Batched, Route::Whole];
 
-/// A fresh port over a copy of `memory`'s state.
-fn port(memory: &MemoryMetadata, route: Route, missing: Option<i64>) -> Arc<Faulty> {
+/// A port over a fresh copy of `memory`'s state.
+fn faulty(memory: &MemoryMetadata, route: Route) -> Faulty {
     let state = copy(memory);
     let inner: Arc<dyn PackPersistence> = match route {
-        Route::Plain => state,
+        Route::Plain | Route::Whole => state,
         Route::Batched => {
             let mut chains = ChainProvider::new(state);
             chains.batched = true;
@@ -168,8 +206,31 @@ fn port(memory: &MemoryMetadata, route: Route, missing: Option<i64>) -> Arc<Faul
         }
     };
     let mut faulty = Faulty::new(inner);
+    faulty.whole = matches!(route, Route::Whole);
+    faulty
+}
+
+fn port(memory: &MemoryMetadata, route: Route, missing: Option<i64>) -> Arc<Faulty> {
+    let mut faulty = faulty(memory, route);
     faulty.missing = missing;
     Arc::new(faulty)
+}
+
+/// The port's read calls with every pack read (`read_groups`, `read_packs`
+/// and their classified form, one call each) under one name.
+fn calls(port: &Faulty) -> Vec<(&'static str, Vec<i64>)> {
+    let log = port.log.lock().unwrap();
+    log.iter()
+        .map(|(name, packs)| match *name {
+            "read_groups" | "read_packs" | "read_groups_classified" => ("packs", packs.clone()),
+            other => (other, packs.clone()),
+        })
+        .collect()
+}
+
+fn count(port: &Faulty, name: &str) -> usize {
+    let log = port.log.lock().unwrap();
+    log.iter().filter(|(call, _)| *call == name).count()
 }
 
 fn show(result: &StorageResult<Vec<u8>>) -> String {
@@ -259,13 +320,15 @@ fn check(memory: &MemoryMetadata, route: Route, missing: Option<i64>, ids: &[Obj
 fn healthy_demands_cost_what_the_batched_read_costs() {
     let memory = ordinary_history();
     let ids = stored(&memory);
-    for route in [Route::Plain, Route::Batched] {
+    for route in ROUTES {
         let batch_port = port(&memory, route, None);
         let storage = Storage::new(batch_port.clone()).unwrap();
         let reader = storage.reader().unwrap();
         let batch = reader.read_objects(&ids).unwrap();
         let (batch_counts, batch_pooled) = (storage.diagnostics(), reader.pooled_read_counters());
         drop(reader);
+        // A batched read never asks for classified answers.
+        assert_eq!(count(&batch_port, "read_groups_classified"), 0);
 
         let each_port = port(&memory, route, None);
         let storage = Storage::new(each_port.clone()).unwrap();
@@ -273,10 +336,16 @@ fn healthy_demands_cost_what_the_batched_read_costs() {
         let each = reader.read_objects_each(&ids).unwrap();
         assert_eq!(storage.diagnostics(), batch_counts, "{route:?}");
         assert_eq!(reader.pooled_read_counters(), batch_pooled, "{route:?}");
-        assert_eq!(
-            *each_port.log.lock().unwrap(),
-            *batch_port.log.lock().unwrap()
-        );
+        // The same calls with the same packs; each pack read is classified.
+        assert_eq!(calls(&each_port), calls(&batch_port), "{route:?}");
+        assert_eq!(count(&each_port, "read_groups"), 0);
+        assert_eq!(count(&each_port, "read_packs"), 0);
+        let classified = count(&batch_port, "read_groups") + count(&batch_port, "read_packs");
+        assert_eq!(count(&each_port, "read_groups_classified"), classified);
+        match route {
+            Route::Plain => assert_eq!(classified, 0, "SQLite-like: unchanged calls"),
+            Route::Batched | Route::Whole => assert!(classified > 0, "{route:?}"),
+        }
         let each: Vec<Vec<u8>> = each.into_iter().map(Result::unwrap).collect();
         assert_eq!(each, batch, "{route:?}");
 
@@ -286,10 +355,7 @@ fn healthy_demands_cost_what_the_batched_read_costs() {
         let mut cache = ReadCache::new().unwrap();
         let kept = storage.read_each_with(&mut cache, &ids).unwrap();
         assert_eq!(storage.diagnostics(), batch_counts, "{route:?}");
-        assert_eq!(
-            *kept_port.log.lock().unwrap(),
-            *batch_port.log.lock().unwrap()
-        );
+        assert_eq!(calls(&kept_port), calls(&batch_port), "{route:?}");
         assert_eq!(
             kept.into_iter().map(Result::unwrap).collect::<Vec<_>>(),
             batch
@@ -306,7 +372,7 @@ fn a_missing_object_is_its_own_result() {
     let leaf = *ids.iter().rev().find(|id| !named.contains(id)).unwrap();
     memory.state.lock().unwrap().objects.remove(&leaf);
     ids.push(ObjectId::for_bytes(b"never stored"));
-    for route in [Route::Plain, Route::Batched] {
+    for route in ROUTES {
         assert_eq!(check(&memory, route, None, &ids), 2, "{route:?}");
     }
 }
@@ -325,7 +391,7 @@ fn a_mismatched_object_is_its_own_result() {
         moved.object_id = wrong.object_id;
         state.objects.insert(wrong.object_id, moved);
     }
-    for route in [Route::Plain, Route::Batched] {
+    for route in ROUTES {
         check(&memory, route, None, &ids);
     }
 }
@@ -375,40 +441,35 @@ fn a_missing_pack_fails_only_its_objects_and_is_requested_once() {
             .unwrap();
         state.objects[&base].pack_id
     };
-    check(&memory, Route::Plain, Some(pack), &ids);
-    let (_, plain) = each(&memory, Route::Plain, Some(pack), &ids);
-    assert_eq!(
-        plain.requests_of(pack),
-        1,
-        "the failed pack is not asked again"
-    );
-    // On the batched route the pack is one of a group read over several
-    // packs, which this provider (as PostgreSQL's `read_groups`) refuses as
-    // a whole call: no object can be blamed, so the demand fails, once.
-    let port = port(&memory, Route::Batched, Some(pack));
-    let storage = Storage::new(port.clone()).unwrap();
-    let read = storage.reader().unwrap().read_objects_each(&ids);
-    assert!(read.is_err());
-    assert_eq!(port.requests_of(pack), 1);
+    // On the batched and whole routes the pack is one of a read over several
+    // packs: its classified answer refuses that pack alone.
+    for route in ROUTES {
+        check(&memory, route, Some(pack), &ids);
+        let (_, port) = each(&memory, route, Some(pack), &ids);
+        assert_eq!(
+            port.requests_of(pack),
+            1,
+            "{route:?}: the failed pack is not asked again"
+        );
+        if !matches!(route, Route::Plain) {
+            let shared = port.log.lock().unwrap().iter().any(|(name, packs)| {
+                *name == "read_groups_classified" && packs.contains(&pack) && packs.len() > 1
+            });
+            assert!(shared, "{route:?}: refused inside a read of several packs");
+        }
+    }
 }
 
 #[test]
 fn a_transport_failure_at_any_call_fails_the_demand() {
     let memory = ordinary_history();
     let ids = stored(&memory);
-    for route in [Route::Plain, Route::Batched] {
+    for route in ROUTES {
         let (_, clean) = each(&memory, route, None, &ids);
         let calls = clean.log.lock().unwrap().len();
         assert!(calls > 0);
         for at in 0..calls {
-            let mut faulty = Faulty::new(match route {
-                Route::Plain => copy(&memory) as Arc<dyn PackPersistence>,
-                Route::Batched => {
-                    let mut chains = ChainProvider::new(copy(&memory));
-                    chains.batched = true;
-                    Arc::new(chains)
-                }
-            });
+            let mut faulty = faulty(&memory, route);
             faulty.fail_at = Some(at);
             let storage = Storage::new(Arc::new(faulty)).unwrap();
             let read = storage.reader().unwrap().read_objects_each(&ids);
@@ -481,7 +542,7 @@ fn pooled_leaves_healthy_cost_and_bad_leaves() {
     let memory = pooled_history();
     let ids = stored(&memory);
     assert!(based(&memory).len() >= 2, "a pooled delta chain is stored");
-    for route in [Route::Plain, Route::Batched] {
+    for route in ROUTES {
         let batch_port = port(&memory, route, None);
         let storage = Storage::new(batch_port.clone()).unwrap();
         let reader = storage.reader().unwrap();
@@ -495,10 +556,7 @@ fn pooled_leaves_healthy_cost_and_bad_leaves() {
         assert_eq!(storage.diagnostics(), counts, "{route:?}");
         assert_eq!(reader.pooled_read_counters(), pooled, "{route:?}");
         assert!(pooled.value_lookups >= 1);
-        assert_eq!(
-            *each_port.log.lock().unwrap(),
-            *batch_port.log.lock().unwrap()
-        );
+        assert_eq!(calls(&each_port), calls(&batch_port), "{route:?}");
         assert_eq!(
             each.into_iter().map(Result::unwrap).collect::<Vec<_>>(),
             batch
@@ -513,7 +571,7 @@ fn pooled_leaves_healthy_cost_and_bad_leaves() {
         let ordinal = *state.values.keys().last().unwrap();
         state.values.remove(&ordinal);
     }
-    for route in [Route::Plain, Route::Batched] {
+    for route in ROUTES {
         check(&gone, route, None, &ids);
     }
 

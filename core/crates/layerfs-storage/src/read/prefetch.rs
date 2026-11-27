@@ -22,8 +22,11 @@ pub(crate) type ChainFailures = Vec<(usize, StorageError)>;
 /// an absent base, a chain past the depth bound) ends the chains through
 /// that unit and is returned for every root whose chain reaches it, the
 /// first such unit along each chain, which is where that root's own walk
-/// fails; the other chains go on. A call over the level's units (its group
-/// read and its locate) and a session or transport failure fail the call.
+/// fails; the other chains go on. Within a per-object demand
+/// ([`Fetch::per_object`]) a pack refused there, by a group read or an
+/// acquisition, is not acquired again. A failed call over the level's units
+/// (its group read and its locate) and a session or transport failure fail
+/// the call.
 pub(crate) fn chains_each(
     source: &Fetch,
     roots: &[ObjectLocation],
@@ -33,11 +36,10 @@ pub(crate) fn chains_each(
 ) -> StorageResult<(crate::encoding::pool::PoolReadCounters, ChainFailures)> {
     let mut frontier = roots.to_vec();
     let mut visited = BTreeSet::new();
-    // Each walked element's base, each failed element's failure and each
-    // failed pack's: at most one entry per visited element, as `visited`.
+    // Each walked element's base and each failed element's failure: at most
+    // one entry per visited element, as `visited`.
     let mut bases = BTreeMap::new();
     let mut failed = BTreeMap::new();
-    let mut failed_packs: BTreeMap<i64, StorageError> = BTreeMap::new();
     let mut pooled = crate::encoding::pool::PoolReadCounters::default();
     for level in 0..=layerfs_content::MAXIMUM_DELTA_MAX_DEPTH {
         if frontier.is_empty() {
@@ -62,9 +64,9 @@ pub(crate) fn chains_each(
                 .collect::<BTreeSet<_>>()
                 .into_iter()
                 .collect();
-            // A pack that failed at an earlier level is not acquired again.
-            let acquired = match failed_packs.get(&id) {
-                Some(error) => Err(duplicate(error)),
+            // A pack refused earlier in the demand is not acquired again.
+            let acquired = match source.refused_pack(id) {
+                Some(error) => Err(error),
                 None => packs.acquire_groups(source, id, &needed).map(drop),
             };
             if let Err(error) = acquired {
@@ -76,7 +78,7 @@ pub(crate) fn chains_each(
                         failed.insert(location.object_id, duplicate(&error));
                     }
                 }
-                failed_packs.entry(id).or_insert(error);
+                source.refuse(id, error);
                 from = end;
                 continue;
             }

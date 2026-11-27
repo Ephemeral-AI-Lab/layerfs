@@ -237,7 +237,9 @@ impl ReadState {
     /// objects that need the failed unit (an absent object or base, a pack,
     /// a chain record, a leaf, a body): the failure each one's point read
     /// meets, since that read runs the same steps over its own units in
-    /// the same order. A failed unit is not requested again in the demand.
+    /// the same order. Pack reads over several packs are classified
+    /// ([`Fetch::per_object`]), so a pack refused among them is that pack's
+    /// failure. A failed unit is not requested again in the demand.
     pub(crate) fn read_each(
         &mut self,
         workspace: &mut DecompressionWorkspace,
@@ -253,6 +255,7 @@ impl ReadState {
             });
         }
         source.begin_demand(true);
+        let _per_object = source.per_object();
         self.pool.forget_prepared();
         source.locate(ids)?;
         let mut out: Vec<Option<StorageResult<Vec<u8>>>> = ids.iter().map(|_| None).collect();
@@ -291,7 +294,7 @@ impl ReadState {
             let cohort = &sorted[start..end];
             if paged == 0 {
                 let located: Vec<i64> = cohort.iter().map(|row| row.pack_id).collect();
-                source.whole_packs(&located, &mut self.packs)?;
+                source.whole_packs_each(&located, &mut self.packs)?;
             }
             let mut walk = || {
                 prefetch::chains_each(source, cohort, &mut self.packs, workspace, &mut self.groups)
@@ -325,7 +328,11 @@ impl ReadState {
                     .into_iter()
                     .collect();
                 if !needed.is_empty() {
-                    if let Err(error) = self.packs.acquire_groups(source, id, &needed) {
+                    let acquired = match source.refused_pack(id) {
+                        Some(error) => Err(error),
+                        None => self.packs.acquire_groups(source, id, &needed).map(drop),
+                    };
+                    if let Err(error) = acquired {
                         if call_failure(&error) {
                             return Err(error);
                         }
@@ -334,6 +341,7 @@ impl ReadState {
                                 out[roots[at].0] = Some(Err(duplicate(&error)));
                             }
                         }
+                        source.refuse(id, error);
                     }
                 }
                 for at in from..next {

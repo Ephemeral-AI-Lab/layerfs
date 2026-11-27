@@ -131,6 +131,8 @@ pub(crate) struct Fetch {
     saving: Cell<bool>,
     /// Cleared by a failure a hint may have caused, until the next demand.
     pub(super) trust_hints: Cell<bool>,
+    /// A per-object demand's refused packs (`hints.rs`, #818 H5); else None.
+    pub(super) refused: RefCell<Option<super::hints::Refused>>,
 }
 impl Fetch {
     pub(crate) fn retain_inode_locators(&mut self) {
@@ -183,6 +185,7 @@ impl Fetch {
             bind_pages: Cell::new(false),
             saving: Cell::new(false),
             trust_hints: Cell::new(true),
+            refused: RefCell::new(None),
         }
     }
     pub(crate) fn note(&self, change: impl FnOnce(&mut Diagnostics)) {
@@ -290,7 +293,7 @@ impl Fetch {
     /// A body a Save of this handle published, to a Save or a reader that
     /// continues one, validated as a fetched one would be.
     /// A held body (`held.rs`) is served to every read.
-    fn published_body(&self, id: i64) -> StorageResult<Option<(PackInfo, Vec<u8>)>> {
+    pub(super) fn published_body(&self, id: i64) -> StorageResult<Option<(PackInfo, Vec<u8>)>> {
         let found = match self.held_body(id) {
             Some(held) => Some(held),
             None if self.serve_published.get() => self.published.borrow().get(id).cloned(),
@@ -682,10 +685,8 @@ impl Fetch {
             body,
         })
     }
-    /// The stored values of `ordinals` this demand finds: held, published,
-    /// then one lookup per provider page for the rest. An ordinal with no
-    /// stored value is absent from the answer ([`Source::inode_values`]
-    /// refuses it; a per-object demand gives it to the leaves that need it).
+    /// The stored values of `ordinals` found (held, published, then looked
+    /// up); one with no stored value is absent ([`Source::inode_values`]).
     pub(crate) fn inode_values_found(
         &self,
         ordinals: &[u32],

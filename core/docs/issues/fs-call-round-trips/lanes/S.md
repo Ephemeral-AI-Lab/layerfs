@@ -99,3 +99,61 @@ Production LOC: 230,606 -> 231,175 (delta +569)
   api      10,516 -> 10,516 (0)
   reference absent (retired R9c; last counted 65,417 at tree 498dd1917812)
   Method: tools/production_loc.py --detail on parent 2a9a328930 (git archive) and the staged tree
+
+## S2 — per-pack results inside multi-pack reads (closes the S1 limit)
+
+Coordinator 2026-11-27: lane S also owns `read/hints.rs`.
+
+**Prediction (written before the code).** A per-object demand reads every
+pack batch with `read_groups_classified` (PostgreSQL: one statement, as
+`read_groups`; per-pack `Missing`/`Malformed`) instead of `read_groups` /
+`read_packs`: the same calls with the same packs, so trips are unchanged (0
+delta; the statement text differs: `objects::read::classified_ranges` instead
+of `ranges` / `read`). Existing callers (every non-per-object read, Saves,
+Commit) keep `read_groups` and their counts exactly: no pin moves on either
+backend. SQLite: no batched page and no whole-pack batch, so no call changes.
+
+**Built.** `Fetch::per_object()` (a guard `read_each` holds) keeps the
+demand's refused packs on the handle (`Fetch::refused`, `None` otherwise), so
+every page the demand reads is classified, the walk's, the reconstruction's
+and the pool reader's `prefetch_chain` included: an own pack's `Missing` /
+`Malformed` or failed admission is refused; a member-only pack's failure stays
+a stale hint (and is refused when `Missing`); a refused pack is skipped by
+page planning, by `chains_each` and `read_each` acquisitions and by
+`Fetch::whole_packs_each` (the whole-pack batch as one classified call of
+whole reads, frame-checked per pack). Without the guard `fetch_page` is
+today's code path (the refused checks are no-ops), so `chains_each` lost its
+local failed-pack map in favour of the handle's.
+
+**Measured (one run each; receipts in `receipts/S2/`).**
+
+| Check | Predicted | Measured | Within 15% |
+|---|---|---|---|
+| `sdk_read_round_trips`, `sdk_history_round_trips` (both backends) | unchanged | pass unchanged, no pin edited | yes (0 delta) |
+| `sdk_round_trip_equivalence_seeded` | pass | pass (2/2) | yes |
+| `layerfs-storage` suite | pass | 191 passed, 0 failed | yes |
+| Healthy per-object vs batched read, plain / batched-chain / whole-pack ports, ordinary and pooled | same calls and packs; classified replaces `read_groups`/`read_packs` 1:1; plain port no classified call | as predicted; `Diagnostics` and pooled counters equal | yes (0 delta) |
+| Missing pack inside a read of several packs (batched-chain and whole-pack ports) | only its objects and dependents fail, equal to point reads; pack requested once | as predicted | yes |
+
+Decisions and limits:
+
+- A per-object demand's pack reads now use the classified port call; its
+  PostgreSQL statement differs from the batched read's (same trips). Pins of a
+  per-object caller (lane RH) should be taken with this path.
+- Residual: a pack first refused by a reconstruction's own acquisition after
+  the walk (only if the pack cache evicted a group the walk read, within one
+  cohort) is acquired by that reconstruction; the refused pack is then that
+  root's failure, equal to its point read.
+- Deleted tests: none. `per_object_reads.rs`: the S1 test that asserted the
+  batched route fails the call now asserts per-object results on all three
+  ports and one request of the refused pack inside a classified read of
+  several packs; the healthy, missing-object, mismatch, pooled and transport
+  tests run on the whole-pack port too.
+
+Production LOC: 231,175 -> 231,300 (delta +125)
+  core     46,931 -> 47,056 (+125)  layerfs-storage +125 (read/hints.rs +118, read/objects.rs +6, read/fetch.rs +2, read/prefetch.rs -1)
+  engine  109,094 -> 109,094 (0)
+  control  64,634 -> 64,634 (0)
+  api      10,516 -> 10,516 (0)
+  reference absent (retired R9c; last counted 65,417 at tree 498dd1917812)
+  Method: tools/production_loc.py --detail on parent dec2216e23 (git archive) and the staged tree
