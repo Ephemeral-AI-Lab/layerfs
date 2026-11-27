@@ -1601,8 +1601,14 @@ class Mover:
                 target = "::".join(["crate"] + list(nk[1]))
             node = shims[host]
             for seg in rest[:-1]:
-                node = node.setdefault(seg, {})
-            node[rest[-1]] = target
+                sub = node.setdefault(seg, {})
+                if isinstance(sub, str):
+                    sub = node[seg] = {"*": sub}
+                node = sub
+            if isinstance(node.get(rest[-1]), dict):
+                node[rest[-1]]["*"] = target
+            else:
+                node[rest[-1]] = target
         for host, trie in shims.items():
             nf = self.file_of_newkey(host)
             if nf is None:
@@ -1620,7 +1626,9 @@ class Mover:
             def render(trie, indent):
                 out = []
                 for name, sub in sorted(trie.items()):
-                    if isinstance(sub, str):
+                    if name == "*":
+                        out.append(f"{indent}#[allow(unused_imports)]\n{indent}pub use {sub}::*; // {MARK}")
+                    elif isinstance(sub, str):
                         out.append(f"{indent}#[doc(hidden)]\n{indent}pub use {sub} as {name}; // {MARK}")
                     else:
                         out.append(f"{indent}#[doc(hidden)]\n{indent}pub mod {name} {{ // {MARK}")
