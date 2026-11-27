@@ -2,7 +2,9 @@
 use super::target::{Budget, Checks};
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::home::{paths, with_field};
-use layerfs_machine::worker::{start_failure, HostObservation, HostPaths, HostProbe};
+use layerfs_machine::worker::{
+    start_failure, HostObservation, HostPaths, HostProbe, LAUNCH_MACHINE_START,
+};
 use std::path::Path;
 use std::time::{Duration, Instant};
 
@@ -113,13 +115,7 @@ pub(super) fn diagnose(home: &Path, budget: &Budget, checks: &mut Checks) {
     match &probe {
         Absent | Stale if failed.is_some() => {
             let record = failed.unwrap_or_default();
-            let message = record.get_text("message").unwrap_or("unknown");
-            checks.warning(
-                ENDPOINT,
-                format!(
-                    "the last background start of the host worker failed: {message}; calls run directly until a worker starts (see log/worker.log)"
-                ),
-            );
+            checks.warning(ENDPOINT, start_failed(home, &record));
             checks.fix(
                 ENDPOINT,
                 format!(
@@ -182,6 +178,31 @@ pub(super) fn diagnose(home: &Path, budget: &Budget, checks: &mut Checks) {
             };
             checks.pass_evidence(PING, message, evidence());
         }
+    }
+}
+
+/// The endpoint finding for a recorded failed start, worded by its cause:
+/// a stopped host machine refuses calls; a failed `machine start` was
+/// answered to its caller; a failed background start left calls direct.
+fn start_failed(home: &Path, record: &SdkValue) -> String {
+    let message = record.get_text("message").unwrap_or("unknown");
+    let host = layerfs_home::names::HOST_MACHINE;
+    let stopped = layerfs_machine::record::MachineRecord::read(home, host)
+        .ok()
+        .flatten()
+        .is_some_and(|machine| machine.recorded_state() == Some("stopped"));
+    if stopped {
+        return format!(
+            "host machine {host} is stopped: calls are refused until `layerfs machine start {host}` (the last host worker start failed: {message})"
+        );
+    }
+    match record.get_text("launch") {
+        Some(LAUNCH_MACHINE_START) => format!(
+            "the last `layerfs machine start {host}` failed before its worker published its endpoints: {message} (see log/worker.log)"
+        ),
+        _ => format!(
+            "the last background start of the host worker failed: {message}; calls run directly until a worker starts (see log/worker.log)"
+        ),
     }
 }
 

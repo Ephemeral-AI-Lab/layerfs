@@ -21,7 +21,10 @@ use std::time::{Duration, Instant};
 
 mod start;
 mod stream;
-pub use start::{start_failure, START_FAILURE_LIMIT};
+pub use start::{
+    record_worker_start_failure, start_failure, LAUNCH_BACKGROUND, LAUNCH_MACHINE_START,
+    START_FAILURE_LIMIT,
+};
 pub use stream::{
     StreamFrame, StreamReader, StreamSender, STREAM_KEEPALIVE, STREAM_PIECE, STREAM_PROGRESS,
     STREAM_WAIT,
@@ -671,6 +674,7 @@ impl HostPaths {
                         &self.home,
                         layerfs_home::names::HOST_MACHINE,
                     )?;
+                    self.forget_pending_start();
                     child = Some(self.spawn(None)?);
                 }
             }
@@ -683,7 +687,10 @@ impl HostPaths {
     /// output in `log/worker.log`. A background start hands it the startup
     /// lock it holds as its stdin (`startup`): the worker keeps it until
     /// its endpoints are published, so no other caller starts a second
-    /// worker meanwhile, and a worker that dies first releases it.
+    /// worker meanwhile, and a worker that dies first releases it. It
+    /// inherits no other descriptor: one this caller was given without
+    /// close-on-exec (a pipe its own caller waits on) would stay open for
+    /// the worker's lifetime.
     fn spawn(&self, startup: Option<File>) -> Result<Child, SdkRefusal> {
         let folder = paths::log_dir(&self.home);
         home::private_dir(&folder)?;
@@ -726,7 +733,10 @@ impl HostPaths {
             .stdin(startup.map_or_else(Stdio::null, Stdio::from))
             .stdout(log)
             .stderr(stderr)
-            .process_group(0)
+            .process_group(0);
+        layerfs_bridge::process::close_inherited(&mut command)
+            .map_err(|error| unavailable("startup descriptors", error))?;
+        command
             .spawn()
             .map_err(|error| unavailable("startup", error))
     }

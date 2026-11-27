@@ -721,7 +721,10 @@ The call takes the startup lock without waiting, re-probes (a start that
 finished meanwhile is used), checks that `worker.lock` is free and the host
 machine not stopped, and spawns `layerfs worker --host` as `machine start`
 does (its own process group, the cleared environment below, output to
-`log/worker.log`). It hands the startup lock to the worker as its stdin
+`log/worker.log`, and no descriptor above stderr: every inherited
+descriptor is marked close-on-exec between fork and exec, so a pipe or
+channel the CLI's own caller passed ends with the CLI, not with the
+worker). It hands the startup lock to the worker as its stdin
 and does not wait: the worker keeps the lock until all three endpoints are
 bound and private, then points stdin at `/dev/null`, so concurrent first
 calls start one worker and a worker that dies first frees the lock. The
@@ -731,19 +734,34 @@ thread. The spawn costs the call about 0.3 ms on Linux and 0.7 ms on macOS
 after it, so the next call is routed.
 
 A failed start never fails the call. The caller (spawn, lock or log
-failures) or the worker (before its endpoints are published) writes
-`machine/<host>/worker-start-failed.json`, `{ at, by, pid, message }`
-(message at most 1 KiB), and the trace line names it. The next worker that
-publishes its endpoints removes the record. While no worker listens,
-`machine.worker.endpoint` is a warning naming the failure, its evidence
-adding `start_failure`, with `layerfs machine start <host>` as the fix
-(a start that waits and reports its own refusal).
+failures) or the worker (any failure before its endpoints are published:
+its home's identity, its lifetime lock, the home lock, a stopped machine,
+a bind, or a panic, through a hook active until then) writes
+`machine/<host>/worker-start-failed.json`, `{ at, by, launch, pid,
+message }` (message at most 1 KiB; `launch` is `background` or
+`machine start`), and the trace line names it. Before it spawns, the
+caller writes `machine/<host>/worker-starting.json` (`{ at, pid }`, the
+caller's pid) under the startup lock and removes an earlier failure
+record: this start is the one reported from then on. The worker removes
+both once its endpoints are published, before it releases the startup
+lock. A worker that ends before that without a record (a signal) leaves
+the marker with the startup lock free, which reads as a failed start
+("the worker ended before publishing its endpoints"); a held startup lock
+means the start is still in progress. `machine start` removes a leftover
+marker before it spawns the worker it waits for. While no worker listens,
+`machine.worker.endpoint` is a warning naming the failure by its cause
+(a stopped host machine: calls are refused until `layerfs machine start
+<host>`; a failed `machine start`; a failed background start: calls run
+directly), its evidence adding `start_failure`, with `layerfs machine
+start <host>` as the fix. A start that fails again is not backed off: each
+call that finds no worker tries once (an owner decision is pending).
 
 Each such call adds one trace line, `{event: "worker.route", op, worker,
 route: "direct", reason}`, and the step `background_start` (the time from
 `route` to the decision, the spawn included). A streamed write whose input
 is not a regular file makes the same decision before its spool copy, so a
-cold worker never costs the copy. The idle exit stays 60 s: calls further
+cold worker never costs the copy; that check reads the write endpoint's
+mode and never dials it. The idle exit stays 60 s: calls further
 apart than that each run direct and start a worker that then exits idle.
 
 A separate startup lock serializes launch attempts until the child is

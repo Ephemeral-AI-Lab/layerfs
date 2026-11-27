@@ -2,14 +2,17 @@
 //! and for streamed writes.
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::outcome::{failed, refused, Outcome};
-use layerfs_machine::worker::{HostHello, HostPaths, HOST_HELD_WRITES};
+use layerfs_machine::worker::{
+    record_worker_start_failure, HostHello, HostPaths, HOST_HELD_WRITES,
+};
 use nix::poll::{poll, PollFd, PollFlags};
 use std::collections::VecDeque;
 use std::io::{self, Read, Write};
 use std::os::fd::{AsFd, AsRawFd};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
-use std::sync::{Condvar, Mutex, MutexGuard};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
 mod postgres;
@@ -740,18 +743,39 @@ fn release_startup_lock() {
     }
 }
 
+/// Records a panic before this worker publishes its endpoints as its failed
+/// start (#833), for doctor, then panics as before; the flag it answers is
+/// set once they are published, after which a panic is not a start's.
+fn record_startup_panics(home: &Path) -> Arc<AtomicBool> {
+    let published = Arc::new(AtomicBool::new(false));
+    let (flag, home) = (published.clone(), home.to_owned());
+    let previous = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        if !flag.load(Ordering::Acquire) {
+            record_worker_start_failure(&home, &format!("the worker {info}"));
+        }
+        previous(info);
+    }));
+    published
+}
+
 /// Runs the host worker with the real home and its lifetime lock.
 /// This entry runs in its own process, above the Store and machine crates.
 pub fn serve_host(home: &Path) -> Result<super::Served, SdkRefusal> {
     // before any request, which may carry a PostgreSQL password, is read
     layerfs_store::host_postgresql::limit_core_dumps();
-    let paths = HostPaths::new(home)?;
-    let guard = paths.try_hold()?.ok_or_else(|| {
-        refused(
-            "Unavailable",
-            "another host worker owns the endpoint for this home",
-        )
-    })?;
+    let started = record_startup_panics(home);
+    let paths = HostPaths::new(home)
+        .inspect_err(|error| record_worker_start_failure(home, &error.message))?;
+    let guard = paths
+        .try_hold()
+        .inspect_err(|error| paths.record_start_failure(&error.message))?
+        .ok_or_else(|| {
+            refused(
+                "Unavailable",
+                "another host worker owns the endpoint for this home",
+            )
+        })?;
     let run = (|| {
         let published = (|| {
             let hello = HostHello::own(&paths)?;
@@ -774,6 +798,7 @@ pub fn serve_host(home: &Path) -> Result<super::Served, SdkRefusal> {
             paths.record_start_failure(&error.message);
         })?;
         paths.clear_start_failure();
+        started.store(true, Ordering::Release);
         release_startup_lock();
         run(
             listeners,

@@ -222,6 +222,9 @@ class ProductBoundaryTests(unittest.TestCase):
         self.assertFalse(unsafe_violations(darwin, "fn f() { unsafe { libc::proc_listallpids(); } }"))
         left = Path("control/crates/layerfs-sandbox-backend/src/backend/process/macos/darwin.rs")
         self.assertTrue(unsafe_violations(left, "fn f() { unsafe { libc::proc_listallpids(); } }"))
+        # #833 review: a spawned host worker's descriptors marked close-on-exec
+        inherit = Path("engine/crates/layerfs-bridge/src/process/inherit.rs")
+        self.assertFalse(unsafe_violations(inherit, "fn f() { unsafe { command.pre_exec(mark); } }"))
         for sibling in ("process/identity.rs", "process/linux.rs", "process/mod.rs", "control.rs"):
             with self.subTest(sibling=sibling):
                 path = Path("engine/crates/layerfs-bridge/src") / sibling

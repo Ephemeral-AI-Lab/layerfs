@@ -72,8 +72,11 @@ steps.
   machine/<host>/retained/     host worker write outcomes a caller may not know,
                                <request id>.json each; at most 256; removed with `rm`
   machine/<host>/worker-start-failed.json
-                               the host worker's last failed background start; removed
+                               the host worker's last failed start; removed
                                by the next worker that starts
+  machine/<host>/worker-starting.json
+                               a background start in progress; removed when its
+                               worker publishes its endpoints
   sandbox/<name>/
     record.json                v, name, project, machine, backend, route, ..., op?
     control.json               the Sandbox daemon's keys (0600; the host machine, and machines reached directly)
