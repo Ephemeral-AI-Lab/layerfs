@@ -63,6 +63,16 @@
 //!   reader PostgreSQL [1, 123, 121, 1] -> [1, 24, 22, 1] cold and
 //!   [0, 109, 109, 0] -> [0, 10, 10, 0] warm; SQLite 169 -> 70 and
 //!   116 -> 17 statements.
+//! - W6: new case `apply.10_dirs` (a new file in each of ten directories
+//!   on seven levels), pinned at the M1 tip as Workspace reader PostgreSQL
+//!   [1, 58, 56, 1] cold, [0, 16, 16, 0] warm; SQLite 113 and 27. The
+//!   call plans its paths' base reads level by level on PostgreSQL
+//!   (-> [1, 34, 32, 1] and [0, 8, 8, 0]; `cp.file.cold` 29 -> 28), and
+//!   walks the directories it passes by kind only on both backends
+//!   (SQLite `apply.10_dirs` 113 -> 109 cold, `apply.10_writes` 77 -> 74,
+//!   `rm.dir_100_recursive` 70 -> 65; `write.overwrite` 73 -> 75 and
+//!   `cp.file` 86 -> 88 cold, whose parent's stat had read the siblings'
+//!   values the file lookup then reused).
 #[path = "support/round_trips.rs"]
 mod rt;
 
@@ -91,7 +101,7 @@ const SQLITE: &[Pin] = &[
         "write.overwrite.cold",
         [0, 0, 61, 7],
         [0, 0, 0, 0],
-        [0, 0, 73, 4],
+        [0, 0, 75, 4],
     ),
     pin(
         "write.overwrite.warm",
@@ -116,7 +126,7 @@ const SQLITE: &[Pin] = &[
     pin("mkdir.cold", [0, 0, 79, 11], [0, 0, 0, 0], [0, 0, 65, 4]),
     pin("mkdir.warm", [0, 0, 48, 7], [0, 0, 0, 0], [0, 0, 17, 2]),
     // probe cp.file: 64
-    pin("cp.file.cold", [0, 0, 75, 11], [0, 0, 0, 0], [0, 0, 86, 4]),
+    pin("cp.file.cold", [0, 0, 75, 11], [0, 0, 0, 0], [0, 0, 88, 4]),
     pin("cp.file.warm", [0, 0, 47, 7], [0, 0, 0, 0], [0, 0, 9, 2]),
     // probe mv.file: 60
     pin("mv.file.cold", [0, 0, 79, 10], [0, 0, 0, 0], [0, 0, 81, 4]),
@@ -129,7 +139,7 @@ const SQLITE: &[Pin] = &[
         "apply.10_writes.cold",
         [0, 0, 93, 12],
         [0, 0, 0, 0],
-        [0, 0, 77, 4],
+        [0, 0, 74, 4],
     ),
     pin(
         "apply.10_writes.warm",
@@ -142,13 +152,25 @@ const SQLITE: &[Pin] = &[
         "rm.dir_100_recursive.cold",
         [0, 0, 68, 9],
         [0, 0, 0, 0],
-        [0, 0, 70, 4],
+        [0, 0, 65, 4],
     ),
     pin(
         "rm.dir_100_recursive.warm",
         [0, 0, 44, 6],
         [0, 0, 0, 0],
         [0, 0, 17, 2],
+    ),
+    pin(
+        "apply.10_dirs.cold",
+        [0, 0, 88, 12],
+        [0, 0, 0, 0],
+        [0, 0, 109, 4],
+    ),
+    pin(
+        "apply.10_dirs.warm",
+        [0, 0, 53, 7],
+        [0, 0, 0, 0],
+        [0, 0, 27, 2],
     ),
 ];
 
@@ -198,7 +220,7 @@ const POSTGRESQL: &[Pin] = &[
     pin("mkdir.cold", [1, 78, 46, 8], [0, 0, 0, 0], [1, 19, 17, 1]),
     pin("mkdir.warm", [0, 31, 27, 4], [0, 0, 0, 0], [0, 4, 4, 0]),
     // probe cp.file: 44
-    pin("cp.file.cold", [1, 75, 43, 8], [0, 0, 0, 0], [1, 29, 27, 1]),
+    pin("cp.file.cold", [1, 75, 43, 8], [0, 0, 0, 0], [1, 28, 26, 1]),
     pin("cp.file.warm", [0, 30, 26, 4], [0, 0, 0, 0], [0, 3, 3, 0]),
     // probe mv.file: 40
     pin("mv.file.cold", [1, 69, 41, 7], [0, 0, 0, 0], [1, 20, 18, 1]),
@@ -231,6 +253,18 @@ const POSTGRESQL: &[Pin] = &[
         [0, 28, 26, 3],
         [0, 0, 0, 0],
         [0, 10, 10, 0],
+    ),
+    pin(
+        "apply.10_dirs.cold",
+        [1, 80, 44, 9],
+        [0, 0, 0, 0],
+        [1, 34, 32, 1],
+    ),
+    pin(
+        "apply.10_dirs.warm",
+        [0, 32, 28, 4],
+        [0, 0, 0, 0],
+        [0, 8, 8, 0],
     ),
 ];
 
@@ -279,6 +313,34 @@ fn apply(dir: &str, prefix: &str) -> Vec<(&'static str, SdkValue)> {
                     "bytes",
                     SdkValue::Bytes(format!("{prefix}{n}\n").into_bytes()),
                 ),
+            ])
+        })
+        .collect();
+    vec![branch(), ("changes", SdkValue::List(changes))]
+}
+
+/// Ten new files `name`, one in each of ten directories the earlier cases
+/// left in place (#818 W6: an `apply` across directories).
+fn apply_dirs(name: &str) -> Vec<(&'static str, SdkValue)> {
+    let dirs = [
+        "/src/d00",
+        "/src/d01",
+        "/src/d02",
+        "/src/d03",
+        "/src/d04",
+        "/src/d05",
+        "/src/d06",
+        "/src/d09",
+        "/deep/a/b/c/d/e",
+        "/hist",
+    ];
+    let changes: Vec<SdkValue> = dirs
+        .iter()
+        .map(|dir| {
+            SdkValue::map([
+                ("op", t("write")),
+                ("path", t(&format!("{dir}/{name}"))),
+                ("bytes", SdkValue::Bytes(format!("{dir}\n").into_bytes())),
             ])
         })
         .collect();
@@ -382,6 +444,12 @@ fn scenarios(store: &mut Store) -> Vec<Measured> {
             path("/src/d08"),
             ("recursive", SdkValue::Bool(true)),
         ],
+    );
+    case(
+        "apply.10_dirs",
+        "fs.apply",
+        apply_dirs("p.txt"),
+        apply_dirs("q.txt"),
     );
     out
 }

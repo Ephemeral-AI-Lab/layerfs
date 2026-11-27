@@ -3,4 +3,5 @@
 pub mod edit;
 pub mod files;
 pub mod mutation;
+pub mod plan;
 pub mod recursive;

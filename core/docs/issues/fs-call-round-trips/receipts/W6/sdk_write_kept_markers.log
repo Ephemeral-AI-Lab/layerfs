@@ -1,0 +1,10 @@
+
+running 2 tests
+test postgresql_hidden_check_from_kept_markers_and_fallback ... W1_KEPT {"backend":"postgresql","kept":[11,0],"fallback":[13,4]}
+ok
+test sqlite_hidden_check_from_kept_markers_and_fallback ... W1_KEPT {"backend":"sqlite","kept":[11,0],"fallback":[17,10]}
+ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.02s
+
+run_bounded: exit 0 after 1.5 s

@@ -353,7 +353,16 @@ fn change(
     let mut mutation = Mutation::new(workspace)?;
     let (mut result, mut replaced) = (Ok(()), 0u64);
     for (index, change) in changes.iter().enumerate() {
-        result = (|| match change.as_ref().map_err(Clone::clone)? {
+        result = (|| {
+            // #818 W6: the next window's paths are planned before its first
+            // change; a failed plan read refuses at that change.
+            if index % super::plan::PLAN_PATHS == 0 {
+                let end = changes.len().min(index + super::plan::PLAN_PATHS);
+                mutation.plan(&changes[index..end])?;
+            }
+            Ok(())
+        })()
+        .and_then(|()| match change.as_ref().map_err(Clone::clone)? {
             Change::Write { path, bytes, mode } => mutation.write(path, bytes, *mode),
             Change::Edit {
                 path,
@@ -386,7 +395,7 @@ fn change(
             // `NoSuchPath` (see the `NotFound` mapping above); unlike
             // `edit`/`cp`-from it does not consult the base view.
             Change::Mv { from, to } => mutation.rename(from, to),
-        })()
+        })
         .map_err(|mut e| {
             if let SdkValue::Map(fields) = &mut e.detail {
                 fields.push(("index".into(), SdkValue::Int(index as i64)));

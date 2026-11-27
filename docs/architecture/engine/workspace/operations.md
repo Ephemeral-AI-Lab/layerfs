@@ -26,6 +26,16 @@ What each filesystem operation on a [Workspace](README.md) reads and publishes, 
  stat(serial): overlay inode row, else base inode
 ```
 
+`SourceView::lookup_kind` binds the same way and answers the serial with
+the kind `stat` reports (overlay inode row, else one base inode value), with
+no metadata, length or child-directory read: the SDK path walk uses it for
+the directories it passes (#818 W6). `BaseView::plan_level` reads one level
+of a planned walk ahead of it: the level's directory root pages as one
+grouped demand, and the children found, with every child of a directory
+whose root page holds its entries and whose count is not remembered, as one
+inode wave of at most `BaseView::PLAN_SERIALS` (1,024) serials; it
+remembers those counts and only fills the client's caches.
+
 | `Operation` | POSIX call | Published in one transaction | Source |
 | --- | --- | --- | --- |
 | `Create`, `Mkdir`, `Symlink` | creat, mkdir, symlink | New inode on a reserved serial, parent entry and counts, symlink target cell | [`create.rs`](../../../../engine/crates/layerfs-workspace/src/operations/namespace/create.rs) |

@@ -286,3 +286,132 @@ never opened that reader). No new server message, no trip change.
   `sdk_write_round_trips` (pins unchanged), `method_refusal_order`: green.
   Clippy `-D warnings` on `layerfs-store-service` clean; rustfmt clean on
   the touched files. Deleted tests: none.
+
+## W6 — plan the parent-path reads (M2)
+
+Base `cfc9586d05` (M1 merged). Re-estimate first (W0 attribution at the M1
+tip, PG, `receipts/W6/w0-pg-m1.log`): `files.change` Workspace reader is
+warm 0–4 on every pinned case (overwrite 0, new file 2, edit 2, mkdir 0,
+cp 3, mv 4, rm 2, apply 2, rm.dir 7), so W6 can save at most ~0–3 warm
+there. The mechanism has a real case: `fs.apply` across directories. New
+pinned case `apply.10_dirs` (one new file in each of `/src/d00`–`d06`,
+`/src/d09`, `/deep/a/b/c/d/e` and `/hist`; 16 directories on 7 levels),
+measured at the M1 tip (`receipts/W6/pins-before.log`): PG Workspace
+reader [1,58,56,1] cold, [0,16,16,0] warm (`apply.10_writes`, one
+directory: 25 and 2). W0 attribution of the same calls on the probe
+(temporary local case, not committed; `receipts/W6/w0-dirs-before.log`):
+`files.change` Workspace reader 34 cold (26 locates, 8 pack-block reads)
+and 12 warm (10 locates, 2 span reads) against 4 and 2 for one directory.
+The writer's Save base reads (`construct`) are 18 cold / 1 warm in both,
+so they do not grow with directories: nothing to hand them, and
+`store/commit.rs`/`store/pipeline.rs` stay untouched.
+
+Today each path component costs a full `SourceView::stat` (inode value,
+portable metadata, and for a directory its sub-directory count: a listing
+plus one inode wave of its children), and `parent()` stats the parent
+directory too, though only its serial is used. W6 does two things:
+
+1. Kind-only walk (both backends, a logic change like W5):
+   `SourceView::lookup_kind` binds a name to its serial and kind (overlay
+   first, then the base child, as `lookup` does) with no stat; `resolve`
+   uses it for every component but the last, and `parent()` for all of
+   them. The checks keep their order (name grammar, then `NotDirectory` at
+   the entry before it, then `NoSuchPath`).
+2. Planned levels (PostgreSQL only, where the writer reports
+   `batched_chain_reads`): `write/plan.rs` collects the change set's
+   distinct parent directories (in windows of `PLAN_PATHS` = 1,024 changes,
+   at most 128 directories or 1 MiB per level demand) and, level by level,
+   reads the level's directory pages in one batch and the found children's
+   inode values in one `values` wave, into the call's client cache;
+   `resolve` then answers from memory. Base reads only: the overlay still
+   answers first, so answers do not change.
+
+| Case (PG Workspace reader) | M1 tip | predicted |
+|---|---|---|
+| `apply.10_dirs.cold` | [1,58,56,1] | ~[1,36,34,1] (32–40) |
+| `apply.10_dirs.warm` | [0,16,16,0] | ~[0,9,9,0] (8–11) |
+| pinned single-path cases | as pinned | unchanged to −3 (kind-only parent) |
+
+SQLite: kind-only only; `apply.10_dirs` Workspace statements 113 → ~90
+cold, 27 → ~20 warm; other cases unchanged or a few fewer. Writer and
+control reader unchanged everywhere.
+
+### W6 measured
+
+Built as predicted, with one change found while measuring: a level's inode
+wave also takes every child of each directory whose root page holds its
+entries and whose child-directory count is not remembered, and remembers
+that count (`BaseView::plan_level`). A first cut asked only the walked
+names' values and pushed `write.overwrite.cold` from 21 to 23 and
+`cp.file.cold` from 29 to 30 (PG). The full stat of the file's parent had
+read its siblings' values in the count wave, and the file lookup's
+sibling-length step then reused them. A separate count wave for the paths'
+parents did not recover them (still 23), because the walked name's own
+value wave came first. Folding the children into the level's one wave
+did. Bound: `BaseView::PLAN_SERIALS` = 1,024 serials per wave (a listed
+page's rows); a directory's names are split into groups of at most that
+many.
+
+| Case (PG Workspace reader) | M1 tip | predicted | measured | vs prediction |
+|---|---|---|---|---|
+| `apply.10_dirs.cold` | [1,58,56,1] | ~[1,36,34,1] (32–40) | [1,34,32,1] | −6% |
+| `apply.10_dirs.warm` | [0,16,16,0] | ~[0,9,9,0] (8–11) | [0,8,8,0] | −11% |
+| `cp.file.cold` | [1,29,27,1] | unchanged to −3 | [1,28,26,1] | in range |
+| every other pinned case | as pinned | unchanged to −3 | unchanged | in range |
+
+PG case totals: `apply.10_dirs` 138 → 114 cold, 48 → 40 warm. Writer and
+control reader are unchanged everywhere. W0 at W6 (`receipts/W6/w0-pg-after.log`,
+the whole `w0` group plus the temporary `apply.10_dirs` case) matches the M1
+tip on every case except `cp.file` cold (104 → 103). `apply.10_dirs` (run
+in group order, after the other cases) has `files.change` Workspace reader
+17 cold and 5 warm, against 34 and 12 for the same calls run alone at the
+M1 tip.
+
+SQLite (kind-only walk; nothing planned), Workspace statements:
+`apply.10_dirs` 113 → 109 cold, 27 → 27 warm; `apply.10_writes.cold`
+77 → 74; `rm.dir_100_recursive.cold` 70 → 65; `write.overwrite.cold`
+73 → 75; `cp.file.cold` 86 → 88. Other cases are unchanged. The
+`apply.10_dirs` prediction (~90 / ~20) missed by more than 15%. Diagnosed
+once from the W0 demand trace (temporary instrumentation, not committed):
+kind-only drops only the metadata object and child-directory count of each
+directory a walk passes. Most of those were already shared or remembered.
+Each directory still costs its page and its inode value, which the walk
+reads either way. The +2 on overwrite and cp is the same sibling-values
+effect as on PG, with no plan to recover it. Net over the pinned SQLite
+cases: −8 statements.
+
+- Sweep: no new or changed server message. The plan sends the existing
+  object-demand templates (locate, span and pack-block reads) on the
+  Workspace reader, grouped, so there is no sweep (as for W5). A failed
+  plan read refuses at the first change of its window as `Failed` (a read,
+  nothing changed), as that change's own walk would have.
+- Answers: new `tests/sdk_write_planned_paths.rs` (both backends) covers:
+  - writes across depths, `mkdir -p`, `cp` and `mv` across directories and
+    an overwrite in one `fs.apply`, each read back;
+  - six refusals with exact code, text and index: the name grammar before
+    a file parent, a file parent at shallow and deep levels, and a missing
+    parent at three depths;
+  - 1,100 changes over four directories, past one `PLAN_PATHS` window.
+
+  It passes on the M1 source (`receipts/W6/before/`) and on W6.
+- Checks, once at the final source (`receipts/W6/*.log`), all green:
+  - write pins (repinned);
+  - `sdk_write_planned_paths`, `sdk_round_trip_equivalence_seeded` and
+    `method_refusal_order`;
+  - `sdk_write_kept_markers`, `sdk_write_named_refusals` and
+    `sdk_write_recursive_kinds`;
+  - `sdk_method_golden` and `write_refusals`;
+  - `sdk_path_whiteouts`, `sdk_path_hidden_semantics`, `sdk_path_reads`,
+    `sdk_path_removal` and `sdk_path_merge_removal`;
+  - `history_diff_oracle`;
+  - workspace `namespace` and `namespace_view`.
+
+  Clippy `-D warnings` (`--all-targets`, both packages) needed one type
+  alias (`base::view::Planned`), added after the test run, signature only.
+  rustfmt is clean on the touched files. Deleted tests: none.
+- Not done: the spec's hand-off to the Save's base reads. W0 shows the
+  writer's `construct` at 18 cold and 1 warm, the same with one directory as
+  with ten, so there is nothing to hand over. `store/commit.rs` and
+  `store/pipeline.rs` are untouched.
+- Production LOC: 228,436 -> 228,641 (delta +205), engine
+  layerfs-store-service +128 (new `write/plan.rs` 107), layerfs-workspace +77.

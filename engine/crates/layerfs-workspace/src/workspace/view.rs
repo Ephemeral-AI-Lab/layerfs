@@ -170,30 +170,56 @@ impl SourceView {
         parent: u64,
         name: &PathName,
     ) -> WorkspaceResult<ViewStat> {
+        // A walk stats names in listing order: remember the lengths of the
+        // files listed after this one with its own (F-032).
+        let serial = self.bound(overlay, parent, name, |value| {
+            self.base.sibling_lengths_for(parent, name, value)
+        })?;
+        self.stat(overlay, serial)
+    }
+    /// What [`Self::lookup`] binds `name` under `parent` to, with the kind
+    /// [`Self::stat`] reports and no metadata, length or sub-directory read:
+    /// a path walk needs no more of the directories it passes (#818 W6).
+    pub fn lookup_kind(
+        &self,
+        overlay: &impl OverlayRead,
+        parent: u64,
+        name: &PathName,
+    ) -> WorkspaceResult<(u64, InodeKind)> {
+        let serial = self.bound(overlay, parent, name, |_| Ok(()))?;
+        let kind = self.kinds(overlay, &[serial])?;
+        Ok((serial, kind[0]))
+    }
+    /// The serial `name` binds under `parent`: the overlay's entry, else the
+    /// base child (`found` sees it), the overlay asked again after the base.
+    fn bound(
+        &self,
+        overlay: &impl OverlayRead,
+        parent: u64,
+        name: &PathName,
+        found: impl FnOnce(&layerfs_content::filesystem::Resolved) -> WorkspaceResult<()>,
+    ) -> WorkspaceResult<u64> {
         let local = overlay.inode(self.source, parent)?;
         let inherits = self.inherits(parent, local.as_ref())?;
         if let Some(local) = overlay.directory_entry(self.source, parent, name.as_bytes())? {
-            return self.stat(overlay, local.serial.ok_or(ContentError::PathNotFound)?);
+            return local.serial.ok_or(ContentError::PathNotFound.into());
         }
         if !inherits {
             return Err(ContentError::PathNotFound.into());
         }
         let inherited = match self.base.child(parent, name) {
             Ok(value) => {
-                // A walk stats names in listing order: remember the lengths
-                // of the files listed after this one with its own (F-032).
-                self.base.sibling_lengths_for(parent, name, &value)?;
+                found(&value)?;
                 Some(value.serial)
             }
             Err(ContentError::PathNotFound) => None,
             Err(error) => return Err(error.into()),
         };
-        let serial = match overlay.directory_entry(self.source, parent, name.as_bytes())? {
+        match overlay.directory_entry(self.source, parent, name.as_bytes())? {
             Some(local) => local.serial,
             None => inherited,
         }
-        .ok_or(ContentError::PathNotFound)?;
-        self.stat(overlay, serial)
+        .ok_or(ContentError::PathNotFound.into())
     }
     /// Effective local symlink layers, followed by exact immutable demand.
     pub fn readlink(
