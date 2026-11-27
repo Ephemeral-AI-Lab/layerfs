@@ -151,16 +151,16 @@ pub fn diff(
     }
     let mut content_budget = file_facts::CONTENT_QUERY_BYTES;
     let (content, metadata, identity) = if options.extended {
-        file_facts::changes_bounded(&reader, left.entry, right.entry, &mut content_budget)?
+        file_facts::changes_bounded(reader, left.entry, right.entry, &mut content_budget)?
     } else {
-        file_facts::changes(&reader, left.entry, right.entry)?
+        file_facts::changes(reader, left.entry, right.entry)?
     };
     let equal = left.entry.is_some() && right.entry.is_some() && !content;
     let same_inode = left
         .entry
         .zip(right.entry)
         .is_some_and(|(a, b)| a.serial == b.serial);
-    let reason = omitted(&reader, &left)?.or(omitted(&reader, &right)?);
+    let reason = omitted(reader, &left)?.or(omitted(reader, &right)?);
     let mut legacy_budget = super::window::BYTES;
     let (legacy_kind, mut legacy_hunks) = match (&left.text, &right.text) {
         (Some(a), Some(b)) if a == b => ("Equal", Some(SdkValue::List(Vec::new()))),
@@ -262,8 +262,8 @@ pub fn diff(
         ("hunks", legacy_hunks.unwrap_or_default()),
         ("leftRef", saved::reference(store, left.snap.node)?),
         ("rightRef", saved::reference(store, right.snap.node)?),
-        ("before", file_facts::facts(&reader, left.entry)?),
-        ("after", file_facts::facts(&reader, right.entry)?),
+        ("before", file_facts::facts(reader, left.entry)?),
+        ("after", file_facts::facts(reader, right.entry)?),
         ("changeKind", SdkValue::text(change_kind)),
         (
             "changes",

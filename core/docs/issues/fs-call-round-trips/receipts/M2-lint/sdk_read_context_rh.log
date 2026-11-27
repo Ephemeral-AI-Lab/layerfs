@@ -1,0 +1,29 @@
+ 8:40  up 3 days,  7:13, 1 user, load averages: 8.47 8.25 7.87
+   Compiling layerfs-store-service v2.0.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/.claude/worktrees/agent-ade40f7299b8c2b99/engine/crates/layerfs-store-service)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.97s
+     Running tests/sdk_read_context_rh.rs (target/debug/deps/sdk_read_context_rh-cc6c19c223778fc5)
+
+running 1 test
+test a_read_context_decodes_alike_on_both_backends ... READ_CONTEXT sqlite refused NoSuchProject: project
+READ_CONTEXT sqlite refused NoSuchProject: project
+READ_CONTEXT sqlite refused NoSuchBranch: Branch
+READ_CONTEXT sqlite refused NoSuchBranch: Branch
+READ_CONTEXT sqlite refused InvalidInput: `deadbeef12` is not a Branch, and not a full Commit or Layer identity (66 hex characters)
+READ_CONTEXT sqlite refused InvalidInput: `deadbeef` is not a Branch, and not a full Commit or Layer identity (66 hex characters)
+READ_CONTEXT sqlite refused NoSuchCommit: Commit
+READ_CONTEXT sqlite refused NotFound: Layer
+READ_CONTEXT sqlite refused NoSuchCommit: Commit
+READ_CONTEXT sqlite refused NoSuchCommit: Commit
+READ_CONTEXT sqlite refused NoSuchPath: /missing
+READ_CONTEXT sqlite refused InvalidInput: expected an absolute path without empty, dot or parent components
+READ_CONTEXT sqlite ok Commit Some("work")
+READ_CONTEXT sqlite ok Layer Some("main")
+READ_CONTEXT sqlite ok Commit Some("work")
+READ_CONTEXT sqlite ok Layer Some("main")
+READ_CONTEXT sqlite ok Commit Some("work")
+READ_CONTEXT sqlite ok Commit Some("work")
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.31s
+
+run_bounded: exit 0 after 3.1 s

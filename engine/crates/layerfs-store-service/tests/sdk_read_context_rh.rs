@@ -5,7 +5,6 @@
 //! backends, in the same order. The PostgreSQL half needs
 //! `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
 #[path = "support/round_trips.rs"]
-#[allow(dead_code)]
 mod rt;
 
 use layerfs_bridge::control::SdkValue;

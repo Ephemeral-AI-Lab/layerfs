@@ -579,3 +579,13 @@ its `Result` shape (control's `project/export/walk.rs` calls it).
 - The directory memo has lane C's `DirectoryMemo` shape (`get` → unknown /
   known-unbound / bound, `insert` → `false` when full); H5 wiring can swap
   in lane C's type. No new message: no sweep. Deleted tests: none.
+
+### M2 milestone checks
+
+Clippy `-D warnings` (all targets) on `layerfs-history`, `layerfs-storage`,
+`layerfs-persistence`, `layerfs-store-service`: clean after two fixes in a
+separate commit (needless borrows in `read/file_compare.rs` from H3; a
+duplicated `allow(dead_code)` in the new `sdk_read_context_rh.rs`).
+`cargo fmt --check` differs only in files this lane did not touch (as at
+M1). History pins, `sdk_read_context_rh`, `sdk_file_compare_budget` rerun
+green (`receipts/M2-lint/`). Host free space 195 GB.
