@@ -116,7 +116,7 @@ built addon).
 
 <!-- BEGIN GENERATED: api/scripts/mcp-profiles.mjs -->
 
-82 calls: 17 in `work` (the table's `agent` profile), 65 in `admin` only (`full`); `--profile admin` lists 82.
+83 calls: 17 in `work` (the table's `agent` profile), 66 in `admin` only (`full`); `--profile admin` lists 83.
 
 | Call | Bucket | Profiles that list it | Why |
 | --- | --- | --- | --- |
@@ -129,10 +129,10 @@ built addon).
 | `project.list` | admin | admin | import, list, read, count, export, delete or check a project, or hide a path in it; the `full` profile (administration) |
 | `project.get` | admin | admin | import, list, read, count, export, delete or check a project, or hide a path in it; the `full` profile (administration) |
 | `project.stats` | admin | admin | import, list, read, count, export, delete or check a project, or hide a path in it; the `full` profile (administration) |
+| `project.doctor` | admin | admin | import, list, read, count, export, delete or check a project, or hide a path in it; the `full` profile (administration) |
 | `project.export` | admin | admin | export a Branch snapshot to a local folder under a launch-time --export-root; a folder scope refuses it; the `full` profile (administration) |
 | `project.delete` | admin | admin | retire a project in its Store and remove its home entry; a folder scope refuses it; the `full` profile (administration) |
 | `project.hide_path` | admin | admin | hide one absolute path from the project's whole history; a folder scope refuses it; the `full` profile (administration) |
-| `project.doctor` | admin | admin | import, list, read, count, export, delete or check a project, or hide a path in it; the `full` profile (administration) |
 | `branch.list` | admin | admin | list, read, fork, merge, publish and remove Branches; the `full` profile (administration) |
 | `branch.get` | admin | admin | list, read, fork, merge, publish and remove Branches; the `full` profile (administration) |
 | `branch.fork` | work | work, admin | list, read, fork, merge, publish and remove Branches; the `agent` profile |
@@ -195,6 +195,7 @@ built addon).
 | `store.remove` | admin | admin | create, connect, attach, move, compact, upgrade, check and remove Stores; the `full` profile (administration) |
 | `store.compact` | admin | admin | reclaim one Store's dead bytes; a folder scope refuses it; the `full` profile (administration) |
 | `store.upgrade` | admin | admin | bring an older-format Store to the latest format, in place; Ctrl-C cancels it before COMMIT; the `full` profile (administration) |
+| `store.repair_mount_holders` | admin | admin | the operator's explicit repair of the admissions that hold one Branch: list, preview, settle, release or audit; the `full` profile (administration) |
 | `store.doctor` | admin | admin | create, connect, attach, move, compact, upgrade, check and remove Stores; the `full` profile (administration) |
 | `backup.connect` | admin | admin | connect buckets, back up and restore a Store, and check a bucket; the `full` profile (administration) |
 | `backup.disconnect` | admin | admin | connect buckets, back up and restore a Store, and check a bucket; the `full` profile (administration) |

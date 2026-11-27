@@ -9,8 +9,8 @@ one file per call under its family in
 help, and the Node and Python functions are all built from that table, so
 the three front ends take the same arguments.
 
-There are 82 calls in ten families: `home` 5, `project` 8, `branch` 6,
-`commit` 3, `file` 14, `sandbox` 7, `workspace` 7, `machine` 14, `store` 12
+There are 83 calls in ten families: `home` 5, `project` 8, `branch` 6,
+`commit` 3, `file` 14, `sandbox` 7, `workspace` 7, `machine` 14, `store` 13
 and `backup` 6. `layerfs help` lists them, `layerfs help <family> [<call>]`
 prints one family or one call, and `layerfs help --json` prints the whole
 table (each call's arguments and the form of its answer). Outside the table
@@ -1375,7 +1375,7 @@ See [machines](machines-and-stores.md#machines) for kinds, defaults and
 refusals, and
 [removed platforms](machines-and-stores.md#removed-platforms-firecracker-microsandbox-and-ssh).
 
-### `store` (12)
+### `store` (13)
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
@@ -1390,6 +1390,7 @@ refusals, and
 | `remove` | `store` | — | deletes a sqlite Store with every project in it |
 | `compact` | `store` | `on_progress` | reclaims the dead bytes of one Store; a sqlite Store on another machine is compacted by that machine's worker |
 | `upgrade` | `store` | `on_progress` | brings an older-format Store to the latest format, in place, in one transaction |
+| `repair_mount_holders` | `project`, `branch`, `action` | `op`, `legacy`, `force`, `operator`, `limit` (100), `cursor` | the operator's explicit repair of the admissions that hold one Branch: list, preview, settle, release, settle_legacy or audit; answers `status` and `operation` per row |
 | `doctor` | `store` | `machine`, `on_progress` | checks a Store, then each of its projects ([the doctors](#the-doctors)) |
 
 `store.doctor` is one of [the doctors](#the-doctors). `store.status` and `store.stats` are gone into

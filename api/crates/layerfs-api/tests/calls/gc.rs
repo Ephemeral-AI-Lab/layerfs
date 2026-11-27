@@ -898,6 +898,8 @@ fn store_repair_mount_holders_is_an_explicit_two_step_operator_call() {
             fields.push(("legacy", SdkValue::Bool(true)));
         }
         fields.push(("operator", t("alice")));
+        // the long form: every key, a null `next_cursor` included
+        fields.push(("detail", SdkValue::Bool(true)));
         fields
     };
 
@@ -938,9 +940,9 @@ fn store_repair_mount_holders_is_an_explicit_two_step_operator_call() {
     );
     let live_row = holders
         .iter()
-        .find(|row| row.get_text("op") == Some(live_op.as_str()))
+        .find(|row| row.get_text("operation") == Some(live_op.as_str()))
         .expect("the live holder");
-    assert_eq!(live_row.get_text("state"), Some("live"));
+    assert_eq!(live_row.get_text("status"), Some("live"));
     assert_eq!(live_row.get_text("machine_incarnation"), Some("worker:1"));
     assert_eq!(
         live_row.get_text("sandbox_generation"),
@@ -953,7 +955,7 @@ fn store_repair_mount_holders_is_an_explicit_two_step_operator_call() {
     assert!(live_row.get("reason").is_none(), "state words, no prose");
     let legacy_row = holders
         .iter()
-        .find(|row| row.get_text("op") == Some(legacy_op.as_str()))
+        .find(|row| row.get_text("operation") == Some(legacy_op.as_str()))
         .expect("the legacy holder");
     assert_eq!(legacy_row.get("legacy"), Some(&SdkValue::Bool(true)));
 
@@ -981,7 +983,7 @@ fn store_repair_mount_holders_is_an_explicit_two_step_operator_call() {
     let mut forced = repair("settle", Some(&live_op), false);
     forced.push(("force", SdkValue::Bool(true)));
     let settled = ok(&home, "store.repair_mount_holders", &forced);
-    assert_eq!(settled.get_text("state"), Some("uncertain"), "{settled:?}");
+    assert_eq!(settled.get_text("status"), Some("uncertain"), "{settled:?}");
     let preview = ok(
         &home,
         "store.repair_mount_holders",
@@ -992,9 +994,9 @@ fn store_repair_mount_holders_is_an_explicit_two_step_operator_call() {
     };
     let settled_row = holders
         .iter()
-        .find(|row| row.get_text("op") == Some(live_op.as_str()))
+        .find(|row| row.get_text("operation") == Some(live_op.as_str()))
         .expect("the settled holder");
-    assert_eq!(settled_row.get_text("state"), Some("uncertain"));
+    assert_eq!(settled_row.get_text("status"), Some("uncertain"));
     ok(
         &home,
         "store.repair_mount_holders",
@@ -1043,7 +1045,7 @@ fn store_repair_mount_holders_is_an_explicit_two_step_operator_call() {
     assert_eq!(rows.len(), 2, "only the releases are retained: {audit:?}");
     let released = released
         .iter()
-        .find(|row| row.get_text("op") == Some(live_op.as_str()))
+        .find(|row| row.get_text("operation") == Some(live_op.as_str()))
         .expect("the released live op");
     assert_eq!(released.get_text("kind"), Some("mount"));
     assert_eq!(released.get_text("project"), Some("api"));
@@ -1070,7 +1072,9 @@ fn store_repair_mount_holders_is_an_explicit_two_step_operator_call() {
     second.push(("cursor", t(&cursor)));
     let second = ok(&home, "store.repair_mount_holders", &second);
     let op_of = |page: &SdkValue| match page.get("items") {
-        Some(SdkValue::List(rows)) if rows.len() == 1 => rows[0].get_text("op").map(str::to_owned),
+        Some(SdkValue::List(rows)) if rows.len() == 1 => {
+            rows[0].get_text("operation").map(str::to_owned)
+        }
         other => panic!("one row: {other:?}"),
     };
     assert_ne!(op_of(&first), op_of(&second), "the second page moves on");

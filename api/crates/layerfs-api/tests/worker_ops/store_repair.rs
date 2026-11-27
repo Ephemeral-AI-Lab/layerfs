@@ -195,9 +195,9 @@ fn repair_previews_settles_and_releases_through_the_worker() {
     assert_eq!(rows.len(), 2);
     let live = rows
         .iter()
-        .find(|row| row.get_text("op") == Some("21".repeat(16).as_str()))
+        .find(|row| row.get_text("operation") == Some("21".repeat(16).as_str()))
         .expect("the live holder");
-    assert_eq!(live.get_text("state"), Some("live"));
+    assert_eq!(live.get_text("status"), Some("live"));
     // nothing proves its owner gone: it still looks live, so not safe
     assert_eq!(live.get_text("liveness"), Some("live"));
     assert_eq!(live.get("safe"), Some(&SdkValue::Bool(false)));
@@ -207,7 +207,7 @@ fn repair_previews_settles_and_releases_through_the_worker() {
     assert_eq!(live.get("legacy"), Some(&SdkValue::Bool(false)));
     let legacy = rows
         .iter()
-        .find(|row| row.get_text("op") == Some("31".repeat(16).as_str()))
+        .find(|row| row.get_text("operation") == Some("31".repeat(16).as_str()))
         .expect("the legacy holder");
     assert_eq!(legacy.get("legacy"), Some(&SdkValue::Bool(true)));
 
@@ -240,9 +240,9 @@ fn repair_previews_settles_and_releases_through_the_worker() {
     let preview = repair(&placed, "preview", None, false);
     let settled = holders(&preview)
         .iter()
-        .find(|row| row.get_text("op") == Some("21".repeat(16).as_str()))
+        .find(|row| row.get_text("operation") == Some("21".repeat(16).as_str()))
         .expect("the settled holder");
-    assert_eq!(settled.get_text("state"), Some("uncertain"));
+    assert_eq!(settled.get_text("status"), Some("uncertain"));
 
     repair(&placed, "release", Some(0x21), false);
     let preview = repair(&placed, "preview", None, false);
@@ -292,7 +292,7 @@ fn the_worker_judges_with_the_sent_view_and_pages_the_audit_by_key() {
         let preview = repair(placed, "preview", None, false);
         let row = holders(&preview)
             .iter()
-            .find(|row| row.get_text("op") == Some("21".repeat(16).as_str()))
+            .find(|row| row.get_text("operation") == Some("21".repeat(16).as_str()))
             .expect("the placed holder")
             .clone();
         (
@@ -325,7 +325,7 @@ fn the_worker_judges_with_the_sent_view_and_pages_the_audit_by_key() {
         (Some("dead".to_owned()), Some(SdkValue::Bool(true)))
     );
     let settled = repair(&placed, "settle", Some(0x21), false);
-    assert_eq!(settled.get_text("state"), Some("uncertain"), "{settled:?}");
+    assert_eq!(settled.get_text("status"), Some("uncertain"), "{settled:?}");
     repair(&placed, "release", Some(0x21), false);
     repair(&placed, "settle_legacy", None, false);
     repair(&placed, "release", Some(0x31), false);
@@ -347,7 +347,9 @@ fn the_worker_judges_with_the_sent_view_and_pages_the_audit_by_key() {
         .unwrap_or_else(|| panic!("a next page: {first:?}"));
     let second = page(Some(cursor)).expect("the second audit page");
     let op = |page: &SdkValue| match page.get("items") {
-        Some(SdkValue::List(rows)) if rows.len() == 1 => rows[0].get_text("op").map(str::to_owned),
+        Some(SdkValue::List(rows)) if rows.len() == 1 => {
+            rows[0].get_text("operation").map(str::to_owned)
+        }
         other => panic!("one row: {other:?}"),
     };
     let mut ops = vec![op(&first), op(&second)];

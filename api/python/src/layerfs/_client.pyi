@@ -104,6 +104,17 @@ class ProjectFamily:
         log_tag: str | None = None,
     ) -> Result:
         """entry counts and size of the tree at a Branch's head or a Commit"""
+    def doctor(
+        self,
+        project: str,
+        *,
+        full: bool | None = None,
+        on_progress: Callable[[Progress], object] = ...,
+        detail: bool | None = None,
+        with_: Sequence[str] | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
+        """check one project's record; with --full, also read and check its data"""
     def export(
         self,
         project: str,
@@ -136,17 +147,6 @@ class ProjectFamily:
         log_tag: str | None = None,
     ) -> Result:
         """hide one absolute path from the project's whole history; frees no bytes"""
-    def doctor(
-        self,
-        project: str,
-        *,
-        full: bool | None = None,
-        on_progress: Callable[[Progress], object] = ...,
-        detail: bool | None = None,
-        with_: Sequence[str] | None = None,
-        log_tag: str | None = None,
-    ) -> Result:
-        """check one project's record; with --full, also read and check its data"""
 
 class BranchFamily:
     def list(
@@ -830,6 +830,7 @@ class StoreFamily:
         user: str | None = None,
         password: Content | None = None,
         synchronous_commit: str | None = None,
+        dry_run: bool | None = None,
         detail: bool | None = None,
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
@@ -849,6 +850,7 @@ class StoreFamily:
         store: str,
         *,
         machine: str,
+        dry_run: bool | None = None,
         detail: bool | None = None,
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
@@ -904,6 +906,23 @@ class StoreFamily:
         log_tag: str | None = None,
     ) -> Result:
         """bring an older Store to the latest format, in place"""
+    def repair_mount_holders(
+        self,
+        project: str,
+        branch: str,
+        action: str,
+        *,
+        op: str | None = None,
+        legacy: bool | None = None,
+        force: bool | None = None,
+        operator: str | None = None,
+        limit: int | None = None,
+        cursor: str | None = None,
+        detail: bool | None = None,
+        with_: Sequence[str] | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
+        """list, preview, settle, release, settle_legacy or audit a Branch's holders (operator)"""
     def doctor(
         self,
         store: str,

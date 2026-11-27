@@ -365,7 +365,7 @@ fn diagnosed_row(rows: &[SdkValue], tag: u8) -> &SdkValue {
 
 fn previewed_row(rows: &[SdkValue], tag: u8) -> &SdkValue {
     rows.iter()
-        .find(|row| row.get_text("op") == Some(op_hex(tag).as_str()))
+        .find(|row| row.get_text("operation") == Some(op_hex(tag).as_str()))
         .unwrap_or_else(|| panic!("no previewed holder {tag:02x}"))
 }
 
@@ -518,7 +518,7 @@ fn a_worker_start_reconciles_the_incarnations_its_home_records() {
     let preview = repair(&placed, "stuck-reconcile", "preview", None, false);
     let rows = holders(&preview);
     assert_eq!(rows.len(), 1, "{preview:?}");
-    assert_eq!(previewed_row(rows, 0x82).get_text("state"), Some("live"));
+    assert_eq!(previewed_row(rows, 0x82).get_text("status"), Some("live"));
     placed.remove();
 }
 

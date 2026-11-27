@@ -102,6 +102,17 @@ class AsyncProjectFamily:
         log_tag: str | None = None,
     ) -> Result:
         """entry counts and size of the tree at a Branch's head or a Commit"""
+    async def doctor(
+        self,
+        project: str,
+        *,
+        full: bool | None = None,
+        on_progress: Callable[[Progress], object] = ...,
+        detail: bool | None = None,
+        with_: Sequence[str] | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
+        """check one project's record; with --full, also read and check its data"""
     async def export(
         self,
         project: str,
@@ -134,17 +145,6 @@ class AsyncProjectFamily:
         log_tag: str | None = None,
     ) -> Result:
         """hide one absolute path from the project's whole history; frees no bytes"""
-    async def doctor(
-        self,
-        project: str,
-        *,
-        full: bool | None = None,
-        on_progress: Callable[[Progress], object] = ...,
-        detail: bool | None = None,
-        with_: Sequence[str] | None = None,
-        log_tag: str | None = None,
-    ) -> Result:
-        """check one project's record; with --full, also read and check its data"""
 
 class AsyncBranchFamily:
     async def list(
@@ -828,6 +828,7 @@ class AsyncStoreFamily:
         user: str | None = None,
         password: Content | None = None,
         synchronous_commit: str | None = None,
+        dry_run: bool | None = None,
         detail: bool | None = None,
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
@@ -847,6 +848,7 @@ class AsyncStoreFamily:
         store: str,
         *,
         machine: str,
+        dry_run: bool | None = None,
         detail: bool | None = None,
         with_: Sequence[str] | None = None,
         log_tag: str | None = None,
@@ -902,6 +904,23 @@ class AsyncStoreFamily:
         log_tag: str | None = None,
     ) -> Result:
         """bring an older Store to the latest format, in place"""
+    async def repair_mount_holders(
+        self,
+        project: str,
+        branch: str,
+        action: str,
+        *,
+        op: str | None = None,
+        legacy: bool | None = None,
+        force: bool | None = None,
+        operator: str | None = None,
+        limit: int | None = None,
+        cursor: str | None = None,
+        detail: bool | None = None,
+        with_: Sequence[str] | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
+        """list, preview, settle, release, settle_legacy or audit a Branch's holders (operator)"""
     async def doctor(
         self,
         store: str,

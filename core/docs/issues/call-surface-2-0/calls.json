@@ -8210,6 +8210,186 @@
      ]
     },
     {
+     "call": "store.repair_mount_holders",
+     "badge": "new",
+     "today": [],
+     "help": "list, preview, settle, release, settle_legacy or audit a Branch's holders (operator)",
+     "cli": "layerfs store repair-mount-holders <project> <branch> <action> [--op HEX] [--legacy] [--force] [--operator NAME] [--limit 100] [--cursor C]",
+     "positionals": [
+      {
+       "name": "project",
+       "kind": "Project"
+      },
+      {
+       "name": "branch",
+       "kind": "Name"
+      },
+      {
+       "name": "action",
+       "kind": "Name"
+      }
+     ],
+     "options": [
+      {
+       "name": "op",
+       "kind": "Text",
+       "help": "the holder `settle` and `release` act on: 16 bytes of hex"
+      },
+      {
+       "name": "legacy",
+       "kind": "Bool",
+       "help": "`settle` only a mount row without owner or place evidence"
+      },
+      {
+       "name": "force",
+       "kind": "Bool",
+       "help": "`settle` a holder that still looks live"
+      },
+      {
+       "name": "operator",
+       "kind": "Text",
+       "help": "the label a release records: at most 128 characters, no control characters; empty is `local`"
+      },
+      {
+       "name": "limit",
+       "kind": "Int",
+       "help": "the most rows in one page, 1 to 1000",
+       "default": 100
+      },
+      {
+       "name": "cursor",
+       "kind": "Text",
+       "help": "the `next_cursor` of the page before; it carries the project, Branch and action",
+       "redact": true
+      }
+     ],
+     "stdin": null,
+     "with": {},
+     "paging": "cursor",
+     "progress": false,
+     "quiet": false,
+     "profile": "full",
+     "short": {
+      "always": [
+       "action"
+      ],
+      "sometimes": [
+       "items",
+       "next_cursor",
+       "operation",
+       "status",
+       "settled"
+      ]
+     },
+     "long": [
+      "items",
+      "next_cursor",
+      "action",
+      "operation",
+      "status",
+      "settled"
+     ],
+     "item": {
+      "short": {
+       "always": [
+        "operation",
+        "kind"
+       ],
+       "sometimes": [
+        "status",
+        "liveness",
+        "safe",
+        "legacy",
+        "project",
+        "branch",
+        "workspace",
+        "sandbox",
+        "machine",
+        "phase",
+        "evidence",
+        "updated_ms"
+       ]
+      },
+      "long": [
+       "operation",
+       "kind",
+       "status",
+       "liveness",
+       "safe",
+       "legacy",
+       "project",
+       "branch",
+       "workspace",
+       "sandbox",
+       "machine",
+       "owner_runtime",
+       "owner_boot",
+       "machine_incarnation",
+       "sandbox_generation",
+       "scope_kind",
+       "scope_id",
+       "phase",
+       "evidence",
+       "updated_ms"
+      ]
+     },
+     "examples": {
+      "short": [
+       "{\"action\":\"preview\",\"items\":[{\"operation\":\"21212121212121212121212121212121\",\"kind\":\"mount\",\"status\":\"live\",\"liveness\":\"live\",\"project\":\"api\",\"branch\":\"main\",\"workspace\":\"w1\",\"sandbox\":\"box\",\"machine\":\"box\"},{\"operation\":\"31313131313131313131313131313131\",\"kind\":\"mount\",\"status\":\"live\",\"liveness\":\"uncertain\",\"safe\":true,\"legacy\":true,\"project\":\"api\",\"branch\":\"main\"}]}",
+       "settle: {\"action\":\"settle\",\"operation\":\"21212121212121212121212121212121\",\"status\":\"uncertain\"}",
+       "release: {\"action\":\"release\",\"operation\":\"21212121212121212121212121212121\",\"status\":\"done\"}",
+       "settle_legacy: {\"action\":\"settle_legacy\",\"settled\":1}",
+       "audit: {\"action\":\"audit\",\"items\":[{\"operation\":\"21212121212121212121212121212121\",\"kind\":\"mount\",\"project\":\"api\",\"branch\":\"main\",\"sandbox\":\"box\",\"machine\":\"box\",\"evidence\":\"action=release;operator=alice;op=21212121212121212121212121212121\",\"updated_ms\":1764320000000}]}"
+      ],
+      "long": "{\"items\":[{\"operation\":\"21212121212121212121212121212121\",\"kind\":\"mount\",\"status\":\"live\",\"liveness\":\"live\",\"safe\":false,\"legacy\":false,\"project\":\"api\",\"branch\":\"main\",\"workspace\":\"w1\",\"sandbox\":\"box\",\"machine\":\"box\",\"owner_runtime\":\"pid:4120@7\",\"owner_boot\":\"boot:9f2c\",\"machine_incarnation\":\"worker:1\",\"sandbox_generation\":\"gen:3\",\"scope_kind\":null,\"scope_id\":null,\"phase\":null,\"evidence\":null,\"updated_ms\":null},{\"operation\":\"31313131313131313131313131313131\",\"kind\":\"mount\",\"status\":\"live\",\"liveness\":\"uncertain\",\"safe\":true,\"legacy\":true,\"project\":\"api\",\"branch\":\"main\",\"workspace\":null,\"sandbox\":null,\"machine\":null,\"owner_runtime\":null,\"owner_boot\":null,\"machine_incarnation\":null,\"sandbox_generation\":null,\"scope_kind\":null,\"scope_id\":null,\"phase\":null,\"evidence\":null,\"updated_ms\":null}],\"next_cursor\":null,\"action\":\"preview\",\"operation\":null,\"status\":null,\"settled\":null}"
+     },
+     "dropped": [],
+     "new_work": "New (#776 G1; on the 2.0 surface by owner ruling 2026-11-28): one explicit operator call per action, nothing automatic. A SQLite Store's repair runs in its machine's worker (store.repair), sent the calling home's place view; a PostgreSQL Store's runs in the calling process. settle refuses a holder whose liveness is live unless forced; release needs the preceding settle and retains the row as the durable done audit (newest 100 per Branch); audit pages by (updated_ms, op).",
+     "refusals": [
+      {
+       "error": "InvalidInput",
+       "when": "an unknown action; a missing or malformed --op; a bad operator label; a limit out of range; a cursor of another action, project or Branch",
+       "adds": []
+      },
+      {
+       "error": "NotFound",
+       "when": "no such Store, project or Branch (every action but audit), or no holder with that op (already released)",
+       "adds": []
+      },
+      {
+       "error": "InUse",
+       "when": "settle of a holder that still looks live",
+       "adds": [
+        "fix"
+       ],
+       "fix": "layerfs store repair-mount-holders <project> <branch> settle --op HEX --force"
+      },
+      {
+       "error": "Conflict",
+       "when": "release before settle",
+       "adds": []
+      },
+      {
+       "error": "Unresolved",
+       "when": "a later call finds an earlier repair's outcome unknown",
+       "adds": []
+      },
+      {
+       "error": "Unavailable",
+       "when": "the Store's machine is stopped or its worker is of another build",
+       "adds": [
+        "fix"
+       ],
+       "fix": "layerfs machine start M"
+      },
+      {
+       "error": "Unknown",
+       "when": "the owning worker's answer was lost",
+       "adds": []
+      }
+     ]
+    },
+    {
      "call": "store.doctor",
      "badge": "new",
      "today": [],

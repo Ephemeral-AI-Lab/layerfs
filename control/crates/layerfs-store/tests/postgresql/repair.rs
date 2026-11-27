@@ -255,9 +255,9 @@ fn operator_repair_round_trips_on_postgresql() {
     assert_eq!(rows.len(), 2, "{rows:?}");
     let row = rows
         .iter()
-        .find(|row| row.get_text("op") == Some("21".repeat(16).as_str()))
+        .find(|row| row.get_text("operation") == Some("21".repeat(16).as_str()))
         .expect("the live holder");
-    assert_eq!(row.get_text("state"), Some("live"));
+    assert_eq!(row.get_text("status"), Some("live"));
     // a shared Store proves no owner gone from here: it still looks live
     assert_eq!(row.get_text("liveness"), Some("live"));
     assert_eq!(row.get("safe"), Some(&SdkValue::Bool(false)));
@@ -297,7 +297,7 @@ fn operator_repair_round_trips_on_postgresql() {
     for item in releases {
         assert_eq!(item.get_text("project"), Some("app"));
         assert_eq!(item.get_text("branch"), Some("main"));
-        assert_eq!(item.get_text("op").map(str::len), Some(32));
+        assert_eq!(item.get_text("operation").map(str::len), Some(32));
     }
 
     let _ = std::fs::remove_dir_all(&home);
@@ -359,7 +359,10 @@ fn an_orphaned_operation_row_is_repaired_on_postgresql() {
     let preview = repair("preview", None, false).expect("preview");
     let rows = holders(&preview);
     assert_eq!(rows.len(), 1, "{rows:?}");
-    assert_eq!(rows[0].get_text("op"), Some("41".repeat(16).as_str()));
+    assert_eq!(
+        rows[0].get_text("operation"),
+        Some("41".repeat(16).as_str())
+    );
     assert_eq!(rows[0].get_text("kind"), Some("merge"));
     assert_eq!(rows[0].get_text("liveness"), Some("live"));
     assert_eq!(rows[0].get("legacy"), Some(&SdkValue::Bool(false)));

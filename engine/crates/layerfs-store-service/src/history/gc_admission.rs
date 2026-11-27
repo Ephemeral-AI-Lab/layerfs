@@ -433,7 +433,7 @@ pub fn done_intents_branch(
 /// The wire answer of one retained `done` row of the operator audit.
 pub fn done_value(row: &GcIntentDone) -> SdkValue {
     SdkValue::map([
-        ("op", SdkValue::text(hex16(&row.op_id))),
+        ("operation", SdkValue::text(hex16(&row.op_id))),
         ("kind", SdkValue::text(row.kind.as_str())),
         ("scope_kind", SdkValue::text(row.scope_kind.as_str())),
         ("scope_id", SdkValue::text(hex16(&row.scope_id))),
