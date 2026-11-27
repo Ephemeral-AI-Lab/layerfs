@@ -3,8 +3,8 @@
 //! per range, `commit diff --with patch` as changed lines, and the next
 //! page or window as the command line that reads it. Every other answer
 //! takes [`crate::output::readable`].
-use crate::banner::paint;
 use crate::output;
+use crate::style::paint;
 use layerfs_api::Call;
 use layerfs_protocol::sdk::SdkValue;
 use std::io::{self, Write};

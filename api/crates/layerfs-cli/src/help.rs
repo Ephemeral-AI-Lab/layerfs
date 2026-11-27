@@ -2,8 +2,8 @@
 //! it ([`layerfs_api::guide`]): the concepts, a first session and the
 //! families; one family's calls; one call's arguments, options, answer and
 //! example.
-use crate::banner::bold;
 use crate::output;
+use crate::style::bold;
 use layerfs_api::{guide, Arg, Call, Kind};
 use std::process::ExitCode;
 
@@ -106,7 +106,7 @@ fn option_word(call: &Call, arg: &Arg) -> Option<String> {
         (_, name, _) => format!(
             "--{} {}",
             shell(name),
-            crate::words::word(&call.name(), name)
+            crate::usage_words::word(&call.name(), name)
         ),
     })
 }
@@ -114,7 +114,7 @@ fn option_word(call: &Call, arg: &Arg) -> Option<String> {
 /// Prints help for `topic`: nothing, a family, or a family and a call.
 pub fn print(topic: &[&str]) -> ExitCode {
     match topic {
-        ["--json"] => crate::capabilities::help(),
+        ["--json"] => crate::discovery::help(),
         [] => output::print(&top()),
         [family] => match family_help(family) {
             Some(text) => output::print(&text),

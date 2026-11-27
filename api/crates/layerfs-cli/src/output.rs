@@ -100,7 +100,7 @@ pub fn doctor_text(report: &SdkValue) -> String {
             open.len()
         ),
     };
-    let mut printed = format!("{}\n", crate::banner::bold(&summary));
+    let mut printed = format!("{}\n", crate::style::bold(&summary));
     let width = if open.is_empty() { 8 } else { 11 };
     let pad = " ".repeat(width + 1);
     // worst first (the frozen `doctor.worst_first`), report order within one severity
@@ -422,7 +422,7 @@ fn block(fields: &[(String, SdkValue)], form: Option<&Form>, indent: usize, out:
                     out.push('\n');
                 }
                 if name != "items" {
-                    out.push_str(&format!("{pad}{}\n", crate::banner::bold(&label(name))));
+                    out.push_str(&format!("{pad}{}\n", crate::style::bold(&label(name))));
                 }
                 out.push_str(&table(rows, declared, &pad));
             }
@@ -572,7 +572,7 @@ fn table(rows: &[SdkValue], declared: Option<&Form>, pad: &str) -> String {
             .join("  ");
         format!("{pad}{}", text.trim_end())
     };
-    let mut out = format!("{}\n", crate::banner::bold(&line(&headers)));
+    let mut out = format!("{}\n", crate::style::bold(&line(&headers)));
     for row in &cells {
         out.push_str(&format!("{}\n", line(row)));
     }

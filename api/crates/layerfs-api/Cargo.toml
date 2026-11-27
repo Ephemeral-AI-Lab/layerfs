@@ -78,3 +78,47 @@ path = "tests/standalone/worker_hello.rs"
 [[test]]
 name = "worker_trace"
 path = "tests/standalone/worker_trace.rs"
+
+[[test]]
+name = "machine_built_ins_once"
+path = "tests/standalone/machine_built_ins_once.rs"
+
+[[test]]
+name = "commit_get_pages"
+path = "tests/standalone/commit_get_pages.rs"
+
+[[test]]
+name = "file_family"
+path = "tests/standalone/file_family.rs"
+
+[[test]]
+name = "home_family"
+path = "tests/standalone/home_family.rs"
+
+[[test]]
+name = "home_records"
+path = "tests/standalone/home_records.rs"
+
+[[test]]
+name = "branch_list_pages"
+path = "tests/standalone/branch_list_pages.rs"
+
+[[test]]
+name = "idle_checkpoint"
+path = "tests/standalone/idle_checkpoint.rs"
+
+[[test]]
+name = "oneshot_close"
+path = "tests/standalone/oneshot_close.rs"
+
+[[test]]
+name = "open_cache"
+path = "tests/standalone/open_cache.rs"
+
+[[test]]
+name = "reaper"
+path = "tests/standalone/reaper.rs"
+
+[[test]]
+name = "upgrade_cancel"
+path = "tests/standalone/upgrade_cancel.rs"
