@@ -1,6 +1,8 @@
 //! `machine.start` and `machine.stop` (#535 P1), with a stand-in `limactl`
-//! (its state in a file; `stop` stops it) and a stand-in worker: built-in
-//! `native` answers both at once; a running machine's `start` answers at
+//! (its state in a file; `stop` stops it) and a stand-in worker: the
+//! built-in host machine's stop records `stopped` and its start needs the
+//! matching `layerfs` CLI on PATH (#819 D7; the start with that CLI is
+//! `layerfs-cli`'s `host_machine_stop`); a running machine's `start` answers at
 //! once, starting nothing; a stopped one's runs a start (refused here at
 //! the missing Linux bundle, after its `start.lock`); `stop` is `InUse`
 //! with `detail.related` while Sandboxes run on the machine, and otherwise
@@ -138,11 +140,24 @@ fn start_and_stop_a_machine() {
     let home = tempdir("home");
     home::open(&home).unwrap();
 
-    // native answers both at once
-    for name in ["machine.start", "machine.stop"] {
-        let native = call(&home, name, layerfs_home::names::HOST_MACHINE).unwrap();
-        assert_eq!(json(&native), r#"{"unchanged":true}"#, "{name}");
-    }
+    // the host machine (#819 D7): a stop records `stopped`, and a second
+    // stop has nothing to do; a start runs the host worker from the matching
+    // `layerfs` CLI on PATH, which this PATH (the stand-ins alone) lacks
+    let host = layerfs_home::names::HOST_MACHINE;
+    let stopped = call(&home, "machine.stop", host).unwrap();
+    assert_eq!(json(&stopped), r#"{"ok":true}"#);
+    let record = read_record(&paths::machine_record(&home, host))
+        .unwrap()
+        .unwrap();
+    assert_eq!(record.get_text("state"), Some("stopped"));
+    let again = call(&home, "machine.stop", host).unwrap();
+    assert_eq!(json(&again), r#"{"unchanged":true}"#);
+    let refusal = call(&home, "machine.start", host).unwrap_err();
+    assert_eq!(refusal.code, "Unavailable", "{}", refusal.message);
+    assert_eq!(
+        refusal.message,
+        "host worker management requires the matching layerfs CLI on PATH"
+    );
 
     // a running machine's start answers at once and starts nothing
     std::fs::write(tools.join("state"), "Running\n").unwrap();

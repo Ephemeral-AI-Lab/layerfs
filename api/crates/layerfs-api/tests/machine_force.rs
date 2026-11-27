@@ -210,7 +210,8 @@ esac
         &[("machine", t(layerfs_home::names::HOST_MACHINE))],
     )
     .unwrap();
-    assert_eq!(native.get_text("state"), Some("ready"));
+    // a stopped host machine stays stopped until `machine start` (D7)
+    assert_eq!(native.get_text("state"), Some("stopped"));
     std::fs::remove_dir_all(root).unwrap();
 }
 

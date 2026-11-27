@@ -351,13 +351,16 @@ fn list_and_get_answer_the_records_then_the_live_state() {
     let _ = std::fs::remove_dir_all(tools);
 }
 
-/// `native` is this computer: `--with live` reads the free bytes of the
-/// disk that holds the home, its data disk, and answers no provider tool
-/// and no worker (its calls run in the caller's process), so the short
-/// form shows the one value it has.
+/// The host machine is this computer: `--with live` reads the free bytes of
+/// the disk that holds the home, its data disk, and answers no provider
+/// tool. It reports the machine state and the host worker's health
+/// separately (#819 D7, spec §12): an enabled machine whose worker has not
+/// started is `absent`. The short form leaves out the worker's empty fields.
 #[test]
 fn native_with_live_answers_the_free_bytes_of_the_homes_disk() {
     let home = tempdir(layerfs_home::names::HOST_MACHINE);
+    // a real home is private; the worker probe refuses one that is not
+    std::fs::set_permissions(&home, std::fs::Permissions::from_mode(0o700)).unwrap();
     let got = call(
         &home,
         "machine.get",
@@ -368,7 +371,10 @@ fn native_with_live_answers_the_free_bytes_of_the_homes_disk() {
     let live = got.get("live").unwrap();
     assert!(live.get_int("disk_free_bytes").unwrap() > 0, "{live:?}");
     assert_eq!(live.get("tool_version"), Some(&SdkValue::Null));
-    assert_eq!(live.get("worker"), Some(&SdkValue::Null));
+    assert_eq!(live.get_text("machine_state"), Some("enabled"), "{live:?}");
+    let worker = live.get("worker").unwrap();
+    assert_eq!(worker.get_text("health"), Some("absent"), "{worker:?}");
+    assert_eq!(worker.get("pid"), Some(&SdkValue::Null), "{worker:?}");
     let args = SdkValue::map([
         ("machine", SdkValue::text(layerfs_home::names::HOST_MACHINE)),
         ("with", SdkValue::List(vec![SdkValue::text("live")])),
@@ -376,7 +382,10 @@ fn native_with_live_answers_the_free_bytes_of_the_homes_disk() {
     let short = layerfs_api::call(Some(&home), "machine.get", args, &mut |_| {}).unwrap();
     let live = short.get("live").unwrap();
     assert!(live.get_int("disk_free_bytes").unwrap() > 0, "{short:?}");
-    assert_eq!(live.get("worker"), None, "{short:?}");
+    assert_eq!(live.get_text("machine_state"), Some("enabled"), "{short:?}");
+    let worker = live.get("worker").unwrap();
+    assert_eq!(worker.get_text("health"), Some("absent"), "{short:?}");
+    assert_eq!(worker.get("pid"), None, "{short:?}");
     std::fs::remove_dir_all(home).unwrap();
 }
 

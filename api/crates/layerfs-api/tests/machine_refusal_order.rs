@@ -74,7 +74,10 @@ fn the_first_broken_rule_is_the_refusal() {
             ("cpus", SdkValue::Int(2)),
             ("docker", t("/tmp/docker.sock")),
         ]),
-        "native is built in; it has no size of its own"
+        format!(
+            "{} is built in; it has no size of its own",
+            layerfs_home::names::HOST_MACHINE
+        )
     );
     write_record(
         &paths::machine_record(home, "box"),

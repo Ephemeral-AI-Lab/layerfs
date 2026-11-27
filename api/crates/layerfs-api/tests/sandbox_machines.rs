@@ -305,7 +305,11 @@ fn a_sandbox_runs_where_its_store_can_be_reached() {
     )
     .unwrap_err();
     assert_eq!(code, "Unsupported", "{message}");
-    assert!(message.contains("is on machine native"), "{message}");
+    let host = layerfs_home::names::HOST_MACHINE;
+    assert!(
+        message.contains(&format!("is on machine {host}")),
+        "{message}"
+    );
     // nothing was claimed
     assert_eq!(
         ok(&home, "sandbox.list", &[]).get("items"),
@@ -945,16 +949,19 @@ fn a_sandbox_with_no_machine_runs_on_its_store_s() {
     // engine says so instead of "cannot reach", and a server that takes
     // no connection is said to, not shown as an engine status
     let (code, message) = refused;
+    let host = layerfs_home::names::HOST_MACHINE;
     if true {
         assert_eq!(code, "Unavailable", "{message}");
         assert!(
-            message.starts_with("machine native cannot reach PostgreSQL Store pg's server at 127.0.0.1: no connection to the server was made"),
+            message.starts_with(&format!("machine {host} cannot reach PostgreSQL Store pg's server at 127.0.0.1: no connection to the server was made")),
             "{message}"
         );
     } else {
         assert_eq!(code, "Unsupported", "{message}");
         assert!(
-            message.starts_with("machine native cannot check PostgreSQL Store pg's server:"),
+            message.starts_with(&format!(
+                "machine {host} cannot check PostgreSQL Store pg's server:"
+            )),
             "{message}"
         );
     }
