@@ -314,3 +314,58 @@ fn reads_stay_prompt_while_writes_wait_on_the_store_writer() {
     assert_eq!(count(&lending(&home, 0), "writes"), 0);
     drain(&home);
 }
+
+/// As after a server restart: the held write session is gone and the
+/// server refuses the new one (here the role may no longer log in). The
+/// waiting write is refused before anything is sent, `Failed`, in plain
+/// words with its check and no login; nothing committed or resent, and a
+/// later write commits once.
+#[test]
+fn a_refused_new_session_is_said_plainly_with_nothing_sent() {
+    let Some(server) = server() else { return };
+    let db = Db::new(&server, "wrefuse");
+    let home = forked(&db);
+    let path = home.paths.home.clone();
+    ok(&path, &["file", "mkdir", "pg/p", "work", "/warm"]);
+    let before = commits(&path);
+    let mut admin = db.admin();
+    let login = |allowed: &str| format!("ALTER ROLE {} {allowed}", db.name);
+    admin.batch_execute(&login("NOLOGIN")).unwrap();
+    admin
+        .query(
+            "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE usename = $1",
+            &[&db.name],
+        )
+        .unwrap();
+    assert!(db.settle(0).is_empty(), "the held session is gone");
+
+    let output = finish(spawn(
+        &path,
+        &["file", "mkdir", "pg/p", "work", "/refused"],
+        None,
+    ));
+    let refusal = decode(&output);
+    assert!(!output.status.success(), "{refusal:?}");
+    assert_eq!(refusal.get_text("error"), Some("Failed"), "{refusal:?}");
+    let message = refusal.get_text("message").unwrap_or_default();
+    assert_eq!(
+        message,
+        "the PostgreSQL server refused a new session (it may be restarting, \
+         or the database, user or password changed); nothing was sent and \
+         nothing was committed"
+    );
+    assert_eq!(
+        refusal.get_text("fix"),
+        Some("layerfs store get pg --with live")
+    );
+    assert!(!format!("{refusal:?}").contains(&db.password));
+
+    admin.batch_execute(&login("LOGIN")).unwrap();
+    assert_eq!(commits(&path), before, "nothing was committed");
+    let answer = call(&path, &["file", "mkdir", "pg/p", "work", "/later"], None);
+    committed(&answer.unwrap());
+    assert_eq!(commits(&path), before + 1, "nothing was resent");
+    assert!(retained(&path).is_empty(), "the refusal was definite");
+    drain(&home);
+    no_secret(&path, &db.password);
+}

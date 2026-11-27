@@ -124,6 +124,38 @@ pub fn no_session(error: &layerfs_storage::port::PersistenceError) -> Option<Sdk
     Some(refused("Unavailable", message))
 }
 
+/// A held session's open (#819 P-B) that the server refused before a
+/// session existed: a server restarting or down after the held sessions
+/// were lost, a dropped database or a changed login. Its engine text
+/// (`Store open: ... Refused { status: "Rejected" }`, or `"Closed"` when
+/// no connection was made) is said plainly with the check to run; the
+/// code and the outcome stay as they are (a definite failure: nothing of
+/// the call was sent, nothing was committed, nothing is resent). The
+/// message names no address or login. Any other refusal is returned as
+/// it is.
+pub(crate) fn new_session_refused(store: &str, refusal: SdkRefusal) -> SdkRefusal {
+    use layerfs_storage::port::PersistenceError::Refused;
+    let status = |status: &str| {
+        Refused {
+            status: status.to_owned(),
+        }
+        .to_string()
+    };
+    let said = if refusal.message.ends_with(&status("Rejected")) {
+        "the PostgreSQL server refused a new session (it may be restarting, or the database, user or password changed)"
+    } else if refusal.message.ends_with(&status("Closed")) {
+        "no new session to the PostgreSQL server could be made (it may be restarting or unreachable)"
+    } else {
+        return refusal;
+    };
+    let fix = format!(
+        "layerfs store get {} --with live",
+        layerfs_home::outcome::shell_word(store)
+    );
+    let message = format!("{said}; nothing was sent and nothing was committed");
+    layerfs_home::outcome::with_fix(SdkRefusal { message, ..refusal }, fix)
+}
+
 /// How [`no_session`] says that no connection was made.
 const NO_CONNECTION: &str = "no connection to the server was made (it refused the connection, did not answer, or closed it)";
 

@@ -509,7 +509,10 @@ fn checkout(
         }
         None => {}
     }
-    lent.service = Some(Session::open(kind, open)?);
+    // a refused new session (a server restart, say) is said plainly
+    let opened = Session::open(kind, open)
+        .map_err(|refusal| crate::postgresql::open::new_session_refused(store, refusal))?;
+    lent.service = Some(opened);
     Ok(lent)
 }
 

@@ -511,7 +511,11 @@ session waits without holding a thread, and is never refused for waiting.
 A write whose connection is lost while it runs (a server restart) is
 `Unknown`, with its record kept as on SQLite; writes still waiting then run
 once on new connections, or are refused with nothing sent when none can be
-opened. Nothing is sent twice. `store upgrade` closes the worker's
+opened: `Failed`, "the PostgreSQL server refused a new session (it may be
+restarting, or the database, user or password changed); nothing was sent
+and nothing was committed" (or "no new session to the PostgreSQL server
+could be made" when no connection was made), with the fix `layerfs store
+get <store> --with live`. Nothing is sent twice. `store upgrade` closes the worker's
 connections to that Store too. A Store connected before this release has no login revision:
 it keeps the direct route, one read-only connection per call opened and
 checked the same way, until `store connect` is run for it again. So do a
