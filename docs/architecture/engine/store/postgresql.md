@@ -339,7 +339,7 @@ role that can read its own backends' starts (the default) never meets it.
 | `Publish` | as `Write` | `FOR UPDATE` and the lane barrier after the pack bodies; nested: as a nested `Write` | one Save publication, up to 16 MiB − 1 |
 | `Snapshot` | `REPEATABLE READ` + `synchronous_commit` + `jit` off | no | the garbage-collection mark: reads history, locators and packs from one snapshot and writes only `kept_node` |
 | `Immutable` | none; autocommit statements | no | locates, pack reads, inode values |
-| `Statement` | none; exactly one autocommit statement | no | `branch_snapshot`, a Branch by name, a Commit or Layer by id, a LayerStack by name, a project's `project.remove_file` markers (alone or with a node's serial), `digest_roots` (up to `FILE_DIGEST_WINDOW` = 1,024 contents) |
+| `Statement` | none; exactly one autocommit statement | no | Init's acquisition reads (owner joined), `branch_snapshot`, a Branch by name, a Commit or Layer by id, a LayerStack by name, a project's `project.remove_file` markers (alone or with a node's serial), `digest_roots` (up to `FILE_DIGEST_WINDOW` = 1,024 contents) |
 | `Admit` | as `Publish`: `READ COMMITTED` + `synchronous_commit` + `lock_timeout` | never | a mount's GC registration ([GC admission](#gc-admission)) |
 | `Bare` | none; exactly one autocommit statement that may write, sent as written | no | the GC session keys and the owner's release; each carries its own generation check ([GC admission](#gc-admission)) |
 | Fused | as `Write`, sent in one pipelined message with the generation fence and a per-attempt token | `FOR UPDATE` and the lane barrier in the transaction itself, never nested in a held lane | a Workspace Commit over its bound head ([Fused Commit](#fused-commit)) |
@@ -1686,11 +1686,16 @@ authoritative row ([physical storage](../../core/physical-storage/README.md)).
 ## Acquisition
 
 `PostgresAcquisition` implements SQLite's acquisition port with the same row
-encodings, charges, refusal order and failures. Each unit is one transaction;
-reads are index range scans in one `REPEATABLE READ` snapshot after the owner
-check; writes are lane-ordered. A released or foreign operation is `Stale`
-before any row is read. A schema without the acquisition tables refuses every
-unit ([`acquisition/`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/acquisition)). The session's epoch is the
+encodings, charges, refusal order and failures. Each write unit is one
+lane-ordered transaction that matches the owner first. Each read unit is one
+fenced autocommit statement (`Statement` mode, #818 I3a): its index range
+scan is joined `LATERAL` to the owner's live row, so a released or foreign
+operation reads no row and is `Stale`, and an empty window answers one row
+with a NULL marker; a path window (jobs, directories) sums its rows' sizes
+over the rows it read and keeps the leading rows that fit in the same
+statement, where a sizing read and a second read did before. One round trip
+per read instead of four or five. A schema without the acquisition tables
+refuses every unit ([`acquisition/`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/acquisition)). The session's epoch is the
 same lock-free value as on SQLite ([Acquisition](sqlite.md#acquisition)): a
 `begin` waiting for the lane blocks no live owner's unit.
 
@@ -1736,6 +1741,7 @@ reuses an operation id
 | [`postgresql_acquisition_compaction.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_acquisition_compaction.rs) | `LAYERFS_TEST_POSTGRES_URL=… cargo +1.85.1 test --locked -p layerfs-persistence --test postgresql_acquisition_compaction` | Compaction after the last release, never touching a live operation |
 | [`acquisition_placement.rs`](../../../../engine/crates/layerfs-persistence/tests/acquisition_placement.rs) | `LAYERFS_TEST_POSTGRES_URL=… cargo +1.85.1 test --locked -p layerfs-persistence --test acquisition_placement` | Set-window placement gives the per-row loop's first refusal, rows and charges (repeated names and positions, unsigned positions, stored-row dependencies, all-hardlink and large mixed directories), both backends |
 | [`postgresql_placement_fault.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_placement_fault.rs) | same, `--test postgresql_placement_fault` | Drop and kill at every server message of a placement unit (84 + 84): the unit is atomic, never replayed |
+| [`postgresql_acquisition_reads.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_acquisition_reads.rs) | same, `--test postgresql_acquisition_reads` | Every read window, paged under row and byte limits, equals SQLite's; empty, released, missing and foreign owners stay distinct; drop and kill at every server message of each read kind (78 + 78): never a wrong answer, no row changed, never replayed |
 
 Without `LAYERFS_TEST_POSTGRES_URL` these tests print `NOT_RUN` and check
 nothing.

@@ -1,0 +1,13 @@
+# load 5.53 6.70 6.44
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.08s
+     Running tests/namespace_scaling.rs (target/debug/deps/namespace_scaling-318b44176dafe503)
+
+running 1 test
+DIAGNOSTIC namespace-count-100 NamespaceWork { unique_files: 100, regular_aliases: 0, entries: 111, jobs: 100, frontier: 10, directory_children: 10, wide_directories: 0, child_window_rows: 10, directory_bindings: 110, read_units: 11, write_units: 5, read_window_rows: 111, write_window_rows: 100, write_window_bytes: 27200, discard_units: 1, backing_rows: 211, backing_bytes: 40572 }
+DIAGNOSTIC namespace-count-3000 NamespaceWork { unique_files: 3000, regular_aliases: 0, entries: 3011, jobs: 3000, frontier: 10, directory_children: 300, wide_directories: 0, child_window_rows: 300, directory_bindings: 3010, read_units: 31, write_units: 5, read_window_rows: 512, write_window_rows: 3000, write_window_bytes: 816000, discard_units: 2, backing_rows: 6011, backing_bytes: 1151272 }
+DIAGNOSTIC namespace-count-6000 NamespaceWork { unique_files: 6000, regular_aliases: 0, entries: 6011, jobs: 6000, frontier: 10, directory_children: 600, wide_directories: 10, child_window_rows: 512, directory_bindings: 6010, read_units: 85, write_units: 25, read_window_rows: 512, write_window_rows: 4096, write_window_bytes: 196608, discard_units: 3, backing_rows: 12011, backing_bytes: 2300272 }
+test backed_counts_grow_while_resident_buffers_stay_fixed ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.32s
+
+run_bounded: exit 0 after 2.0 s

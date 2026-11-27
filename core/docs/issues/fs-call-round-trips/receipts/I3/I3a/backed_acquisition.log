@@ -1,0 +1,13 @@
+# load 5.80 6.79 6.47
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.08s
+     Running tests/backed_acquisition.rs (target/debug/deps/backed_acquisition-8f98a7244b661ebe)
+
+running 2 tests
+S9_BACKED_ACQUISITION entries=1314 work=NamespaceWork { unique_files: 1302, regular_aliases: 2, entries: 1314, jobs: 1304, frontier: 4, directory_children: 1302, wide_directories: 1, child_window_rows: 512, directory_bindings: 1313, read_units: 32, write_units: 8, read_window_rows: 512, write_window_rows: 1306, write_window_bytes: 360224, discard_units: 1, backing_rows: 2616, backing_bytes: 509944 }
+test wide_nested_aliased_root_equals_the_whole_namespace_constructor ... ok
+S9_BACKED_ACQUISITION_WIDE work=NamespaceWork { unique_files: 0, regular_aliases: 0, entries: 17002, jobs: 0, frontier: 1, directory_children: 17000, wide_directories: 1, child_window_rows: 512, directory_bindings: 17001, read_units: 110, write_units: 13, read_window_rows: 512, write_window_rows: 4096, write_window_bytes: 679936, discard_units: 5, backing_rows: 17002, backing_bytes: 1326413 }
+test very_wide_directory_is_ordered_through_many_windows ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.31s
+
+run_bounded: exit 0 after 3.0 s
