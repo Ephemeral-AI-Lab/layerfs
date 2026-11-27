@@ -6,11 +6,11 @@
 //! with `a`'s `/.lww`, and a clean result becomes one Commit with two parents.
 //! A conflict creates nothing. Publishing is a compare-and-swap on main's
 //! head by default, and reports the main Layers a forced publication skipped.
-use super::lookup::{
+use super::resolve::{self, Named};
+use crate::lookup::{
     self as args, branch_node, commit_value, hex, history, invalid, layer_value, node_text, refuse,
     root, short, Answer,
 };
-use super::resolve::{self, Named};
 use crate::store::{CommitError, Store};
 use layerfs_content::{
     filesystem::FilesystemRootId,
@@ -159,7 +159,9 @@ pub fn list_commits(
                 continue;
             }
             let cost = record.meta.message.as_ref().map_or(0, String::len) + 1024;
-            if items.len() == limit || spent + cost > crate::read::reads::REPLY_BUDGET {
+            if items.len() == limit
+                || spent + cost > crate::filesystem::tree::positional::REPLY_BUDGET
+            {
                 more = true;
                 break 'pages;
             }
@@ -204,7 +206,7 @@ pub struct Merge<'a> {
 /// nothing.
 pub fn merge(store: &Arc<Store>, stack: &LayerStackRecord, request: &Merge<'_>) -> Answer {
     let name = request.into.unwrap_or(request.left);
-    let admission = crate::history::admission::SharedIntent::begin(
+    let admission = crate::history::gc_admission::SharedIntent::begin(
         store.history(),
         layerfs_history::records::GcIntentKind::Merge,
         stack,
@@ -345,13 +347,13 @@ fn merge_inner(store: &Arc<Store>, stack: &LayerStackRecord, merge: &Merge<'_>) 
     // post-frontier re-creation stays and wins the merge.
     let reader = store.ports(stack.scope);
     let derive = |node, root| {
-        crate::removal::derive_root(store, stack.id, &*reader, &save, node, root)
-            .map_err(crate::removal::refusal)
+        crate::history::whiteout::derive_root(store, stack.id, &*reader, &save, node, root)
+            .map_err(crate::history::whiteout::refusal)
     };
     let base_root = derive(base_node, FilesystemRootId(root(store, base_node)?))?;
     let ours = derive(ln, FilesystemRootId(root(store, ln)?))?;
     let theirs = derive(rn, FilesystemRootId(root(store, rn)?))?;
-    let mut sides = super::units::Sides {
+    let mut sides = super::merge_units::Sides {
         base: base_root,
         ours,
         theirs,
@@ -361,7 +363,7 @@ fn merge_inner(store: &Arc<Store>, stack: &LayerStackRecord, merge: &Merge<'_>) 
     let mut decided = Vec::new();
     if !admitted.is_empty() {
         let units = crate::telemetry::timed("branch.merge.units", |timing| {
-            super::units::decide(store, &save, &hints, &admitted, &sides, &mut fresh, timing)
+            super::merge_units::decide(store, &save, &hints, &admitted, &sides, &mut fresh, timing)
         })?;
         (sides.ours, sides.theirs, decided) = (units.ours, units.theirs, units.reports);
     }

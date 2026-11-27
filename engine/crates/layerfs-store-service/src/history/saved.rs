@@ -1,5 +1,5 @@
 //! Typed saved identities and bounded, branch-qualified history lookups.
-use super::{lookup as args, MAIN};
+use super::{super::lookup as args, MAIN};
 use crate::store::Store;
 use layerfs_content::ObjectId;
 use layerfs_history::{LayerStackRecord, NodeId};

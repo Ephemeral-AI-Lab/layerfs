@@ -1,0 +1,131 @@
+//! One Workspace lock: connection, open state, lifecycle and counted work.
+use super::{jobs::OwnerError, roster::backing::Backing};
+use crate::{JobWork, OwnerWork, ServiceClass};
+use layerfs_overlay::{Overlay, OverlayError};
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::{Arc, Condvar, Mutex, OnceLock};
+use std::time::Instant;
+
+pub struct State {
+    pub db: Option<Box<Overlay>>,
+    pub work: OwnerWork,
+    pub stopping: bool,
+    pub failure: Option<Arc<OwnerError>>,
+    pub maintenance_error: Option<Arc<OverlayError>>,
+    pub cursor: layerfs_overlay::MaintenanceCursor,
+    pub initial: Option<Arc<layerfs_overlay::CreationWork>>,
+    pub backing: Option<Arc<Backing>>,
+    /// Captures waiting for earlier reply attempts, and known installs
+    /// waiting for earlier base sources: their frontiers stay finite.
+    pub captures_waiting: u32,
+    pub installs_waiting: u32,
+    /// Merged Commits between their check of the active rows and their
+    /// install (`hold.rs` `MutationHold`): mutations wait behind them.
+    pub mutation_holds: u32,
+}
+pub struct Shared {
+    pub namespace: i64,
+    pub route: OnceLock<layerfs_vfs::Route>,
+    pub state: Mutex<State>,
+    pub changed: Condvar,
+    /// Live maintenance holds (`hold.rs`): while any is taken, no step of
+    /// queued maintenance runs. Outside the lock, so a hold lands while a
+    /// drain loop keeps retaking it and stops that loop at its next step.
+    pub held: AtomicU32,
+    /// Foreground jobs and reply attempts waiting for the lock: a drain loop
+    /// lets them in before its next step (`OwnerClient::maintain`).
+    pub waiting: AtomicU32,
+}
+impl Shared {
+    pub fn new(namespace: i64) -> Self {
+        Self {
+            namespace,
+            route: OnceLock::new(),
+            state: Mutex::new(State {
+                db: None,
+                work: OwnerWork::default(),
+                stopping: false,
+                failure: None,
+                maintenance_error: None,
+                cursor: layerfs_overlay::MaintenanceCursor::default(),
+                initial: None,
+                backing: None,
+                captures_waiting: 0,
+                installs_waiting: 0,
+                mutation_holds: 0,
+            }),
+            changed: Condvar::new(),
+            held: AtomicU32::new(0),
+            waiting: AtomicU32::new(0),
+        }
+    }
+}
+impl State {
+    /// A later mutation waits behind a waiting Capture or a held merged
+    /// install, and a later source acquisition behind a waiting known install.
+    pub fn behind_frontier(&self, class: ServiceClass) -> bool {
+        match class {
+            ServiceClass::Mutation => self.captures_waiting != 0 || self.mutation_holds != 0,
+            ServiceClass::Source => self.installs_waiting != 0,
+            _ => false,
+        }
+    }
+    /// Enters or leaves the waiting frontier of one Capture or install. True
+    /// when one left: jobs that waited behind it may now run.
+    pub fn front(
+        &mut self,
+        ready: Option<super::jobs::Readiness>,
+        fronted: &mut bool,
+        wanted: bool,
+    ) -> bool {
+        let count = match ready {
+            Some(super::jobs::Readiness::Capture) => &mut self.captures_waiting,
+            Some(super::jobs::Readiness::Install(_)) => &mut self.installs_waiting,
+            None => return false,
+        };
+        match (*fronted, wanted) {
+            (false, true) => *count += 1,
+            (true, false) => *count -= 1,
+            _ => return false,
+        }
+        *fronted = wanted;
+        !wanted
+    }
+    /// One hold of this connection. A foreground job is counted in its class;
+    /// a maintenance step only in the maintenance totals, never in both.
+    pub fn record(&mut self, class: ServiceClass, work: &JobWork, maintenance: bool) {
+        if maintenance {
+            self.work.sql_maintenance.accumulate(work.sql);
+            self.work.allocation_maintenance.accumulate(work.allocation);
+            self.work.payload_maintenance.accumulate(work.payload);
+            self.work.maintenance_jobs = self.work.maintenance_jobs.saturating_add(1);
+            self.work.maintenance_ns = self.work.maintenance_ns.saturating_add(work.hold_ns);
+        } else {
+            self.work.jobs[class as usize] = self.work.jobs[class as usize].saturating_add(1);
+            self.work.lock_wait_ns[class as usize] =
+                self.work.lock_wait_ns[class as usize].saturating_add(work.lock_wait_ns);
+            self.work.hold_ns[class as usize] =
+                self.work.hold_ns[class as usize].saturating_add(work.hold_ns);
+            self.work.sql_foreground.accumulate(work.sql);
+            self.work.allocation_foreground.accumulate(work.allocation);
+            self.work.payload_foreground.accumulate(work.payload);
+        }
+    }
+}
+impl Shared {
+    /// Takes the lock as a foreground caller, counted in `waiting` while it
+    /// waits, so a running drain loop yields to it at its next step. The last
+    /// waiter in wakes the drain: it may go on to wait on `changed` itself (a
+    /// frontier or readiness wait) without the notification a job's end gives.
+    pub fn foreground<T>(&self, lock: impl FnOnce() -> T) -> T {
+        self.waiting.fetch_add(1, Ordering::AcqRel);
+        let locked = lock();
+        if self.waiting.fetch_sub(1, Ordering::AcqRel) == 1 {
+            self.changed.notify_all();
+        }
+        locked
+    }
+}
+pub fn elapsed(start: Instant) -> u64 {
+    start.elapsed().as_nanos().min(u64::MAX as u128) as u64
+}

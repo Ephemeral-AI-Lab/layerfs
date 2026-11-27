@@ -1,490 +1,477 @@
-//! Opened provider ownership and one reader per mounted Workspace.
-use super::{read_service::ReadSet, PortError, ReadServiceWork, ReaderFactory, StoreReader};
-use layerfs_content::ObjectId;
-use layerfs_history::{HistoryCatalog, WorkspaceId};
-use layerfs_storage::{encoding::delta::select::DeltaCounters, save::PoolCounters, WriteOutcome};
-use layerfs_storage::{
-    port::PackPersistence, ReservationBlocks, Storage, StorageError, StoragePolicy, StorageResult,
+//! Concrete Store composition and mount-time reader opening.
+use crate::store::{Store, StoreReader};
+use layerfs_persistence::{
+    DeferredSqliteWriter, PersistenceConfig, SqlWork, SqliteHandles, StorageProvider,
 };
-use layerfs_vfs::{CanonicalCache, CanonicalClient, ClientWork};
-use std::sync::{
-    atomic::{AtomicU64, Ordering},
-    Arc, Mutex,
+use layerfs_storage::{
+    port::PersistenceError, ReservationBlocks, Storage, StorageError, StorageResult,
+};
+use std::{
+    collections::BTreeMap,
+    sync::{Arc, Mutex, Weak},
 };
 
-/// Exact adapter demand counts. They do not substitute for provider work receipts.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub struct StoreWork {
-    pub object_batches: u64,
-    pub object_ids: u64,
-    pub length_batches: u64,
-    pub length_ids: u64,
-    pub serial_reservations: u64,
+/// The Store's writer session on its engine (#506).
+#[derive(Clone)]
+enum Writer {
+    /// A one-shot or held PostgreSQL read service's only session.
+    ReadOnly(Arc<layerfs_persistence::PostgresStorage>),
+    Sqlite(Arc<StorageProvider>),
+    DeferredSqlite {
+        writer: Arc<DeferredSqliteWriter>,
+        reader: Arc<StorageProvider>,
+    },
+    Postgres(Arc<layerfs_persistence::PostgresStorage>),
 }
-/// Fixed per-call handles made and reused (#352 F-025 fix 4).
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub struct ReuseWork {
-    /// Workspace readers opened, and SDK private ones reused from the pool.
-    pub readers_opened: u64,
-    pub readers_reused: u64,
-    /// Producer Storage handles made (each reads the policy and hints).
-    pub producers: u64,
-    /// Idle readers opened after readiness (#64), and such opens that failed.
-    pub readers_prefilled: u64,
-    pub prefill_failures: u64,
-}
-#[derive(Default)]
-pub(super) struct Counts {
-    pub objects: AtomicU64,
-    pub object_ids: AtomicU64,
-    pub lengths: AtomicU64,
-    pub length_ids: AtomicU64,
-    pub serials: AtomicU64,
-    pub readers_opened: AtomicU64,
-    pub readers_reused: AtomicU64,
-    pub producers: AtomicU64,
-    pub readers_prefilled: AtomicU64,
-    pub prefill_failures: AtomicU64,
-}
-/// Delta selection outcomes of every Save this daemon finished, payload and
-/// pooled metadata: stored depths and why candidates were refused.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub struct SaveCounters {
-    pub delta: DeltaCounters,
-    pub pool: PoolCounters,
-    pub merge: MergeCounters,
-}
-/// How every merge that reached path naming named its changed inodes (#352):
-/// from recorded bindings, or by the breadth-first walk (`fallbacks`), with
-/// the naming work summed over both sides.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub struct MergeCounters {
-    pub merges: u64,
-    pub fallbacks: u64,
-    /// In-lane steps after the head moved again, the paths they decided,
-    /// and those refused as too large (#355).
-    pub lane_steps: u64,
-    pub lane_paths: u64,
-    pub lane_refused: u64,
-    pub naming: layerfs_content::compare::NamingWork,
-}
-/// One global Store binding, with mounted readers and a shared immutable cache.
-/// Opened providers must belong to the same validated authority. Application
-/// composition owns that selection; this adapter knows only the public ports.
-pub struct Store {
-    writer: Option<Arc<dyn PackPersistence>>,
-    pub(super) history: Arc<dyn HistoryCatalog>,
-    pub(super) readers: Arc<ReadSet>,
-    policy: StoragePolicy,
-    reservations: ReservationBlocks,
-    pub(super) cache: Arc<CanonicalCache>,
-    /// Reads objects already in `cache` and nothing else: no reader, no I/O.
-    pub(super) resident: Arc<CanonicalClient>,
-    pub(super) counts: Arc<Counts>,
-    /// Unconsumed local serials below which a create refills early.
-    pub(super) serial_low_water: AtomicU64,
-    /// The write recognizer's fixed slots, shared by every Workspace.
-    pub(super) recognizer: super::Recognizer,
-    saves: Mutex<SaveCounters>,
-    /// One idle producer handle any Workspace may take (#352 F-025 fix 4).
-    pub(super) idle_producer: super::producer::Producer,
-    /// Reserved, unhanded serials per scope, `(next, end)` (#352 F-025 fix 4).
-    serial_pool: Mutex<std::collections::HashMap<ObjectId, (u64, u64)>>,
-    /// Merge build records in the Store file (#355); a Store without them
-    /// refuses merges.
-    merge_scratch: Option<layerfs_persistence::MergeScratch>,
-    /// Merge record work of every merge so far, including writer holds.
-    merge_work: Mutex<layerfs_persistence::MergeRecordsWork>,
-    /// The writer session's fused Commit (#768 stage 2); a Store without one
-    /// makes every Commit on the separate path.
-    pub(super) committer: Option<layerfs_persistence::Committer>,
-    /// Fused Commits made, and fused attempts refused by a race that went on
-    /// the separate path.
-    pub(super) fused: super::commit_fused::FusedCounts,
-    /// A mount reads its snapshot on the writer, not its Workspace reader
-    /// (#768 step B, PostgreSQL): with its admission and markers it is then
-    /// two writer messages and no reader round trip.
-    pub(super) mount_on_writer: bool,
-    /// The recorded logical size of the node any of this Store's
-    /// Workspaces last read or published (#818 W3), so a Workspace bound
-    /// to the Commit another one just published reads none. A node's
-    /// recorded size never changes. Bound: one `(NodeId, u64)`; a poisoned
-    /// slot keeps nothing.
-    pub(super) last_logical: Mutex<Option<(layerfs_history::NodeId, u64)>>,
-    /// A Store with no writer whose read session pays a round trip per
-    /// demand (#819's PostgreSQL read-only open): its reads plan as a
-    /// PostgreSQL writer's Store plans them (#818).
-    read_session_batches: bool,
-    /// Dropped after the readers so SQLite can clean up WAL and SHM on its
-    /// last writable close. Keep it the last field: fields drop in
-    /// declaration order.
-    sqlite_writer: Option<Arc<layerfs_persistence::DeferredSqliteWriter>>,
-}
-impl Store {
-    /// Takes the control reader and a mount-time factory under explicit capacity.
-    pub fn new(
-        writer: Arc<dyn PackPersistence>,
-        history: Arc<dyn HistoryCatalog>,
-        control: StoreReader,
-        factory: ReaderFactory,
-        cache_bytes: usize,
-        reservations: ReservationBlocks,
-        workspace_capacity: usize,
-    ) -> StorageResult<Self> {
-        let policy = writer.policy()?.validated()?;
-        if control.storage.policy() != policy {
-            return Err(StorageError::Integrity("Store reader policy"));
+impl Writer {
+    fn diagnostics(&self) -> Result<Option<SqlWork>, PersistenceError> {
+        match self {
+            Self::ReadOnly(_) => Ok(None),
+            Self::Sqlite(provider) => provider.diagnostics().map(Some),
+            Self::DeferredSqlite { writer, .. } => writer
+                .get()
+                .map(|writer| writer.storage.diagnostics())
+                .transpose(),
+            Self::Postgres(provider) => provider.diagnostics().map(Some),
         }
-        let mut store = Self::with_control_reader(
-            history,
+    }
+}
+/// A reader session whose SQL counters can be read.
+trait Observed: Send + Sync {
+    fn work(&self) -> Result<SqlWork, PersistenceError>;
+}
+impl Observed for StorageProvider {
+    fn work(&self) -> Result<SqlWork, PersistenceError> {
+        self.diagnostics()
+    }
+}
+impl Observed for layerfs_persistence::PostgresStorage {
+    fn work(&self) -> Result<SqlWork, PersistenceError> {
+        self.diagnostics()
+    }
+}
+struct ReaderObservations {
+    live: BTreeMap<usize, Weak<dyn Observed>>,
+    retired: Option<SqlWork>,
+}
+type Registry = Arc<Mutex<ReaderObservations>>;
+fn registry() -> Registry {
+    Arc::new(Mutex::new(ReaderObservations {
+        live: BTreeMap::new(),
+        retired: Some(SqlWork::default()),
+    }))
+}
+/// Registers reader `index`'s session and folds its counters into the
+/// retired total when the reader closes. Weak observation never keeps the
+/// SQL connection open after unmount.
+fn observe(
+    registry: &Registry,
+    index: usize,
+    provider: Weak<dyn Observed>,
+    reader: StoreReader,
+) -> StorageResult<StoreReader> {
+    registry
+        .lock()
+        .map_err(|_| StorageError::Integrity("reader observations poisoned"))?
+        .live
+        .insert(index, provider.clone());
+    let observed = registry.clone();
+    Ok(reader.on_close(move || {
+        let mut rows = observed.lock().unwrap_or_else(|poison| poison.into_inner());
+        if let Some(provider) = provider.upgrade() {
+            match provider.work() {
+                Ok(work) => {
+                    if let Some(total) = &mut rows.retired {
+                        total.accumulate(&work);
+                    }
+                }
+                Err(_) => rows.retired = None,
+            }
+        }
+        rows.live.remove(&index);
+    }))
+}
+pub struct OpenedStore {
+    pub store: Arc<Store>,
+    /// The engine's version: SQLite's, or `postgresql <server version>`.
+    pub sqlite_version: String,
+    writer: Writer,
+    readers: Arc<Mutex<ReaderObservations>>,
+}
+/// The Store's SQL sessions, observed without holding the daemon's state.
+pub struct SqlSessions {
+    writer: Writer,
+    readers: Arc<Mutex<ReaderObservations>>,
+}
+impl SqlSessions {
+    /// The writer's totals, and every reader's (live plus retired) summed
+    /// under one registry turn so a reader closing meanwhile counts once.
+    /// Either is None when a session's counters are unavailable. Last, the
+    /// work the calling thread ran on any session (#367).
+    pub fn totals(&self) -> crate::telemetry::SqlTotals {
+        let writer = self.writer.diagnostics().ok().flatten();
+        let readers = self.readers.lock().ok().and_then(|readers| {
+            let mut total = readers.retired?;
+            for provider in readers.live.values().filter_map(Weak::upgrade) {
+                total.accumulate(&provider.work().ok()?);
+            }
+            Some(total)
+        });
+        (writer, readers, layerfs_persistence::thread_work())
+    }
+}
+pub struct StoreDiagnostics {
+    pub writer: SqlWork,
+    pub readers: Vec<SqlWork>,
+}
+impl OpenedStore {
+    /// Prepares the writer's mount and unmount statements in one flight
+    /// (#768): on PostgreSQL one round trip and one read transaction, so a
+    /// mount's admission and an unmount's release prepare nothing. Only a
+    /// service that mounts calls it, the daemon at its Store open; an SDK
+    /// call, an install or a restore does not pay it, and a mount on such a
+    /// service prepares its statements at first use instead. Nothing on
+    /// SQLite.
+    pub fn prepare_mounts(&self) -> StorageResult<()> {
+        match &self.writer {
+            Writer::ReadOnly(_) | Writer::Sqlite(_) | Writer::DeferredSqlite { .. } => Ok(()),
+            Writer::Postgres(storage) => storage.prepare_mount_writes().map_err(StorageError::from),
+        }
+    }
+    /// Prepares the writer's create statements in one flight (#818 W4): on
+    /// PostgreSQL one round trip and one read transaction, so a first create
+    /// (an SDK write that does not take the fused Commit) prepares none of
+    /// them, and its serial reservation is one message. The SDK's Store open
+    /// calls it (`StoreService::open_postgres`); the daemon does not.
+    /// Nothing on SQLite (its deferred writer included) or on a read-only
+    /// PostgreSQL service, which sends no writes.
+    pub fn prepare_sdk_writes(&self) -> StorageResult<()> {
+        match &self.writer {
+            Writer::ReadOnly(_) | Writer::Sqlite(_) | Writer::DeferredSqlite { .. } => Ok(()),
+            Writer::Postgres(storage) => storage.prepare_sdk_writes().map_err(StorageError::from),
+        }
+    }
+    /// The Store-file operations of a SQLite session (`None` for a
+    /// PostgreSQL Store, which has no file).
+    pub fn file(&self) -> Option<&dyn layerfs_persistence::StoreFile> {
+        match &self.writer {
+            Writer::Sqlite(provider) => {
+                Some(provider.as_ref() as &dyn layerfs_persistence::StoreFile)
+            }
+            Writer::DeferredSqlite { writer, reader } => Some(
+                writer
+                    .get()
+                    .map_or(reader, |writer| &writer.storage)
+                    .as_ref(),
+            ),
+            Writer::ReadOnly(_) | Writer::Postgres(_) => None,
+        }
+    }
+    /// Checkpoints an owned SQLite writer. Explicit maintenance can start
+    /// one. An idle checkpoint following a Store call only uses an open one.
+    pub fn checkpoint(&self, explicit: bool) -> Result<Option<bool>, PersistenceError> {
+        use layerfs_persistence::StoreFile;
+        let provider = match &self.writer {
+            Writer::Sqlite(provider) => Some(provider),
+            Writer::DeferredSqlite { writer, .. } if explicit => Some(&writer.start()?.storage),
+            Writer::DeferredSqlite { writer, .. } => writer.get().map(|writer| &writer.storage),
+            Writer::ReadOnly(_) | Writer::Postgres(_) => None,
+        };
+        provider.map(|provider| provider.checkpoint()).transpose()
+    }
+    /// Whether a held PostgreSQL service can serve another call at the
+    /// generation it opened at (`PostgresStorage::current`: one round trip):
+    /// a read service's one session, or a writable service's writer
+    /// session (#819 P-B writes), whose readers check themselves when used.
+    /// `None` for a SQLite service.
+    pub fn postgres_session_current(&self) -> Option<bool> {
+        match &self.writer {
+            Writer::ReadOnly(session) | Writer::Postgres(session) => Some(session.current()),
+            _ => None,
+        }
+    }
+    pub fn reader_indices(&self) -> Vec<usize> {
+        let readers = self
+            .readers
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
+        readers.live.keys().copied().chain([usize::MAX]).collect()
+    }
+    pub fn session_diagnostics(&self, reader: Option<usize>) -> StorageResult<Option<SqlWork>> {
+        let Some(index) = reader else {
+            return self.writer.diagnostics().map_err(StorageError::from);
+        };
+        let readers = self
+            .readers
+            .lock()
+            .map_err(|_| StorageError::Integrity("reader observations poisoned"))?;
+        if index == usize::MAX {
+            return Ok(readers.retired);
+        }
+        readers
+            .live
+            .get(&index)
+            .and_then(Weak::upgrade)
+            .map(|provider| provider.work().map_err(StorageError::from))
+            .transpose()
+    }
+    pub fn sql_sessions(&self) -> SqlSessions {
+        SqlSessions {
+            writer: self.writer.clone(),
+            readers: self.readers.clone(),
+        }
+    }
+    pub fn diagnostics(&self) -> StorageResult<StoreDiagnostics> {
+        Ok(StoreDiagnostics {
+            writer: self.writer.diagnostics()?.unwrap_or_default(),
+            readers: self
+                .reader_indices()
+                .into_iter()
+                .map(|index| {
+                    self.session_diagnostics(Some(index))?
+                        .ok_or(StorageError::Integrity("reader observation unavailable"))
+                })
+                .collect::<StorageResult<Vec<_>>>()?,
+        })
+    }
+}
+
+pub fn open_store(
+    config: impl Into<layerfs_persistence::StoreSelection>,
+    binding: &[u8],
+    cursor_key: [u8; 32],
+    workspace_capacity: usize,
+    cache_bytes: usize,
+    reservations: ReservationBlocks,
+) -> StorageResult<Arc<Store>> {
+    open_store_observed(
+        config,
+        binding,
+        cursor_key,
+        workspace_capacity,
+        cache_bytes,
+        reservations,
+    )
+    .map(|opened| opened.store)
+}
+/// One control reader opens at startup. Each Workspace reader opens once at bind,
+/// never in the middle of a request. Persistence verifies its 2 MiB page cache.
+pub fn open_store_observed(
+    config: impl Into<layerfs_persistence::StoreSelection>,
+    binding: &[u8],
+    cursor_key: [u8; 32],
+    workspace_capacity: usize,
+    cache_bytes: usize,
+    reservations: ReservationBlocks,
+) -> StorageResult<OpenedStore> {
+    if workspace_capacity == 0 {
+        return Err(StorageError::Integrity("empty Workspace reader capacity"));
+    }
+    reservations.validate()?;
+    let config = match config.into() {
+        layerfs_persistence::StoreSelection::Sqlite(config) => config,
+        layerfs_persistence::StoreSelection::Postgres(selection) => {
+            let _ = &selection;
+            return open_postgres(
+                &selection,
+                binding,
+                cursor_key,
+                workspace_capacity,
+                cache_bytes,
+                reservations,
+            );
+        }
+    };
+    let writer = SqliteHandles::open_writable(config.clone(), binding, cursor_key)?;
+    let sqlite_version = writer.profile().sqlite_version.clone();
+    let observations = registry();
+    let binding = binding.to_vec();
+    let factory = sqlite_readers(config, binding, cursor_key, observations.clone());
+    let control = factory(0)?;
+    let committer = writer.history.committer();
+    let store = Arc::new(
+        Store::new(
+            writer.storage.clone(),
+            Arc::new(writer.history),
             control,
             factory,
             cache_bytes,
             reservations,
             workspace_capacity,
-        )?;
-        store.writer = Some(writer);
-        Ok(store)
-    }
+        )?
+        .with_merge_scratch(writer.storage.merge_scratch())
+        .with_committer(committer),
+    );
+    Ok(OpenedStore {
+        store,
+        sqlite_version,
+        writer: Writer::Sqlite(writer.storage),
+        readers: observations,
+    })
+}
 
-    /// Builds over an already validated control reader without a writer.
-    pub(crate) fn with_control_reader(
-        history: Arc<dyn HistoryCatalog>,
-        control: StoreReader,
-        factory: ReaderFactory,
-        cache_bytes: usize,
-        reservations: ReservationBlocks,
-        workspace_capacity: usize,
-    ) -> StorageResult<Self> {
-        let reservations = reservations.validate()?;
-        let policy = control.storage.policy();
-        if workspace_capacity == 0 {
-            return Err(StorageError::Integrity("empty Workspace reader capacity"));
-        }
-        let counts = Arc::new(Counts::default());
-        let readers = ReadSet::new(
-            Some(control),
+fn sqlite_reader(
+    opened: SqliteHandles,
+    observations: &Registry,
+    index: usize,
+) -> StorageResult<StoreReader> {
+    let provider: Weak<dyn Observed> = Arc::downgrade(&opened.storage) as Weak<_>;
+    let reader = StoreReader::new(Storage::new(opened.storage)?, Arc::new(opened.history));
+    observe(observations, index, provider, reader)
+}
+
+fn sqlite_readers(
+    config: PersistenceConfig,
+    binding: Vec<u8>,
+    cursor_key: [u8; 32],
+    observations: Registry,
+) -> crate::store::ReaderFactory {
+    Arc::new(move |index| {
+        let opened = SqliteHandles::open_read_only(config.clone(), &binding, cursor_key)?;
+        sqlite_reader(opened, &observations, index)
+    })
+}
+
+/// In-process SQLite Store calls have one validated control reader and an
+/// unopened writer. The daemon and standalone install use eager assembly.
+pub(crate) fn open_sqlite_for_calls(
+    config: PersistenceConfig,
+    binding: &[u8],
+    cursor_key: [u8; 32],
+    workspace_capacity: usize,
+    cache_bytes: usize,
+    reservations: ReservationBlocks,
+) -> StorageResult<OpenedStore> {
+    let (opened, history, writer) =
+        DeferredSqliteWriter::open(config.clone(), binding, cursor_key)?;
+    let sqlite_version = opened.profile().sqlite_version.clone();
+    let reader = opened.storage.clone();
+    let observations = registry();
+    let control = sqlite_reader(opened, &observations, 0)?;
+    let factory = sqlite_readers(config, binding.to_vec(), cursor_key, observations.clone());
+    let store = Arc::new(
+        Store::with_control_reader(
+            Arc::new(history),
+            control,
             factory,
-            counts.clone(),
-            (workspace_capacity, policy, false),
-        );
-        Self::with_readers(
-            None,
-            history,
-            (readers, counts, policy),
             cache_bytes,
             reservations,
-        )
-    }
-    /// [`Self::new`] with shared readers (#64), as a PostgreSQL Store opens:
-    /// no control reader opens until its first use, and every Workspace's
-    /// reader comes from and returns to the idle readers
-    /// ([`super::read_service::IDLE_READERS`]), so a mount after an unmount
-    /// opens no connection.
-    pub fn with_shared_readers(
-        writer: Arc<dyn PackPersistence>,
-        history: Arc<dyn HistoryCatalog>,
-        factory: ReaderFactory,
-        cache_bytes: usize,
-        reservations: ReservationBlocks,
-        workspace_capacity: usize,
-    ) -> StorageResult<Self> {
-        let reservations = reservations.validate()?;
-        let policy = writer.policy()?.validated()?;
-        if workspace_capacity == 0 {
-            return Err(StorageError::Integrity("Store reader capacity or policy"));
+            workspace_capacity,
+        )?
+        .with_deferred_sqlite_writer(writer.clone()),
+    );
+    Ok(OpenedStore {
+        store,
+        sqlite_version,
+        writer: Writer::DeferredSqlite { writer, reader },
+        readers: observations,
+    })
+}
+
+/// A one-shot read over a single PostgreSQL session with Full validation.
+pub(crate) fn open_postgres_read_only(
+    selection: &layerfs_persistence::PostgresSelection,
+    binding: &[u8],
+    cursor_key: [u8; 32],
+    cache_bytes: usize,
+) -> StorageResult<OpenedStore> {
+    use layerfs_persistence::{PostgresCheck, PostgresHandles};
+    let selection = selection.clone().with_check(PostgresCheck::Full);
+    let opened = PostgresHandles::open_read_only(&selection, binding, cursor_key)?;
+    let session = opened.storage.clone();
+    let version = format!("postgresql {}", opened.storage.server_version());
+    let observations = registry();
+    let provider: Weak<dyn Observed> = Arc::downgrade(&opened.storage) as Weak<_>;
+    let history = Arc::new(opened.history);
+    let control = StoreReader::new(Storage::new(opened.storage)?, history.clone());
+    let control = observe(&observations, 0, provider, control)?;
+    let batches = layerfs_storage::port::PackPersistence::batched_chain_reads(&*session);
+    let store = Store::with_control_reader(
+        history,
+        control,
+        Arc::new(|_| {
+            Err(StorageError::Integrity(
+                "one-shot read has no Workspace reader",
+            ))
+        }),
+        cache_bytes,
+        ReservationBlocks::default(),
+        1,
+    )?
+    .with_batched_read_session(batches);
+    Ok(OpenedStore {
+        store: Arc::new(store),
+        sqlite_version: version,
+        writer: Writer::ReadOnly(session),
+        readers: observations,
+    })
+}
+
+/// A PostgreSQL Store (#506): one writer session, checked as `selection`
+/// says, and read-only sessions with the light check (#63), each observed as
+/// on SQLite. Readers are shared (#64): the control reader opens at its first
+/// use, and an unmounted Workspace's healthy reader serves the next mount,
+/// so the daemon holds at most the writer, its lane connection, the control
+/// reader, one reader per mounted Workspace and `IDLE_READERS` idle ones.
+/// A merge's records live in the writer connection's temporary tables
+/// (#506 d).
+fn open_postgres(
+    selection: &layerfs_persistence::PostgresSelection,
+    binding: &[u8],
+    cursor_key: [u8; 32],
+    workspace_capacity: usize,
+    cache_bytes: usize,
+    reservations: ReservationBlocks,
+) -> StorageResult<OpenedStore> {
+    use layerfs_persistence::PostgresHandles;
+    let writer = PostgresHandles::open_writable(selection, binding, cursor_key)?;
+    // A lost reply quarantines the writer; its next call reopens it once,
+    // settling what the closed connection left, instead of refusing every
+    // later Commit, mount and release until the service closes.
+    writer.storage.enable_reopen();
+    let version = format!("postgresql {}", writer.storage.server_version());
+    let selection = (selection.clone()).with_check(layerfs_persistence::PostgresCheck::Light);
+    let binding = binding.to_vec();
+    let observations = registry();
+    let registry = observations.clone();
+    let factory: crate::store::ReaderFactory = Arc::new(move |index| {
+        let opened = PostgresHandles::open_read_only(&selection, &binding, cursor_key)?;
+        // A reader reopens too: a read changes nothing on the server, so a
+        // lost reply leaves no custody, and a reader whose connection
+        // closed (a lost reply, a restart) serves its next call on a new
+        // one instead of failing every later read of its Workspace.
+        opened.storage.enable_reopen();
+        // #768: a Workspace reader (the control reader is index 0) prepares
+        // its mount statements in one flight when it opens: at the mount
+        // that opens it, or after readiness for the idle reader.
+        if index != 0 {
+            opened.storage.prepare_mount_reads()?;
         }
-        let counts = Arc::new(Counts::default());
-        let readers = ReadSet::new(
-            None,
+        let provider: Weak<dyn Observed> = Arc::downgrade(&opened.storage) as Weak<_>;
+        let session = opened.storage.clone();
+        let reader = StoreReader::new(Storage::new(opened.storage)?, Arc::new(opened.history))
+            .with_usable(move || session.usable())
+            .reopening();
+        observe(&registry, index, provider, reader)
+    });
+    let committer = writer.history.committer();
+    let store = Arc::new(
+        Store::with_shared_readers(
+            writer.storage.clone(),
+            Arc::new(writer.history),
             factory,
-            counts.clone(),
-            (workspace_capacity, policy, true),
-        );
-        Self::with_readers(
-            Some(writer),
-            history,
-            (readers, counts, policy),
             cache_bytes,
             reservations,
-        )
-    }
-    fn with_readers(
-        writer: Option<Arc<dyn PackPersistence>>,
-        history: Arc<dyn HistoryCatalog>,
-        (readers, counts, policy): (Arc<ReadSet>, Arc<Counts>, StoragePolicy),
-        cache_bytes: usize,
-        reservations: ReservationBlocks,
-    ) -> StorageResult<Self> {
-        let cache = Arc::new(CanonicalCache::new(cache_bytes));
-        Ok(Self {
-            writer,
-            history,
-            readers,
-            policy,
-            reservations,
-            resident: Arc::new(CanonicalClient::resident(cache.clone())),
-            cache,
-            counts,
-            serial_low_water: AtomicU64::new(0),
-            recognizer: super::Recognizer::new(),
-            saves: Mutex::default(),
-            idle_producer: Default::default(),
-            serial_pool: Mutex::default(),
-            merge_scratch: None,
-            merge_work: Mutex::default(),
-            committer: None,
-            fused: Default::default(),
-            mount_on_writer: false,
-            last_logical: Mutex::default(),
-            read_session_batches: false,
-            sqlite_writer: None,
-        })
-    }
-    pub(crate) fn with_deferred_sqlite_writer(
-        mut self,
-        writer: Arc<layerfs_persistence::DeferredSqliteWriter>,
-    ) -> Self {
-        self.sqlite_writer = Some(writer);
-        self
-    }
-
-    /// Marks a writerless Store whose read session batches demands.
-    pub(crate) fn with_batched_read_session(mut self, batches: bool) -> Self {
-        self.read_session_batches = batches;
-        self
-    }
-
-    pub(crate) fn prepare_history_write(&self) -> layerfs_history::HistoryResult<()> {
-        if let Some(writer) = &self.sqlite_writer {
-            writer.prepare_history_write()?;
-        }
-        Ok(())
-    }
-
-    pub(super) fn committer(&self) -> Option<&layerfs_persistence::Committer> {
-        match &self.sqlite_writer {
-            Some(writer) => writer.get().map(|writer| &writer.committer),
-            None => self.committer.as_ref(),
-        }
-    }
-
-    /// Makes each Workspace Commit over an unmoved head in one write
-    /// transaction of the writer session (#768 stage 2).
-    #[must_use]
-    pub fn with_committer(mut self, committer: layerfs_persistence::Committer) -> Self {
-        self.committer = Some(committer);
-        self
-    }
-    /// Reads each mount's snapshot on the writer session (#768 step B): a
-    /// PostgreSQL Store, whose writer registers the mount and reads its
-    /// markers in one more message.
-    #[must_use]
-    pub fn with_mount_on_writer(mut self) -> Self {
-        self.mount_on_writer = true;
-        self
-    }
-    /// Merge build records over the Store's writable session (#355).
-    #[must_use]
-    pub fn with_merge_scratch(mut self, scratch: layerfs_persistence::MergeScratch) -> Self {
-        self.merge_scratch = Some(scratch);
-        self
-    }
-    /// Explicit configuration. Application assembly calls this once, before
-    /// any Workspace is served; nothing else in the product calls it. Zero,
-    /// the value until then, makes no early attempt.
-    pub fn set_serial_low_water(&self, serials: u64) {
-        self.serial_low_water.store(serials, Ordering::Relaxed);
-    }
-    /// Whether the opened writer reads known chains in one wave (#816: a
-    /// PostgreSQL writer). A Store with no opened writer provider plans no
-    /// batched reads: SQLite's deferred writer (whose provider keeps the
-    /// default `false`) and a one-shot read, which binds no Workspace.
-    pub(super) fn batched_chain_reads(&self) -> bool {
-        self.writer
-            .as_ref()
-            .is_some_and(|writer| writer.batched_chain_reads())
-    }
-    /// Independent mutable producer state over the same opened write provider.
-    /// No shared Save or whole-Commit ownership is acquired here.
-    pub fn producer(&self) -> StorageResult<Storage> {
-        let writer: Arc<dyn PackPersistence> = match &self.sqlite_writer {
-            Some(writer) => writer.start()?.storage.clone(),
-            None => self
-                .writer
-                .clone()
-                .ok_or(layerfs_storage::port::PersistenceError::BackendUnavailable)?,
-        };
-        self.counts.producers.fetch_add(1, Ordering::Relaxed);
-        Storage::with_reservations(writer, self.reservations)
-    }
-    /// Runs one merge over fresh build records in the Store file and removes
-    /// them when `body` returns. Returns the records' first failure with the
-    /// body's result, so a refused merge reports the persistence cause.
-    pub fn merge_records<T>(
-        &self,
-        body: impl FnOnce(&mut layerfs_persistence::MergeRecords) -> T,
-    ) -> Result<
-        (T, Option<layerfs_storage::port::PersistenceError>),
-        layerfs_storage::port::PersistenceError,
-    > {
-        let scratch = match &self.sqlite_writer {
-            Some(writer) => &writer.start()?.merge_scratch,
-            None => self
-                .merge_scratch
-                .as_ref()
-                .ok_or(layerfs_storage::port::PersistenceError::BackendUnavailable)?,
-        };
-        let mut records = scratch.begin()?;
-        let value = body(&mut records);
-        let failure = records.failure().cloned();
-        let work = records.end()?;
-        if let Ok(mut total) = self.merge_work.lock() {
-            total.add(work);
-        }
-        Ok((value, failure))
-    }
-    /// Merge record work of every merge so far: jobs and writer holds.
-    pub fn merge_record_work(&self) -> layerfs_persistence::MergeRecordsWork {
-        self.merge_work
-            .lock()
-            .map_or_else(|poison| *poison.into_inner(), |work| *work)
-    }
-    pub const fn policy(&self) -> StoragePolicy {
-        self.policy
-    }
-    pub fn history(&self) -> &dyn HistoryCatalog {
-        self.history.as_ref()
-    }
-    /// One lookup in published history, through the control reader's
-    /// read-only session, so it never queues behind a Commit holding the
-    /// publication lane (#352 F-018). It sees what is published when it runs,
-    /// and the reader's admission, stop and failure custody apply to it.
-    pub fn published<T>(
-        &self,
-        lookup: impl FnOnce(&dyn HistoryCatalog) -> layerfs_history::HistoryResult<T>,
-    ) -> Result<T, Arc<PortError>> {
-        self.readers.control()?.published(lookup)
-    }
-    /// Adds one finished Save's selection counts to the daemon's totals.
-    pub fn note_save(&self, saved: &WriteOutcome) {
-        if let Ok(mut saves) = self.saves.lock() {
-            saves.delta.accumulate(&saved.delta);
-            saves.pool.accumulate(&saved.pool);
-        }
-    }
-    /// `count` serials of `scope` from the pool, when it holds that many.
-    pub(super) fn pooled_serials(&self, scope: ObjectId, count: u64) -> Option<(u64, u64)> {
-        let mut pool = self.serial_pool.lock().ok()?;
-        let (next, end) = pool.get_mut(&scope)?;
-        if *end - *next < count {
-            return None;
-        }
-        let start = *next;
-        *next += count;
-        Some((start, count))
-    }
-    /// Makes `[next, end)` the pool of `scope`; what it held before stays
-    /// consumed.
-    pub(super) fn pool_serials(&self, scope: ObjectId, next: u64, end: u64) {
-        if let Ok(mut pool) = self.serial_pool.lock() {
-            pool.insert(scope, (next, end));
-        }
-    }
-    /// Adds one merge's path naming to the totals; a merge that ended before
-    /// naming (one side unchanged) adds nothing.
-    pub fn note_merge(&self, merged: &layerfs_content::merge::MergeOutcome) {
-        let named = merged.naming;
-        if !merged.hinted && named.inodes == 0 {
-            return;
-        }
-        if let Ok(mut saves) = self.saves.lock() {
-            saves.merge.merges += 1;
-            saves.merge.fallbacks += u64::from(!merged.hinted);
-            saves.merge.naming.add(&named);
-        }
-    }
-    /// Counts one in-lane merge step: its decided paths, or a refusal.
-    pub fn note_lane(&self, paths: Option<usize>) {
-        if let Ok(mut saves) = self.saves.lock() {
-            match paths {
-                Some(paths) => {
-                    saves.merge.lane_steps += 1;
-                    saves.merge.lane_paths += paths as u64;
-                }
-                None => saves.merge.lane_refused += 1,
-            }
-        }
-    }
-    /// The selection counts of every Save this daemon finished.
-    pub fn save_counters(&self) -> SaveCounters {
-        self.saves.lock().map(|saves| *saves).unwrap_or_default()
-    }
-    pub fn read_handles(&self) -> usize {
-        self.readers.work().readers
-    }
-    pub fn cache_work(&self) -> layerfs_content::ContentResult<ClientWork> {
-        self.cache.diagnostics()
-    }
-    pub fn recognizer_work(&self) -> super::RecognizerWork {
-        self.recognizer.work()
-    }
-    pub fn work(&self) -> StoreWork {
-        StoreWork {
-            object_batches: self.counts.objects.load(Ordering::Relaxed),
-            object_ids: self.counts.object_ids.load(Ordering::Relaxed),
-            length_batches: self.counts.lengths.load(Ordering::Relaxed),
-            length_ids: self.counts.length_ids.load(Ordering::Relaxed),
-            serial_reservations: self.counts.serials.load(Ordering::Relaxed),
-        }
-    }
-    pub fn reuse_work(&self) -> ReuseWork {
-        ReuseWork {
-            readers_opened: self.counts.readers_opened.load(Ordering::Relaxed),
-            readers_reused: self.counts.readers_reused.load(Ordering::Relaxed),
-            producers: self.counts.producers.load(Ordering::Relaxed),
-            readers_prefilled: self.counts.readers_prefilled.load(Ordering::Relaxed),
-            prefill_failures: self.counts.prefill_failures.load(Ordering::Relaxed),
-        }
-    }
-    /// Opens one idle Store reader ahead of the first mount, once, on a
-    /// Store with shared readers (PostgreSQL); the reader set's `prefill`.
-    /// The daemon calls it after it reported ready, on a thread of its own.
-    pub fn prefill_reader(&self) -> Option<StorageResult<()>> {
-        self.readers.prefill()
-    }
-    /// Whether the Store's provider pays a round trip per demand and reads
-    /// a grouped demand in one (PostgreSQL): a planned read pays only there
-    /// (#818 W6). The opened writer answers; a writerless Store answers for
-    /// its read session (#819: SQLite's deferred writer plans none).
-    pub(crate) fn batched_reads(&self) -> bool {
-        self.batched_chain_reads() || self.read_session_batches
-    }
-    pub fn mount_reader(&self, workspace: WorkspaceId) -> Result<(), Arc<PortError>> {
-        self.readers.mount(workspace, false)
-    }
-    pub fn close_reader(&self, workspace: WorkspaceId) -> Result<(), Arc<PortError>> {
-        self.readers.close(workspace)
-    }
-    pub(super) fn reader(
-        &self,
-        workspace: Option<WorkspaceId>,
-    ) -> Result<Arc<super::read_handle::ReadSession>, super::ReadAdmissionError> {
-        self.readers.session(workspace)
-    }
-    pub fn read_work(&self) -> ReadServiceWork {
-        self.readers.work()
-    }
-    /// One nonblocking Storage-counter snapshot of an opened reader identity.
-    /// A contended or unavailable reader returns None without acquisition.
-    pub fn reader_storage_diagnostics(&self, index: usize) -> Option<layerfs_storage::Diagnostics> {
-        self.readers.storage_diagnostics(index)
-    }
-    pub fn reader_failures(&self) -> Vec<(usize, Arc<PortError>)> {
-        self.readers.failures()
-    }
-    /// Whole-Store shutdown only. Workspace unmount must not stop other readers.
-    pub fn stop_reads(&self) {
-        self.readers.stop();
-    }
+            workspace_capacity,
+        )?
+        .with_merge_scratch(writer.storage.merge_scratch())
+        .with_committer(committer)
+        .with_mount_on_writer(),
+    );
+    Ok(OpenedStore {
+        store,
+        sqlite_version: version,
+        writer: Writer::Postgres(writer.storage),
+        readers: observations,
+    })
 }
