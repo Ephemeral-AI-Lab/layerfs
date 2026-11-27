@@ -798,3 +798,34 @@ code change. Open: the M2 → M3 per-trip wall difference on revision.h100
 (12.05 vs 16–17 ms) is unexplained (no M2 capture). Suggested harness change
 (not done): calibrate by the mean of a pause-matched loop or the in-container
 delay, and treat local netem as indicative.
+
+### M3 review fixes merged, and S3
+
+| Merge | Lane commit | Change | LOC |
+|---|---|---|---|
+| `f7dac666ad` | W `ffd5a9a426` | `send_in_unit` refuses after a failed flight; no ROLLBACK for an unsent first flight | +2 |
+| `c2e00dd9c0` | I `857431518d` | joined acquisition reads decode the owner row (corrupt → Integrity); ROLLBACK counted after a failed check | +10 |
+| `f4936e01c8` | RH `645d0aedea` | `object_owned` = `!call_failure` (shared); `read_canonical_each` dedupe; `Cached.failed` ≤ MEMO; rustfmt | +20 |
+| `3a15eba8f4` | S `8c1b6b7466` | S3: `locate_chains_each`; a deleted pack row (PG) fails only its objects and dependents; relocation into `read/values.rs`, `read/per_object.rs` | +104 |
+
+No tests deleted. No healthy-Store trip changed (pins unchanged on both
+backends). Fixed: the damaged-Store refusal-order bug (corrupt pack and deleted
+pack row both refuse only where the lone walk reaches them).
+
+### Final check at `3a15eba8f4` (receipts/final/)
+
+All 19 affected binaries pass once. Probe at SQLite and PG local: every count
+equals M3 except PG grep.tree_1k 63 → 35 (R6). Final table: `receipts/M3/REPORT.md`
+"Final comparison" with grep.tree_1k PG trips 78 → 35 and PG local 79.4 → 28.8 ms
+(2.8×); its +10 ms was not re-run.
+
+Range LOC:
+```text
+Production LOC: 227,592 -> 232,612 (delta +5,020)
+  core     45,655 ->  47,144 (+1,489)  layerfs-content +575, layerfs-history +123, layerfs-storage +791
+  engine  106,787 -> 110,318 (+3,531)  layerfs-persistence +1,920, layerfs-project +11, layerfs-store-service +1,490, layerfs-workspace +110
+  control  64,634 ->  64,634 (0)
+  api      10,516 ->  10,516 (0)
+  reference absent (retired R9c; last counted 65,417 at tree 498dd1917812)
+  Method: tools/production_loc.py --detail on base 1317ebf7ca and the tip 3a15eba8f4
+```

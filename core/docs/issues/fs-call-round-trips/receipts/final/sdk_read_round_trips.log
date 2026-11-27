@@ -1,0 +1,8 @@
+
+running 2 tests
+test postgresql_read_counts ... ok
+test sqlite_read_counts ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.54s
+
+run_bounded: exit 0 after 5.8 s

@@ -1,0 +1,11 @@
+
+running 5 tests
+test a_corrupt_owner_row_refuses_every_unit_integrity ... ok
+test empty_released_missing_and_foreign_owners_stay_distinct ... ok
+test postgresql_reads_equal_sqlite_reads ... ok
+test reads_drop_at_every_message ... ok
+test reads_kill_at_every_message ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 19.62s
+
+run_bounded: exit 0 after 20.3 s

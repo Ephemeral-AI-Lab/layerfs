@@ -1,0 +1,10 @@
+
+running 4 tests
+test every_inline_sql_read_of_branch_or_layer_stack_is_filtered_or_allow_listed ... ok
+test every_statement_reading_branch_or_layer_stack_is_filtered_or_allow_listed ... ok
+test the_guard_recognizes_a_new_unfiltered_statement ... ok
+test the_retry_stack_read_is_the_marker_plus_the_filtered_lookup ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+run_bounded: exit 0 after 0.7 s

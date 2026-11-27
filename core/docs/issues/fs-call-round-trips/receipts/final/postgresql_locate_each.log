@@ -1,0 +1,7 @@
+
+running 1 test
+test a_located_row_whose_pack_is_gone_is_unpacked_and_the_others_locate ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+run_bounded: exit 0 after 0.8 s
