@@ -4,13 +4,17 @@ mod callbacks;
 mod directory;
 mod failure;
 mod inline;
-mod mutate;
+pub(crate) mod mutation;
 mod reply;
 mod state;
 mod terminal;
+pub mod coherence;
 
 pub use accounting::{Accounting, Disposal, Opcode, OpcodeWork, Timed, OPCODES};
 pub use failure::{KernelInput, RequestFailure};
 pub(crate) use layerfs_vfs::requests::phase::charge;
 pub use layerfs_vfs::requests::phase::{Phase, PHASES};
 pub use state::KernelFilesystem;
+
+// Kernel-cache coherence rules. No rule here sends a kernel notification or
+// waits for an entry or attribute lifetime to expire.

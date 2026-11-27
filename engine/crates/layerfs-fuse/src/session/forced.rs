@@ -1,0 +1,126 @@
+//! Forced teardown of one connection: one abort write, the terminal fence,
+//! the local drain, then one plain detach. Nothing here is repeated by
+//! itself; only a later terminal call may ask again for a detach the kernel
+//! refused, never for the abort.
+use super::state::{DetachAttempt, DrainStage, Drained, ForceRefusal, KernelSession, Undrained};
+use crate::{mount, AbortWrite};
+use std::{sync::atomic::Ordering, time::Instant};
+
+impl KernelSession {
+    /// The abort control bound at attach is still held, unused.
+    pub fn abort_bound(&self) -> bool {
+        self.abort.is_some()
+    }
+    /// The connection's single abort write. Refused before any effect when
+    /// the session is already detached or aborted, or when no control was
+    /// bound. The control leaves the session before the write, so no second
+    /// write can follow any result. Only `Written` stops the mount's request
+    /// service; a short or failed write does nothing further.
+    pub fn abort(&mut self) -> Result<AbortWrite, ForceRefusal> {
+        if self.is_detached() || self.aborted.get().is_some() {
+            return Err(ForceRefusal::NotServing);
+        }
+        self.write_abort()
+    }
+    /// The single abort write for a connection whose plain detach succeeded
+    /// but whose drain stopped at `Join`: another mount of the same
+    /// superblock outlived the detach, so the kernel never ended the
+    /// connection and the receive loops stay blocked. That detach is the
+    /// connection's one detach; `force_drain` makes none after this. Refused
+    /// before any effect unless detached and not yet aborted.
+    pub fn abort_detached(&mut self) -> Result<AbortWrite, ForceRefusal> {
+        if !self.is_detached() || self.aborted.get().is_some() {
+            return Err(ForceRefusal::NotServing);
+        }
+        if self.abort.is_none() {
+            return Err(ForceRefusal::AbortUnavailable);
+        }
+        self.forced_detach = DetachAttempt::Detached;
+        self.write_abort()
+    }
+    fn write_abort(&mut self) -> Result<AbortWrite, ForceRefusal> {
+        let Some(control) = self.abort.take() else {
+            return Err(ForceRefusal::AbortUnavailable);
+        };
+        let written = mount::abort(&control);
+        drop(control);
+        let _ = self.aborted.set(written);
+        if written == AbortWrite::Written {
+            // Refuse later receives and wake every request waiting inside its
+            // service so that it observes the stop.
+            let _ = self.queue.stop_service();
+        }
+        Ok(written)
+    }
+    /// After a `Written` abort: the same local drain as a normal unmount,
+    /// then exactly one plain detach, then the request owner and directory. The detach
+    /// is attempted only once the local drain held, and never again: `EBUSY`
+    /// or any other errno stops at `Detach` with the connection aborted and
+    /// still mounted. Called again, it observes the same predicate; a
+    /// recorded failed detach is returned as it was, with no syscall. After
+    /// `abort_detached` the earlier plain detach is that one detach.
+    pub fn force_drain(mut self) -> Result<Box<Drained>, Box<Undrained>> {
+        let attempted = match self.forced_detach {
+            DetachAttempt::Failed(_) => return Err(self.undrained(DrainStage::Detach, None)),
+            DetachAttempt::Detached => true,
+            DetachAttempt::NotAttempted => false,
+        };
+        if self.aborted.get() != Some(&AbortWrite::Written) || self.is_detached() != attempted {
+            return Err(self.undrained(DrainStage::Detach, None));
+        }
+        let deadline = Instant::now() + self.drain_wait;
+        let work = match self.quiesce(deadline) {
+            Ok(work) => work,
+            Err(stop) => return Err(self.stopped(stop)),
+        };
+        if !attempted {
+            match mount::detach(&self.directory) {
+                Ok(()) => {
+                    self.forced_detach = DetachAttempt::Detached;
+                    self.detached.store(true, Ordering::Release);
+                }
+                Err(errno) => {
+                    self.forced_detach = DetachAttempt::Failed(errno);
+                    return Err(self.undrained(DrainStage::Detach, None));
+                }
+            }
+        }
+        self.release(work)
+    }
+}
+
+impl Undrained {
+    /// A normal unmount whose plain detach succeeded but whose drain stopped at
+    /// `Join`: another mount of the same superblock outlived the detach, so the
+    /// kernel never ended the connection and the receive loops stay blocked
+    /// (#426, #460). End it exactly the way a forced unmount does: one abort
+    /// write on the already-detached connection, then the same drain. Only a
+    /// `Join` stop is a candidate. A refused or short write keeps the owner
+    /// and records the attempted abort; its facts admit no second abort.
+    pub fn end_stalled(mut self) -> Result<Box<Drained>, Box<Undrained>> {
+        if self.stage != DrainStage::Join {
+            return Err(Box::new(self));
+        }
+        match self.session.abort_detached() {
+            Ok(AbortWrite::Written) => self.session.force_drain(),
+            Ok(_) | Err(_) => {
+                self.forced = self.session.forced();
+                Err(Box::new(self))
+            }
+        }
+    }
+    /// A forced teardown that stopped at its one plain detach because the
+    /// kernel refused it (#538), asked again by a later terminal call: the
+    /// holder may be gone. Only that recorded failure is a candidate; any
+    /// other stop returns the connection as it was, with no syscall. The
+    /// abort write is never repeated: a fresh local drain, then the detach.
+    pub fn retry_detach(mut self) -> Result<Box<Drained>, Box<Undrained>> {
+        if self.stage != DrainStage::Detach
+            || !matches!(self.session.forced_detach, DetachAttempt::Failed(_))
+        {
+            return Err(Box::new(self));
+        }
+        self.session.forced_detach = DetachAttempt::NotAttempted;
+        self.session.force_drain()
+    }
+}

@@ -1,6 +1,6 @@
 //! Reversible plain detach, then complete connection and request drain.
 use super::state::{DrainStage, Drained, KernelSession, Undrained};
-use crate::{mount::syscalls, DispatchError, MountWork};
+use crate::{mount, DispatchError, MountWork};
 use fuser::SessionPhase;
 use nix::errno::Errno;
 use std::{any::Any, fs, sync::atomic::Ordering, time::Instant};
@@ -28,7 +28,7 @@ impl KernelSession {
         if self.is_detached() || self.aborted.get().is_some() {
             return Err(Errno::EINVAL);
         }
-        match syscalls::detach(&self.directory) {
+        match mount::detach(&self.directory) {
             Ok(()) => {
                 self.detached.store(true, Ordering::Release);
                 // Known detach is the fence: later receives are refused and

@@ -16,26 +16,36 @@
 //! programs are implemented here over `std::net`.
 #![forbid(unsafe_code)]
 
-pub mod apple_double;
-pub mod apple_double_codec;
-mod apple_double_spill;
-pub mod attributes;
-mod block;
-pub mod change;
-mod changing;
-mod directory;
-pub mod handle;
-pub mod kernel;
-mod mount;
-pub mod names;
-mod nfs;
-pub mod read;
-pub mod refresh;
-pub mod rpc;
 mod server;
-mod trace;
-pub mod xdr;
+pub mod apple_double;
+pub mod kernel;
+pub(crate) mod procedures;
+pub mod protocol;
 
-pub use kernel::Released;
-pub use nfs::TRANSFER_WINDOW;
+pub use kernel::references::Released;
+pub use procedures::program::TRANSFER_WINDOW;
 pub use server::{Count, ExportConfig, Refresher, Server};
+
+// #828 compat: old public module paths, removed in wave 3.
+#[doc(hidden)]
+pub use crate::apple_double::companions as apple_double; // #828 compat
+#[doc(hidden)]
+pub use crate::apple_double::codec as apple_double_codec; // #828 compat
+#[doc(hidden)]
+pub use crate::protocol::attributes as attributes; // #828 compat
+#[doc(hidden)]
+pub use crate::kernel::mutation as change; // #828 compat
+#[doc(hidden)]
+pub use crate::protocol::handle as handle; // #828 compat
+#[doc(hidden)]
+pub use crate::kernel::references as kernel; // #828 compat
+#[doc(hidden)]
+pub use crate::kernel::names as names; // #828 compat
+#[doc(hidden)]
+pub use crate::kernel::read as read; // #828 compat
+#[doc(hidden)]
+pub use crate::kernel::refresh as refresh; // #828 compat
+#[doc(hidden)]
+pub use crate::protocol::rpc as rpc; // #828 compat
+#[doc(hidden)]
+pub use crate::protocol::xdr as xdr; // #828 compat

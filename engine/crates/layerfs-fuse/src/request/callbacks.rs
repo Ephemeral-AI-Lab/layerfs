@@ -1,11 +1,5 @@
 //! Borrowed kernel input enters fixed receive accounting before owned copies.
-use super::{
-    accounting::Opcode,
-    failure::{failed, KernelInput},
-    mutate::{Appended, MutationReply},
-    reply::ReadReply,
-    state::KernelFilesystem,
-};
+use super::{accounting::Opcode, failure::{failed, KernelInput}, mutation::{Appended, MutationReply}, reply::ReadReply, state::KernelFilesystem};
 use crate::RequestDisposition;
 use fuser::{
     AccessFlags, BsdFileFlags, CopyFileRangeFlags, Errno, FileHandle, Filesystem, INodeNo,
@@ -38,7 +32,7 @@ fn absent() -> Errno {
 
 impl Filesystem for KernelFilesystem {
     fn init(&mut self, _: &Request, config: &mut KernelConfig) -> io::Result<()> {
-        let negotiated = crate::mount::negotiate(config)?;
+        let negotiated = crate::negotiate(config)?;
         self.negotiation
             .set(negotiated)
             .map_err(|_| io::Error::other("duplicate kernel initialization"))

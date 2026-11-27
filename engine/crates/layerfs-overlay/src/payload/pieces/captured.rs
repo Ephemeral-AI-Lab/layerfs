@@ -1,9 +1,5 @@
 //! The captured run step of a file whose layers hold reference pieces.
-use crate::{
-    layers::Layer, payload::captured_runs::gap_bounds, CapturedGap, CapturedRunCursor,
-    CapturedRunReply, CapturedRunStep, CapturedRunWork, Overlay, OverlayError, OverlayResult,
-    CELL_BYTES,
-};
+use crate::{layers::Layer, generation::captured::runs::gap_bounds, CapturedGap, CapturedRunCursor, CapturedRunReply, CapturedRunStep, CapturedRunWork, Overlay, OverlayError, OverlayResult, CELL_BYTES};
 
 const CELL: u64 = CELL_BYTES as u64;
 fn reply(step: CapturedRunStep, work: CapturedRunWork) -> CapturedRunReply {

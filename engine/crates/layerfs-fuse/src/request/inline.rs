@@ -68,7 +68,7 @@ impl KernelFilesystem {
                     let services = services.request(&fence)?;
                     let started = std::time::Instant::now();
                     let forgotten = services.forget(mount, serial, count).await;
-                    crate::request::charge(crate::request::Phase::Forget, started);
+                    layerfs_vfs::requests::phase::charge(layerfs_vfs::requests::phase::Phase::Forget, started);
                     drop(forgotten?);
                     Ok::<_, layerfs_vfs::ports::mount::ServiceError>(())
                 }

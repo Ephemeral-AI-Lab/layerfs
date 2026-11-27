@@ -2,7 +2,7 @@
 //!
 //! [`Kernel::release`] runs once, before the engine mount is revoked; [`Kernel::held`]
 //! reports the same counts while the export serves, for diagnostics.
-use super::{Kernel, Table};
+use super::references::{Kernel, Table};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 impl Kernel {
@@ -37,7 +37,7 @@ impl Kernel {
         self.holdings(&table, companions)
     }
     /// What this export holds now, as [`Released`] reports it.
-    fn holdings(&self, table: &Table, companions: crate::apple_double::Holding) -> Released {
+    fn holdings(&self, table: &Table, companions: crate::apple_double::companions::Holding) -> Released {
         let count = |counter: &AtomicU64| counter.load(Ordering::Relaxed);
         Released {
             companions: companions.held,

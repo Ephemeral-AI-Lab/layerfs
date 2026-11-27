@@ -194,7 +194,7 @@ impl Overlay {
         let serial = integer(inode.serial)?;
         let orphan = owned && inode.nlink == 0 && self.orphan(serial)?.is_some();
         let gen = if orphan {
-            crate::lifetime::orphan::DOMAIN
+            crate::custody::orphan::DOMAIN
         } else {
             state.active.0
         };

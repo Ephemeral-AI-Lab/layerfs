@@ -16,15 +16,8 @@
 //! lock and renamed to the companion's own name outside it, before the body is
 //! committed as spilled under the lock again. No descriptor is kept for a
 //! spilled body: each operation opens its file by path and closes it again.
-use super::{edited_len, record, Body, Companions, Decoded, Slot, DECODED_ENTRY_BYTES, FILE_BYTES};
-use crate::{
-    apple_double_spill::{
-        create_spilled, io_status, spill_path, touch, unlink_paths, Edit, Edited, Room,
-    },
-    attributes::Status,
-    change::{Sattr, Tickets, Wcc},
-    kernel::Kernel,
-};
+use super::companions::{edited_len, record, Body, Companions, Decoded, Slot, DECODED_ENTRY_BYTES, FILE_BYTES};
+use crate::{apple_double::spill::{create_spilled, io_status, spill_path, touch, unlink_paths, Edit, Edited, Room}, protocol::attributes::Status, kernel::{mutation::{Sattr, Tickets, Wcc}, references::Kernel}};
 use layerfs_vfs::requests::write::Stamp;
 use layerfs_vfs::ViewStat;
 use std::{
@@ -137,7 +130,7 @@ impl Kernel {
             let file = companions.files.get(&serial).ok_or(Status::Stale)?;
             let before = Companions::stat(serial, file);
             if let Some(expected) = guard {
-                if crate::attributes::ctime(&before) != expected {
+                if crate::protocol::attributes::ctime(&before) != expected {
                     return Err(Status::NotSync);
                 }
             }
@@ -147,8 +140,8 @@ impl Kernel {
             if size > FILE_BYTES {
                 return Err(Status::FBig);
             }
-            if crate::trace::enabled() {
-                crate::trace::handle("SETATTR", serial, &format!("size={size}"));
+            if crate::apple_double::trace::enabled() {
+                crate::apple_double::trace::handle("SETATTR", serial, &format!("size={size}"));
             }
             self.edit_gated(serial, Edit::Size(size as usize))?;
         }
@@ -269,7 +262,7 @@ impl Kernel {
             // complete a whole image, whose decoded form costs its attributes
             // rather than its bytes. Only a body small enough to decode is
             // tried.
-            if target > DECODED_ENTRY_BYTES + crate::apple_double_codec::IMAGE_UNIT {
+            if target > DECODED_ENTRY_BYTES + crate::apple_double::codec::IMAGE_UNIT {
                 return Ok(Room::Grow(need));
             }
             let mut bytes = match &file.body {

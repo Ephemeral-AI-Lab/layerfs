@@ -13,3 +13,7 @@ rusqlite = { version = "=0.40.2", features = ["cache", "limits", "blob"] }
 
 [target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
 rusqlite = { version = "=0.40.2", features = ["bundled"] }
+
+[[test]]
+name = "kernel_memory"
+path = "tests/standalone/kernel_memory.rs"
