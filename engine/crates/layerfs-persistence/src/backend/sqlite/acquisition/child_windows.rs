@@ -4,9 +4,10 @@
 //!
 //! A set window is one dependency check, one multi-row upsert of its bound
 //! children (`bind_host_files.sql`, when it has one) and one multi-row
-//! `UPDATE … FROM` (`place_children.sql`). `UPDATE … FROM` cannot return the
-//! input's columns, so a placed row is matched to its child by its new
-//! position, and a binding by its identity; both are distinct in a window.
+//! update (`place_children.sql`, one primary-key probe per child). Neither
+//! can return the input's columns, so a placed row is matched to its child
+//! by its new position, and a binding by its identity; both are distinct in
+//! a window.
 //! A one-child window and a dependent child run `bind_host_file.sql` and
 //! `place_entry.sql`, the per-row loop's statements.
 use super::accounting::charge;

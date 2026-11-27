@@ -1,0 +1,10 @@
+# load 5.66 6.74 6.46
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.08s
+     Running tests/init_postgresql.rs (target/debug/deps/init_postgresql-4e2bcb983bbfbfd9)
+
+running 1 test
+test a_folder_inits_into_postgresql_with_the_root_sqlite_gives ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.83s
+
+run_bounded: exit 0 after 2.6 s

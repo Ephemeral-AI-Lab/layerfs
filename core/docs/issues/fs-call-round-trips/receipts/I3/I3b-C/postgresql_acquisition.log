@@ -1,0 +1,13 @@
+# load 10.38 10.53 9.36
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.12s
+     Running tests/postgresql_acquisition.rs (target/debug/deps/postgresql_acquisition-bd2d2351ff4ceb44)
+
+running 4 tests
+test unplaced_children_take_their_positions_in_name_order ... ok
+test missing_and_repeated_roots_roll_back_the_window_and_report_first_failure ... ok
+test windows_keep_aliases_charges_and_the_first_refusal_in_order ... ok
+test a_new_store_is_empty_refuses_a_second_create_and_reopens ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s
+
+run_bounded: exit 0 after 1.1 s

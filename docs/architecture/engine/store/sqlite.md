@@ -610,10 +610,12 @@ rule and decoding are shared in
 [`placement.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/acquisition/placement.rs)),
 over fixed 32-row inputs as entry and root windows use: per window one
 dependency check (`placement_dependencies.sql`), one multi-row upsert of the
-bound children (`bind_host_files.sql`) and one multi-row `UPDATE … FROM`
-(`place_children.sql`). `UPDATE … FROM` cannot return the input's columns,
-so a placed row is matched to its child by its new position and a binding by
-its identity. One-child windows and dependent children run the per-row
+bound children (`bind_host_files.sql`) and one multi-row update
+(`place_children.sql`) that finds its rows by `name IN (input)`, one
+primary-key probe per child (an `UPDATE … FROM` join let the planner scan
+every child of the parent per window instead). The input's columns cannot be
+returned, so a placed row is matched to its child by its new position and a
+binding by its identity. One-child windows and dependent children run the per-row
 `bind_host_file.sql` and `place_entry.sql`
 ([`child_windows.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/acquisition/child_windows.rs)).
 A flat directory of 10,000 files places in about 940 statements instead of

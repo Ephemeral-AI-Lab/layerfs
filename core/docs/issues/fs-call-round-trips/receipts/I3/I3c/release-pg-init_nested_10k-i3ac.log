@@ -1,0 +1,9 @@
+# i3ac 54fd02e5d015f707 load 8.27 7.93 7.60
+
+running 1 test
+FS_RT {"arm":"pg","case":"init.nested_10k","method":"project.init","entries":10101,"ms":8592.5,"client_storage":{"connects":0,"round_trips":303,"prepares":45,"statements":250,"transactions":33,"returned_rows":70734},"server":{"toplevel_calls":528,"nested_calls":30415,"evicted":false,"distinct":66,"top":[[33,"COMMIT"],[33,"SET LOCAL search_path TO lfs818_init_88229"],[31,"BEGIN ISOLATION LEVEL READ COMMITTED"],[31,"SELECT $1 FROM store_lane WHERE id = $2 FOR UPDATE"],[31,"SELECT pg_advisory_unlock($1, $2) FROM (SELECT pg_advisory_lock($3, $4) OFFSET $5) AS barrier"],[31,"SET LOCAL lock_timeout TO 30000"]]},"logical":108000,"walked":108000,"stored":225963,"canonical":1379418,"load1":"8.15"}
+test init_nested_10k ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 15.96s
+
+run_bounded: exit 0 after 16.0 s

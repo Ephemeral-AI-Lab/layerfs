@@ -1,0 +1,11 @@
+# load 6.68 7.05 6.55
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.07s
+     Running tests/acquisition_placement.rs (target/debug/deps/acquisition_placement-26b5342b4565a350)
+
+running 2 tests
+test sqlite_placement_equals_the_per_row_loop ... ok
+test postgresql_placement_equals_the_per_row_loop ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.29s
+
+run_bounded: exit 0 after 9.0 s

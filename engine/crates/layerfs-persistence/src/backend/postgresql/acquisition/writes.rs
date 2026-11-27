@@ -26,7 +26,9 @@ use std::collections::BTreeSet;
 /// Parent position stored for the source root, which has no parent.
 const ROOT_PARENT: i64 = -1;
 
-const OWNER: &str = "SELECT phase,held_rows,held_bytes,peak_rows,peak_bytes,removed_rows,removed_bytes FROM init_operation WHERE operation_id=$1::bigint AND owner_epoch=$2::bigint";
+/// Names the schema (`{s}`), so it also runs alone as a fenced autocommit
+/// read (the provider's `work`, #818 I3a).
+const OWNER: &str = "SELECT phase,held_rows,held_bytes,peak_rows,peak_bytes,removed_rows,removed_bytes FROM {s}.init_operation WHERE operation_id=$1::bigint AND owner_epoch=$2::bigint";
 const CHARGE: &str = "UPDATE init_operation SET held_rows=held_rows+$3::bigint,held_bytes=held_bytes+$4::bigint,peak_rows=greatest(peak_rows,held_rows+$3::bigint),peak_bytes=greatest(peak_bytes,held_bytes+$4::bigint) WHERE operation_id=$1::bigint AND owner_epoch=$2::bigint RETURNING held_rows";
 const CREDIT: &str = "UPDATE init_operation SET held_rows=held_rows-$3::bigint,held_bytes=held_bytes-$4::bigint,removed_rows=removed_rows+$3::bigint,removed_bytes=removed_bytes+$4::bigint WHERE operation_id=$1::bigint AND owner_epoch=$2::bigint RETURNING held_rows";
 const BEGIN: &str = "INSERT INTO init_operation(owner_epoch,phase,source_device,source_inode,stack_id,scope) VALUES(coalesce($1::bigint,1),1,$2::bytea,$3::bytea,$4::bytea,$5::bytea) RETURNING operation_id";
@@ -56,7 +58,7 @@ pub(super) fn owner(
     owner: Owner,
 ) -> Result<(Phase, AcquisitionWork), Failure> {
     let (operation, epoch) = identity(owner)?;
-    let rows = tx.typed(OWNER, &[&operation, &epoch], 16)?;
+    let rows = tx.typed(&OWNER.replace("{s}", tx.schema), &[&operation, &epoch], 16)?;
     let row = rows.first().ok_or(Failure::Stale)?;
     let phase = u8::try_from(get::<i64>(row, 0)?)
         .ok()

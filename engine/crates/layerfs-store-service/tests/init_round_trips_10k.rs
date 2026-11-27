@@ -62,20 +62,29 @@ const SQLITE_FLAT: InitPin = pin(
 );
 
 // PostgreSQL: session `[connects, round_trips, statements, transactions]`.
-// probe init.nested_10k at 056e920166 (`pg.log`): [0, 10,955, 10,666, 120]
+// probe init.nested_10k at 056e920166 (`pg.log`): [0, 10,955, 10,666, 120];
+// after I1 [0, 624, 335, 120]; after I3a (87 read units, each one fenced
+// statement instead of a transaction with an owner select and one or two
+// reads) [0, 339, 226, 33]; after I3c (8 Save publications, each one
+// fenced flight; 6 carry packs) [0, 303, 250, 33]; after I3b part C (3
+// root units and 5 removal jobs, each one fenced flight) [0, 245, 271, 33]
 const POSTGRESQL_NESTED: InitPin = pin(
     "nested_10k",
-    [0, 624, 335, 120],
+    [0, 245, 271, 33],
     108000,
     1379418,
     "a68d83d36cfcc6aa",
 );
 // probe init.flat_10k at 056e920166 (`pg.log`): [0, 31,039, 30,700, 144];
 // after I1 [0, 20,720, 20,381, 144]; after I2a (three placement units, each
-// one dependency check and one placement statement) [0, 726, 387, 144]
+// one dependency check and one placement statement) [0, 726, 387, 144];
+// after I3a (108 read units, each one fenced statement) [0, 378, 257, 36];
+// after I3c (8 Save publications in fenced flights) [0, 342, 281, 36];
+// after I3b part C (root units and removal jobs in fenced flights)
+// [0, 284, 302, 36]
 const POSTGRESQL_FLAT: InitPin = pin(
     "flat_10k",
-    [0, 726, 387, 144],
+    [0, 284, 302, 36],
     118890,
     1380691,
     "a0b8d9600c933c0a",
@@ -107,7 +116,22 @@ fn one(backend: Backend, pin: InitPin, dirs: usize, per: usize) {
         },
     };
     let measured = rt::init_shape(&mut store, pin.case, &|source| rt::files(source, dirs, per));
+    templates(&measured);
     rt::check_init("init_round_trips_10k", backend, &[measured], &[pin]);
+}
+
+/// Prints every server statement template of a PostgreSQL Init with its
+/// top-level calls (`RT_INIT_TEMPLATE`, printed, not pinned): the per-phase
+/// attribution lane I's I3 predictions start from.
+fn templates(measured: &rt::InitMeasured) {
+    let Some(server) = &measured.outcome.server else {
+        return;
+    };
+    for (top, _, text) in server.templates.iter().filter(|t| t.0 > 0) {
+        let text: String = text.split_whitespace().collect::<Vec<_>>().join(" ");
+        let text: String = text.chars().take(160).collect();
+        println!("RT_INIT_TEMPLATE {} {top} {text}", measured.case);
+    }
 }
 
 #[test]

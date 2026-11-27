@@ -234,3 +234,340 @@ test) and `receipts/I2b/check/`.
   three units of 122 + 122 + 70 SQLite windows = 314.
 - Deleted tests: none. Production LOC: 227,827 -> 228,098 (delta +271),
   engine layerfs-persistence +271 (Rust and the three shipped SQL texts).
+
+## I3 — fewer waits per acquisition unit and publication (PostgreSQL)
+
+Decisions (coordinator, after M1 merged at `cfc9586d05`): I3a and I3b as
+specified; I3c taken (D12) with Init Saves on `publish_flight` behind their
+own flag; I3d not taken (D13): **I3d not done**. SQLite is unchanged by I3.
+
+### Per-phase attribution at M1 (written before coding)
+
+From the M1 pins' server templates (`RT_INIT_TEMPLATE`, printed by both pin
+binaries since this item; `receipts/I3/before/`). A unit is one
+transaction: its `BEGIN` message and `COMMIT` (2 trips), the owner select
+(1), its statements (1 each); each first-use statement text costs one
+prepare trip. Model: `scratchpad phases.py` over the two logs.
+
+| Phase (PG trips) | nested_10k | flat_10k | nested_1k | flat_1k |
+|---|---|---|---|---|
+| Read units (count) | 87 | 108 | 15 | 18 |
+| Read units: trips (2 + owner + 1–2 reads each) | 370 | 454 | 64 | 76 |
+| Write units (count: put, place, roots, discard, release) | 15 | 18 | 6 | 7 |
+| Write units: trips (2 + owner + statements) | 96 | 111 | 41 | 47 |
+| Acquisition prepares (texts) | ~22 | ~24 | ~20 | ~22 |
+| Save publications (count; BEGIN, lane, rows, COMMIT, one COPY) | 8: 33 | 8: 33 | 3: 13 | 3: 13 |
+| Locates, spans, value blocks (one fenced statement each) | 28 | 29 | 5 | 5 |
+| History, begin unit, GC intent, other prepares | rest (~75) | rest (~75) | rest (~66) | rest (~65) |
+| **Total** | **624** | **726** | **209** | **228** |
+
+### Predictions (written before coding)
+
+- **I3a** (every read unit one fenced autocommit statement with the owner
+  joined in; sizing folded): a unit costs 1 trip instead of
+  3 + reads. Saved: 2 × units + read statements, plus one prepare per
+  sizing text removed (`JOB_SIZES`, `DIRECTORY_SIZES`). The single-row
+  reads (`job`, `directory_path`) are read units too: 3 saved each. This
+  is the same mechanism as finding 3 (`check_aliases`' one `job` read unit
+  per alias), whose units drop from 4 trips to 1; batching those reads
+  into windows is a different mechanism and is not built.
+- **I3b** (each write unit one flight from `BEGIN` to `COMMIT`; every
+  dependency check, `put_entries`' and placement's, stays one extra wait;
+  a release waits once for its "last record" answer before its compaction;
+  a discard's key lookups, deletes and credit become one statement): a unit
+  costs 1 + its dependency checks + (release) 1 trips. Each unit kind's
+  texts are prepared in one trip at its first use.
+- **I3c** (Init's Saves on the fenced flight): a publication costs 1 trip
+  instead of 4 (5 with packs); the prepared texts change, net 0.
+
+| Shape | M1 | after I3a | after I3a+b | after I3a+b+c |
+|---|---|---|---|---|
+| nested_10k | 624 | **339** (−285) | ~254 (−85) | **~229** (−25) |
+| flat_10k | 726 | **378** (−348) | ~284 (−94) | **~259** (−25) |
+| nested_1k | 209 | **158** (−51) | ~119 (−39) | ~109 (−10) |
+| flat_1k, dir_600 | 228 | **168** (−60) | ~125 (−43) | ~115 (−10) |
+| hardlink_window | 704 | **507** (−197) | predicted before I3b | −10 |
+| wide_hardlinks | 2,038 | **1,073** (−965) | predicted before I3b | −10 |
+| mixed | 255 | **189** (−66) | predicted before I3b | −10 |
+
+I3a statements fall by each read unit's owner select and the folded
+sizing reads (nested_10k 335 → ~226, flat_10k 387 → ~257); transactions
+fall by the read units (nested_10k 120 → ~33, flat_10k 144 → ~36; the
+counter counts autocommit statements as no transaction).
+
+**Is ≤ 250 per 10k reachable?** For nested_10k yes: ~229 with a+b+c.
+For flat_10k **no, by about 9 trips** (~259; the model is ± ~10): flat
+has 18 write units with 8 dependency waits and 6 more read units than
+nested. The remaining gap is about the prepare trips that I3d (D13, not
+taken) would batch (~13 after a+b+c). Proposed revision: flat_10k
+≤ 265 with a+b+c, or ≤ 250 only with a narrowed I3d (prepare each Init's
+acquisition texts in one flight at `begin`).
+
+Order: I3a, then I3c (small, independent of I3b), then I3b (the largest
+and the only one that could meet a stop condition: custody or refusal
+order), so a stop in I3b does not hold back I3c.
+
+### I3a measured (PostgreSQL; test profile, one sample; load ~12)
+
+`[0, round_trips, statements, transactions]`, I2a pin → predicted → measured:
+
+| Shape | Pin at M1 | Predicted | Measured | Within 15% |
+|---|---|---|---|---|
+| `nested_10k` | 624 / 335 / 120 | 339 / ~226 / ~33 | **339 / 226 / 33** | yes (exact) |
+| `flat_10k` | 726 / 387 / 144 | 378 / ~257 / ~36 | **378 / 257 / 36** | yes (exact) |
+| `nested_1k` | 209 / 98 / 33 | 158 | **158 / 79 / 18** | yes (exact) |
+| `flat_1k`, `dir_600` | 228 / 107 / 37 | 168 | **168 / 85 / 19** | yes (exact) |
+| `hardlink_window` | 704 / 491 / 82 | 507 | **507 / 424 / 18** | yes (exact) |
+| `wide_hardlinks` | 2,038 / 1,309 / 339 | 1,073 | **1,073 / 986 / 19** | yes (exact) |
+| `mixed` | 255 / 129 / 38 | 189 | **189 / 105 / 18** | yes (exact) |
+
+- Prepares fall by 2 (the two sizing texts); roots, logical and canonical
+  bytes identical; SQLite unchanged (its pins pass as at M1).
+- Finding 3 (`check_aliases`, one `job` read unit per alias): the same
+  read-unit mechanism, so each alias now costs 1 round trip instead of 4
+  (`wide_hardlinks` −903 of its −965). Batching those reads is a different
+  mechanism and is not built (recorded only).
+- Wall in the test profile is not comparable across runs at this load:
+  `nested_1k` 322 ms at M1, 530 then 368 ms (a second, diagnostic sample);
+  `flat_10k` 6.2 s → 7.8 s, inside M1's own 6–13 s spread. The new reads'
+  server time is 0.7–1.4 ms each (`pg_stat_statements`, about 110 ms of
+  `flat_10k`'s 21 × 6 reads), so no server cost explains a difference. The
+  release timing rows are the orchestrator's.
+- Design: `reads.rs` (the owner join, `LEFT JOIN LATERAL`; NULL marker for
+  an empty window; running sum with `row_number() = 1` keeping the first row
+  as the sizing loop did, over at most the row limit); `provider.rs` `read`
+  for every read unit and `work`; `OWNER` names the schema so `work` runs
+  alone. Rows are put in key order client-side, whatever order the joined,
+  fenced statement returns. No write, format, answer or refusal-order change.
+- New test `postgresql_acquisition_reads.rs`: PG windows equal SQLite's
+  (972 compared lines over 7 limits, single reads and `work`); empty,
+  released, missing-operation and foreign-epoch owners distinct (every read
+  `Stale` but the live empty one); drop at every server message of each of
+  the 9 read kinds (78): always `Uncertain`, no row changed, no reconnect;
+  kill (78): `Uncertain`, or the clean answer when the whole reply was held
+  and passed on before the kill. Its first run failed on the test's own data
+  (entries read before the unplaced children were placed: `Integrity`, as
+  before I3a; and a kill after the reply that the test had not allowed);
+  fixed in the test and run once more.
+- Check set (once): init pins 1k/10k, `sdk_round_trip_equivalence_seeded`,
+  `method_refusal_order`; persistence `postgresql_acquisition`,
+  `acquisition_placement`, `postgresql_placement_fault`,
+  `acquisition_batching`, `acquisition_disposal`,
+  `postgresql_acquisition_compaction`, `acquisition_reads`,
+  `sqlite_reference_acquisition`; every `layerfs-project` test binary: pass.
+  `fs_call_round_trips` NOT_RUN (needs `FS818_ARM`; the probe is the
+  orchestrator's).
+
+## I2b fix — SQLite `flat_10k` release time (coordinator's M1 note)
+
+M1's release benchmark: SQLite `init.flat_10k` 510.0 → 563.8 ms (+10.5%)
+while statements fell 31,882 → 2,502. Diagnosed once, from the plans:
+
+- `EXPLAIN QUERY PLAN` of the three I2b texts on an empty acquisition
+  schema (sqlite3 3.51): `placement_dependencies.sql` probes
+  `init_host_file`'s key and `init_entry_directory` per input row (fine);
+  `bind_host_files.sql` scans its 32 input rows (fine);
+  `place_children.sql`'s `UPDATE … FROM` ran
+  `SEARCH target USING PRIMARY KEY (operation_id=? AND parent_position=?)`
+  with the input probed through a bloom filter and an automatic index:
+  **every child of the parent per window**. A flat directory of 10,000
+  children placed in 314 windows visits about 3.1 million rows; nested
+  directories (100 children, below 512) never place, hence only flat
+  regressed.
+- Fix within I2b's design (one multi-row update per window, same rows,
+  same answers, no constant): the update finds its rows by
+  `target.name IN (SELECT child_name FROM input)` and takes the new values
+  from correlated lookups in the 32-row input. Plan:
+  `SEARCH target USING PRIMARY KEY (operation_id=? AND parent_position=? AND name=?)`,
+  one probe per child. Statement counts unchanged (pins pass as they are).
+- One release sample each, same load, same probe (`FS818_ARM=sqlite`,
+  `init_flat_10k`): the M1 binary (sha256 `db76b87011816739`) 494.0 ms,
+  the fixed tree (`a99d36b75b0d2b96`) **298.8 ms** (−40% against 494, −41%
+  against the pre-I2b 510.0). Test profile: 1,010.6 ms at M1 → 478.6 ms.
+  Receipts `receipts/I2b-fix/`.
+- New guard in `acquisition_placement.rs`
+  (`sqlite_window_update_probes_each_child_by_key`): the bundled SQLite's
+  plan for `place_children.sql` probes the full key; equivalence (19
+  cases) passes with the new text.
+- Checks: init pins, `sdk_round_trip_equivalence_seeded`,
+  `method_refusal_order`, `acquisition_placement`,
+  `sqlite_reference_acquisition`, `acquisition_batching`, `init_sqlite`,
+  `backed_acquisition`: pass.
+
+## I3c — Init's Saves in fenced flights (D12)
+
+### Prediction (the numbers are the I3 table's, written before coding)
+
+From the per-phase table above: each of the 8 (10k) or 3 (1k) Save
+publications costs 1 round trip instead of 4 (5 with packs): −25 at 10k,
+−10 at 1k; nested_10k 339 → ~314, flat_10k 378 → ~353, nested_1k 158 →
+~148, flat_1k 168 → ~158. Statements +3 per publication (the flight counts
+each request). Entry (decided with the implementation): `publish_captured` keeps no payloads by itself
+(payload retention is `settle`'s `captured_output && batched_chain_reads`),
+so the flag can reuse the flight entries without lane W's provider change.
+`publish_captured_tail` is chosen over `publish_captured`: both are the same
+flight; `_tail` answers an untrusted completion `Unknown`, which is the
+ordinary publication's custody (spec: "failure custody of the ordinary
+path"); `publish_captured` would answer a definite refusal there.
+
+### Measured (PostgreSQL; test profile, one sample)
+
+| Shape | after I3a | Predicted | Measured | Within 15% |
+|---|---|---|---|---|
+| `nested_10k` | 339 / 226 / 33 | ~314 | **303 / 250 / 33** | yes (−3.5%) |
+| `flat_10k` | 378 / 257 / 36 | ~353 | **342 / 281 / 36** | yes (−3.1%) |
+| `nested_1k` | 158 / 79 / 18 | ~148 | **145 / 88 / 18** | yes |
+| `flat_1k`, `dir_600` | 168 / 85 / 19 | ~158 | **155 / 94 / 19** | yes |
+| `hardlink_window` | 507 / 424 / 18 | ~497 | **494 / 433 / 18** | yes |
+| `wide_hardlinks` | 1,073 / 986 / 19 | ~1,063 | **1,060 / 995 / 19** | yes |
+| `mixed` | 189 / 105 / 18 | ~179 | **173 / 116 / 18** | yes |
+
+- The saving per publication was larger than predicted (−36, not −25, at
+  10k): diagnosed from the flat_10k templates (nested_10k's window was
+  evicted, `evicted: true`, so its templates are not used). The flight
+  inserted packs in 6 of the 8 publications, while `pg_stat_statements`
+  had shown one `COPY` call for the ordinary path; and a `COPY` costs 2
+  round trips (`copy_in`: the start and the finish). Ordinary: 6 × 6 + 2 ×
+  4 = 44 trips; flights 8: −36 exactly. 1k: 2 of 3 with packs, −13.
+- Statements +3 per publication (8 → +24), transactions unchanged (a flight
+  counts its own), prepares unchanged (the fused `PACK`/`ROWS` texts replace
+  `publish_rows.sql`). Roots, logical, canonical and stored bytes identical.
+- Release, same load, one sample each (`FS818_ARM=pg`, M1 binary
+  `db76b87011816739` vs this tree with I3a+I3c): flat_10k 8,920 → 8,668 ms,
+  nested_10k 9,187 → 8,593 ms (726 → 342 and 624 → 303 round trips). Local
+  PostgreSQL Init time is server work; the trips pay at a network distance.
+  The test-profile drift seen at I3a (6.2 → 7.8 → 9.1 s) is host load: the
+  M1 binary itself took 8.9 s in this window against 6.4 s at the M1 bench.
+- New test `postgresql_save_flight_fault.rs`: a Save with the flag stores
+  the same rows as an ordinary Save in 8 round trips instead of 14; drop at
+  every server message of its finish (68): always an error, the
+  publication atomic; kill (68): 50 errors and 18 successes whose rows equal
+  the clean finish's; never a reconnect or replay.
+- Check set (once): init pins 1k/10k, `sdk_round_trip_equivalence_seeded`,
+  `method_refusal_order`, `postgresql_captured_save_fault` (the shared
+  flight), `layerfs-storage` `captured_payload_retention` and
+  `kept_ids_pooled_chains`, every `layerfs-project` test binary: pass.
+
+## I3b — stopped before coding (needs a session-layer capability)
+
+Prediction (from the I3 table): nested_10k 303 → ~218, flat_10k 342 →
+~248, i.e. both ≤ 250 only with I3b. Not built. Why:
+
+- A `put_entries` or `place_children` unit decides its statements from its
+  dependency check (append the independent prefix, then the first
+  dependent row per row, then the next window). Keeping that check as "one
+  extra wait" inside the same transaction means one write transaction held
+  across two or more flights in one turn. `Session::decided_turn` /
+  `DecidedTurn::send` can send several flights in a turn, but each flight
+  prepares its own uncached texts inside a scoped read transaction
+  (`BEGIN … READ ONLY; SET LOCAL search_path; prepares; COMMIT`): inside an
+  open write transaction that `COMMIT` would commit the unit half way. A
+  prepare before the turn does not help: the statement cache clears when
+  full, so a text can be missing again by the second flight. A safe form
+  needs the session layer (for example: prepare a unit's every text at the
+  start of the turn, before its `BEGIN`, and refuse any prepare while the
+  turn's transaction is open). `session/` is not lane I's.
+- Without it, the alternatives change behaviour and are not lane I's call:
+  (a) the dependency check as a separate fenced read before a one-flight
+  write: not atomic with the write (another session's
+  `discard_abandoned`, or a concurrent unit of the same owner, could land
+  in between and change the answer); (b) an optimistic one-flight unit
+  that asserts "no dependency" server-side and, when it fires (nothing
+  written), continues on today's path in the same call, like the owner's
+  2026-11-25 Commit race fallback: an owner decision for Init.
+- What lane I could build alone: the units with no wait (`complete_files`,
+  `set_directory_roots`, `advance`, `discard` as one data-modifying CTE
+  statement) as single fenced flights with server-side assertions before
+  `COMMIT` (a `Changed` position read from the reply, the abort via a
+  session-local flag, as `publish_flight`'s nonce check does). About −50 at
+  10k (nested ~253, flat ~292): neither reaches 250 without the put and
+  place units. Not started, pending the coordinator's choice.
+
+## I3b part C — the units with no wait, one message each (coordinator: C now, then A)
+
+Decision (coordinator): build the no-wait units now; the waiting units
+(`put_entries`, `place_children`) wait for lane W's session capability
+(note `I3b-session-capability.md` in the shared notes); B (optimistic unit
+with a fallback) not taken.
+
+### Prediction (written before coding)
+
+Each unit becomes one pipelined flight: `BEGIN` (write, lane row and
+barrier as before) with the generation fence and an attempt token, the
+owner assertion, the unit's statements with server-side assertions before
+`COMMIT` (a `Changed` window or a missing charge row aborts the
+transaction; the client reads which from the replies), the token check and
+`COMMIT` as its own request. Init's units: `complete_files` (3 at 10k),
+`set_directory_roots` (1), `dispose` (5; the last releases and compacts).
+`advance` and `discard` are built too (not on Init's ordinary path).
+
+| Unit (nested_10k) | Old trips | New |
+|---|---|---|
+| complete_files ×3 (2 + owner + update + charge) | 15 | 3 |
+| set_directory_roots ×1 | 5 | 1 |
+| dispose ×5 (2 + owner + key lookups, deletes, credit; release + compact once) | 40 | 5 |
+| prepares: 10 old texts out, 3 flight kinds' first prepare in | 10 | 3 |
+| **total** | 70 | 12 (−58) |
+
+nested_10k 303 → **~245**, flat_10k 342 → **~284** (same units);
+1k shapes: complete 1, dirs 1, dispose 1: about −4 −4 −7 −7 ≈ −22
+(nested_1k 145 → ~123, flat_1k 155 → ~133). Statements: each flight counts
+its seven requests (begin, owner, body, token check, `COMMIT`), about +19 at
+10k. Transactions unchanged; prepares about −4.
+
+Design points:
+- `discard` is one statement: data-modifying CTEs for the entry key (the
+  offset key, else the tail), the entry delete, the host key (the largest of
+  at most `budget − deleted entries` lowest positions), the host delete and
+  the credit, with `1/(credit row exists)` for `Stale`: the same rows,
+  order (entries first), sizes and charge as the five to seven statements.
+- `dispose` adds the release as one statement that deletes the record only
+  at zero held rows, asserts a missing record (`Stale`, as before) and sets a
+  transaction-local flag when it was the last record; compaction is a `DO`
+  block that runs only under that flag, with the same 2 s lock timeout and
+  an exception handler in place of the savepoint (a refusal keeps the dead
+  rows, as `KEEP` did).
+- A root window's update sets a transaction-local flag when every input
+  position was recorded; the next request divides by it, so `COMMIT` never
+  lands on a `Changed` window; `Changed` is the first input position missing
+  from that window's returned positions, as before.
+- Selected before sending: no generation yet, a held lane (nested), or a
+  position that does not convert to signed use today's transaction.
+
+### Measured (receipts `receipts/I3/I3b-C/`)
+
+| Shape (PG `[connects, rt, stmts, tx]`) | I3c pin | Predicted rt | Measured |
+|---|---|---|---|
+| nested_10k | [0, 303, 250, 33] | ~245 | [0, 245, 271, 33] |
+| flat_10k | [0, 342, 281, 36] | ~284 | [0, 284, 302, 36] |
+| nested_1k | [0, 145, 88, 18] | ~123 | [0, 119, 93, 18] |
+| flat_1k | [0, 155, 94, 19] | ~133 | [0, 129, 99, 19] |
+| dir_600 | [0, 155, 94, 19] | ~133 | [0, 129, 99, 19] |
+| hardlink_window | [0, 494, 433, 18] | — | [0, 468, 438, 18] |
+| wide_hardlinks | [0, 1060, 995, 19] | — | [0, 1034, 1000, 19] |
+| mixed | [0, 173, 116, 18] | — | [0, 147, 121, 18] |
+
+10k exactly as predicted (−58 each); statements +21 (predicted about +19);
+prepares 45 → 41 and 47 → 43 (predicted about −4). The 1k delta is −26, not
+about −22 (18% beyond the delta, 3% on the total). Diagnosed once from the
+per-role counts: prepares −4 and the root units −8 as predicted; the one 1k
+`dispose` (≈2k rows in one job) ran its key lookups past the end, so each fell
+back to the tail (two more lookups), plus the release and the compaction
+batch: 13 old round trips, not the 8 the prediction priced → −12, not −8.
+The 10k jobs end mid-table except the last, which the 10k prediction priced
+correctly. SQLite pins unchanged.
+
+Tests: `postgresql_acquisition_flights` (equivalence 39 script lines equal
+SQLite's; warm unit one round trip and one transaction for each of the five
+units; drop 327 and kill 327 over 7 unit kinds, `Changed` included). A drop
+after the refusal's reply was received answers the definite refusal (its
+transaction cannot commit), as `publish_flight` does; the sweep checks a
+drop is never a success and a definite refusal changed nothing. Reached:
+postgresql_acquisition, acquisition_disposal, postgresql_acquisition_compaction
+(the held-table case keeps the release through the `DO` block's handler),
+postgresql_acquisition_reads, layerfs-project init_postgresql,
+acquisition_custody, backed_acquisition, init_sqlite, init_counters,
+complete_root; check set method_refusal_order, sdk_round_trip_equivalence_seeded.
+
+Not built: the waiting units (`put_entries`, `place_children`); see the note
+`I3b-session-capability.md` for lane W.

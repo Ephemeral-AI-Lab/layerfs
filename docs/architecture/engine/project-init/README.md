@@ -101,7 +101,11 @@ Three Saves keep each step reading only finished objects. Init adds no
 encoder: `layerfs-project` depends only on Content, Storage, History,
 Persistence, Bridge and Telemetry, the same libraries a Workspace Commit uses
 ([`Cargo.toml`](../../../../engine/crates/layerfs-project/Cargo.toml),
-[Commit](../commit/README.md)).
+[Commit](../commit/README.md)). Each of the three Saves publishes in fenced
+flights (`Save::publishing_in_flights`, #818 I3c): one round trip per
+publication on PostgreSQL, with the ordinary publication's custody
+([Namespace Init's Saves](../store/postgresql.md#captured-save-registration));
+SQLite publishes as before.
 
 ```text
  owner thread (holds Save and backing)

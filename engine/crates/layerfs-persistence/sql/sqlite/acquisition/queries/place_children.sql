@@ -1,8 +1,10 @@
 -- Positions one window of unpositioned children of parent ?2 (#818 I2b), as
 -- place_entry.sql does one at a time. Names and positions in the window are
--- distinct; UPDATE ... FROM cannot return the input's columns, so a
--- returned row is matched to its child by its new position. NULL names pad
--- the unused slots.
+-- distinct; the input's columns cannot be returned, so a returned row is
+-- matched to its child by its new position. NULL names pad the unused
+-- slots. The rows are found by `name IN (input)`: one primary-key probe per
+-- child. (An UPDATE ... FROM join let the planner scan every child of the
+-- parent per window, which grows with a wide directory.)
 WITH input(child_name,child_position,child_canonical) AS (VALUES
  (?3,?4,?5),
  (?6,?7,?8),
@@ -37,8 +39,11 @@ WITH input(child_name,child_position,child_canonical) AS (VALUES
  (?93,?94,?95),
  (?96,?97,?98)
 )
-UPDATE init_entry AS target SET position=input.child_position,canonical_position=input.child_canonical,host_identity=NULL
-FROM input
-WHERE target.operation_id=?1 AND target.parent_position=?2 AND target.name=input.child_name
+UPDATE init_entry AS target SET
+ position=(SELECT child_position FROM input WHERE child_name=target.name),
+ canonical_position=(SELECT child_canonical FROM input WHERE child_name=target.name),
+ host_identity=NULL
+WHERE target.operation_id=?1 AND target.parent_position=?2
+ AND target.name IN (SELECT child_name FROM input)
  AND target.position IS NULL
 RETURNING position,kind

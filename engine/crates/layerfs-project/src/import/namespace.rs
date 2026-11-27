@@ -78,7 +78,7 @@ pub(crate) fn build_namespace<'a>(
         .filter(|end| *end <= i64::MAX as u64)
         .ok_or(Failure::Capacity)?;
     progress.tick()?;
-    let save = store.begin_save().map_err(storage)?;
+    let save = store.begin_save().map_err(storage)?.publishing_in_flights();
     let built = {
         let mut sink = save.sink();
         let mut objects = FilesystemObjects::new(provider, &mut sink);
