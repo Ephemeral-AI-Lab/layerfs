@@ -514,3 +514,68 @@ its `Result` shape (control's `project/export/walk.rs` calls it).
   `sdk_method_golden`, `sdk_round_trip_equivalence_seeded`,
   `method_refusal_order`, `verify_history_readback` green. No new message:
   no sweep. Deleted tests: none.
+
+### H3 — one per-call cache across versions, plus a directory memo (both backends)
+
+**Prediction (written before the code).**
+
+- Mechanism: `fs.blame`, `fs.revision`, `fs.diff_files` (and the operator's
+  `fs.list_revisions`/`fs.get_storage`) read every version's objects
+  through one call `Cached` (pack bodies, decoded groups, 3 MiB bound):
+  roots, inode pages, directory pages, sizes (`lengths_with`), text windows,
+  ranges, metadata and byte comparisons. Version walks bind names through a
+  per-call directory memo `(DirectoryRoot, PathName) → Option<serial>`
+  (bounded at 4,096 entries; the shape of lane C's `DirectoryMemo`: `get`
+  gives unknown / known-unbound / bound, `insert` refuses when full), so an
+  unchanged directory's pages are not read again. `diff_files` keeps the
+  strict lookup it made (`raw`) instead of walking again when
+  `allowMissing` is false. Store reads (rows, serials) unchanged.
+- PostgreSQL control, warm (cold alike, plus first-use prepares unchanged):
+  - `blame.h100` 1,768 → ~900–1,100 (a version ≈ 17 → ≈ 8: its new root,
+    new inode branch and leaf, values, text through shared packs).
+  - `blame.h10` 193 → ~110–130.
+  - `revision.h100` 1,705 → ~850–1,000; `revision.h10` cold 260 → ~150–180.
+  - `diff_files` 77 → ~50–60 warm (cold 103 → ~75–85).
+- SQLite: the same page reads go: `blame.h100` 5,829 → ~3,000–3,500,
+  `revision.h100` 5,797 → ~3,000–3,500, `diff_files` 187 → ~130 (new pins).
+- Read pins (`sdk_read_round_trips`): unchanged (their walk is unchanged).
+- Exit check: page reads per Commit on `blame.h100` ≤ 8 (control trips per
+  version after the rows: (trips − fixed) / versions).
+- Memory: the existing `Cached` bound (3 MiB) and the memo (≤ 4,096 names of
+  ≤ 255 bytes), both dropped at call end. No new message: no sweep.
+
+**Measured (receipts `receipts/H3/`).**
+
+| Case | PG warm (cold) before → after | predicted | SQLite warm (cold) before → after |
+|---|---|---|---|
+| `blame.h100` | 1,768 (2,005) → 254 (491) | ~900–1,100 | 5,829 (6,185) → 779 (1,135) |
+| `blame.h10` | 193 (231) → 33 (71) | ~110–130 | 548 (589) → 91 (132) |
+| `revision.h100` | 1,705 (1,933) → 253 (481) | ~850–1,000 | 5,797 (6,141) → 769 (1,113) |
+| `revision.h10` (cold) | 260 → 82 | ~150–180 | 634 → 147 |
+| `diff_files` | 77 (103) → 23 (49) | ~50–60 | 187 (218) → 71 (102) |
+
+- Far beyond 15%, better. Diagnosed once: the prediction priced a version
+  at ≈ 8 page reads (SPEC's "new root, inode branch and leaf, values"), but
+  a Commit's new objects sit in one pack and its delta chain's bases in
+  packs the call already read, so after the first versions a version costs
+  its Commit row, its serial and about 0.5 object trips: (254 − 54) / 100 ≈
+  2 control trips per version on `blame.h100`. Exit check (≤ 8 page reads
+  per Commit) holds. Recorded, no change.
+- Answers: the eleven history calls of the pinned scenario (blame h10, h100,
+  `/hist/other.txt`; revision h10, h100, page size 7, other.txt; diff_files
+  with and without attribution) dumped on SQLite at R5 (`de237565ee`, before
+  H1) and at H3, ids and times masked: identical (sha256 prefix
+  `70ba09470f703fa3` both). The dump test was temporary, not committed.
+- Read pins unchanged (their walk binds through the tree as before).
+  `sdk_blame_coarse`, `sdk_file_history`, `history_surface`,
+  `operator_history`, `sdk_history_depth`, `history_wire_codes`,
+  `sdk_method_golden`, `sdk_round_trip_equivalence_seeded`,
+  `method_refusal_order`, `verify_history_readback`, `sdk_compare`,
+  `history_ancestry_oracle`, `sdk_file_compare_budget`,
+  `history_diff_oracle`, `sdk_diff_size`, `sdk_path_reads`, `sdk_text_scan`,
+  `sdk_fs_reads_replay` green.
+- Test adapted (not deleted): `sdk_file_compare_budget.rs` calls
+  `file_facts::changes_bounded`, which now takes the call's `Cached`.
+- The directory memo has lane C's `DirectoryMemo` shape (`get` → unknown /
+  known-unbound / bound, `insert` → `false` when full); H5 wiring can swap
+  in lane C's type. No new message: no sweep. Deleted tests: none.

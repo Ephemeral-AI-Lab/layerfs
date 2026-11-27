@@ -1,6 +1,7 @@
 //! File comparison's compatible legacy view and numbered aligned detail rows.
 use super::{
     attribution,
+    cached::Cached,
     compare::{self, Selector},
     file_facts, query,
     snapshot::{self, Snap},
@@ -8,7 +9,7 @@ use super::{
 };
 use crate::{
     history::{lookup as args, saved},
-    store::{Store, StorePorts},
+    store::Store,
 };
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_content::{
@@ -37,12 +38,12 @@ struct Side {
 fn side(
     store: &Arc<Store>,
     stack: &LayerStackRecord,
-    reader: &StorePorts,
+    reader: &Cached<'_>,
     selector: args::Arg<Selector<'_>>,
     allow_missing: bool,
 ) -> Result<Side, SdkRefusal> {
     let selector = selector?;
-    let snap = snapshot::resolve(store, stack, reader, selector.at)?;
+    let snap = snapshot::resolve_in(store, stack, reader, selector.at)?;
     // Explicit selectors stay in their project; a globally valid ID is not admission.
     let belongs = match snap.node {
         layerfs_history::NodeId::Commit(id) => args::commit(store, id)?.stack == stack.id,
@@ -56,7 +57,7 @@ fn side(
     // §4.3: a side is visible, hidden or absent; a hidden side is treated as
     // absent for the comparison but keeps its own `Removed` side object and
     // never refuses, even when `allowMissing` is false.
-    let raw = snapshot::entry(reader, &snap.tree, &selector.path)?;
+    let raw = reader.lookup(&snap.tree, &selector.path)?;
     let hidden = if raw.is_some() {
         Visibility::for_snap(store, &snap)?.hidden(&selector.path)
     } else {
@@ -67,7 +68,8 @@ fn side(
     } else if allow_missing {
         raw
     } else {
-        Some(snapshot::existing(reader, &snap, &selector.path)?)
+        // The strict lookup above is the one `existing` made (#818 H3).
+        Some(snapshot::found(&snap, &selector.path, raw)?)
     };
     if hidden.is_none() && entry.is_some_and(|e| e.value.kind == InodeKind::Directory) {
         return Err(args::refuse(
@@ -108,14 +110,14 @@ fn label(side: &Side) -> SdkValue {
     ])
 }
 
-fn omitted(reader: &StorePorts, side: &Side) -> Result<Option<&'static str>, SdkRefusal> {
+fn omitted(reader: &Cached<'_>, side: &Side) -> Result<Option<&'static str>, SdkRefusal> {
     if side.hidden.is_some() {
         return Ok(None);
     }
     Ok(match side.entry {
         None => None,
         Some(e) if e.value.kind != InodeKind::RegularFile => Some("unsupported_type"),
-        Some(e) if snapshot::size(reader, &e)? > MAXIMUM_TEXT_BYTES => Some("text_limit"),
+        Some(e) if snapshot::size_in(reader, &e)? > MAXIMUM_TEXT_BYTES => Some("text_limit"),
         Some(_) if side.text.is_none() => Some("binary"),
         Some(_) => None,
     })
@@ -129,9 +131,11 @@ pub fn diff(
     right: args::Arg<Selector<'_>>,
     options: Options,
 ) -> args::Answer {
-    let reader = snapshot::reader(store, stack);
-    let left = side(store, stack, &reader, left, options.allow_missing)?;
-    let right = side(store, stack, &reader, right, options.allow_missing)?;
+    let ports = snapshot::reader(store, stack);
+    // Both sides' objects go through the call's caches (#818 H3).
+    let reader = &Cached::new(&ports)?;
+    let left = side(store, stack, reader, left, options.allow_missing)?;
+    let right = side(store, stack, reader, right, options.allow_missing)?;
     // Only a genuinely absent side is `NoSuchPath`; a hidden side is the
     // `Removed` state, and two hidden sides are a removal with both objects.
     if left.entry.is_none()
@@ -173,7 +177,7 @@ pub fn diff(
         let right_seen = Visibility::for_snap(store, &right.snap)?;
         attribution::align(
             store,
-            &reader,
+            &ports,
             (
                 (&left.snap, &left.path, &left_seen),
                 (&right.snap, &right.path, &right_seen),

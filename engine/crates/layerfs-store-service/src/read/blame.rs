@@ -4,6 +4,7 @@
 //! A line is kept from the common suffix only where both texts start a line,
 //! and from the common prefix only where both texts end it.
 use super::{
+    cached::Cached,
     snapshot::{self, Snap},
     visibility::Visibility,
     window,
@@ -11,8 +12,7 @@ use super::{
 use crate::{
     history::lookup::{self as args, Answer, Arg},
     history::rows::Rows,
-    operator::files::entry,
-    store::{Store, StorePorts},
+    store::Store,
 };
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_content::{
@@ -23,7 +23,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
-fn range(reader: &StorePorts, file: EntryFacts, offset: u64, count: u64) -> Result<Vec<u8>> {
+fn range(reader: &Cached<'_>, file: EntryFacts, offset: u64, count: u64) -> Result<Vec<u8>> {
     let mut out = Vec::new();
     let result = crate::telemetry::timed("blame.compare", |timer| {
         layerfs_content::file::read_range(
@@ -48,7 +48,7 @@ struct Text {
     prefix: Vec<String>,
     complete: bool,
 }
-fn text(reader: &StorePorts, file: EntryFacts) -> Result<Text> {
+fn text(reader: &Cached<'_>, file: EntryFacts) -> Result<Text> {
     let (mut lines, mut prefix, mut bytes, mut complete) = (0, Vec::new(), 0, true);
     window::lines(reader, &file, window::BYTES, 1, |_, line| {
         lines += 1;
@@ -71,7 +71,7 @@ fn text(reader: &StorePorts, file: EntryFacts) -> Result<Text> {
     })
 }
 /// Whether a line of the file starts at byte `at`: at its start, or after a newline.
-fn starts_line(reader: &StorePorts, file: EntryFacts, at: u64) -> Result<bool> {
+fn starts_line(reader: &Cached<'_>, file: EntryFacts, at: u64) -> Result<bool> {
     Ok(at == 0 || range(reader, file, at - 1, 1)?.first() == Some(&b'\n'))
 }
 /// The bytes the texts share at their start and at their end. A line of `newer` that starts at the
@@ -79,10 +79,10 @@ fn starts_line(reader: &StorePorts, file: EntryFacts, at: u64) -> Result<bool> {
 /// too. When it does not (a split or cut line), the suffix gives up that byte, so the line belongs to
 /// the changed middle. Likewise, an unterminated last line of `newer` that ends the common prefix is
 /// the same line only if `older` ends there too; otherwise the prefix gives up its last byte.
-fn equal_edges(reader: &StorePorts, newer: EntryFacts, older: EntryFacts) -> Result<(u64, u64)> {
+fn equal_edges(reader: &Cached<'_>, newer: EntryFacts, older: EntryFacts) -> Result<(u64, u64)> {
     let (a, b) = (
-        snapshot::size(reader, &newer)?,
-        snapshot::size(reader, &older)?,
+        snapshot::size_in(reader, &newer)?,
+        snapshot::size_in(reader, &older)?,
     );
     let min = a.min(b);
     let mut prefix = 0;
@@ -165,12 +165,13 @@ fn owners(
 /// as the parent, and carried to the next step; each owner's `ref` comes
 /// from the row held when the owner was assigned; and each version's text
 /// is read once, carried from the older side of one comparison to the newer
-/// side of the next.
+/// side of the next. `reader` is the call's caches, which every version's
+/// objects go through, with its directory memo (#818 H3).
 #[allow(clippy::too_many_arguments)]
 pub fn blame(
     store: &Arc<Store>,
     rows: &mut Rows<'_>,
-    reader: &StorePorts,
+    reader: &Cached<'_>,
     snap: &Snap,
     path: &str,
     visibility: &Visibility,
@@ -194,7 +195,7 @@ pub fn blame(
         return Err(args::invalid("lineCount must be in 1..=2000"));
     }
     let (mut tracks, mut spent, mut next_line) = (Vec::new(), 0, None);
-    let tip_size = snapshot::size(reader, &tip)?;
+    let tip_size = snapshot::size_in(reader, &tip)?;
     let mut offset = 0u64;
     let scan = window::lines_bounded(reader, &tip, window::BYTES, 1, limits.bytes, |n, line| {
         offset = offset.saturating_add(line.bytes);
@@ -257,7 +258,8 @@ pub fn blame(
         // attributes the remaining lines to the newest visible version.
         let older = match parent {
             Some(p) => {
-                let found = entry(reader, rows.record(p)?.root(), path)?
+                let found = reader
+                    .entry(rows.record(p)?.root(), path)?
                     .filter(|e| e.value.kind == InodeKind::RegularFile);
                 match found {
                     Some(_)
@@ -281,8 +283,8 @@ pub fn blame(
                 current = older;
                 continue;
             }
-            let bytes = snapshot::size(reader, &current)?
-                .saturating_add(snapshot::size(reader, &older)?)
+            let bytes = snapshot::size_in(reader, &current)?
+                .saturating_add(snapshot::size_in(reader, &older)?)
                 .saturating_mul(3);
             if bytes > limits.bytes {
                 history_limited = true;
@@ -312,7 +314,7 @@ pub fn blame(
             } else {
                 coarse = true;
                 let (prefix, suffix) = equal_edges(reader, current, older)?;
-                let size = snapshot::size(reader, &current)?;
+                let size = snapshot::size_in(reader, &current)?;
                 let (mut offset, mut ranges) = (0u64, Vec::new());
                 window::lines(reader, &current, 0, 1, |n, line| {
                     let start = offset;

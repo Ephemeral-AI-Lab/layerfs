@@ -11,12 +11,10 @@ use layerfs_bridge::control::SdkValue;
 /// `blame(path, { branch, commit?, fromLine? })`: each line with the Commit that last changed it.
 pub fn blame(service: &StoreService, args: &SdkValue) -> Answer {
     let (stack, reader, name) = snapshot_target(service, args)?;
-    let (snap, saved) = {
-        // The root opens through caches of its own until blame's reads share
-        // one (#818 H3).
-        let cached = Cached::new(&reader)?;
-        snapshot_in(service, &stack, &cached, name)?
-    };
+    // The call's caches, from the root's open on, across every version
+    // (#818 H3).
+    let cached = Cached::new(&reader)?;
+    let (snap, saved) = snapshot_in(service, &stack, &cached, name)?;
     let path = path(args, "path")?;
     let seen = visibility::Visibility::load(&service.store, &stack, &snap, saved.removals)?;
     // The call's rows, from the resolve's on (#818 H1).
@@ -25,7 +23,7 @@ pub fn blame(service: &StoreService, args: &SdkValue) -> Answer {
     blame::blame(
         &service.store,
         &mut rows,
-        &reader,
+        &cached,
         &snap,
         &path,
         &seen,

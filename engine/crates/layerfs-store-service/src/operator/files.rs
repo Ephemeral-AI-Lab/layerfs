@@ -1,6 +1,7 @@
 //! File revisions from persisted first-parent facts. No reconstructed UI history.
 use super::args::{paging, text};
 use crate::history::rows::{Revision, Rows};
+use crate::read::cached::Cached;
 use crate::{
     history::lookup::{self as args, Answer},
     read::snapshot,
@@ -37,7 +38,7 @@ type Carried = Option<(NodeId, Option<EntryFacts>)>;
 /// is kept in `carried`: it is the next node's own, read once (#818 H2).
 #[allow(clippy::type_complexity)]
 fn sides(
-    reader: &StorePorts,
+    reader: &Cached<'_>,
     rows: &mut Rows<'_>,
     carried: &mut Carried,
     node: NodeId,
@@ -47,11 +48,11 @@ fn sides(
 ) -> Result<(Option<EntryFacts>, Option<EntryFacts>), SdkRefusal> {
     let now = match carried.take() {
         Some((held, found)) if held == node => found,
-        _ => entry(reader, root, path)?,
+        _ => reader.entry(root, path)?,
     };
     let before = match parent {
         Some(parent) => {
-            let found = entry(reader, rows.record(parent)?.root(), path)?;
+            let found = reader.entry(rows.record(parent)?.root(), path)?;
             *carried = Some((parent, found));
             found
         }
@@ -62,6 +63,8 @@ fn sides(
 
 pub fn history(store: &Arc<Store>, args: &SdkValue) -> Answer {
     let (_, reader, snap) = super::args::snapshot(store, args)?;
+    // Every version's objects through the call's caches (#818 H3).
+    let cached = Cached::new(&reader)?;
     let path = checked(text(args, "path")?)?;
     let (limit, pos) = paging(args)?;
     let (mut next, mut seen, mut items, mut spent, mut more) =
@@ -69,7 +72,7 @@ pub fn history(store: &Arc<Store>, args: &SdkValue) -> Answer {
     let (mut rows, mut carried) = (Rows::new(store), None);
     while let Some(node) = next {
         let (root, parent, record) = rows.revision(node)?;
-        let (now, before) = sides(&reader, &mut rows, &mut carried, node, root, parent, &path)?;
+        let (now, before) = sides(&cached, &mut rows, &mut carried, node, root, parent, &path)?;
         next = parent;
         let same = match (now, before) {
             (None, None) => true,
@@ -107,7 +110,7 @@ pub fn history(store: &Arc<Store>, args: &SdkValue) -> Answer {
             ),
             (
                 "size",
-                now.map(|e| snapshot::size(&reader, &e))
+                now.map(|e| snapshot::size_in(&cached, &e))
                     .transpose()?
                     .map_or(SdkValue::Null, |n| SdkValue::Int(n as i64)),
             ),
@@ -131,10 +134,11 @@ pub fn history(store: &Arc<Store>, args: &SdkValue) -> Answer {
 
 pub fn stats(store: &Arc<Store>, args: &SdkValue) -> Answer {
     let (_, reader, snap) = super::args::snapshot(store, args)?;
+    let cached = Cached::new(&reader)?;
     let path = checked(text(args, "path")?)?;
     let current = snapshot::entry(&reader, &snap.tree, &path)?;
     let size = current
-        .map(|entry| snapshot::size(&reader, &entry))
+        .map(|entry| snapshot::size_in(&cached, &entry))
         .transpose()?;
     // The operator explicitly caps this diagnostic, never silently reports a total.
     let mut count = 0i64;
@@ -143,14 +147,14 @@ pub fn stats(store: &Arc<Store>, args: &SdkValue) -> Answer {
     let (mut rows, mut carried) = (Rows::new(store), None);
     while let Some(node) = next {
         let (root, parent, _) = rows.revision(node)?;
-        let (now, before) = sides(&reader, &mut rows, &mut carried, node, root, parent, &path)?;
+        let (now, before) = sides(&cached, &mut rows, &mut carried, node, root, parent, &path)?;
         next = parent;
         if now.map(|e| e.value.content_root) == before.map(|e| e.value.content_root) {
             continue;
         }
         count += 1;
         if let Some(e) = now {
-            logical = logical.saturating_add(snapshot::size(&reader, &e)?);
+            logical = logical.saturating_add(snapshot::size_in(&cached, &e)?);
         }
         if count == 1000 {
             break;

@@ -77,7 +77,18 @@ pub fn resolve(
     reader: &StorePorts,
     name: &str,
 ) -> Result<Snap, SdkRefusal> {
-    let (snap, _, ()) = resolve_with(store, stack, reader, name, |node| {
+    resolve_in(store, stack, reader, name)
+}
+
+/// [`resolve`] with the root's tree opened through `pages`, such as a
+/// call's caches (#818 H3).
+pub fn resolve_in(
+    store: &Arc<Store>,
+    stack: &LayerStackRecord,
+    pages: &dyn AuthenticatedObjects,
+    name: &str,
+) -> Result<Snap, SdkRefusal> {
+    let (snap, _, ()) = resolve_with(store, stack, pages, name, |node| {
         let serial = match store.published(|history| history.node_history_serial(node)) {
             Ok(Some(serial)) => serial,
             _ => 0,
@@ -262,7 +273,21 @@ pub fn lookup(
     tree: &TreeTable,
     path: &str,
 ) -> Result<Option<EntryFacts>, SdkRefusal> {
-    find_with(pages, tree, path, true)
+    find_with(pages, tree, path, true, &mut |serial, name| {
+        tree.lookup(pages, serial, name)
+    })
+}
+
+/// [`lookup`] with each name bound by `bind` (directory serial, name) in
+/// place of the tree's own lookup: a history call's directory memo
+/// (#818 H3). Refusals are [`lookup`]'s.
+pub fn lookup_bound(
+    pages: &dyn AuthenticatedObjects,
+    tree: &TreeTable,
+    path: &str,
+    bind: &mut dyn FnMut(u64, &PathName) -> layerfs_content::ContentResult<Option<u64>>,
+) -> Result<Option<EntryFacts>, SdkRefusal> {
+    find_with(pages, tree, path, true, bind)
 }
 
 /// [`entry`] through any object reader, such as a call's memo. A component
@@ -273,7 +298,9 @@ pub fn find(
     tree: &TreeTable,
     path: &str,
 ) -> Result<Option<EntryFacts>, SdkRefusal> {
-    find_with(reader, tree, path, false)
+    find_with(reader, tree, path, false, &mut |serial, name| {
+        tree.lookup(reader, serial, name)
+    })
 }
 
 /// The shared path walk. `strict` refuses a symlink component before the last
@@ -285,12 +312,13 @@ fn find_with(
     tree: &TreeTable,
     path: &str,
     strict: bool,
+    bind: &mut dyn FnMut(u64, &PathName) -> layerfs_content::ContentResult<Option<u64>>,
 ) -> Result<Option<EntryFacts>, SdkRefusal> {
     let mut serial = tree.root_serial();
     let mut names = path.split('/').filter(|name| !name.is_empty()).peekable();
     while let Some(name) = names.next() {
         let name = PathName::new(name).map_err(|_| invalid(format!("`{path}` is not valid")))?;
-        match tree.lookup(reader, serial, &name).map_err(args::content)? {
+        match bind(serial, &name).map_err(args::content)? {
             Some(child) => serial = child,
             None => return Ok(None),
         }
@@ -387,7 +415,10 @@ pub fn size_in(cached: &Cached, entry: &EntryFacts) -> Result<u64, SdkRefusal> {
 
 /// A regular file's text within the text bound; `None` for anything else, a
 /// binary file or a larger one.
-pub fn text(reader: &StorePorts, entry: Option<EntryFacts>) -> Result<Option<String>, SdkRefusal> {
+pub fn text(
+    reader: &dyn AuthenticatedObjects,
+    entry: Option<EntryFacts>,
+) -> Result<Option<String>, SdkRefusal> {
     let Some(entry) = entry.filter(|entry| entry.value.kind == InodeKind::RegularFile) else {
         return Ok(None);
     };

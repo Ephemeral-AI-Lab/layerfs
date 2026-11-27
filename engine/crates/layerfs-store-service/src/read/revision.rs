@@ -6,7 +6,6 @@ use super::{
     visibility::Visibility,
 };
 use crate::history::{lookup as args, rows::Rows};
-use crate::operator::files::entry;
 use crate::store::{Store, StorePorts};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_content::compare::EntryFacts;
@@ -74,8 +73,11 @@ pub fn list(
     // instead of being skipped over.
     let visibility = Visibility::for_stack(store, stack, Visibility::node_serial(store, start)?)?;
     let mut rows = Rows::new(store);
+    // Every node's objects go through the call's caches and directory memo
+    // (#818 H3).
+    let reader = &super::cached::Cached::new(reader)?;
     let anchor = rows.record(start)?.clone();
-    if entry(reader, anchor.root(), path)?.is_some() {
+    if reader.entry(anchor.root(), path)?.is_some() {
         if let Some(frontier) = visibility.hidden_at(path, visibility.serial()) {
             return Err(Visibility::refusal(path, frontier));
         }
@@ -149,7 +151,7 @@ pub fn list(
         let previous = parent(&mut rows, node, provenance)?;
         let (now, serial) = match carried.take() {
             Some((held, found, serial)) if held == node => (found, serial),
-            _ => (entry(reader, rows.record(node)?.root(), path)?, None),
+            _ => (reader.entry(rows.record(node)?.root(), path)?, None),
         };
         // A node the marker hides is never a returned version: the walk stops
         // at the first one rather than listing it or walking past it.
@@ -165,7 +167,7 @@ pub fn list(
         let mut hidden_before = false;
         let before = previous
             .map(|p| {
-                let found = entry(reader, rows.record(p)?.root(), path)?;
+                let found = reader.entry(rows.record(p)?.root(), path)?;
                 let serial = found
                     .map(|_| Visibility::node_serial(store, p))
                     .transpose()?;

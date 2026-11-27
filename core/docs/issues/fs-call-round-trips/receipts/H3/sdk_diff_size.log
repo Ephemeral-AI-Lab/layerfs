@@ -1,0 +1,14 @@
+ 8:36  up 3 days,  7:09, 1 user, load averages: 8.50 8.41 7.84
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.13s
+     Running tests/sdk_diff_size.rs (target/debug/deps/sdk_diff_size-6751b7e23fd8bd83)
+
+running 1 test
+test diff_commits_is_independent_of_tree_size_and_history_depth ... SDK_DIFF_SIZE files=300 commits=2 diff=Work { object_batches: 10, object_ids: 12, statements: 57, rows: 37, vm_steps: 884 } profile=Normal cache=warm-after-sibling-diff diagnostic_count_gate=true
+SDK_DIFF_SIZE files=300 commits=60 diff=Work { object_batches: 10, object_ids: 12, statements: 63, rows: 50, vm_steps: 1201 } profile=Normal cache=warm-after-sibling-diff diagnostic_count_gate=true
+SDK_DIFF_SIZE files=3000 commits=2 diff=Work { object_batches: 11, object_ids: 13, statements: 59, rows: 40, vm_steps: 988 } profile=Normal cache=warm-after-sibling-diff diagnostic_count_gate=true
+SDK_DIFF_SIZE files=3000 commits=60 diff=Work { object_batches: 11, object_ids: 13, statements: 65, rows: 53, vm_steps: 1305 } profile=Normal cache=warm-after-sibling-diff diagnostic_count_gate=true
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.26s
+
+run_bounded: exit 0 after 2.1 s

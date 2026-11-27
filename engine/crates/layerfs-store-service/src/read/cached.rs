@@ -6,7 +6,12 @@ use crate::history::lookup as args;
 use crate::store::{PortError, StorePorts};
 use layerfs_bridge::control::SdkRefusal;
 use layerfs_content::{
+    compare::{EntryFacts, TreeTable},
     file::{mapping::FILE_STATE_CANONICAL_BYTES, FileView},
+    filesystem::{
+        directory::read::lookup, path::PathName, sorted::DirectoryRoot, FilesystemRootId,
+    },
+    object::inode_leaf::InodeKind,
     policy::WHOLE_FILE_CANONICAL_OVERHEAD,
     AuthenticatedObjects, ContentResult, ObjectId,
 };
@@ -20,6 +25,60 @@ use std::{cell::RefCell, collections::HashMap, sync::Arc};
 pub struct Cached<'a> {
     ports: &'a StorePorts,
     cache: RefCell<Option<ReadCache>>,
+    directories: RefCell<DirectoryMemo>,
+}
+
+/// Names a call has bound in saved directories, by the directory's root
+/// (#818 H3). A directory root's contents never change, so an equal root
+/// binds a name to the same serial in every version that holds it. The shape
+/// is lane C's `DirectoryMemo` (`layerfs_content::compare::across`), which
+/// replaces it once that lands: `get` answers unknown (`None`), known unbound
+/// (`Some(None)`) or bound; `insert` keeps nothing more once full.
+pub struct DirectoryMemo {
+    entries: HashMap<ObjectId, HashMap<PathName, Option<u64>>>,
+    len: usize,
+    capacity: usize,
+}
+
+impl DirectoryMemo {
+    /// Names a history call keeps at most.
+    pub const CAPACITY: usize = 4_096;
+
+    /// An empty memo keeping at most `capacity` names (0 keeps none).
+    pub fn new(capacity: usize) -> Self {
+        Self {
+            entries: HashMap::new(),
+            len: 0,
+            capacity,
+        }
+    }
+
+    /// The binding of `name` in `directory`, when known.
+    pub fn get(&self, directory: DirectoryRoot, name: &PathName) -> Option<Option<u64>> {
+        self.entries.get(&directory.0)?.get(name).copied()
+    }
+
+    /// Keeps a binding; `false` when the memo is full.
+    pub fn insert(
+        &mut self,
+        directory: DirectoryRoot,
+        name: PathName,
+        binding: Option<u64>,
+    ) -> bool {
+        if self.len >= self.capacity {
+            return false;
+        }
+        if self
+            .entries
+            .entry(directory.0)
+            .or_default()
+            .insert(name, binding)
+            .is_none()
+        {
+            self.len += 1;
+        }
+        true
+    }
 }
 
 impl<'a> Cached<'a> {
@@ -29,7 +88,42 @@ impl<'a> Cached<'a> {
         Ok(Self {
             ports,
             cache: RefCell::new(None),
+            directories: RefCell::new(DirectoryMemo::new(DirectoryMemo::CAPACITY)),
         })
+    }
+
+    /// The entry at a checked absolute `path` of the saved tree `root`,
+    /// looked up strictly (as [`super::snapshot::lookup`]) through the
+    /// call's caches, each directory's names bound through the call's
+    /// directory memo (#818 H3): a history call walks the same path in many
+    /// versions, and their unchanged directories bind it once.
+    pub fn entry(&self, root: ObjectId, path: &str) -> Result<Option<EntryFacts>, SdkRefusal> {
+        let tree = TreeTable::open(self, FilesystemRootId(root)).map_err(args::content)?;
+        self.lookup(&tree, path)
+    }
+
+    /// [`Self::entry`] in a tree already open.
+    pub fn lookup(&self, tree: &TreeTable, path: &str) -> Result<Option<EntryFacts>, SdkRefusal> {
+        super::snapshot::lookup_bound(self, tree, path, &mut |serial, name| {
+            self.bind(tree, serial, name)
+        })
+    }
+
+    /// The serial `name` binds in directory `serial` of `tree`, through the
+    /// memo; `None` when unbound or when `serial` is no directory.
+    fn bind(&self, tree: &TreeTable, serial: u64, name: &PathName) -> ContentResult<Option<u64>> {
+        let directory = match tree.value(self, serial)? {
+            Some(value) if value.kind == InodeKind::Directory => DirectoryRoot(value.content_root),
+            _ => return Ok(None),
+        };
+        if let Some(binding) = self.directories.borrow().get(directory, name) {
+            return Ok(binding);
+        }
+        let binding = lookup(self, directory, name)?;
+        self.directories
+            .borrow_mut()
+            .insert(directory, name.clone(), binding);
+        Ok(binding)
     }
 
     /// Runs `demand` through the call's caches, made on first use.

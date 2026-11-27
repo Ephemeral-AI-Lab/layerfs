@@ -60,21 +60,26 @@ const NONE: Counts = [0, 0, 0, 0];
 ///   parent side, entry and serial, is the next node's own): `revision.h100`
 ///   warm 10,483 → 5,797, cold 10,827 → 6,141; `revision.h10` cold 1,106 →
 ///   634; `blame` and `diff_files` unchanged.
+/// - #818 H3 (dedupe): every version's objects through one call cache, and
+///   names bound through a per-call directory memo; `diff_files` keeps its
+///   strict lookup: warm `blame.h100` 5,829 → 779, `blame.h10` 548 → 91,
+///   `revision.h100` 5,797 → 769, `diff_files` 187 → 71; cold alike
+///   (`revision.h10` 634 → 147).
 const SQLITE: &[Pin] = &[
     // probe blame.h10: 714 statements
-    pin("blame.h10.cold", NONE, [0, 0, 589, 24], NONE),
-    pin("blame.h10.warm", NONE, [0, 0, 548, 24], NONE),
+    pin("blame.h10.cold", NONE, [0, 0, 132, 24], NONE),
+    pin("blame.h10.warm", NONE, [0, 0, 91, 24], NONE),
     // probe blame.h100: 7,575
-    pin("blame.h100.cold", NONE, [0, 0, 6185, 205], NONE),
-    pin("blame.h100.warm", NONE, [0, 0, 5829, 205], NONE),
+    pin("blame.h100.cold", NONE, [0, 0, 1135, 205], NONE),
+    pin("blame.h100.warm", NONE, [0, 0, 779, 205], NONE),
     // probe revision.h10 (appended at P0): 1,314
-    pin("revision.h10.cold", NONE, [0, 0, 634, 29], NONE),
+    pin("revision.h10.cold", NONE, [0, 0, 147, 29], NONE),
     // probe revision.h100: 12,658
-    pin("revision.h100.cold", NONE, [0, 0, 6141, 203], NONE),
-    pin("revision.h100.warm", NONE, [0, 0, 5797, 203], NONE),
+    pin("revision.h100.cold", NONE, [0, 0, 1113, 203], NONE),
+    pin("revision.h100.warm", NONE, [0, 0, 769, 203], NONE),
     // probe diff_files.h10_vs_h99: 198
-    pin("diff_files.h10_vs_h99.cold", NONE, [0, 0, 218, 15], NONE),
-    pin("diff_files.h10_vs_h99.warm", NONE, [0, 0, 187, 15], NONE),
+    pin("diff_files.h10_vs_h99.cold", NONE, [0, 0, 102, 15], NONE),
+    pin("diff_files.h10_vs_h99.warm", NONE, [0, 0, 71, 15], NONE),
 ];
 
 /// PostgreSQL: `[connects, round_trips, statements, transactions]` per
@@ -99,21 +104,25 @@ const SQLITE: &[Pin] = &[
 /// - #818 H2 (dedupe, see SQLITE): one path walk and serial per node fewer:
 ///   `revision.h100` warm 3,161 → 1,705, cold 3,389 → 1,933;
 ///   `revision.h10` cold 420 → 260.
+/// - #818 H3 (dedupe, see SQLITE): a version's objects mostly come from
+///   packs the call already holds: warm `blame.h100` 1,768 → 254,
+///   `blame.h10` 193 → 33, `revision.h100` 1,705 → 253, `diff_files` 77 →
+///   23; cold `blame.h100` 2,005 → 491, `revision.h10` 260 → 82.
 const POSTGRESQL: &[Pin] = &[
     // probe blame.h10: 267 trips
-    pin("blame.h10.cold", NONE, [1, 231, 223, 0], NONE),
-    pin("blame.h10.warm", NONE, [0, 193, 193, 0], NONE),
+    pin("blame.h10.cold", NONE, [1, 71, 63, 0], NONE),
+    pin("blame.h10.warm", NONE, [0, 33, 33, 0], NONE),
     // probe blame.h100: 2,325
-    pin("blame.h100.cold", NONE, [1, 2005, 1997, 0], NONE),
-    pin("blame.h100.warm", NONE, [0, 1768, 1768, 0], NONE),
+    pin("blame.h100.cold", NONE, [1, 491, 483, 0], NONE),
+    pin("blame.h100.warm", NONE, [0, 254, 254, 0], NONE),
     // probe revision.h10 (appended at P0)
-    pin("revision.h10.cold", NONE, [1, 260, 249, 0], NONE),
+    pin("revision.h10.cold", NONE, [1, 82, 71, 0], NONE),
     // probe revision.h100: 3,890
-    pin("revision.h100.cold", NONE, [1, 1933, 1922, 0], NONE),
-    pin("revision.h100.warm", NONE, [0, 1705, 1705, 0], NONE),
+    pin("revision.h100.cold", NONE, [1, 481, 470, 0], NONE),
+    pin("revision.h100.warm", NONE, [0, 253, 253, 0], NONE),
     // probe diff_files.h10_vs_h99: 88
-    pin("diff_files.h10_vs_h99.cold", NONE, [1, 103, 94, 0], NONE),
-    pin("diff_files.h10_vs_h99.warm", NONE, [0, 77, 77, 0], NONE),
+    pin("diff_files.h10_vs_h99.cold", NONE, [1, 49, 40, 0], NONE),
+    pin("diff_files.h10_vs_h99.warm", NONE, [0, 23, 23, 0], NONE),
 ];
 
 /// `(method, F, W, K)`: cold PostgreSQL round trips at V versions are at

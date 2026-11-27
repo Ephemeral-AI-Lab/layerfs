@@ -19,6 +19,7 @@ use layerfs_content::compare::{
 };
 use layerfs_content::filesystem::path::PathName;
 use layerfs_content::object::inode_leaf::InodeKind;
+use layerfs_content::AuthenticatedObjects;
 use layerfs_history::LayerStackRecord;
 use std::sync::Arc;
 
@@ -57,7 +58,7 @@ pub(crate) fn hunks(lines: &[DiffLine], budget: &mut usize) -> Option<SdkValue> 
 /// how the file was built, so a file edited away and back can keep its bytes
 /// under a new root (#352 F-073).
 pub fn same_content(
-    reader: &StorePorts,
+    reader: &dyn AuthenticatedObjects,
     left: &EntryFacts,
     right: &EntryFacts,
 ) -> Result<bool, SdkRefusal> {
@@ -109,7 +110,7 @@ pub fn diff_files(
                 SdkValue::map([("path", SdkValue::text(path.as_str()))]),
             ));
         }
-        let content = snapshot::text(&reader, Some(entry))?;
+        let content = snapshot::text(reader.as_ref(), Some(entry))?;
         Ok((path, snap, entry, content))
     };
     let (left, right) = (side(left)?, side(right)?);
@@ -128,7 +129,7 @@ pub fn diff_files(
             ("Text", false, hunks(&line_diff(l, r), &mut budget))
         }
         _ => {
-            let equal = same_content(&reader, &left.2, &right.2)?;
+            let equal = same_content(reader.as_ref(), &left.2, &right.2)?;
             (
                 if equal { "Equal" } else { "Binary" },
                 equal,
