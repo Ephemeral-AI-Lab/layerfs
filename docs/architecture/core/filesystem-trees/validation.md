@@ -33,7 +33,7 @@ every named limit of a tree, within [Filesystem trees](README.md).
 | Root not a directory, bound by a name, or declared new on update | `InvalidRecord("root inode kind" / "root directory binding" / "root inode allocation")` | `check_root_invariants` |
 | A directory placed twice in one batch | refused before any object is offered | [`checked.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/validate/checked.rs) |
 | A cycle, or a walk ending at an allocated unbound directory | refused | [`validate/cycles.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/validate/cycles.rs) |
-| A non-root directory whose derived count is not 1 | refused by the reducer | [`reference/reduce.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/reference/reduce.rs) |
+| A non-root directory whose derived count is not 1 | refused by the reducer | [`reference_count/reduce.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/reference_count/reduce.rs) |
 | Unsorted or duplicate change rows | `NonCanonicalOrdering` | [`resident.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/input/resident.rs), [`pages/merge.rs`](../../../../core/crates/layerfs-content/src/filesystem/tree/pages/merge.rs) |
 
 Validation is incremental: an update reads the affected bindings and records,
@@ -95,7 +95,7 @@ no Commit or read path does.
 | Keys per attribute listing | 4,096 | `MAXIMUM_ATTRIBUTE_KEYS` | same |
 | Inode serial | 1 to `i64::MAX` | `MAXIMUM_INODE_SERIAL` | [`identity.rs`](../../../../core/crates/layerfs-content/src/filesystem/name/identity.rs) |
 | Objects per read wave | 4,096 | `MAXIMUM_READ_DEMANDS` | [`objects.rs`](../../../../core/crates/layerfs-content/src/filesystem/objects.rs) |
-| Reference run tiers | 32 | `MAXIMUM_LEVELS` | [`reference/runs.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/reference/runs.rs) |
+| Reference run tiers | 32 | `MAXIMUM_LEVELS` | [`reference_count/runs.rs`](../../../../core/crates/layerfs-content/src/filesystem/construction/reference_count/runs.rs) |
 
 There is no cap on entries per directory, inodes per tree or bindings per
 update: they grow as B+tree pages and streamed rows. The resident route

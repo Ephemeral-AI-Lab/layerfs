@@ -11,7 +11,9 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
-use layerfs_content::filesystem::construction::reference::backing::{FileBacking, OrderingBacking};
+use layerfs_content::filesystem::construction::reference_count::backing::{
+    FileBacking, OrderingBacking,
+};
 use layerfs_content::ContentError;
 use support::filesystem::TempDir;
 

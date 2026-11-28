@@ -2,7 +2,7 @@
 //! value meanings of at most 21 serials, read as one job and written as one.
 use super::reduce::{IndexedReducer, PASS_ROWS};
 use super::{
-    super::reference::{meaning, record::Row},
+    super::reference_count::{meaning, record::Row},
     wire,
 };
 use crate::object::inode_leaf::InodeValue;

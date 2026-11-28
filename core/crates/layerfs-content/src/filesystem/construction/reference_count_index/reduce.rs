@@ -1,7 +1,7 @@
 //! Direct fixed reference rows, fresh membership and touched witnesses.
 use super::window::{Step, Window};
 use super::{
-    super::reference::{meaning, record::Row, reduce::ReferenceWork},
+    super::reference_count::{meaning, record::Row, reduce::ReferenceWork},
     wire,
 };
 use crate::filesystem::construction::{

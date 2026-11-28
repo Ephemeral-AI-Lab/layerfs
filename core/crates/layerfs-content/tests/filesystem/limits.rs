@@ -178,7 +178,7 @@ fn the_limits_this_suite_cannot_bound_are_named_with_their_reason() {
     // in a file nothing reads: the figures below are exactly the limits this suite
     // does not probe, and each is asserted here so a reader can tell a
     // deliberately unbounded row from a forgotten one.
-    use layerfs_content::filesystem::construction::reference::runs::MAXIMUM_LEVELS;
+    use layerfs_content::filesystem::construction::reference_count::runs::MAXIMUM_LEVELS;
     use layerfs_content::filesystem::limits::{MAXIMUM_PAGE_BYTES, MAXIMUM_TREE_LEVEL};
     assert_eq!(MAXIMUM_TREE_LEVEL, 31);
     assert_eq!(MAXIMUM_PAGE_BYTES, 8_192);

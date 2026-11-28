@@ -9,7 +9,7 @@
 use std::collections::{BTreeMap, VecDeque};
 
 use crate::error::{ContentError, ContentResult};
-use crate::filesystem::construction::reference::reduce::{PendingState, ReferenceReducer};
+use crate::filesystem::construction::reference_count::reduce::{PendingState, ReferenceReducer};
 use crate::filesystem::name::path::PathName;
 use crate::filesystem::tree::directory::read::{list_after, DirectoryReadWork};
 use crate::filesystem::tree::inode::read::{lookup_many, InodeReadWork, InodeTable};

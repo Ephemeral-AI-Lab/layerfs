@@ -1,5 +1,5 @@
 //! Versioned raw meanings under the filesystem operation marker.
-use crate::filesystem::construction::reference::record::{Row, ROW_BYTES};
+use crate::filesystem::construction::reference_count::record::{Row, ROW_BYTES};
 use crate::filesystem::name::path::PathName;
 use crate::object::inode_leaf::{
     decode_inode_value, encode_inode_value, InodeValue, INODE_VALUE_BYTES,

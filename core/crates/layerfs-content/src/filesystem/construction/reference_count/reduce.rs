@@ -14,9 +14,11 @@
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use crate::error::{ContentError, ContentResult};
-use crate::filesystem::construction::reference::backing::OrderingBacking;
-use crate::filesystem::construction::reference::record::{Row, ROW_BYTES};
-use crate::filesystem::construction::reference::runs::{RunStore, DEFAULT_MERGE_BUFFER_BYTES};
+use crate::filesystem::construction::reference_count::backing::OrderingBacking;
+use crate::filesystem::construction::reference_count::record::{Row, ROW_BYTES};
+use crate::filesystem::construction::reference_count::runs::{
+    RunStore, DEFAULT_MERGE_BUFFER_BYTES,
+};
 use crate::filesystem::tree::inode::read::{lookup_many, InodeReadWork, InodeTable};
 use crate::object::inode_leaf::InodeValue;
 use crate::object::AuthenticatedObjects;
@@ -50,7 +52,7 @@ pub struct ReferenceWork {
     /// Largest simultaneous pending rows.
     pub peak_pending: usize,
     /// Merge and spill work.
-    pub runs: crate::filesystem::construction::reference::merge::MergeWork,
+    pub runs: crate::filesystem::construction::reference_count::merge::MergeWork,
 }
 
 /// Bounded pending state plus the tiered runs that back it.
@@ -296,7 +298,7 @@ pub struct FinalRows<'r> {
     table: InodeTable,
     memory: std::vec::IntoIter<Row>,
     memory_next: Option<Row>,
-    run: Option<Box<dyn crate::filesystem::construction::reference::backing::OrderingRun>>,
+    run: Option<Box<dyn crate::filesystem::construction::reference_count::backing::OrderingRun>>,
     run_remaining: u64,
     run_offset: u64,
     run_buffer: Vec<u8>,
@@ -316,7 +318,9 @@ impl<'r> FinalRows<'r> {
         reader: &'r dyn AuthenticatedObjects,
         table: InodeTable,
         pending: BTreeMap<u64, Row>,
-        run: Option<Box<dyn crate::filesystem::construction::reference::backing::OrderingRun>>,
+        run: Option<
+            Box<dyn crate::filesystem::construction::reference_count::backing::OrderingRun>,
+        >,
         run_rows: u64,
         base_batch: usize,
         root_serial: u64,
