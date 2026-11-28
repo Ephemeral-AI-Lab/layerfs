@@ -121,9 +121,12 @@ Python  layerfs.workspace.mount(sandbox, branch, *, name=None)
 | call | writes one call-log line; MCP `admin` |
 
 Mounts a Branch as a new Workspace, a complete writable view of its head,
-and answers its handle and the directory the daemon mounted it at
-(`/workspaces/<n>` in the Sandbox; a folder under its run folder on macOS
-`macos-host`). Without `--name` the name is the Branch's made valid: lowercased,
+and answers its handle and the directory the daemon mounted it at: its
+name's folder (#846), `/layerfs/workspaces/<name>` inside a Sandbox with a
+root of its own (the `namespaces` backend: `linux-host`, docker, Lima, Apple
+Container), and `<home>/sandbox/<sandbox>/workspaces/<name>` on macOS
+`macos-host`, beside the Sandbox's records. A name mounted again lands on
+the same path, so absolute paths a build recorded there stay valid. Without `--name` the name is the Branch's made valid: lowercased,
 each character outside `a-z 0-9 _ . -` replaced by `-`, cut to 63 and
 `_ . -` trimmed from the ends (`Feature/Login` mounts as `feature-login`).
 The long form adds `outcome` (`mounted`), `branch`, `commit` (the Commit it
@@ -144,6 +147,7 @@ mounted.
 | `Exists` | a Workspace of that name is mounted in the Sandbox | `fix` names `--name` |
 | `InvalidInput` | the Branch is `main`, or its default name is empty or reserved | `fix`: `layerfs branch fork <project> <name> main` for `main` |
 | `Capacity` | the Sandbox already holds 16 Workspaces | |
+| `Failed` | the name's mount point is still there: an earlier mount of that name was not released (a forced unmount's leftover; the daemon's attach refuses it before any kernel effect, [`kernel.rs`](../../../../engine/crates/layerfs-daemon/src/workspace/kernel.rs)), and the Workspace stays bound, not attached | mount under another `--name`; a daemon start clears leftover empty points |
 | `NotFound` | no such Sandbox, project or Branch (the daemon's lookup, [`bind/run.rs`](../../../../engine/crates/layerfs-store-service/src/workspace/bind/run.rs)) | |
 
 Run on macOS (`macos-host`) with a debug build:
@@ -152,7 +156,7 @@ Run on macOS (`macos-host`) with a debug build:
 $ layerfs workspace mount tests main
 {"error":"InvalidInput","message":"main is the project's published line, not a Branch, and is not mounted: fork a Branch from it and mount that","fix":"layerfs branch fork shop/api <name> main"}
 $ layerfs workspace mount tests agent
-{"workspace":"tests:agent","path":"/tmp/demo/home/machine/macos-host/run/layerfs-8a7387b2-tests/workspaces/1"}
+{"workspace":"tests:agent","path":"/tmp/demo/home/sandbox/tests/workspaces/agent"}
 ```
 
 ### workspace.exec

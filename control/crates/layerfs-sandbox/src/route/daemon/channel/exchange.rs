@@ -260,12 +260,16 @@ fn matches_reply(request: &Request, reply: &Reply) -> bool {
         (Request::Status(token), Reply::Status(status)) => *token == status.token,
         (Request::Unmount(control), Reply::Unmounted(closed)) => control.token == *closed,
         (Request::Unmount(control), Reply::Dirty(report)) => control.token == report.token,
-        (Request::Attach(token), Reply::Ready(ready)) => *token == ready.token,
+        (Request::Attach(token) | Request::AttachNamed { token, .. }, Reply::Ready(ready)) => {
+            *token == ready.token
+        }
         (Request::ForceUnmount { token, .. }, Reply::ForceUnmounted(closed)) => {
             *token == closed.token
         }
         (
-            Request::Attach(token) | Request::ForceUnmount { token, .. },
+            Request::Attach(token)
+            | Request::AttachNamed { token, .. }
+            | Request::ForceUnmount { token, .. },
             Reply::Retained(custody),
         ) => *token == custody.token,
         (Request::Unmount(control), Reply::Retained(custody)) => control.token == custody.token,

@@ -129,6 +129,7 @@ fn native_create(
             options: ProviderLaunchOptions::Local {
                 command_identity: identity,
                 environment: vec![],
+                mount_home: None,
             },
         },
     };

@@ -128,7 +128,7 @@ impl Sandbox {
     pub fn identity(&self) -> ContainerId {
         self.id
     }
-    /// Its private directory (setup, overlay, Workspace mounts, daemon log).
+    /// Its private directory (setup, overlay, its mount home link, daemon log).
     pub fn directory(&self) -> &Path {
         &self.directory
     }

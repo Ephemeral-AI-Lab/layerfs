@@ -394,6 +394,7 @@ fn operation_code(operation: &Request) -> u64 {
         Request::Hello(_) => 7,
         Request::EndSession => 8,
         Request::Attach(_) => 9,
+        Request::AttachNamed { .. } => 18,
         Request::Locate(_) => 10,
         Request::ForceUnmount { .. } => 11,
         Request::Observed { .. } => 12,

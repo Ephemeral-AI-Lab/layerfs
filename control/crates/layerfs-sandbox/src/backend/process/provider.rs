@@ -36,6 +36,7 @@ impl ProcessProvider {
         let ProviderLaunchOptions::Local {
             command_identity,
             environment,
+            mount_home,
         } = request.options
         else {
             return Err(fail(RuntimeError::Unsupported(
@@ -58,7 +59,8 @@ impl ProcessProvider {
             .clone()
             .naming(&request.name)
             .map_err(fail)?
-            .environment(environment);
+            .environment(environment)
+            .mount_home(mount_home);
         local
             .create(
                 &request.daemon_executable,

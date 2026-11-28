@@ -1,6 +1,9 @@
 //! Kernel half of one registry entry and its bounded status block.
-use layerfs_protocol::daemon::{MountPhase, MountStatus};
-use std::{path::PathBuf, time::Duration};
+use layerfs_protocol::daemon::{MountPhase, MountStatus, WorkspaceToken};
+use std::{
+    path::{Path, PathBuf},
+    time::Duration,
+};
 
 /// Declared kernel serving inputs, assembled once by the application.
 #[derive(Clone, Debug)]
@@ -26,6 +29,40 @@ pub struct KernelConfig {
 pub enum KernelServing {}
 #[cfg(target_os = "linux")]
 pub use super::fuse::dispatcher::KernelServing;
+
+/// A Workspace's mount point under the mount home `mounts`: the folder of
+/// its name when its attach carries one (#846), so one name mounted again
+/// lands on one path; else its namespace's, which this daemon never
+/// reuses. Each is created exclusively by its attach: a folder an earlier
+/// mount of that name has not released yet refuses it.
+pub(crate) fn mount_directory(mounts: &Path, token: WorkspaceToken, name: Option<&str>) -> PathBuf {
+    match name {
+        Some(name) => mounts.join(name),
+        None => mounts.join(token.namespace.to_string()),
+    }
+}
+
+/// A named mount point that is still there refuses the attach `Busy`
+/// before any effect (#846): an earlier mount of that name has not been
+/// unmounted, or its folder not removed. Its exclusive create would refuse
+/// it too; this says why. A numbered point is new by construction.
+pub(crate) fn named_point_free(directory: &Path, name: Option<&str>) -> Result<(), super::Failure> {
+    if name.is_none() || std::fs::symlink_metadata(directory).is_err() {
+        return Ok(());
+    }
+    Err(super::Failure::Kernel(Box::new(
+        super::receipts::KernelFailure {
+            code: layerfs_protocol::daemon::ControlCode::Busy,
+            phase: "attach:directory",
+            detail: format!(
+                "Workspace mount point {} is still there: an earlier mount of this name \
+                 has not been released; unmount it, or mount under another name",
+                directory.display()
+            ),
+            evidence: None,
+        },
+    )))
+}
 
 /// The registry is the sole authority for which connection an entry owns.
 pub(crate) enum Kernel {

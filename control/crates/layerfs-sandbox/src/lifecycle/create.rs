@@ -293,7 +293,34 @@ pub fn create_on(
 }
 
 /// Removes a Sandbox's folder; one its own side removed already is gone.
+/// Refuses `Busy`, before anything is removed, while a mount is left under
+/// Sandbox folder `dir`: a process Sandbox's Workspaces are mounted in its
+/// `workspaces` (#846), and removing the folder through a live mount would
+/// delete their files. Its stop detaches them; one left (a stop that could
+/// not) is named with the line that forces it off. A table that cannot be
+/// read refuses too.
+pub fn unmounted(dir: &Path) -> Result<(), SdkRefusal> {
+    let points = crate::spawn::mounts_under(dir).map_err(layerfs_home::reply::outcome::failed)?;
+    if points.is_empty() {
+        return Ok(());
+    }
+    let shown: Vec<String> = points.iter().map(|p| p.display().to_string()).collect();
+    let refusal = layerfs_home::reply::outcome::refused(
+        "Busy",
+        format!(
+            "Sandbox folder {} still has mounted Workspaces ({}); nothing was removed",
+            dir.display(),
+            shown.join(", ")
+        ),
+    );
+    Err(layerfs_home::reply::outcome::with_fix(
+        refusal,
+        format!("umount -f {}", shown.join(" ")),
+    ))
+}
+
 pub fn remove_folder(dir: &Path) -> Result<(), SdkRefusal> {
+    unmounted(dir)?;
     match std::fs::remove_dir_all(dir) {
         Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
             Err(layerfs_home::reply::outcome::failed(error))

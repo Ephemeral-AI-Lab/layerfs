@@ -74,6 +74,13 @@ impl SpecNetwork {
     }
 }
 
+/// Where a namespaces Sandbox's daemon mounts its Workspaces, inside the
+/// Sandbox's own root (#846): one short path on every machine, the
+/// Workspace's name below it (`/layerfs/workspaces/<name>`). The init stage
+/// mounts a tmpfs (0755) there, so no mount point outlives the namespaces
+/// and none is in the image or the Sandbox's writable layer.
+pub const SANDBOX_MOUNTS: &str = "/layerfs/workspaces";
+
 /// The launcher's name-resolution files, which the init stage binds
 /// read-only over the Sandbox root's own, so the Sandbox resolves names as
 /// the launcher does (Docker Desktop's `host.docker.internal`, a VM's hosts
@@ -81,8 +88,8 @@ impl SpecNetwork {
 /// server the Sandbox's own network cannot reach (a loopback or IPv6 one),
 /// the commands' view has the file the spec's `resolver=` names instead
 /// (`network::resolver`). Their place is the root's `/etc`, the image and the Sandbox's own
-/// writable layer, never a Workspace: Workspaces are mounted under the
-/// Sandbox directory, and a diff or a Commit reads nothing else.
+/// writable layer, never a Workspace: Workspaces are mounted at
+/// [`SANDBOX_MOUNTS`], and a diff or a Commit reads nothing else.
 pub const RESOLVER_FILES: [&str; 2] = ["/etc/resolv.conf", "/etc/hosts"];
 
 /// One init stage's decoded inputs.
@@ -92,7 +99,7 @@ pub struct HelperSpec {
     /// it by the init stage. Sibling of `sandbox`, never inside it.
     pub root: PathBuf,
     /// The Sandbox directory, bound at its own path inside the private root,
-    /// so the daemon's setup, overlay and Workspace mounts keep one naming.
+    /// so the daemon's setup and overlay keep one naming.
     pub sandbox: PathBuf,
     /// The daemon executable inside the private root.
     pub daemon: PathBuf,

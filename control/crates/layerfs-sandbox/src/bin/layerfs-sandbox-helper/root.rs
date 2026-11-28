@@ -4,7 +4,9 @@
 //! Sandbox's own directory is bound at its own path, and each of the spec's
 //! binds at its guest path (a sqlite Store's directory at its own), so every
 //! path keeps one meaning on both sides of the pivot, and a
-//! private `/proc`, `/dev` and `/tmp` are mounted over the image's own.
+//! private `/proc`, `/dev` and `/tmp` are mounted over the image's own, and
+//! a tmpfs at `/layerfs/workspaces`, where the daemon mounts its Workspaces
+//! by name (#846).
 //! The Sandbox's copy of the bundle's runtime layer, when its spec names one,
 //! is bound read-only, nosuid and nodev at `/.layerfs/runtime` (R5). This
 //! host's `/etc/resolv.conf` and `/etc/hosts` are bound read-only over the
@@ -60,7 +62,7 @@ pub(super) fn build(spec: &HelperSpec) -> Result<(), String> {
         MsFlags::MS_NOSUID | MsFlags::MS_NODEV,
         "mode=1777",
     )?;
-    // the daemon's setup, overlay, Workspace mounts and `tmp`
+    // the daemon's setup, overlay and `tmp`
     bind(&spec.sandbox, &inside(&spec.root, &spec.sandbox)?, false)?;
     // the spec's binds: a sqlite Store's directory, where SQLite's WAL and
     // the writers' directory lock see the same inode as every other opener
@@ -75,6 +77,9 @@ pub(super) fn build(spec: &HelperSpec) -> Result<(), String> {
     if let Some(runtime) = &spec.runtime {
         bind_runtime(runtime, &spec.root)?;
     }
+    // the daemon's Workspace mount home (#846), its own tmpfs
+    let workspaces = inside(&spec.root, Path::new(layerfs_sandbox::SANDBOX_MOUNTS))?;
+    tmpfs(&workspaces, MsFlags::MS_NODEV, "mode=0755")?;
     resolver(spec)
 }
 

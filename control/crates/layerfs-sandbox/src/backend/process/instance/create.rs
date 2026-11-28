@@ -79,7 +79,7 @@ impl Local {
             .create(&paths.directory)
             .map_err(|error| fail(LocalPhase::Create, None, error.into()))?;
         let mut sandbox = Sandbox::unstarted(id, paths.directory.clone(), labels);
-        let log = match prepare(&paths, config) {
+        let log = match prepare(&paths, config, self.mount_home.as_deref()) {
             Ok(log) => log,
             Err(error) => return Err(fail(LocalPhase::Create, Some(sandbox), error.into())),
         };
@@ -130,8 +130,10 @@ impl Local {
 
 /// The setup and overlay directories (0700), the scratch directory (1777),
 /// the setup file (0600, written once) and the empty log file (0600) it
-/// returns.
-fn prepare(paths: &LocalPaths, config: &[u8]) -> io::Result<File> {
+/// returns. With a `mount_home` (#846), its `workspaces` is a link to it,
+/// made once: the daemon makes that folder and mounts there, and a stop or
+/// delete follows the link to every mount.
+fn prepare(paths: &LocalPaths, config: &[u8], mount_home: Option<&Path>) -> io::Result<File> {
     // the process umask may narrow the create mode
     fs::set_permissions(&paths.directory, Permissions::from_mode(0o755))?;
     for file in [&paths.config, &paths.overlay] {
@@ -142,6 +144,9 @@ fn prepare(paths: &LocalPaths, config: &[u8]) -> io::Result<File> {
     }
     fs::DirBuilder::new().mode(0o700).create(&paths.tmp)?;
     fs::set_permissions(&paths.tmp, Permissions::from_mode(0o1777))?;
+    if let Some(home) = mount_home {
+        std::os::unix::fs::symlink(home, &paths.mounts)?;
+    }
     let private = |path: &Path| {
         OpenOptions::new()
             .write(true)

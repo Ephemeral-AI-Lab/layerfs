@@ -284,7 +284,7 @@ fn kind(request: &layerfs_protocol::daemon::Request) -> &'static str {
         Request::Status(_) => "status",
         Request::Unmount(_) => "unmount",
         Request::ForceUnmount { .. } => "force-unmount",
-        Request::Attach(_) => "attach",
+        Request::Attach(_) | Request::AttachNamed { .. } => "attach",
         Request::Locate(_) => "locate",
         Request::Cleanup(_) => "cleanup",
         Request::Fork(_) => "fork",

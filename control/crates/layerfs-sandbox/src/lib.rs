@@ -81,7 +81,9 @@ pub use backend::dispatch::{LaunchFailure, Runtime, Sandbox};
 #[cfg(target_os = "linux")]
 pub use backend::namespaces::{self, NamespaceProvider};
 #[cfg(unix)]
-pub use backend::namespaces::{network, rootfs, HelperSpec, SpecNetwork, RESOLVER_FILES};
+pub use backend::namespaces::{
+    network, rootfs, HelperSpec, SpecNetwork, RESOLVER_FILES, SANDBOX_MOUNTS,
+};
 #[cfg(target_os = "macos")]
 pub use backend::process::{self, ProcessProvider};
 #[cfg(unix)]

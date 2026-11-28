@@ -651,6 +651,7 @@ fn a_request_is_refused_before_any_effect() {
     request.options = ProviderLaunchOptions::Local {
         command_identity: CommandIdentity { uid: 501, gid: 20 },
         environment: Vec::new(),
+        mount_home: None,
     };
     let failure = provider
         .launch_with_binds(request, vec![fixture.store_bind()])

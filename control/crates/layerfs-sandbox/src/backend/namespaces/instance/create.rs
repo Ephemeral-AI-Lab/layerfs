@@ -344,9 +344,11 @@ fn prepare(
             .ok_or(RuntimeError::Protocol("namespaces path"))?;
         fs::DirBuilder::new().mode(0o700).create(parent)?;
     }
-    for directory in [&paths.bin_directory, &paths.local.mounts] {
-        fs::DirBuilder::new().mode(0o755).create(directory)?;
-    }
+    // no `workspaces` here: the daemon mounts at `/layerfs/workspaces` in
+    // the Sandbox's own root (#846)
+    fs::DirBuilder::new()
+        .mode(0o755)
+        .create(&paths.bin_directory)?;
     fs::DirBuilder::new().mode(0o700).create(&paths.local.tmp)?;
     fs::set_permissions(&paths.local.tmp, Permissions::from_mode(0o1777))?;
     fs::DirBuilder::new().mode(0o755).create(&paths.root)?;

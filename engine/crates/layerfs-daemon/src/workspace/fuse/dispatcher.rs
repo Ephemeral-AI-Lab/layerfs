@@ -28,9 +28,10 @@ impl KernelServing {
     pub fn config(&self) -> &KernelConfig {
         &self.config
     }
-    /// A namespace is never reused by this daemon, so neither is its directory.
-    pub(super) fn directory(&self, token: WorkspaceToken) -> PathBuf {
-        self.config.mounts.join(token.namespace.to_string())
+    /// The Workspace's mount point: its name's folder (#846), else its
+    /// namespace's, which this daemon never reuses.
+    pub(super) fn directory(&self, token: WorkspaceToken, name: Option<&str>) -> PathBuf {
+        super::super::kernel::mount_directory(&self.config.mounts, token, name)
     }
 }
 impl fmt::Debug for KernelServing {

@@ -24,6 +24,7 @@ pub use mount::{
     MountPhase, MountReceipt, MountStatus, MountWork, ReadyMount, TeardownCustody, TeardownStage,
     MOUNT_DIRECTORY_LIMIT,
 };
+pub use request::{checked_mount_name, MOUNT_NAME_LIMIT};
 pub use request::{
     Activity, Answer, Call, CleanupObservation, ControlCode, ControlRefusal, LocalObservation,
     MountPlace, Reply, Request, WorkspaceStatus, WorkspaceToken, HISTORY_WINDOW,

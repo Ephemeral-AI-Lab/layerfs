@@ -142,7 +142,18 @@ fn start_named(
         (setup.command_uid, setup.command_gid) = crate::record::discovery::user();
     }
     setup.overlay = path_text(&paths.overlay)?;
-    setup.mounts = path_text(&paths.mounts)?;
+    // #846: a process daemon mounts in the home's `sandbox/<name>/workspaces`,
+    // beside the Sandbox's records; a namespaces one at `/layerfs/workspaces`
+    // in the Sandbox's own root
+    let mount_home = match backend {
+        crate::backend::select::Backend::HostProcess => Some(directory.join("workspaces")),
+        crate::backend::select::Backend::Namespaces => None,
+    };
+    setup.mounts = match (backend, &mount_home) {
+        (_, Some(home)) => path_text(home)?,
+        (crate::backend::select::Backend::Namespaces, None) => crate::SANDBOX_MOUNTS.to_owned(),
+        _ => path_text(&paths.mounts)?,
+    };
     let identity = CommandIdentity {
         uid: setup.command_uid,
         gid: setup.command_gid,
@@ -155,7 +166,7 @@ fn start_named(
     let store = host.open_args().store;
     let labels = crate::lifecycle::serve::labels(name, store.as_deref(), id);
     let api = SandboxApi::with_runtime(Arc::new(runtime));
-    let options = launch_options(backend, identity, host)?;
+    let options = launch_options(backend, identity, host, mount_home)?;
     let pg_host = match &setup.store {
         DaemonStore::Postgres { url, .. } => Some(
             layerfs_machine::table::postgresql_url::url_hosts(url)
@@ -315,6 +326,7 @@ fn launch_options(
     backend: crate::backend::select::Backend,
     identity: CommandIdentity,
     host: &Host,
+    _: Option<PathBuf>,
 ) -> Result<ProviderLaunchOptions, SdkRefusal> {
     Ok(match backend {
         crate::backend::select::Backend::HostProcess => {
@@ -346,10 +358,12 @@ fn launch_options(
     _: crate::backend::select::Backend,
     identity: CommandIdentity,
     _: &Host,
+    mount_home: Option<PathBuf>,
 ) -> Result<ProviderLaunchOptions, SdkRefusal> {
     Ok(ProviderLaunchOptions::Local {
         command_identity: identity,
         environment: Vec::new(),
+        mount_home,
     })
 }
 

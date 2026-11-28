@@ -119,9 +119,11 @@ pub fn mount(host: &Host, branch: Option<&str>, name: Option<&str>) -> Outcome {
         // incarnation or the Sandbox tombstone can prove the mount dead.
         let home = layerfs_store::data::project::record::discovery::home_of(Some(&host.home))?;
         let place = layerfs_sandbox::record::mount_place(&home, &directory, sandbox)?;
-        workspace(&mut control)
-            .placed(place)
-            .mount_named(id, (project, branch))
+        workspace(&mut control).placed(place).mount_named(
+            id,
+            (project, branch),
+            name.as_ref().map(WorkspaceName::as_str),
+        )
     };
     let mounted = mounted.map_err(|failure| match (&failure.bound, &failure.failure.cause) {
         // the daemon's lookup refusal, nothing bound: the call's answer
