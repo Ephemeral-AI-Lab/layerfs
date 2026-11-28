@@ -14,21 +14,32 @@ pub(super) struct WaveSource<'a> {
     pub(super) signatures: &'a RefCell<BTreeMap<usize, SignatureRow>>,
     /// Values this Save assigned and has not published yet, by ordinal.
     pub(super) values: &'a BTreeMap<u32, [u8; INODE_VALUE_BYTES]>,
+    /// True only when reconstructing this Save's own lost candidate bytes.
+    pub(super) prefer_packer: bool,
 }
 impl Source for WaveSource<'_> {
     fn ordered_dependencies(&self) -> bool {
         false
     }
     fn location(&self, id: ObjectId, ceiling: i64) -> StorageResult<Option<ObjectLocation>> {
-        match self.packer.location(id) {
-            Some(row) => Ok(Some(row)),
-            None => self.fetch.location(id, ceiling),
+        if self.prefer_packer {
+            match self.packer.location(id) {
+                Some(row) => Ok(Some(row)),
+                None => self.fetch.location(id, ceiling),
+            }
+        } else {
+            match self.fetch.location(id, ceiling)? {
+                Some(row) => Ok(Some(row)),
+                None => Ok(self.packer.location(id)),
+            }
         }
     }
     fn base_location(&self, id: ObjectId, ceiling: i64) -> StorageResult<Option<ObjectLocation>> {
-        match self.packer.location(id) {
+        // A committed base in Fetch is the canonical first-wins winner; never
+        // let an unpublished tentative copy in `packer.ready` shadow it (#723).
+        match self.fetch.base_location(id, ceiling)? {
             Some(row) => Ok(Some(row)),
-            None => self.fetch.base_location(id, ceiling),
+            None => Ok(self.packer.location(id)),
         }
     }
     fn pack_bytes(&self, id: i64) -> StorageResult<Vec<u8>> {

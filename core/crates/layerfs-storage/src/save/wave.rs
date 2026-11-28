@@ -87,6 +87,7 @@ impl State<'_> {
                 packer: &self.packer,
                 signatures: &self.signatures,
                 values: &self.values,
+                prefer_packer: false,
             };
             if let Some(location) = view.location(object.id(), i64::MAX)? {
                 // Exact reuse trusts the content address (owner, 2026-10-19;
@@ -122,6 +123,7 @@ impl State<'_> {
             packer: &self.packer,
             signatures: &self.signatures,
             values: &self.values,
+            prefer_packer: false,
         };
         self.candidates.flush(&view)?;
         Ok(())
@@ -135,6 +137,7 @@ impl State<'_> {
             packer: &self.packer,
             signatures: &self.signatures,
             values: &self.values,
+            prefer_packer: true,
         };
         let capacities = self.storage.capacities();
         let value = Resolver::new(

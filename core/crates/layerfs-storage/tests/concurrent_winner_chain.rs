@@ -158,3 +158,152 @@ fn a_concurrent_winner_chain_resolves_a_base_this_wave_located_absent() {
         .collect();
     assert_eq!(read, expected);
 }
+
+/// A tentative unpublished copy of `v1` (`v1 -> v0`) in `Packer::ready` must
+/// never shadow the committed first-wins copy of `v1` in `Fetch` when walking
+/// a committed base chain (`v0 -> v1`), or `DepthCache::cost_of` / `Resolver`
+/// observes a false-positive `Integrity("dependency cycle")`.
+#[test]
+fn ready_pack_entry_never_shadows_a_committed_base_into_a_cycle() {
+    let base_bytes = support::noise(4096);
+    let p_bytes = support::noise(4096);
+    let p = whole(&p_bytes);
+    let x = hinted(whole(&edited(&p_bytes, 100, b"F723-x0!")), &p);
+    let v1 = whole(&base_bytes);
+    let v0_plain = whole(&edited(&base_bytes, 100, b"F723-v0!"));
+    let v0 = hinted(v0_plain.clone(), &v1);
+    let v1_hint_v0 = hinted(v1.clone(), &v0);
+    let v2 = hinted(whole(&edited(&base_bytes, 300, b"F723-v2!")), &v0);
+    // Incompressible payloads large enough to seal `v1_hint_v0` out of the
+    // open `WholeFile` group and flush `Packer::queued` into `Packer::ready`
+    // (> PACK_LIMIT = 256 KiB) before `v2` is offered.
+    let pad_noise = support::noise(6 * 60 * 1024);
+    let pads: Vec<_> = (0..6)
+        .map(|i| whole(&pad_noise[i * 60 * 1024..(i + 1) * 60 * 1024]))
+        .collect();
+
+    let shared = Arc::new(MemoryMetadata::default());
+    let save_one = |metadata: Arc<MemoryMetadata>, object: FinalizedObject| {
+        let store = Storage::new(metadata).unwrap();
+        let save = store.begin_save().unwrap();
+        save.accept(object).unwrap();
+        save.finish().unwrap()
+    };
+    let (step_shared, v1_other, v0_other) = (shared.clone(), v1.clone(), v0.clone());
+    let other_prefix = Arc::new(Mutex::new(0_u64));
+    let recorded = other_prefix.clone();
+    let steps: Vec<Box<dyn FnOnce() + Send>> = vec![Box::new(move || {
+        save_one(step_shared.clone(), v1_other);
+        *recorded.lock().unwrap() = save_one(step_shared, v0_other).prefix_records;
+    })];
+    let storage = Storage::new(Arc::new(Interleaved {
+        inner: shared.clone(),
+        before_publish: Mutex::new(steps),
+    }))
+    .unwrap();
+
+    // Wave:
+    // 1. `v0` (FULL) enters `Packer`.
+    // 2. `x` (hint `v0`) triggers `register_ready()`; `before_publish` commits
+    //    `v1` (FULL) and `v0` (PREFIX -> `v1`). `v0` loses first-wins and is
+    //    invalidated from `Fetch::absent`, while `v1` remains marked absent.
+    // 3. `v1_hint_v0` is not skipped (still in `absent`), sees `v0 -> v1` in
+    //    `Fetch`, and encodes `v1 -> v0` into `Packer`.
+    // 4. `pad` seals `v1 -> v0` into `Packer::ready`.
+    // 5. `v2` (hint `v0`) does not flush `Packer::ready` because `v0` is already
+    //    committed, and walks `v0 -> v1` via `WaveSource::base_location`.
+    let save = storage.begin_save().unwrap();
+    for object in [&p, &v0_plain, &x, &v1_hint_v0] {
+        save.accept(object.clone()).unwrap();
+    }
+    for pad in &pads {
+        save.accept(pad.clone()).unwrap();
+    }
+    save.accept(v2.clone()).unwrap();
+    save.finish()
+        .unwrap_or_else(|error| panic!("Save hit cycle or integrity error: {error:?}"));
+    assert_eq!(
+        *other_prefix.lock().unwrap(),
+        1,
+        "fixture: concurrent writer must store v0 as PREFIX on v1"
+    );
+
+    let reader = Storage::new(shared).unwrap();
+    let ids = [v0.id(), v1.id(), v2.id()];
+    let read = reader.reader().unwrap().read_objects(&ids).unwrap();
+    assert_eq!(
+        read,
+        vec![
+            v0.canonical().to_vec(),
+            v1.canonical().to_vec(),
+            v2.canonical().to_vec(),
+        ]
+    );
+}
+
+/// When a Save loses first-wins on `v0` after encoding its private copy of
+/// `v0` against `v1`, and the concurrent winner already stored `v1` as a
+/// `PREFIX` on `v0`, `acknowledge()`'s `Wave::resolve(v0)` walks from the
+/// unpublished `v0` through committed `v1` to committed `v0`. Different
+/// `(pack_id, group, record)` locators must not be rejected as a cycle (#723).
+#[test]
+fn lost_candidate_resolving_through_winner_chain_to_same_object_id_is_not_a_cycle() {
+    let base_bytes = support::noise(4096);
+    let v0 = whole(&base_bytes);
+    let v1_plain = whole(&edited(&base_bytes, 100, b"F723-v1!"));
+    let v1_hint_v0 = hinted(v1_plain.clone(), &v0);
+    let v0_hint_v1 = hinted(v0.clone(), &v1_plain);
+    let p_bytes = support::noise(4096);
+    let p = whole(&p_bytes);
+    let x = hinted(whole(&edited(&p_bytes, 100, b"F723-x0!")), &p);
+
+    let shared = Arc::new(MemoryMetadata::default());
+    let save_one = |metadata: Arc<MemoryMetadata>, object: FinalizedObject| {
+        let store = Storage::new(metadata).unwrap();
+        let save = store.begin_save().unwrap();
+        save.accept(object).unwrap();
+        save.finish().unwrap()
+    };
+    let (step_shared, v0_other, v1_other) = (shared.clone(), v0.clone(), v1_hint_v0.clone());
+    let other_prefix = Arc::new(Mutex::new(0_u64));
+    let recorded = other_prefix.clone();
+    let steps: Vec<Box<dyn FnOnce() + Send>> = vec![Box::new(move || {
+        save_one(step_shared.clone(), v0_other);
+        *recorded.lock().unwrap() = save_one(step_shared, v1_other).prefix_records;
+    })];
+    let storage = Storage::new(Arc::new(Interleaved {
+        inner: shared.clone(),
+        before_publish: Mutex::new(steps),
+    }))
+    .unwrap();
+
+    // 1. `p` enters `Packer`, `x` (hint `p`) triggers `register_ready()`.
+    // 2. `before_publish` commits `v0` (FULL) and `v1` (PREFIX -> `v0`).
+    // 3. `v1_plain` is published by `a` or `v1` is resolved via `x`? No,
+    //    `v1_hint_v0`? Here `a` offers `v0_hint_v1`: `v0` is still in `absent`
+    //    from the wave start, while `v1` is located via `register_ready`? No:
+    //    `v1_plain` is also offered first so `register_ready` invalidates `v1`,
+    //    then `v0_hint_v1` encodes `v0 -> v1` and loses `v0` at `finish()`.
+    let save = storage.begin_save().unwrap();
+    for object in [&p, &x, &v1_plain, &v0_hint_v1] {
+        save.accept(object.clone()).unwrap();
+    }
+    save.finish()
+        .unwrap_or_else(|error| panic!("Lost candidate resolution hit cycle: {error:?}"));
+    assert_eq!(
+        *other_prefix.lock().unwrap(),
+        1,
+        "fixture: concurrent writer must store v1 as PREFIX on v0"
+    );
+
+    let reader = Storage::new(shared).unwrap();
+    let read = reader
+        .reader()
+        .unwrap()
+        .read_objects(&[v0.id(), v1_plain.id()])
+        .unwrap();
+    assert_eq!(
+        read,
+        vec![v0.canonical().to_vec(), v1_plain.canonical().to_vec()]
+    );
+}

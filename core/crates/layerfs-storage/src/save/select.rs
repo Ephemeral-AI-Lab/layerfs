@@ -75,6 +75,7 @@ impl State<'_> {
             packer: &self.packer,
             signatures: &self.signatures,
             values: &self.values,
+            prefer_packer: false,
         };
         let capacities = self.storage.capacities();
         let mut input = SelectInput {
