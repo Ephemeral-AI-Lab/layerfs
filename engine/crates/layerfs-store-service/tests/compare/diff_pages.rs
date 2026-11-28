@@ -42,16 +42,7 @@ fn fixture(label: &str) -> (Fixture, String, String) {
 }
 
 fn page(fixture: &Fixture, from: &str, to: &str, cursor: &SdkValue, hunks: bool) -> SdkValue {
-    let mut fields = vec![
-        ("from", SdkValue::text(from)),
-        ("to", SdkValue::text(to)),
-        ("pageSize", SdkValue::Int(1000)),
-        ("cursor", cursor.clone()),
-    ];
-    if !hunks {
-        fields.push(("hunks", SdkValue::Bool(false)));
-    }
-    fixture.call("branch.diff_commits", fields)
+    super::commit_diff(fixture, from, to, 1000, cursor, hunks)
 }
 
 #[test]
@@ -65,10 +56,10 @@ fn cursor_pages_resume_and_list_every_change_once() {
         let value = page(&fixture, &from, &to, &cursor, true);
         work.push(fixture.since(before).statements);
         listed.extend(paths(&value).into_iter().map(str::to_owned));
-        if !value.get_bool("hasMore") {
+        if !super::more(&value) {
             break;
         }
-        cursor = value.get("nextCursor").cloned().expect("nextCursor");
+        cursor = value.get("next").cloned().expect("next");
         assert!(matches!(cursor, SdkValue::Text(_)), "{cursor:?}");
     }
     let expected: Vec<String> = (0..DIRS)
@@ -95,7 +86,7 @@ fn a_listing_without_hunks_fits_by_paths() {
         DIRS * FILES,
         "one page lists every path"
     );
-    assert!(!value.get_bool("hasMore"));
+    assert!(!super::more(&value));
     let item = &items(&value)[0];
     assert!(item.get_bool("content"));
     assert_eq!(item.get("hunks"), Some(&SdkValue::Null));
@@ -138,10 +129,10 @@ fn cursor_pages_without_hunks_pay_for_their_own_entries() {
         let value = page(&fixture, &from, &to, &cursor, false);
         work.push(fixture.since(before).statements);
         listed += items(&value).len();
-        if !value.get_bool("hasMore") {
+        if !super::more(&value) {
             break;
         }
-        cursor = value.get("nextCursor").cloned().expect("nextCursor");
+        cursor = value.get("next").cloned().expect("next");
     }
     println!(
         "SDK_DIFF_PAGES_WIDE pages={} statements={work:?}",

@@ -1,4 +1,4 @@
-//! `fs.stat` gives a symlink the size a mounted Workspace gives it: the
+//! `file.stat` gives a symlink the size a mounted Workspace gives it: the
 //! length of its target, not of the object that stores the target.
 use crate::support;
 
@@ -16,7 +16,7 @@ fn a_symlink_size_is_its_target_length() {
     });
     for (path, target) in [("/link", "a.txt"), ("/dangling", "/does/not/exist")] {
         let stat = fixture.call(
-            "fs.stat",
+            "file.stat",
             vec![
                 ("branch", SdkValue::text("main")),
                 ("path", SdkValue::text(path)),

@@ -11,27 +11,8 @@ fn t(value: &str) -> SdkValue {
 fn integer(value: i64) -> SdkValue {
     SdkValue::Int(value)
 }
-fn rows(value: &SdkValue) -> &[SdkValue] {
-    match value.get("rows") {
-        Some(SdkValue::List(rows)) => rows,
-        _ => panic!("missing rows: {value:?}"),
-    }
-}
 fn id(value: &SdkValue) -> &str {
     value.get("commit").unwrap().get_text("id").unwrap()
-}
-fn selector(at: &str, path: &str) -> SdkValue {
-    SdkValue::map([("commit", t(at)), ("path", t(path))])
-}
-fn diff(f: &Fixture, left: &str, right: &str, path: &str) -> SdkValue {
-    f.call(
-        "fs.diff_files",
-        vec![
-            ("left", selector(left, path)),
-            ("right", selector(right, path)),
-            ("includeAttribution", SdkValue::Bool(true)),
-        ],
-    )
 }
 fn revision(
     f: &Fixture,
@@ -52,7 +33,7 @@ fn revision(
     if let Some(anchor) = anchor {
         args.push(("commit", t(anchor)));
     }
-    f.call("fs.revision", args)
+    f.call("file.history", args)
 }
 
 #[test]
@@ -145,222 +126,6 @@ fn first_changed_inherited_file_is_modified_and_provenance_includes_init() {
 }
 
 #[test]
-fn equal_text_independent_owners_and_publication_source_are_distinct() {
-    let f = Fixture::new("file-attribution", |source| {
-        fs::write(source.join("target"), "old\nkept\n").unwrap();
-        1
-    });
-    f.fork("left");
-    f.fork("right");
-    let left = f.apply("left", vec![write("/target", "same\nkept\n")]);
-    let right = f.apply("right", vec![write("/target", "same\nkept\n")]);
-    let d = diff(&f, "left", "right", "/target");
-    assert!(d.get_bool("contentEqual"));
-    assert!(d.get("changes").unwrap().get_bool("attribution"));
-    assert_eq!(d.get_int("attributionChanges"), Some(1));
-    assert_eq!(rows(&d).len(), 2);
-    let row = &rows(&d)[0];
-    assert!(row.get_bool("ownerChanged"));
-    assert_eq!(
-        row.get("beforeOwner")
-            .unwrap()
-            .get("ref")
-            .unwrap()
-            .get_text("id"),
-        Some(id(&left))
-    );
-    assert_eq!(
-        row.get("afterOwner")
-            .unwrap()
-            .get("ref")
-            .unwrap()
-            .get_text("id"),
-        Some(id(&right))
-    );
-    assert!(!rows(&d)[1].get_bool("ownerChanged"));
-    f.call("branch.publish", vec![("branch", t("left"))]);
-    let published = diff(&f, "left", "main", "/target");
-    assert_eq!(
-        published.get("changes").unwrap().get("attribution"),
-        Some(&SdkValue::Bool(false))
-    );
-    assert_eq!(
-        published.get("rightRef").unwrap().get_text("kind"),
-        Some("Layer")
-    );
-    assert_eq!(
-        rows(&published)[0]
-            .get("afterOwner")
-            .unwrap()
-            .get("ref")
-            .unwrap()
-            .get_text("id"),
-        Some(id(&left))
-    );
-    f.cleanup();
-}
-
-#[test]
-fn equal_whole_tree_roots_do_not_shortcut_file_ownership() {
-    let f = Fixture::new("file-attribution-equal-root", |source| {
-        fs::write(source.join("target"), "old\n").unwrap();
-        1
-    });
-    f.fork("left");
-    f.fork("right");
-    for (branch, workspace) in [("left", 201), ("right", 202)] {
-        f.workspace_commit(
-            branch,
-            &[support::Change::Write("/target", b"new\n")],
-            workspace,
-            || {},
-        );
-    }
-    let d = diff(&f, "left", "right", "/target");
-    assert_eq!(
-        d.get("leftRef").unwrap().get_text("root"),
-        d.get("rightRef").unwrap().get_text("root")
-    );
-    assert!(d.get_bool("contentEqual") && d.get_bool("sameInode"));
-    assert!(d.get("changes").unwrap().get_bool("attribution"));
-    assert_eq!(d.get_int("attributionChanges"), Some(1));
-    f.cleanup();
-}
-
-#[test]
-fn missing_sides_are_opt_in_and_content_edits_are_not_attribution_only() {
-    let f = Fixture::new("file-diff-missing", |source| {
-        fs::write(source.join("target"), "old\n").unwrap();
-        1
-    });
-    f.fork("work");
-    f.apply("work", vec![write("/added", "hello\n")]);
-    let args = vec![
-        ("left", selector("main", "/added")),
-        ("right", selector("work", "/added")),
-    ];
-    assert_eq!(
-        f.try_call("fs.diff_files", args.clone()).unwrap_err().code,
-        "NoSuchPath"
-    );
-    let mut allowed = args;
-    allowed.extend([
-        ("allowMissing", SdkValue::Bool(true)),
-        ("includeAttribution", SdkValue::Bool(true)),
-    ]);
-    let added = f.call("fs.diff_files", allowed);
-    assert_eq!(added.get("before"), Some(&SdkValue::Null));
-    assert_eq!(added.get_text("changeKind"), Some("Added"));
-    assert!(rows(&added)
-        .iter()
-        .all(|r| r.get_text("op") == Some("+") && !r.get_bool("ownerChanged")));
-    let both = f
-        .try_call(
-            "fs.diff_files",
-            vec![
-                ("left", selector("main", "/missing")),
-                ("right", selector("work", "/missing")),
-                ("allowMissing", SdkValue::Bool(true)),
-            ],
-        )
-        .unwrap_err();
-    assert_eq!(both.code, "NoSuchPath");
-    f.cleanup();
-}
-
-#[test]
-fn binary_size_clipping_and_coarse_alignment_never_claim_exact_owner_changes() {
-    let many = (0..1100).fold(String::new(), |mut text, n| {
-        use std::fmt::Write;
-        writeln!(text, "line{n}").unwrap();
-        text
-    });
-    let f = Fixture::new("file-diff-coverage", |source| {
-        fs::write(source.join("binary"), b"\0binary").unwrap();
-        fs::write(source.join("large"), vec![b'x'; 1024 * 1024 + 1]).unwrap();
-        fs::write(source.join("long"), vec![b'x'; 70 * 1024]).unwrap();
-        fs::write(source.join("many"), &many).unwrap();
-        4
-    });
-    f.fork("work");
-    let identical = diff(&f, "main", "main", "/binary");
-    assert_eq!(
-        identical.get("changes").unwrap().get("attribution"),
-        Some(&SdkValue::Bool(false))
-    );
-    f.apply("work", vec![write("/other", "distinct saved identity")]);
-    for (path, reason) in [("/binary", "binary"), ("/large", "text_limit")] {
-        let d = diff(&f, "main", "work", path);
-        assert_eq!(d.get_text("omissionReason"), Some(reason));
-        assert_eq!(
-            d.get("changes").unwrap().get("attribution"),
-            Some(&SdkValue::Null)
-        );
-        assert_eq!(
-            d.get("attributionCoverage").unwrap().get_text("status"),
-            Some("unavailable")
-        );
-    }
-    let read = f.call("fs.read", vec![("branch", t("work")), ("path", t("/long"))]);
-    assert!(layerfs_store_service::filesystem::facts::value_bytes(&read) <= 48 * 1024);
-    assert!(read.get_bool("lineTruncated"));
-    let too_long = f
-        .try_call(
-            "fs.diff_files",
-            vec![
-                ("left", selector("main", "/long")),
-                ("right", selector("work", "/long")),
-                ("includeAttribution", SdkValue::Bool(true)),
-            ],
-        )
-        .unwrap_err();
-    assert_eq!(too_long.code, "Capacity");
-    let blame = f.call(
-        "fs.blame",
-        vec![
-            ("branch", t("work")),
-            ("path", t("/long")),
-            ("lineCount", integer(1)),
-        ],
-    );
-    let Some(SdkValue::List(lines)) = blame.get("lines") else {
-        panic!("{blame:?}")
-    };
-    assert!(lines[0].get_bool("clipped"));
-    assert_eq!(
-        blame.get("coverage").unwrap().get_text("status"),
-        Some("partial")
-    );
-    // Complete small byte windows can still overflow the LCS cell bound.
-    let replacement = (0..1100).fold(String::new(), |mut text, n| {
-        use std::fmt::Write;
-        writeln!(text, "other{n}").unwrap();
-        text
-    });
-    f.apply("work", vec![write("/many", replacement)]);
-    let coarse = diff(&f, "main", "work", "/many");
-    assert_eq!(
-        coarse
-            .get("contentCoverage")
-            .unwrap()
-            .get_text("comparison"),
-        Some("coarse")
-    );
-    assert_eq!(
-        coarse
-            .get("attributionCoverage")
-            .unwrap()
-            .get_text("comparison"),
-        Some("coarse")
-    );
-    assert_eq!(
-        coarse.get("changes").unwrap().get("attribution"),
-        Some(&SdkValue::Null)
-    );
-    f.cleanup();
-}
-
-#[test]
 fn supporting_reads_return_pins_and_numbered_queries_do_not_skip_matches() {
     let f = Fixture::new("file-numbered-reads", |source| {
         for name in ["a", "b", "c"] {
@@ -369,7 +134,7 @@ fn supporting_reads_return_pins_and_numbered_queries_do_not_skip_matches() {
         3
     });
     let list = f.call(
-        "fs.list",
+        "file.list",
         vec![
             ("branch", t("main")),
             ("path", t("/")),
@@ -380,7 +145,7 @@ fn supporting_reads_return_pins_and_numbered_queries_do_not_skip_matches() {
     let pin = list.get("at").unwrap().get_text("id").unwrap().to_owned();
     assert_eq!(items(&list)[0].get_text("name"), Some("a"));
     let second = f.call(
-        "fs.list",
+        "file.list",
         vec![
             ("branch", t("main")),
             ("commit", t(&pin)),
@@ -390,8 +155,8 @@ fn supporting_reads_return_pins_and_numbered_queries_do_not_skip_matches() {
         ],
     );
     assert_eq!(items(&second)[0].get_text("name"), Some("b"));
-    for method in ["fs.glob", "fs.grep"] {
-        let pattern = if method == "fs.glob" { "*" } else { "needle" };
+    for method in ["file.glob", "file.grep"] {
+        let pattern = if method == "file.glob" { "*" } else { "needle" };
         let result = f.call(
             method,
             vec![
@@ -407,7 +172,7 @@ fn supporting_reads_return_pins_and_numbered_queries_do_not_skip_matches() {
         assert_eq!(items(&result).len(), 1);
         assert!(result.get_bool("hasMore"));
     }
-    for method in ["fs.read", "fs.stat"] {
+    for method in ["file.read", "file.stat"] {
         let result = f.call(
             method,
             vec![
@@ -420,7 +185,7 @@ fn supporting_reads_return_pins_and_numbered_queries_do_not_skip_matches() {
     }
     let bad = f
         .try_call(
-            "fs.list",
+            "file.list",
             vec![
                 ("branch", t("main")),
                 ("path", t("/")),
@@ -446,7 +211,7 @@ fn a_bounded_blame_window_does_not_refuse_a_large_total_file() {
         1
     });
     let result = f.call(
-        "fs.blame",
+        "file.blame",
         vec![
             ("branch", t("main")),
             ("path", t("/large")),
@@ -483,7 +248,7 @@ fn blame_reply_admits_duplicated_owner_messages_and_json_escaping() {
     });
     f.fork("work");
     f.call(
-        "fs.write",
+        "file.write",
         vec![
             ("branch", t("work")),
             ("path", t("/target")),
@@ -492,7 +257,7 @@ fn blame_reply_admits_duplicated_owner_messages_and_json_escaping() {
         ],
     );
     let page = f.call(
-        "fs.blame",
+        "file.blame",
         vec![("branch", t("work")), ("path", t("/target"))],
     );
     assert!(layerfs_store_service::filesystem::facts::value_bytes(&page) <= 48 * 1024);

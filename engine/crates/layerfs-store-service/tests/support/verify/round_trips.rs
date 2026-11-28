@@ -1,4 +1,4 @@
-//! #818 round-trip harness shared by the `fs.*` and Init pins
+//! #818 round-trip harness shared by the `file.*` and Init pins
 //! (`sdk_read_round_trips.rs`, `sdk_history_round_trips.rs`,
 //! `sdk_write_round_trips.rs`, `init_round_trips*.rs`) and the measurement
 //! probe `fs_call_round_trips.rs`.
@@ -616,7 +616,7 @@ pub fn fork_work(opened: &Opened) {
 }
 
 /// The probe's history on Branch [`BRANCH`]: 100 Commits through
-/// `fs.write`, alternating `/hist/a.txt` (one appended line each) and
+/// `file.write`, alternating `/hist/a.txt` (one appended line each) and
 /// `/hist/other.txt`. The Commit ids, oldest first.
 pub fn write_history(opened: &Opened) -> Vec<String> {
     let (mut ids, mut text) = (Vec::new(), String::from("v0\n"));
@@ -629,7 +629,7 @@ pub fn write_history(opened: &Opened) -> Vec<String> {
         };
         let reply = opened
             .call(
-                "fs.write",
+                "file.write",
                 vec![
                     ("branch", t(BRANCH)),
                     ("path", t(path)),

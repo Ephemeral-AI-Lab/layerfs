@@ -3,7 +3,7 @@
 //! The owner and its template file start at the first file-changing call,
 //! so a process that only reads never creates them (#819).
 //!
-//! A file-changing call (`fs.write`, `fs.apply`, ...) binds one private
+//! A file-changing call (`file.write`, `file.apply`, ...) binds one private
 //! Workspace, changes it, commits it once and closes it. The binding is this
 //! call's alone: it is never listed, mounted or shared. A Commit whose
 //! outcome is uncertain keeps its Workspace here, with the original failure,

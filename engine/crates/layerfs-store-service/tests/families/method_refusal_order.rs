@@ -30,7 +30,7 @@ fn the_first_fault_met_is_the_refusal() {
     // The directory is looked up before the page arguments are used.
     let r = refused(
         &fixture,
-        "fs.list",
+        "file.list",
         vec![
             ("branch", t("feat")),
             ("path", t("/absent")),
@@ -42,10 +42,10 @@ fn the_first_fault_met_is_the_refusal() {
     // the label's short id is a prefix a Commit lookup accepts
     let label = r.message.rsplit('@').next().unwrap();
     assert_eq!(label.len(), 14);
-    fixture.call("branch.get_commit", vec![("commit", t(label))]);
+    fixture.call("commit.get", vec![("commit", t(label))]);
     let r = refused(
         &fixture,
-        "fs.list",
+        "file.list",
         vec![("branch", t("feat")), ("pageSize", SdkValue::Int(0))],
     );
     assert_eq!(r.message, "pageSize must be in 1..=1000");
@@ -53,7 +53,7 @@ fn the_first_fault_met_is_the_refusal() {
     // The file is found before its line arguments are used.
     let r = refused(
         &fixture,
-        "fs.read",
+        "file.read",
         vec![
             ("branch", t("feat")),
             ("path", t("/absent")),
@@ -63,7 +63,7 @@ fn the_first_fault_met_is_the_refusal() {
     assert_eq!(r.code, "NoSuchPath");
     let r = refused(
         &fixture,
-        "fs.blame",
+        "file.blame",
         vec![
             ("branch", t("feat")),
             ("path", t("/dir")),
@@ -75,8 +75,12 @@ fn the_first_fault_met_is_the_refusal() {
         ("NotFile", "blame requires a regular file")
     );
 
-    // The `from` side is resolved before `to` is read.
-    let r = refused(&fixture, "branch.diff_branches", vec![("from", t("ghost"))]);
+    // `ref` is resolved before `from` is read.
+    let r = refused(
+        &fixture,
+        "commit.diff",
+        vec![("ref", t("ghost")), ("from", t("nowhere"))],
+    );
     assert_eq!(
         (r.code.as_str(), r.message.as_str()),
         ("NoSuchBranch", "Branch ghost does not exist")
@@ -84,37 +88,29 @@ fn the_first_fault_met_is_the_refusal() {
     // The sides are checked before the page arguments.
     let r = refused(
         &fixture,
-        "branch.diff_branches",
+        "commit.diff",
         vec![
-            ("from", t("main")),
-            ("to", t("feat")),
-            ("pageSize", SdkValue::Int(0)),
+            ("ref", t("feat")),
+            ("from", t("ghost")),
+            ("limit", SdkValue::Int(0)),
         ],
     );
-    assert_eq!(r.message, "pageSize must be in 1..=1000");
+    assert_eq!(r.code, "NoSuchBranch");
     let r = refused(
         &fixture,
-        "branch.diff_commits",
+        "commit.diff",
         vec![
+            ("ref", t("feat")),
             ("from", t("main")),
-            ("to", t("feat")),
-            ("pageSize", SdkValue::Int(0)),
+            ("limit", SdkValue::Int(0)),
         ],
     );
-    assert_eq!(r.message, "diff_commits takes saved Commit or Layer ids");
-
-    // The left file is found before the right selector is read.
-    let r = refused(
-        &fixture,
-        "fs.diff_files",
-        vec![("left", SdkValue::map([("path", t("/absent"))]))],
-    );
-    assert_eq!(r.code, "NoSuchPath");
+    assert_eq!(r.code, "InvalidInput");
 
     // An empty pattern is refused before the path is checked.
     let r = refused(
         &fixture,
-        "fs.grep",
+        "file.grep",
         vec![
             ("branch", t("feat")),
             ("pattern", t("")),
@@ -126,13 +122,13 @@ fn the_first_fault_met_is_the_refusal() {
     // The project, then the Branch, then the changes.
     let r = refused(
         &fixture,
-        "fs.write",
+        "file.write",
         vec![("path", t("bad")), ("content", SdkValue::Int(1))],
     );
     assert_eq!(r.message, "missing text argument `branch`");
     let r = refused(
         &fixture,
-        "fs.write",
+        "file.write",
         vec![
             ("branch", t("main")),
             ("path", t("bad")),
@@ -143,7 +139,7 @@ fn the_first_fault_met_is_the_refusal() {
     // A write's content is checked before its path.
     let r = refused(
         &fixture,
-        "fs.write",
+        "file.write",
         vec![
             ("branch", t("feat")),
             ("path", t("bad")),
@@ -162,7 +158,7 @@ fn the_first_fault_met_is_the_refusal() {
     // new path is refused at its index and nothing is committed.
     let r = refused(
         &fixture,
-        "fs.apply",
+        "file.apply",
         vec![
             ("branch", t("feat")),
             (
@@ -183,7 +179,7 @@ fn the_first_fault_met_is_the_refusal() {
             &SdkValue::map([("index", SdkValue::Int(0))])
         )
     );
-    let commits = fixture.call("branch.list_commits", vec![("branch", t("feat"))]);
+    let commits = fixture.call("commit.list", vec![("branch", t("feat"))]);
     assert!(support::items(&commits).is_empty());
     fixture.cleanup();
 }
@@ -199,21 +195,15 @@ fn a_short_identity_is_not_a_missing_branch() {
         fs::write(source.join("a.txt"), b"a\n").unwrap();
         1
     });
-    let listed = fixture.call("branch.list_commits", vec![("branch", t("main"))]);
+    let listed = fixture.call("commit.list", vec![("branch", t("main"))]);
     let id = support::items(&listed)[0]
         .get_text("commit")
         .unwrap()
         .to_owned();
-    fixture.call(
-        "branch.diff_commits",
-        vec![("from", t(&id)), ("to", t(&id))],
-    );
+    // A full identity reads as a snapshot.
+    fixture.call("file.list", vec![("branch", t(&id))]);
     let truncated = |n: usize| id[..n].to_owned();
-    let r = refused(
-        &fixture,
-        "branch.diff_commits",
-        vec![("from", t(&truncated(12))), ("to", t(&id))],
-    );
+    let r = refused(&fixture, "file.list", vec![("branch", t(&truncated(12)))]);
     assert_eq!(r.code, "InvalidInput");
     assert_eq!(
         r.message,
@@ -223,30 +213,18 @@ fn a_short_identity_is_not_a_missing_branch() {
         )
     );
     // An odd-length truncation is identity-shaped too, not only an even one.
-    let r = refused(
-        &fixture,
-        "branch.diff_commits",
-        vec![("from", t(&truncated(65))), ("to", t(&id))],
-    );
+    let r = refused(&fixture, "file.list", vec![("branch", t(&truncated(65)))]);
     assert_eq!(r.code, "InvalidInput");
     // A hex name shorter than a commit.get prefix stays a Branch name.
-    let r = refused(
-        &fixture,
-        "branch.diff_commits",
-        vec![("from", t("cafe")), ("to", t(&id))],
-    );
+    let r = refused(&fixture, "file.list", vec![("branch", t("cafe"))]);
     assert_eq!(r.code, "NoSuchBranch");
     // A non-hex name stays a Branch refusal.
-    let r = refused(
-        &fixture,
-        "branch.diff_commits",
-        vec![("from", t("ghost")), ("to", t(&id))],
-    );
+    let r = refused(&fixture, "file.list", vec![("branch", t("ghost"))]);
     assert_eq!(r.code, "NoSuchBranch");
     // The Branch is resolved before the page arguments are read.
     let r = refused(
         &fixture,
-        "branch.list_commits",
+        "commit.list",
         vec![("branch", t("ghost")), ("limit", SdkValue::Int(0))],
     );
     assert_eq!(r.code, "NoSuchBranch");

@@ -90,5 +90,5 @@ pub fn apply(home: &Path, events: &mut Events<'_>, request: &FileApply) -> Outco
         .collect::<Result<Vec<_>, _>>()?;
     let mut args = base(&request.branch, &request.guard);
     args.put("changes", SdkValue::List(changes));
-    commit(home, events, &request.project, "fs.apply", args)
+    commit(home, events, &request.project, "file.apply", args)
 }

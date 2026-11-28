@@ -582,7 +582,7 @@ fn a_retire_names_its_revision_and_never_fences_the_current_login() {
         .unwrap()
         .unwrap();
     let args = SdkValue::map([
-        ("method", SdkValue::text("fs.write")),
+        ("method", SdkValue::text("file.write")),
         ("store", SdkValue::text("pg")),
         ("project", SdkValue::text("p")),
         ("fields", SdkValue::map([])),

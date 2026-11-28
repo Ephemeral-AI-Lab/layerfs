@@ -1,7 +1,7 @@
-//! The public method table: each JavaScript method name runs its method file
+//! The public method table: each 2.0 Store call name runs its method file
 //! once. Operator names are absent from this table.
 use crate::families::args::{self, Answer};
-use crate::families::{branch, commit, file as fs, project, store};
+use crate::families::{branch, commit, file, project, store};
 use crate::filesystem::change::run::Source;
 use crate::StoreService;
 use layerfs_protocol::sdk::{SdkCall, SdkValue};
@@ -12,27 +12,27 @@ pub fn call(service: &StoreService, call: &SdkCall) -> Answer {
     layerfs_persistence::one_call(|| call_once(service, call))
 }
 
-/// Runs `fs.write` or `fs.apply` once on `service` with its content or its
+/// Runs `file.write` or `file.apply` once on `service` with its content or its
 /// changes pulled from `source` as they are applied: one logical call, one
 /// Commit after the source's whole input. Other methods take no source.
 pub fn call_streamed(service: &StoreService, call: &SdkCall, source: &mut dyn Source) -> Answer {
     layerfs_persistence::one_call(|| {
         message(&call.args)?;
         match call.method.as_str() {
-            "fs.write" => {
+            "file.write" => {
                 let mut one = One {
                     change: Some(args::single(&call.args, "write")),
                     source,
                 };
                 args::commit_streamed(service, &call.args, &mut one)
             }
-            "fs.apply" => args::commit_streamed(service, &call.args, source),
+            "file.apply" => args::commit_streamed(service, &call.args, source),
             _ => call_once(service, call),
         }
     })
 }
 
-/// `fs.write`'s one change, its content from the streamed source.
+/// `file.write`'s one change, its content from the streamed source.
 struct One<'s> {
     change: Option<SdkValue>,
     source: &'s mut dyn Source,
@@ -72,32 +72,29 @@ fn call_once(service: &StoreService, call: &SdkCall) -> Answer {
     match call.method.as_str() {
         "store.stats" => store::stats(service),
         "project.stats" => project::stats(service, args),
-        "project.list_branches" => branch::list_branches(service, args),
-        "project.remove_file" => project::remove_file(service, args),
+        "project.hide_path" => project::hide_path(service, args),
+        "branch.list" => branch::list(service, args),
         "branch.fork" => branch::fork(service, args),
-        "branch.list_commits" => commit::list_commits(service, args),
-        "branch.get_commit" => commit::get_commit(service, args),
         "branch.merge" => branch::merge(service, args),
         "branch.publish" => branch::publish(service, args),
         "branch.remove" => branch::remove(service, args),
-        "branch.diff_commits" => commit::diff_commits(service, args),
-        "branch.diff_branches" => commit::diff_branches(service, args),
+        "commit.get" => commit::get(service, args),
+        "commit.list" => commit::list(service, args),
         "commit.diff" => commit::diff(service, args),
-        "fs.read" => fs::read(service, args),
-        "fs.revision" => fs::revision(service, args),
-        "fs.list" => fs::list(service, args),
-        "fs.stat" => fs::stat(service, args),
-        "fs.grep" => fs::grep(service, args),
-        "fs.glob" => fs::glob(service, args),
-        "fs.diff_files" => fs::diff_files(service, args),
-        "fs.blame" => fs::blame(service, args),
-        "fs.write" => fs::write(service, args),
-        "fs.edit" => fs::edit(service, args),
-        "fs.mkdir" => fs::mkdir(service, args),
-        "fs.rm" => fs::rm(service, args),
-        "fs.cp" => fs::cp(service, args),
-        "fs.mv" => fs::mv(service, args),
-        "fs.apply" => fs::apply(service, args),
+        "file.read" => file::read(service, args),
+        "file.history" => file::history(service, args),
+        "file.list" => file::list(service, args),
+        "file.stat" => file::stat(service, args),
+        "file.grep" => file::grep(service, args),
+        "file.glob" => file::glob(service, args),
+        "file.blame" => file::blame(service, args),
+        "file.write" => file::write(service, args),
+        "file.edit" => file::edit(service, args),
+        "file.mkdir" => file::mkdir(service, args),
+        "file.rm" => file::rm(service, args),
+        "file.cp" => file::cp(service, args),
+        "file.mv" => file::mv(service, args),
+        "file.apply" => file::apply(service, args),
         other => Err(crate::lookup::refuse(
             "UnknownMethod",
             format!("no Store method {other}"),

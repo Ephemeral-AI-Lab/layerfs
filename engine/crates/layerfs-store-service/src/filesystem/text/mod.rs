@@ -1,5 +1,4 @@
-//! Reads over a file's text: windows, search, blame and attribution.
-pub mod attribution;
+//! Reads over a file's text: windows, search, and blame.
 pub mod blame;
 pub mod search;
 pub mod window;

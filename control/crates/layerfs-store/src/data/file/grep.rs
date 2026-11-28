@@ -16,7 +16,7 @@ pub fn grep(home: &Path, events: &mut Events<'_>, request: &FileSearch) -> Outco
         home,
         events,
         &request.project,
-        "fs.grep",
+        "file.grep",
         search_args(&page),
     )?;
     let row = |row: &SdkValue| {

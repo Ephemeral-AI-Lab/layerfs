@@ -5,6 +5,12 @@ use layerfs_protocol::sdk::SdkValue;
 use std::fs;
 use support::{items, operation, paths, write, Fixture};
 
+/// One `commit.diff` page from main to `branch`, after `after`, with hunks.
+fn diff(fixture: &Fixture, branch: &str, limit: i64, after: Option<&str>) -> SdkValue {
+    let after = after.map_or(SdkValue::Null, SdkValue::text);
+    super::commit_diff(fixture, "main", branch, limit, &after, true)
+}
+
 #[test]
 fn wide_diff_pages_have_bounded_store_demand() {
     let mut observed = Vec::new();
@@ -29,22 +35,22 @@ fn wide_diff_pages_have_bounded_store_demand() {
         );
         // Each page owns its own operation demand; no previous-page counts are reused.
         let before = fixture.work();
-        let first = fixture.diff("main", "changed", 1, 0);
+        let first = diff(&fixture, "changed", 1, None);
         let first_work = fixture.since(before);
         assert_eq!(paths(&first), ["/work/a"]);
-        assert!(first.get_bool("hasMore"));
-        assert_eq!(first.get_int("nextPagePos"), Some(1));
+        assert!(super::more(&first));
+        assert_eq!(first.get_text("next"), Some("/work/a"));
         let before = fixture.work();
-        let second = fixture.diff("main", "changed", 1, 1);
+        let second = diff(&fixture, "changed", 1, Some("/work/a"));
         let second_work = fixture.since(before);
         assert_eq!(paths(&second), ["/work/z"]);
-        assert!(!second.get_bool("hasMore"));
-        assert_eq!(second.get("nextPagePos"), Some(&SdkValue::Null));
+        assert!(!super::more(&second));
+        assert_eq!(second.get("next"), Some(&SdkValue::Null));
         let before = fixture.work();
-        let beyond = fixture.diff("main", "changed", 1, 2);
+        let beyond = diff(&fixture, "changed", 1, Some("/work/z"));
         let beyond_work = fixture.since(before);
         assert!(items(&beyond).is_empty());
-        assert!(!beyond.get_bool("hasMore"));
+        assert!(!super::more(&beyond));
         println!("SDK_DIFF_WIDE files={count} first={first_work:?} second={second_work:?} beyond={beyond_work:?} profile=Normal cache=uncontrolled diagnostic_count_gate=true");
         observed.push((count, first_work, second_work, beyond_work));
         fixture.cleanup();
@@ -71,10 +77,10 @@ fn equal_roots_require_no_namespace_scan() {
     });
     fixture.fork("same");
     let before = fixture.work();
-    let result = fixture.diff("main", "same", 1000, 0);
+    let result = diff(&fixture, "same", 1000, None);
     let demand = fixture.since(before);
     assert!(items(&result).is_empty());
-    assert!(!result.get_bool("hasMore"));
+    assert!(!super::more(&result));
     println!("SDK_DIFF_EQUAL files=2048 work={demand:?} profile=Normal");
     fixture.cleanup();
     assert!(
@@ -112,17 +118,20 @@ fn diff_preserves_hardlink_identity_type_changes_and_hunk_omission() {
         ],
     );
     let mut all = Vec::new();
-    let mut position = 0;
+    let mut after: Option<String> = None;
     for _ in 0..16 {
-        let page = fixture.diff("main", "changed", 2, position);
+        let page = diff(&fixture, "changed", 2, after.as_deref());
         all.extend(items(&page).iter().cloned());
-        if !page.get_bool("hasMore") {
+        if !super::more(&page) {
             break;
         }
-        let next = page.get_int("nextPagePos").unwrap();
-        assert_eq!(next, position + items(&page).len() as i64);
-        assert!(next > position);
-        position = next;
+        let next = page.get_text("next").unwrap().to_owned();
+        assert_eq!(Some(next.as_str()), paths(&page).last().copied());
+        // Each page resumes after the last, in component order.
+        assert!(after
+            .as_deref()
+            .is_none_or(|before| before.split('/').lt(next.split('/'))));
+        after = Some(next);
     }
     let actual: Vec<_> = all
         .iter()
@@ -151,8 +160,16 @@ fn diff_preserves_hardlink_identity_type_changes_and_hunk_omission() {
     let shared = find("/work/shared");
     assert!(alias.get_bool("content") && shared.get_bool("content"));
     assert!(!alias.get_bool("identity") && !shared.get_bool("identity"));
-    assert_eq!(alias.get("before"), shared.get("before"));
-    assert_eq!(alias.get("after"), shared.get("after"));
+    // One inode under two names: both rows answer alike but for the path.
+    let without_path = |item: &SdkValue| match item {
+        SdkValue::Map(fields) => fields
+            .iter()
+            .filter(|(name, _)| name.as_str() != "path")
+            .cloned()
+            .collect::<Vec<_>>(),
+        other => panic!("not a row: {other:?}"),
+    };
+    assert_eq!(without_path(alias), without_path(shared));
     let binary = find("/work/binary");
     assert!(binary.get_bool("content"));
     assert_eq!(binary.get("hunks"), Some(&SdkValue::Null));
@@ -167,10 +184,10 @@ fn diff_preserves_hardlink_identity_type_changes_and_hunk_omission() {
     assert!(long.get_bool("hunksOmitted"));
     assert_eq!(long.get("hunks"), Some(&SdkValue::Null));
     let replaced = find("/work/type");
-    assert_eq!(replaced.get_text("kind"), Some("Modified"));
+    assert_eq!(replaced.get_text("change"), Some("modified"));
     assert_eq!(replaced.get_text("type"), Some("dir"));
     assert!(replaced.get_bool("identity") && replaced.get_bool("content"));
-    assert_eq!(find("/work/type/child").get_text("kind"), Some("Added"));
+    assert_eq!(find("/work/type/child").get_text("change"), Some("added"));
     fixture.cleanup();
 }
 
@@ -187,27 +204,19 @@ fn directory_metadata_is_emitted_and_counted_by_both_diff_routes() {
     let first = fixture.apply("changed", vec![write("/tail", b"after\n")]);
     let before = first.get_text("head").unwrap().to_owned();
     let after = fixture.chmod("changed", "/mode", 0o700);
-    let first_page = fixture.diff("main", "changed", 1, 0);
+    let first_page = diff(&fixture, "changed", 1, None);
     assert_eq!(paths(&first_page), ["/mode"]);
-    assert_eq!(first_page.get_int("nextPagePos"), Some(1));
+    assert_eq!(first_page.get_text("next"), Some("/mode"));
     let directory = &items(&first_page)[0];
     assert_eq!(directory.get_text("type"), Some("dir"));
     assert!(directory.get_bool("metadata"));
     assert!(!directory.get_bool("content") && !directory.get_bool("identity"));
-    let second_page = fixture.diff("main", "changed", 1, 1);
+    let second_page = diff(&fixture, "changed", 1, Some("/mode"));
     assert_eq!(paths(&second_page), ["/tail"]);
-    assert!(!second_page.get_bool("hasMore"));
-    let commits = fixture.call(
-        "branch.diff_commits",
-        vec![
-            ("from", SdkValue::text(before)),
-            ("to", SdkValue::text(after)),
-            ("pageSize", SdkValue::Int(1)),
-            ("pagePos", SdkValue::Int(0)),
-        ],
-    );
+    assert!(!super::more(&second_page));
+    let commits = super::commit_diff(&fixture, &before, &after, 1, &SdkValue::Null, true);
     assert_eq!(paths(&commits), ["/mode"]);
-    assert!(!commits.get_bool("hasMore"));
+    assert!(!super::more(&commits));
     assert_eq!(items(&commits)[0], *directory);
     fixture.cleanup();
 }
@@ -233,12 +242,12 @@ fn traversal_continues_at_64_and_65_children_in_component_order() {
                 write("/a-", b"after\n"),
             ],
         );
-        let first = fixture.diff("main", "changed", 2, 0);
+        let first = diff(&fixture, "changed", 2, None);
         assert_eq!(paths(&first), ["/a/item-000000", "/a/x"]);
-        assert_eq!(first.get_int("nextPagePos"), Some(2));
-        let second = fixture.diff("main", "changed", 2, 2);
+        assert_eq!(first.get_text("next"), Some("/a/x"));
+        let second = diff(&fixture, "changed", 2, Some("/a/x"));
         assert_eq!(paths(&second), ["/a-"]);
-        assert!(!second.get_bool("hasMore"));
+        assert!(!super::more(&second));
         fixture.cleanup();
     }
 }
@@ -265,13 +274,13 @@ fn byte_limited_windows_preserve_diff_grep_and_glob_membership() {
         });
         fixture.fork("changed");
         fixture.apply("changed", vec![write(&final_path, b"needle after\n")]);
-        let diff = fixture.diff("main", "changed", 1, 0);
-        assert_eq!(paths(&diff), [final_path.as_str()]);
-        assert!(!diff.get_bool("hasMore"));
-        let beyond = fixture.diff("main", "changed", 1, 1);
+        let listed = diff(&fixture, "changed", 1, None);
+        assert_eq!(paths(&listed), [final_path.as_str()]);
+        assert!(!super::more(&listed));
+        let beyond = diff(&fixture, "changed", 1, Some(final_path.as_str()));
         assert!(items(&beyond).is_empty());
         let glob = fixture.call(
-            "fs.glob",
+            "file.glob",
             vec![
                 ("branch", SdkValue::text("changed")),
                 ("path", SdkValue::text("/wide")),
@@ -286,7 +295,7 @@ fn byte_limited_windows_preserve_diff_grep_and_glob_membership() {
         assert_eq!(items(&glob), expected);
         assert!(!glob.get_bool("hasMore"));
         let grep = fixture.call(
-            "fs.grep",
+            "file.grep",
             vec![
                 ("branch", SdkValue::text("changed")),
                 ("path", SdkValue::text("/wide")),

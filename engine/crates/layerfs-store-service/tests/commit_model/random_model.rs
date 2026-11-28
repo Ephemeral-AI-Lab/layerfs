@@ -9,7 +9,7 @@
 //! model; at the end the Branch read from a fresh session equals it, the
 //! two backends recorded the same number of Commits with the same roots
 //! (content addressing: equal trees, equal roots) and the same per-Commit
-//! logical size (`branch.list_commits`), and each Store's audit is clean.
+//! logical size (`commit.list`), and each Store's audit is clean.
 //! The PostgreSQL half needs `LAYERFS_TEST_POSTGRES_URL` and reports
 //! NOT_RUN without it (the SQLite half still runs against the model).
 use crate::adversary;
@@ -224,7 +224,7 @@ fn logical_sizes(service: &Service, branch: &str) -> Vec<String> {
     loop {
         let page = service
             .call(
-                "branch.list_commits",
+                "commit.list",
                 vec![
                     ("branch", SdkValue::text(branch)),
                     ("pageSize", SdkValue::Int(100)),

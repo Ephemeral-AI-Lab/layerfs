@@ -1,9 +1,9 @@
 //! #818 W5 (lane W): recursive `rm` and `cp` take each listed page's kinds
 //! from one demand and still copy and remove exactly what they did. A mixed
 //! tree (files, nested directories, a symlink to a file and one to a
-//! directory, two hard links, a path `project.remove_file` hides) is copied
+//! directory, two hard links, a path `project.hide_path` hides) is copied
 //! and removed; a directory of 1,100 files (over the listing page of 1,024)
-//! is copied and then removed in an `fs.apply` that first adds entries in
+//! is copied and then removed in an `file.apply` that first adds entries in
 //! the private overlay (kinds the overlay answers). The copy keeps names,
 //! types, modes, sizes, contents, symlink targets and hard links; the
 //! hidden path is not copied. Runs on SQLite, and on PostgreSQL with
@@ -24,7 +24,7 @@ fn call(opened: &Opened, method: &str, fields: Vec<(&str, SdkValue)>) -> SdkValu
         .unwrap_or_else(|refusal| panic!("{method}: {refusal}"))
 }
 
-/// The entries of `dir`, every page of `fs.list`.
+/// The entries of `dir`, every page of `file.list`.
 fn listed(opened: &Opened, dir: &str) -> Vec<(String, String, i64)> {
     let (mut out, mut position) = (Vec::new(), SdkValue::Null);
     loop {
@@ -32,7 +32,7 @@ fn listed(opened: &Opened, dir: &str) -> Vec<(String, String, i64)> {
         if !matches!(position, SdkValue::Null) {
             fields.push(("pagePos", position.clone()));
         }
-        let page = call(opened, "fs.list", fields);
+        let page = call(opened, "file.list", fields);
         let Some(SdkValue::List(items)) = page.get("items") else {
             panic!("no items: {page:?}");
         };
@@ -57,10 +57,10 @@ fn walk(opened: &Opened, root: &str) -> BTreeMap<String, Entry> {
     while let Some(dir) = stack.pop() {
         for (full, kind, inode) in listed(opened, &dir) {
             let relative = full[root.len()..].to_owned();
-            let stat = call(opened, "fs.stat", vec![branch(), path(&full)]);
+            let stat = call(opened, "file.stat", vec![branch(), path(&full)]);
             let body = match kind.as_str() {
                 "file" => {
-                    let read = call(opened, "fs.read", vec![branch(), path(&full)]);
+                    let read = call(opened, "file.read", vec![branch(), path(&full)]);
                     read.get_text("text").unwrap_or_default().to_owned()
                 }
                 _ => String::new(),
@@ -115,7 +115,7 @@ fn scenario(store: &mut Store) {
     rt::fork_work(&opened);
     call(
         &opened,
-        "project.remove_file",
+        "project.hide_path",
         vec![("path", t("/mix/hide/inner"))],
     );
 
@@ -127,7 +127,7 @@ fn scenario(store: &mut Store) {
     assert_eq!(original["/to-dir"].0, "symlink");
     let copied = call(
         &opened,
-        "fs.cp",
+        "file.cp",
         vec![branch(), ("from", t("/mix")), ("to", t("/copy"))],
     );
     assert_eq!(copied.get_text("kind"), Some("Committed"), "{copied:?}");
@@ -136,11 +136,11 @@ fn scenario(store: &mut Store) {
     // The recursive remove takes the whole tree, the copy stays.
     let removed = call(
         &opened,
-        "fs.rm",
+        "file.rm",
         vec![branch(), path("/mix"), ("recursive", SdkValue::Bool(true))],
     );
     assert_eq!(removed.get_text("kind"), Some("Committed"), "{removed:?}");
-    let gone = opened.call("fs.stat", vec![branch(), path("/mix")]);
+    let gone = opened.call("file.stat", vec![branch(), path("/mix")]);
     assert!(gone.is_err_and(|e| e.starts_with("NoSuchPath")), "/mix");
     assert_eq!(walk(&opened, "/copy"), original, "the copy stays");
 
@@ -148,7 +148,7 @@ fn scenario(store: &mut Store) {
     // one apply after adding overlay entries (a file and nested directories).
     call(
         &opened,
-        "fs.cp",
+        "file.cp",
         vec![branch(), ("from", t("/big")), ("to", t("/big2"))],
     );
     let copies = listed(&opened, "/big2");
@@ -165,7 +165,7 @@ fn scenario(store: &mut Store) {
     }
     let applied = call(
         &opened,
-        "fs.apply",
+        "file.apply",
         vec![
             branch(),
             (
@@ -175,7 +175,7 @@ fn scenario(store: &mut Store) {
         ],
     );
     assert_eq!(applied.get_text("kind"), Some("Committed"), "{applied:?}");
-    let gone = opened.call("fs.stat", vec![branch(), path("/big")]);
+    let gone = opened.call("file.stat", vec![branch(), path("/big")]);
     assert!(gone.is_err_and(|e| e.starts_with("NoSuchPath")), "/big");
     assert_eq!(listed(&opened, "/big2").len(), 1100);
     opened.stop();

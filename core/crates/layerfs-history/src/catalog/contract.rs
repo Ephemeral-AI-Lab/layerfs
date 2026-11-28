@@ -652,7 +652,7 @@ pub trait HistoryCatalog: Send + Sync {
         ))
     }
 
-    /// Records a `project.remove_file` marker. The default refuses.
+    /// Records a `project.hide_path` marker. The default refuses.
     ///
     /// # Errors
     ///
@@ -671,7 +671,7 @@ pub trait HistoryCatalog: Send + Sync {
         ))
     }
 
-    /// Applies one `project.remove_file` marker in one write transaction:
+    /// Applies one `project.hide_path` marker in one write transaction:
     /// reads the Store high-water as the new frontier, returns `UpToDate`
     /// when the path's marker already covers every project node, otherwise
     /// advances the marker and the project epoch. The default refuses.
@@ -863,7 +863,7 @@ pub trait HistoryCatalog: Send + Sync {
         })
     }
 
-    /// `project.remove_file`: admits at project scope and advances the marker
+    /// `project.hide_path`: admits at project scope and advances the marker
     /// in one write transaction.
     fn gc_remove_path(
         &self,

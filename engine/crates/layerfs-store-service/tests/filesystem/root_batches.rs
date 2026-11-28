@@ -1,4 +1,4 @@
-//! fs.grep reads a window of files' roots in batched demands (#354, #352
+//! file.grep reads a window of files' roots in batched demands (#354, #352
 //! F-035). A batch never crosses its own byte bound, so it never reaches the
 //! storage reader's per-demand limit, and the batches cover every file once,
 //! in order.

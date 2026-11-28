@@ -36,7 +36,7 @@ fn reads_create_no_overlay_template_and_the_first_write_does() {
     let main = ("branch", SdkValue::text("main"));
     call(
         &service,
-        "fs.list",
+        "file.list",
         vec![main.clone(), ("path", SdkValue::text("/"))],
     );
     assert!(!template.exists(), "a read creates no overlay template");
@@ -49,7 +49,7 @@ fn reads_create_no_overlay_template_and_the_first_write_does() {
     for step in 0..2 {
         call(
             &service,
-            "fs.write",
+            "file.write",
             vec![
                 ("branch", SdkValue::text("work")),
                 ("path", SdkValue::text(format!("/w{step}.txt"))),

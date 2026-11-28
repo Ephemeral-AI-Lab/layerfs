@@ -29,7 +29,7 @@ pub fn list(home: &Path, events: &mut Events<'_>, request: &FileList) -> Outcome
     args.at(&branch.unwrap_or_default(), page.pin().as_deref())
         .text("path", &path.unwrap_or_default());
     positional(&page, &mut args);
-    let value = run(home, events, &request.project, "fs.list", args)?;
+    let value = run(home, events, &request.project, "file.list", args)?;
     let row = |row: &SdkValue| {
         SdkValue::map([
             ("path", take(row, "path")),

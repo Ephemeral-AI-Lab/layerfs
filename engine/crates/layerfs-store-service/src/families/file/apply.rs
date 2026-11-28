@@ -1,4 +1,4 @@
-//! `fs.apply`.
+//! `file.apply`.
 use crate::families::args::{commit, invalid, Answer};
 use crate::StoreService;
 use layerfs_protocol::sdk::SdkValue;

@@ -1,4 +1,4 @@
-//! The write path's cost on a replay Store (#364 item 2 (b)): `fs.write`
+//! The write path's cost on a replay Store (#364 item 2 (b)): `file.write`
 //! latency over small files, and one large file.
 //!
 //! Set `LAYERFS_364_RELINK_STORE`, `LAYERFS_364_RELINK_BINDING` and
@@ -91,7 +91,7 @@ fn write(service: &StoreService, path: &str, content: Vec<u8>) -> f64 {
     let started = std::time::Instant::now();
     let reply = call(
         service,
-        "fs.write",
+        "file.write",
         vec![
             ("branch", SdkValue::text("write")),
             ("path", SdkValue::text(path)),

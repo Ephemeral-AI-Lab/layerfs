@@ -16,7 +16,7 @@ use layerfs_content::ContentResult;
 use layerfs_vfs::BaseView;
 use std::collections::BTreeMap;
 
-/// Changes one plan covers (owner decision D10). `fs.apply` has no cap on
+/// Changes one plan covers (owner decision D10). `file.apply` has no cap on
 /// its changes, so a longer list is planned again every this many changes
 /// and what one plan holds stays bounded.
 pub const PLAN_PATHS: usize = 1_024;

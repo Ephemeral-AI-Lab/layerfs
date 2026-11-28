@@ -37,17 +37,17 @@ fn regime(opened: &Opened, round: u32) -> (u64, u64) {
             ("newText", t("H\n")),
         ]
     };
-    let (refusal_control, hidden) = control_of(opened, "fs.edit", edit("/h/f.txt"));
+    let (refusal_control, hidden) = control_of(opened, "file.edit", edit("/h/f.txt"));
     let hidden = hidden.expect_err("a hidden edit");
     assert!(hidden.starts_with("Removed: "), "{hidden}");
-    let (_, absent) = control_of(opened, "fs.edit", edit("/h/never.txt"));
+    let (_, absent) = control_of(opened, "file.edit", edit("/h/never.txt"));
     let absent = absent.expect_err("an absent edit");
     assert!(absent.starts_with("NoSuchPath: "), "{absent}");
     // The write goes to Branch `other`: its Commit records the whiteout, so
     // `work` keeps the hidden path for the next regime.
     let (write_control, written) = control_of(
         opened,
-        "fs.write",
+        "file.write",
         vec![
             ("branch", t("other")),
             path("/w.txt"),
@@ -82,7 +82,7 @@ fn scenario(store: &mut Store, backend: Backend) {
         .call("branch.fork", vec![("name", t("other"))])
         .unwrap();
     let removed = opened
-        .call("project.remove_file", vec![("path", t("/h/f.txt"))])
+        .call("project.hide_path", vec![("path", t("/h/f.txt"))])
         .unwrap();
     assert_eq!(removed.get_text("kind"), Some("Removed"), "{removed:?}");
 
@@ -92,7 +92,7 @@ fn scenario(store: &mut Store, backend: Backend) {
     // 70 more markers of about 3.8 KB each: over the 256 KiB kept bound.
     for n in 0..70 {
         opened
-            .call("project.remove_file", vec![("path", t(&long_path(n)))])
+            .call("project.hide_path", vec![("path", t(&long_path(n)))])
             .unwrap();
     }
     let (read_refusal, read_write) = regime(&opened, 2);

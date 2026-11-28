@@ -1,6 +1,6 @@
 //! A traced SDK file call accounts for its time (#352 F-025 fix 0).
 //!
-//! Ranges 7-9 showed 3-5% of slow `fs.write` calls with 50-175 ms outside
+//! Ranges 7-9 showed 3-5% of slow `file.write` calls with 50-175 ms outside
 //! every daemon timing root, and Commits whose phases wait for another
 //! Commit's publication lane without saying so. Every span of a file call is
 //! now a timing root (resolve, bind, change, commit, close), and time spent

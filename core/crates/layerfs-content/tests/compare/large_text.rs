@@ -104,7 +104,7 @@ fn a_middle_with_no_unique_line_stays_one_block_and_loses_no_edit() {
 
 #[test]
 fn blame_keeps_the_lines_between_distant_edits() {
-    // `fs.blame` gives an unmatched old line to the newer version.
+    // `file.blame` gives an unmatched old line to the newer version.
     let base = numbered(2000);
     let new = edited(&base, &[(200, "A"), (1300, "A")]);
     let matched = match_lines(&refs(&base), &refs(&new));

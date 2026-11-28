@@ -186,7 +186,7 @@ pub fn live(workspace: &BoundWorkspace, path: &str) -> Result<Vec<u8>, String> {
 pub fn committed(fixture: &Fixture, name: &str, path: &str) -> Option<String> {
     fixture
         .try_call(
-            "fs.read",
+            "file.read",
             vec![
                 ("branch", layerfs_protocol::sdk::SdkValue::text(name)),
                 ("path", layerfs_protocol::sdk::SdkValue::text(path)),

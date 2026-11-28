@@ -1,4 +1,4 @@
-//! Whiteout materialization for `project.remove_file` (§4.3).
+//! Whiteout materialization for `project.hide_path` (§4.3).
 //!
 //! A marker hides an entry at a node at or below its frontier. A tree built
 //! from such a node must record the *absence* explicitly, because the new
@@ -110,7 +110,7 @@ pub(crate) type NodeRemovals = Option<(u64, Vec<PathRemovalRecord>)>;
 /// The whiteout facts of one node a mounted Workspace knows without a read.
 ///
 /// They hold while its mount admission is registered: every marker write
-/// (`project.remove_file`, `branch.remove`, `project.delete`) scans the
+/// (`project.hide_path`, `branch.remove`, `project.delete`) scans the
 /// project's live intents in its own write transaction, after its locks, and
 /// refuses `MountsActive` (persistence `admission/removal.rs`,
 /// `gc_intent_all_project`), and markers are deleted only with their

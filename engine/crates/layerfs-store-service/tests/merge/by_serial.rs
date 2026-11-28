@@ -97,7 +97,7 @@ fn read(fixture: &Fixture, path: &str) -> Option<String> {
 fn read_at(fixture: &Fixture, branch: &str, path: &str) -> Option<String> {
     fixture
         .try_call(
-            "fs.read",
+            "file.read",
             vec![("branch", text(branch)), ("path", text(path))],
         )
         .ok()

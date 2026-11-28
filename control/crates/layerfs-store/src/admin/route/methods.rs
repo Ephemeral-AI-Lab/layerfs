@@ -1,7 +1,7 @@
-//! The Store methods the three families run and the one translation of each
-//! to its engine method and arguments: snake_case to the engine's camelCase,
-//! an absent option not sent. Both routes send these (in this process, or in
-//! a `store.call` frame to the Store's worker).
+//! The Store methods the families run and the one translation of each to its
+//! engine arguments: snake_case to the engine's camelCase, an absent option not
+//! sent. The engine method is the 2.0 call's own name. Both routes send these
+//! (in this process, or in a `store.call` frame to the Store's worker).
 use crate::admin::route::call::store_call;
 use crate::admin::route::resolve::target;
 use crate::data::branch::{BranchFork, BranchMerge, BranchPublish, BranchRemove};
@@ -38,14 +38,14 @@ pub struct Names<'a> {
 /// One Store method with its arguments.
 pub enum StoreOp<'a> {
     /// Store-wide statistics (no project required): `store get --with
-    /// stats` (engine method `store.stats`).
+    /// stats`, the engine's Store-level method `store.stats`.
     Statistics,
     /// Entry counts at one project pin.
     ProjectStats(&'a crate::data::project::status::stats::ProjectStats),
-    /// `project.hide_path` (engine method `project.remove_file`): hide one
-    /// path from every node at or below its marker frontier.
-    RemoveFile(&'a crate::data::project::hide_path::ProjectHidePath),
-    /// `project.list_branches`: the Branch `name`, or, without one, the
+    /// `project.hide_path`: hide one path from every node at or below its
+    /// marker frontier.
+    HidePath(&'a crate::data::project::hide_path::ProjectHidePath),
+    /// `branch.get` and `branch.list`: the Branch `name`, or, without one, the
     /// first page of `page.size` Branches.
     ListBranches {
         /// The one Branch it lists.
@@ -53,17 +53,16 @@ pub enum StoreOp<'a> {
         /// The page.
         page: Page,
     },
-    /// `project.list_branches`: one page of Branches by name.
+    /// `branch.list`: one page of Branches by name.
     Branches {
         /// Which names.
         names: Names<'a>,
         /// The most rows.
         limit: i64,
     },
-    /// `branch.list_commits`: one page of a Branch's Commits.
+    /// `commit.list`: one page of a Branch's Commits.
     ListCommits(&'a CommitPage),
-    /// `commit.get` (engine method `branch.get_commit`): one Commit of the
-    /// project.
+    /// `commit.get`: one Commit of the project.
     GetCommit(&'a CommitGet),
     /// `branch.fork`.
     Fork(&'a BranchFork),
@@ -75,7 +74,7 @@ pub enum StoreOp<'a> {
     BranchRemove(&'a BranchRemove),
     /// `commit.diff`: one page of the paths that differ.
     Diff(&'a DiffPage),
-    /// One `fs.*` method of the `file` family.
+    /// One `file.*` method of the `file` family.
     File(&'a FileOp),
 }
 
@@ -128,20 +127,18 @@ impl Args {
 }
 
 impl StoreOp<'_> {
-    /// The engine method: the Store service's dispatch name, which keeps
-    /// its name under the call surface 2.0 (`project.remove_file` is
-    /// `project.hide_path`'s, `branch.get_commit` `commit.get`'s,
-    /// `store.stats` `store get --with stats`'s). It is sent to the Store,
-    /// in this process or in a worker's `store.call` frame, and no answer,
-    /// operation record or log line shows it.
+    /// The engine method: the 2.0 call's own name (`branch.get` sends
+    /// `branch.list` with the name; `store get --with stats` sends the
+    /// Store-level `store.stats`). It is sent to the Store, in this process
+    /// or in a worker's `store.call` frame.
     pub fn method(&self) -> &'static str {
         match self {
             Self::Statistics => "store.stats",
             Self::ProjectStats(_) => "project.stats",
-            Self::RemoveFile(_) => "project.remove_file",
-            Self::ListBranches { .. } | Self::Branches { .. } => "project.list_branches",
-            Self::ListCommits(_) => "branch.list_commits",
-            Self::GetCommit(_) => "branch.get_commit",
+            Self::HidePath(_) => "project.hide_path",
+            Self::ListBranches { .. } | Self::Branches { .. } => "branch.list",
+            Self::ListCommits(_) => "commit.list",
+            Self::GetCommit(_) => "commit.get",
             Self::Fork(_) => "branch.fork",
             Self::Merge(_) => "branch.merge",
             Self::Publish(_) => "branch.publish",
@@ -157,7 +154,7 @@ impl StoreOp<'_> {
         match self {
             Self::Statistics => &mut args,
             Self::ProjectStats(r) => args.at(&r.branch, r.at.as_deref()),
-            Self::RemoveFile(r) => args.text("path", &r.path),
+            Self::HidePath(r) => args.text("path", &r.path),
             Self::ListBranches { name, page } => args.opt("name", *name).int("limit", page.size),
             Self::Branches { names, limit } => args
                 .opt("prefix", names.prefix)

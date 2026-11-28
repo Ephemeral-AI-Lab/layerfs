@@ -38,17 +38,17 @@ fn battery(fixture: &Fixture) -> Vec<String> {
     let main = ("branch", SdkValue::text("main"));
     let mut out = pages(
         fixture,
-        "fs.grep",
+        "file.grep",
         &[main.clone(), ("pattern", SdkValue::text("needle"))],
     );
     out.extend(pages(
         fixture,
-        "fs.glob",
+        "file.glob",
         &[main.clone(), ("pattern", SdkValue::text("**"))],
     ));
     out.extend(pages(
         fixture,
-        "fs.list",
+        "file.list",
         &[main.clone(), ("path", SdkValue::text("/d1"))],
     ));
     for f in (0..FILES).step_by(17) {
@@ -56,7 +56,7 @@ fn battery(fixture: &Fixture) -> Vec<String> {
         out.push(format!(
             "{:?}",
             fixture.call(
-                "fs.read",
+                "file.read",
                 vec![main.clone(), ("path", SdkValue::text(&path))]
             )
         ));
@@ -139,7 +139,7 @@ fn reads_of_main_are_unchanged_while_another_branch_publishes() {
     );
     // The other Branch did move: its reads see the new files.
     let work = fixture.call(
-        "fs.glob",
+        "file.glob",
         vec![
             ("branch", SdkValue::text("work")),
             ("pattern", SdkValue::text("n*.txt")),

@@ -15,7 +15,7 @@ const SEED: &[(&str, &[u8])] = &[("/seed", b"seed\n"), ("/dir/gone", b"gone\n")]
 
 fn stat(service: &Service, snapshot: (&str, &str), path: &str) -> String {
     let answer: Result<SdkValue, SdkRefusal> = service.call(
-        "fs.stat",
+        "file.stat",
         vec![
             (snapshot.0, SdkValue::text(snapshot.1)),
             ("path", SdkValue::text(path)),
@@ -45,7 +45,7 @@ fn a_corrupt_context_part_refuses_where_it_did() {
     let service = store.open();
     service
         .call(
-            "fs.write",
+            "file.write",
             vec![
                 ("branch", SdkValue::text("work")),
                 ("path", SdkValue::text("/ctx.txt")),
@@ -55,14 +55,14 @@ fn a_corrupt_context_part_refuses_where_it_did() {
         .expect("a Commit on work");
     let removed = service
         .call(
-            "project.remove_file",
+            "project.hide_path",
             vec![("path", SdkValue::text("/dir/gone"))],
         )
         .expect("a marker");
     assert_eq!(removed.get_text("kind"), Some("Removed"));
     let head = service
         .call(
-            "fs.stat",
+            "file.stat",
             vec![
                 ("branch", SdkValue::text("work")),
                 ("path", SdkValue::text("/")),

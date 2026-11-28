@@ -1,6 +1,6 @@
-//! Permission modes on the Branch file calls (#442). `fs.write` and the
-//! `write` and `mkdir` changes of `fs.apply` take an optional `mode`; a
-//! `chmod` change sets one; `fs.stat` reports it. Without `mode` a new file
+//! Permission modes on the Branch file calls (#442). `file.write` and the
+//! `write` and `mkdir` changes of `file.apply` take an optional `mode`; a
+//! `chmod` change sets one; `file.stat` reports it. Without `mode` a new file
 //! is 0o644, a new folder 0o755 and an existing entry keeps its mode. A mode
 //! LayerFS cannot store is refused as `project.init` refuses it, and a
 //! refused change commits nothing.
@@ -21,21 +21,21 @@ fn change(fields: Vec<(&str, SdkValue)>) -> SdkValue {
 
 fn mode(f: &Fixture, branch: &str, path: &str) -> i64 {
     match f
-        .call("fs.stat", vec![("branch", t(branch)), ("path", t(path))])
+        .call("file.stat", vec![("branch", t(branch)), ("path", t(path))])
         .get("mode")
     {
         Some(SdkValue::Int(n)) => *n,
-        other => panic!("fs.stat {path} mode: {other:?}"),
+        other => panic!("file.stat {path} mode: {other:?}"),
     }
 }
 
 fn commits(f: &Fixture) -> usize {
-    support::items(&f.call("branch.list_commits", vec![("branch", t("feat"))])).len()
+    support::items(&f.call("commit.list", vec![("branch", t("feat"))])).len()
 }
 
 fn refused(f: &Fixture, changes: Vec<SdkValue>) -> SdkRefusal {
     f.try_call(
-        "fs.apply",
+        "file.apply",
         vec![("branch", t("feat")), ("changes", SdkValue::List(changes))],
     )
     .expect_err("the change is refused")
@@ -67,7 +67,7 @@ fn write_mkdir_and_chmod_set_modes_that_stat_reports() {
 
     // A new file gets `mode`, else 0o644.
     f.call(
-        "fs.write",
+        "file.write",
         vec![
             ("branch", t("feat")),
             ("path", t("/new.sh")),
@@ -76,7 +76,7 @@ fn write_mkdir_and_chmod_set_modes_that_stat_reports() {
         ],
     );
     f.call(
-        "fs.write",
+        "file.write",
         vec![
             ("branch", t("feat")),
             ("path", t("/plain.txt")),
@@ -122,7 +122,7 @@ fn write_mkdir_and_chmod_set_modes_that_stat_reports() {
             ("content", t(content)),
         ];
         fields.extend(mode.map(|m| ("mode", SdkValue::Int(m))));
-        f.call("fs.write", fields)
+        f.call("file.write", fields)
     };
     write("#!/bin/sh\necho\n", None);
     assert_eq!(mode(&f, "feat", "/tool.sh"), 0o755);
@@ -135,7 +135,7 @@ fn write_mkdir_and_chmod_set_modes_that_stat_reports() {
 
     // An existing folder keeps its mode, as `mkdir -p -m` does.
     let kept = f.call(
-        "fs.mkdir",
+        "file.mkdir",
         vec![
             ("branch", t("feat")),
             ("path", t("/private")),

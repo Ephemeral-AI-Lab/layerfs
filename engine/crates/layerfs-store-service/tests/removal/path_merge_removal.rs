@@ -1,4 +1,4 @@
-//! T12.3c: `project.remove_file` in derived trees (#52 §12 rows AC-11..AC-14
+//! T12.3c: `project.hide_path` in derived trees (#52 §12 rows AC-11..AC-14
 //! and AC-22). A merge of at-or-below heads materializes the whiteout, a
 //! post-frontier re-creation wins, a fast-forward merge creates no tree, a
 //! publish of an at-or-below Commit yields a hidden Layer whose mount
@@ -17,16 +17,16 @@ fn text(value: &str) -> SdkValue {
 }
 
 fn remove(fixture: &Fixture, path: &str) -> SdkValue {
-    fixture.call("project.remove_file", vec![("path", text(path))])
+    fixture.call("project.hide_path", vec![("path", text(path))])
 }
 
 fn try_remove(fixture: &Fixture, path: &str) -> Result<SdkValue, SdkRefusal> {
-    fixture.try_call("project.remove_file", vec![("path", text(path))])
+    fixture.try_call("project.hide_path", vec![("path", text(path))])
 }
 
 fn read(fixture: &Fixture, branch: &str, path: &str) -> Result<SdkValue, SdkRefusal> {
     fixture.try_call(
-        "fs.read",
+        "file.read",
         vec![("branch", text(branch)), ("path", text(path))],
     )
 }
@@ -211,7 +211,7 @@ fn a_recreated_removed_path_still_conflicts_as_an_ordinary_edit() {
     // A conflicted merge creates nothing.
     let missing = fixture
         .try_call(
-            "fs.read",
+            "file.read",
             vec![("branch", text("conflicted")), ("path", text("/a"))],
         )
         .expect_err("the conflicted merge created no Branch");
@@ -253,7 +253,7 @@ fn a_merge_that_cannot_materialize_a_whiteout_is_refused_removed() {
     // Nothing is created for a refused merge.
     let missing = fixture
         .try_call(
-            "fs.read",
+            "file.read",
             vec![("branch", text("merged")), ("path", text("/a"))],
         )
         .expect_err("the refused merge created no Branch");

@@ -43,9 +43,9 @@ pub(crate) enum Method {
 impl Method {
     pub(crate) fn of(name: &str) -> Option<Self> {
         match name {
-            "fs.read" => Some(Self::Read),
-            "fs.stat" => Some(Self::Stat),
-            "fs.list" => Some(Self::List),
+            "file.read" => Some(Self::Read),
+            "file.stat" => Some(Self::Stat),
+            "file.list" => Some(Self::List),
             _ => None,
         }
     }

@@ -1,4 +1,4 @@
-//! `project.remove_file`: one marker, its Store-high-water frontier, the
+//! `project.hide_path`: one marker, its Store-high-water frontier, the
 //! `UpToDate` rule, the `/`-boundary subtree, and the per-project scope.
 use crate::support;
 

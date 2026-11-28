@@ -22,9 +22,9 @@ fn page(f: &Fixture, method: &str, number: i64, size: i64, pattern: Option<&str>
 fn deep_empty_directory_and_filtered_queries_prove_exhaustion_without_ordinal_caps() {
     let f = Fixture::new("namespace-empty", |_| 0);
     for (method, pattern) in [
-        ("fs.list", None),
-        ("fs.glob", Some("*.missing")),
-        ("fs.grep", Some("needle")),
+        ("file.list", None),
+        ("file.glob", Some("*.missing")),
+        ("file.grep", Some("needle")),
     ] {
         let result = page(&f, method, 10001, 50, pattern);
         assert!(items(&result).is_empty());
@@ -40,7 +40,7 @@ fn sequential_list_and_glob_pages_cross_the_replay_budget_using_indexed_boundari
         }
         10020
     });
-    for (method, pattern) in [("fs.list", None), ("fs.glob", Some("/f*"))] {
+    for (method, pattern) in [("file.list", None), ("file.glob", Some("/f*"))] {
         let mut count = 0;
         for number in 1..=201 {
             let result = page(&f, method, number, 50, pattern);
@@ -68,19 +68,19 @@ fn grep_resumes_within_a_file_and_preserves_binary_skip_counts_on_cold_and_cache
         fs::write(source.join("d"), "needle four\n").unwrap();
         4
     });
-    let cold = page(&f, "fs.grep", 2, 1, Some("needle"));
-    let first = page(&f, "fs.grep", 1, 1, Some("needle"));
+    let cold = page(&f, "file.grep", 2, 1, Some("needle"));
+    let first = page(&f, "file.grep", 1, 1, Some("needle"));
     assert_eq!(items(&first)[0].get_int("line"), Some(1));
-    let warm = page(&f, "fs.grep", 2, 1, Some("needle"));
+    let warm = page(&f, "file.grep", 2, 1, Some("needle"));
     assert_eq!(warm, cold);
     assert_eq!(items(&warm)[0].get_int("line"), Some(3));
-    let third = page(&f, "fs.grep", 3, 1, Some("needle"));
+    let third = page(&f, "file.grep", 3, 1, Some("needle"));
     assert_eq!(items(&third)[0].get_int("line"), Some(4));
-    let fourth = page(&f, "fs.grep", 4, 1, Some("needle"));
+    let fourth = page(&f, "file.grep", 4, 1, Some("needle"));
     assert_eq!(items(&fourth)[0].get_text("path"), Some("/d"));
     assert_eq!(fourth.get_int("skipped"), Some(2));
-    let cached_end = page(&f, "fs.grep", 5, 1, Some("needle"));
-    let cold_end = page(&f, "fs.grep", 6, 1, Some("needle"));
+    let cached_end = page(&f, "file.grep", 5, 1, Some("needle"));
+    let cold_end = page(&f, "file.grep", 6, 1, Some("needle"));
     assert!(items(&cached_end).is_empty());
     assert!(items(&cold_end).is_empty());
     assert_eq!(cached_end.get_int("skipped"), Some(2));
@@ -97,7 +97,7 @@ fn grep_admits_delivered_prefixes_of_large_text_and_binary_files() {
         fs::write(source.join("b"), &data).unwrap();
         2
     });
-    let result = page(&f, "fs.grep", 1, 1, Some("needle"));
+    let result = page(&f, "file.grep", 1, 1, Some("needle"));
     assert_eq!(items(&result).len(), 1);
     assert_eq!(items(&result)[0].get_text("path"), Some("/b"));
     assert!(result.get_bool("hasMore"));
@@ -137,7 +137,7 @@ fn nested_glob_cache_keys_isolate_patterns_page_sizes_and_pinned_moving_heads() 
         if let Some(commit) = commit {
             args.push(("commit", text(commit)));
         }
-        f.call("fs.glob", args)
+        f.call("file.glob", args)
     };
     let primary = "/allowed/src/**/*.rs";
     let cold = query(primary, 2, 1, None);

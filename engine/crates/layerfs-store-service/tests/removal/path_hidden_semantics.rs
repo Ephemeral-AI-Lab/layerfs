@@ -18,12 +18,12 @@ fn text(value: &str) -> SdkValue {
 }
 
 fn remove(fixture: &Fixture, path: &str) -> SdkValue {
-    fixture.call("project.remove_file", vec![("path", text(path))])
+    fixture.call("project.hide_path", vec![("path", text(path))])
 }
 
 fn read(fixture: &Fixture, branch: &str, path: &str) -> Result<SdkValue, SdkRefusal> {
     fixture.try_call(
-        "fs.read",
+        "file.read",
         vec![("branch", text(branch)), ("path", text(path))],
     )
 }
@@ -41,7 +41,7 @@ fn hidden_path(refusal: &SdkRefusal, path: &str) -> i64 {
 
 fn glob(fixture: &Fixture, pattern: &str, path: &str) -> SdkValue {
     fixture.call(
-        "fs.glob",
+        "file.glob",
         vec![
             ("branch", text("work")),
             ("pattern", text(pattern)),
@@ -52,7 +52,7 @@ fn glob(fixture: &Fixture, pattern: &str, path: &str) -> SdkValue {
 
 fn paged_glob(fixture: &Fixture, pattern: &str, page: i64, page_size: i64) -> SdkValue {
     fixture.call(
-        "fs.glob",
+        "file.glob",
         vec![
             ("branch", text("work")),
             ("pattern", text(pattern)),
@@ -93,14 +93,14 @@ fn hidden_rm_and_mv_sources_are_absent_while_cp_and_edit_are_removed() {
     // whiteout, and answer like a never-existing path (`NoSuchPath`).
     let refusal = fixture
         .try_call(
-            "fs.rm",
+            "file.rm",
             vec![("branch", text("rm")), ("path", text("/a.txt"))],
         )
         .expect_err("hidden rm");
     assert_eq!(refusal.code, "NoSuchPath", "{refusal:?}");
     let refusal = fixture
         .try_call(
-            "fs.mv",
+            "file.mv",
             vec![
                 ("branch", text("mv")),
                 ("from", text("/a.txt")),
@@ -112,19 +112,22 @@ fn hidden_rm_and_mv_sources_are_absent_while_cp_and_edit_are_removed() {
 
     // A hidden directory and its descendants are absent to `rm`/`mv` too.
     let refusal = fixture
-        .try_call("fs.rm", vec![("branch", text("rm")), ("path", text("/d"))])
+        .try_call(
+            "file.rm",
+            vec![("branch", text("rm")), ("path", text("/d"))],
+        )
         .expect_err("hidden directory rm");
     assert_eq!(refusal.code, "NoSuchPath", "{refusal:?}");
     let refusal = fixture
         .try_call(
-            "fs.rm",
+            "file.rm",
             vec![("branch", text("rm")), ("path", text("/d/f.txt"))],
         )
         .expect_err("hidden child rm");
     assert_eq!(refusal.code, "NoSuchPath", "{refusal:?}");
     let refusal = fixture
         .try_call(
-            "fs.mv",
+            "file.mv",
             vec![
                 ("branch", text("mv")),
                 ("from", text("/d/f.txt")),
@@ -138,7 +141,7 @@ fn hidden_rm_and_mv_sources_are_absent_while_cp_and_edit_are_removed() {
     // `Removed` with the governing path and frontier, not `NoSuchPath`.
     let refusal = fixture
         .try_call(
-            "fs.edit",
+            "file.edit",
             vec![
                 ("branch", text("edit")),
                 ("path", text("/a.txt")),
@@ -150,7 +153,7 @@ fn hidden_rm_and_mv_sources_are_absent_while_cp_and_edit_are_removed() {
     hidden_path(&refusal, "/a.txt");
     let refusal = fixture
         .try_call(
-            "fs.edit",
+            "file.edit",
             vec![
                 ("branch", text("edit")),
                 ("path", text("/d/f.txt")),
@@ -162,7 +165,7 @@ fn hidden_rm_and_mv_sources_are_absent_while_cp_and_edit_are_removed() {
     hidden_path(&refusal, "/d/f.txt");
     let refusal = fixture
         .try_call(
-            "fs.cp",
+            "file.cp",
             vec![
                 ("branch", text("cp")),
                 ("from", text("/a.txt")),
@@ -173,7 +176,7 @@ fn hidden_rm_and_mv_sources_are_absent_while_cp_and_edit_are_removed() {
     hidden_path(&refusal, "/a.txt");
     let refusal = fixture
         .try_call(
-            "fs.cp",
+            "file.cp",
             vec![
                 ("branch", text("cp")),
                 ("from", text("/d")),
@@ -187,7 +190,7 @@ fn hidden_rm_and_mv_sources_are_absent_while_cp_and_edit_are_removed() {
     // hidden and the absent cases stay distinguishable where the spec asks.
     let refusal = fixture
         .try_call(
-            "fs.edit",
+            "file.edit",
             vec![
                 ("branch", text("edit")),
                 ("path", text("/missing")),
@@ -199,7 +202,7 @@ fn hidden_rm_and_mv_sources_are_absent_while_cp_and_edit_are_removed() {
     assert_eq!(refusal.code, "NoSuchPath", "{refusal:?}");
     let refusal = fixture
         .try_call(
-            "fs.cp",
+            "file.cp",
             vec![
                 ("branch", text("cp")),
                 ("from", text("/missing")),
@@ -318,7 +321,7 @@ fn a_marker_under_a_replaced_ancestor_hides_nothing_and_pages_normally() {
     // `list /` pages normally: the marker's parent is `/d`, so it is not a
     // direct hidden child of `/`, and it names no entry to count.
     let listed = fixture.call(
-        "fs.list",
+        "file.list",
         vec![("branch", text("work")), ("path", text("/"))],
     );
     let names = paths(&listed);
@@ -329,7 +332,7 @@ fn a_marker_under_a_replaced_ancestor_hides_nothing_and_pages_normally() {
     // `InvalidInput`.
     let refusal = fixture
         .try_call(
-            "fs.list",
+            "file.list",
             vec![("branch", text("work")), ("path", text("/d"))],
         )
         .expect_err("listing a regular file");

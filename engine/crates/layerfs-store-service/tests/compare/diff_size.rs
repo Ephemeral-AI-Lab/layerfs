@@ -1,5 +1,5 @@
 //! A Commit difference reads the entries that changed, not the tree or the
-//! history (#352 range 002: diff_commits of one changed file walked both whole
+//! history (#352 range 002: the difference of one changed file walked both whole
 //! trees, its work growing with the tree's size).
 use crate::support;
 
@@ -42,13 +42,7 @@ fn diff_one(fixture: &Fixture, previous: &str, name: &str) -> (Work, String) {
         vec![write(&format!("/hot/{name}.txt"), format!("{name} 1\n"))],
     ));
     let before = fixture.work();
-    let diff = fixture.call(
-        "branch.diff_commits",
-        vec![
-            ("from", SdkValue::text(previous)),
-            ("to", SdkValue::text(next.as_str())),
-        ],
-    );
+    let diff = super::commit_diff(fixture, previous, &next, 1000, &SdkValue::Null, true);
     let work = fixture.since(before);
     assert_eq!(
         paths(&diff),
@@ -60,7 +54,7 @@ fn diff_one(fixture: &Fixture, previous: &str, name: &str) -> (Work, String) {
 }
 
 #[test]
-fn diff_commits_is_independent_of_tree_size_and_history_depth() {
+fn commit_diff_is_independent_of_tree_size_and_history_depth() {
     let mut observed = Vec::new();
     for dirs in [10usize, 100] {
         let fixture = Fixture::new(&format!("sdk-diff-size-{dirs}"), |source| {
@@ -100,7 +94,7 @@ fn diff_commits_is_independent_of_tree_size_and_history_depth() {
         assert!(
             work.object_ids.abs_diff(first.object_ids) <= 1
                 && work.object_batches.abs_diff(first.object_batches) <= 1,
-            "diff_commits of one file reads objects by tree size or depth ({dirs} directories, {depth} Commits): {observed:?}"
+            "commit.diff of one file reads objects by tree size or depth ({dirs} directories, {depth} Commits): {observed:?}"
         );
     }
 }

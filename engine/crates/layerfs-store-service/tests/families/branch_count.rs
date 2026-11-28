@@ -24,7 +24,7 @@ fn fork_and_branch_reads_are_independent_of_branch_count() {
         let fork = fixture.since(before);
         let stat = || {
             fixture.call(
-                "fs.stat",
+                "file.stat",
                 vec![
                     ("branch", SdkValue::text("lane-00005")),
                     ("path", SdkValue::text("/a.txt")),

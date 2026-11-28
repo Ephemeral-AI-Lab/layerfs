@@ -9,7 +9,6 @@
 //! with the plain readers below ([`text`], [`stack`], [`paging`],
 //! [`snapshot`]). The Store engine takes typed values.
 use crate::filesystem::change::run::{self, Change};
-use crate::filesystem::compare::diff::{Request, Selector};
 use crate::filesystem::root::{Named, Saved, Snap};
 use crate::lookup;
 use crate::store::{Store, StorePorts};
@@ -175,40 +174,6 @@ pub fn line(args: &SdkValue, name: &str, default: u64) -> Result<u64, SdkRefusal
         Some(SdkValue::Int(n)) if *n > 0 && *n <= 9_007_199_254_740_991 => Ok(*n as u64),
         _ => Err(invalid(format!("{name} must be a positive safe integer"))),
     }
-}
-
-/// A tree difference's page: offset or `cursor` path, and whether `hunks`.
-pub fn diff_page(args: &SdkValue) -> Result<Request, SdkRefusal> {
-    let (limit, pos) = paging(args)?;
-    let cursor = match args.get("cursor") {
-        None | Some(SdkValue::Null) => None,
-        Some(SdkValue::Text(path)) => Some(run::path(path)?),
-        Some(_) => return Err(invalid("cursor must be a path or null")),
-    };
-    let hunks = match args.get("hunks") {
-        None | Some(SdkValue::Null) => true,
-        Some(SdkValue::Bool(value)) => *value,
-        Some(_) => return Err(invalid("hunks must be a boolean")),
-    };
-    Ok(Request {
-        limit,
-        pos,
-        cursor,
-        hunks,
-        scope: None,
-    })
-}
-
-/// One side of a two-file difference: the `name` selector's `path`, at its
-/// `commit`, else at `branch`.
-pub fn selector<'a>(args: &'a SdkValue, name: &str, branch: &'a str) -> Arg<Selector<'a>> {
-    let selector = args
-        .get(name)
-        .ok_or_else(|| invalid(format!("missing `{name}` selector")))?;
-    Ok(Selector {
-        path: path(selector, "path")?,
-        at: selector.get_text("commit").unwrap_or(branch),
-    })
 }
 
 /// A change's optional `mode`: permission bits, an integer up to 0o7777.

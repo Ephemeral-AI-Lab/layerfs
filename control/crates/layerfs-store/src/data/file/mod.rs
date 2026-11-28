@@ -1,5 +1,5 @@
 //! The `file` family: a project's files at a Branch or Commit, each call
-//! translated to the `fs.*` Store method that does it, its answer the
+//! translated to the `file.*` Store method that does it, its answer the
 //! call's full map (the keys of its long form; the dispatcher shapes it).
 //! Each change is one Commit. A paged read's cursor carries its filters
 //! and the Commit its first page read. One file per call; `read.rs` and

@@ -80,7 +80,7 @@ fn changed_serials(fixture: &Fixture, merged: &SdkValue) -> (u64, u64) {
 fn stat(fixture: &Fixture, path: &str) -> Option<String> {
     fixture
         .try_call(
-            "fs.stat",
+            "file.stat",
             vec![("branch", text("merged")), ("path", text(path))],
         )
         .ok()
@@ -145,7 +145,7 @@ fn merge_moved(fixture: Fixture, count: usize) {
 
 fn small_changed(fixture: &Fixture) {
     let small = fixture.call(
-        "fs.read",
+        "file.read",
         vec![("branch", text("merged")), ("path", text("/small.txt"))],
     );
     assert_eq!(small.get_text("text"), Some("small, changed\n"));
@@ -402,7 +402,7 @@ fn m1_both_sides_change_1000_moved_files() {
     assert_eq!(stat(&fixture, "/big"), None);
     for n in [0, edited - 1] {
         let read = fixture.call(
-            "fs.read",
+            "file.read",
             vec![
                 ("branch", text("merged")),
                 ("path", text(&format!("/moved/f{n:07}"))),
@@ -411,7 +411,7 @@ fn m1_both_sides_change_1000_moved_files() {
         assert_eq!(read.get_text("text"), Some("left\n2\n3\n4\nright\n"));
     }
     let untouched = fixture.call(
-        "fs.read",
+        "file.read",
         vec![
             ("branch", text("merged")),
             ("path", text(&format!("/moved/f{:07}", count - 1))),

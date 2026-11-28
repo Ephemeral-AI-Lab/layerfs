@@ -12,40 +12,20 @@ fn entry(f: &Fixture, at: &str, path: &str) -> EntryFacts {
     let (reader, snap) = root::open(&f.service.store, &stack, at).unwrap();
     root::existing(reader.as_ref(), &snap, path).unwrap()
 }
-fn selector(at: &str, path: &str) -> SdkValue {
-    SdkValue::map([
-        ("commit", SdkValue::text(at)),
-        ("path", SdkValue::text(path)),
-    ])
-}
-fn diff(f: &Fixture, extended: bool) -> Result<SdkValue, layerfs_protocol::sdk::SdkRefusal> {
-    let mut args = vec![
-        ("left", selector("main", "/large")),
-        ("right", selector("work", "/large")),
-    ];
-    if extended {
-        args.push(("page", SdkValue::Int(1)));
-    }
-    f.try_call("fs.diff_files", args)
-}
-
 #[test]
-fn new_queries_reserve_large_different_root_payload_but_keep_same_root_and_legacy_reads() {
+fn a_history_page_refuses_large_different_root_payload() {
     let f = Fixture::new("file-comparison-admission", |source| {
         fs::write(source.join("large"), vec![b'a'; 33 * 1024 * 1024]).unwrap();
         1
     });
     f.fork("work");
-    let same = diff(&f, true).unwrap();
-    assert!(same.get_bool("contentEqual"));
     let original = entry(&f, "main", "/large");
     f.workspace_commit("work", &[Change::Write("/large", b"x")], 209, || {});
     let changed = entry(&f, "work", "/large");
     assert_ne!(original.value.content_root, changed.value.content_root);
-    assert_eq!(diff(&f, true).unwrap_err().code, "Capacity");
     let revisions = f
         .try_call(
-            "fs.revision",
+            "file.history",
             vec![
                 ("branch", SdkValue::text("work")),
                 ("path", SdkValue::text("/large")),
@@ -55,9 +35,6 @@ fn new_queries_reserve_large_different_root_payload_but_keep_same_root_and_legac
         )
         .unwrap_err();
     assert_eq!(revisions.code, "Capacity");
-    let legacy = diff(&f, false).unwrap();
-    assert!(!legacy.get_bool("contentEqual"));
-    assert_eq!(legacy.get_text("kind"), Some("Binary"));
     f.cleanup();
 }
 
@@ -96,7 +73,7 @@ fn equal_bytes_under_different_roots_are_unknown_when_the_request_cannot_admit_t
     );
     let stack = layerfs_store_service::lookup::project(&f.service.store, "installed").unwrap();
     let ports = root::reader(&f.service.store, &stack);
-    // The call's caches, as `fs.diff_files` and `fs.revision` read (#818 H3).
+    // The call's caches, as `file.history` reads them (#818 H3).
     let reader = layerfs_store_service::filesystem::cache::Cached::new(&ports).unwrap();
     let mut none = 0;
     assert_eq!(
@@ -142,7 +119,7 @@ fn equal_roots_and_known_different_sizes_do_not_spend_payload_budget() {
     let b = entry(&f, "main", "/long");
     let stack = layerfs_store_service::lookup::project(&f.service.store, "installed").unwrap();
     let ports = root::reader(&f.service.store, &stack);
-    // The call's caches, as `fs.diff_files` and `fs.revision` read (#818 H3).
+    // The call's caches, as `file.history` reads them (#818 H3).
     let reader = layerfs_store_service::filesystem::cache::Cached::new(&ports).unwrap();
     let mut none = 0;
     assert!(

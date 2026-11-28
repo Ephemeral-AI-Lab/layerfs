@@ -1,4 +1,4 @@
-//! `project.stats` and `project.remove_file` (the SDK's `project.hide_path`).
+//! `project.stats` and `project.hide_path`.
 use crate::families::args::{invalid, project, text, Answer};
 use crate::{history::resolve, lookup, store::Store, StoreService};
 use layerfs_content::compare::TreeTable;
@@ -66,9 +66,9 @@ fn visible_trees(
     Ok(roots)
 }
 
-/// `project.remove_file({ project, path })`: hide one path from every node at
+/// `project.hide_path({ project, path })`: hide one path from every node at
 /// or below the frontier. Visibility only; no byte is freed in 2.0.
-pub fn remove_file(service: &StoreService, args: &SdkValue) -> Answer {
+pub fn hide_path(service: &StoreService, args: &SdkValue) -> Answer {
     let stack = project(service, args)?;
     let requested = text(args, "path")?;
     let normalized = layerfs_history::catalog::path::NormalizedPath::new(requested)
@@ -102,7 +102,7 @@ pub fn remove_file(service: &StoreService, args: &SdkValue) -> Answer {
             &intent,
         )
         .map_err(|error| {
-            // A remove_file writes its marker in one transaction and takes
+            // A hide_path writes its marker in one transaction and takes
             // no durable op of its own, so phase and op are null.
             lookup::history_in(error, intent.scope_kind, stack.name.as_str(), None, None)
         })?;

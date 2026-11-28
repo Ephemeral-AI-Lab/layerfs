@@ -9,5 +9,5 @@ use std::path::Path;
 pub fn mv(home: &Path, events: &mut Events<'_>, request: &FileMv) -> Outcome {
     let mut args = base(&request.branch, &request.guard);
     args.text("from", &request.from).text("to", &request.to);
-    commit(home, events, &request.project, "fs.mv", args)
+    commit(home, events, &request.project, "file.mv", args)
 }

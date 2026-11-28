@@ -12,20 +12,19 @@ pub fn rm(home: &Path, events: &mut Events<'_>, request: &FileRm) -> Outcome {
     let mut args = base(&request.branch, &request.guard);
     args.text("path", &request.path)
         .boolean("recursive", Some(request.recursive));
-    let value =
-        run(home, events, &request.project, "fs.rm", args).map_err(|refusal| {
-            match refusal.code == "NotEmpty" {
-                true => with_fix(
-                    refusal,
-                    format!(
-                        "layerfs file rm {} {} {} --recursive",
-                        word(&request.project),
-                        word(&request.branch),
-                        word(&request.path),
-                    ),
+    let value = run(home, events, &request.project, "file.rm", args).map_err(|refusal| {
+        match refusal.code == "NotEmpty" {
+            true => with_fix(
+                refusal,
+                format!(
+                    "layerfs file rm {} {} {} --recursive",
+                    word(&request.project),
+                    word(&request.branch),
+                    word(&request.path),
                 ),
-                false => on_main(refusal, &request.project),
-            }
-        })?;
+            ),
+            false => on_main(refusal, &request.project),
+        }
+    })?;
     Ok(answer(&value, None))
 }

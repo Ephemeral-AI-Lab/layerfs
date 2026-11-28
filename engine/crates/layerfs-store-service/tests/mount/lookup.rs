@@ -1,7 +1,7 @@
 //! A mount finds its Branch by name without listing the project's Branches
 //! (#352 finding 009.a1). `mount_branch` resolved the name by paging through
-//! `project.list_branches`, so a one-shot mount's VM steps grew with every
-//! Branch the replay made (about 7 per range). `project.list_branches` with
+//! `branch.list`, so a one-shot mount's VM steps grew with every
+//! Branch the replay made (about 7 per range). `branch.list` with
 //! `name` answers from the name index: the same work at 10 and 1,000 Branches.
 use crate::support;
 
@@ -10,10 +10,7 @@ use std::fs;
 use support::{items, Fixture};
 
 fn named(fixture: &Fixture, name: &str) -> SdkValue {
-    fixture.call(
-        "project.list_branches",
-        vec![("name", SdkValue::text(name))],
-    )
+    fixture.call("branch.list", vec![("name", SdkValue::text(name))])
 }
 
 #[test]
@@ -74,10 +71,7 @@ fn main_is_listed_with_the_branch_the_project_records_for_it() {
         Some(recorded.as_str()),
         "{named_main:?}"
     );
-    let all = fixture.call(
-        "project.list_branches",
-        vec![("pageSize", SdkValue::Int(1000))],
-    );
+    let all = fixture.call("branch.list", vec![("pageSize", SdkValue::Int(1000))]);
     let listed = items(&all)
         .iter()
         .find(|item| item.get_text("branch") == Some("main"))

@@ -61,7 +61,7 @@ pub fn history(home: &Path, events: &mut Events<'_>, request: &FileHistory) -> O
     .opt("traversal", page.text("traversal").as_deref())
     .opt("continuation", own_text(&page.place()))
     .put("pageSize", size.clone());
-    let value = run(home, events, &request.project, "fs.revision", args)?;
+    let value = run(home, events, &request.project, "file.history", args)?;
     let next = match take(&value, "continuation") {
         SdkValue::Null => SdkValue::Null,
         place => {

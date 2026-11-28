@@ -19,7 +19,7 @@ fn outcomes(store: &mut Store) -> Vec<String> {
     rt::fork_work(&opened);
     opened
         .call(
-            "fs.write",
+            "file.write",
             vec![
                 ("branch", t(rt::BRANCH)),
                 ("path", t("/ctx.txt")),
@@ -32,7 +32,7 @@ fn outcomes(store: &mut Store) -> Vec<String> {
         if !fields.iter().any(|(name, _)| *name == "path") {
             fields.push(("path", t("/")));
         }
-        opened.call("fs.stat", fields)
+        opened.call("file.stat", fields)
     };
     let id = |fields: Vec<(&str, SdkValue)>| -> String {
         let answer = stat(fields).unwrap();

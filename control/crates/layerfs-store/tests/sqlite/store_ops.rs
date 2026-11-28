@@ -60,7 +60,7 @@ fn absent_options_are_not_sent_and_names_keep_their_order() {
             pos: None,
         },
     };
-    assert_eq!(page.method(), "project.list_branches");
+    assert_eq!(page.method(), "branch.list");
     assert_eq!(names(&page), ["limit"]);
     let names_page = StoreOp::Branches {
         names: Names {
@@ -70,7 +70,7 @@ fn absent_options_are_not_sent_and_names_keep_their_order() {
         },
         limit: 100,
     };
-    assert_eq!(names_page.method(), "project.list_branches");
+    assert_eq!(names_page.method(), "branch.list");
     assert_eq!(names(&names_page), ["prefix", "after", "limit"]);
 }
 
@@ -106,10 +106,7 @@ fn history_pages_are_forwarded_without_resolving_heads() {
         after: Some(t("last")),
         limit: 5,
     };
-    assert_eq!(
-        StoreOp::ListCommits(&history).method(),
-        "branch.list_commits"
-    );
+    assert_eq!(StoreOp::ListCommits(&history).method(), "commit.list");
     assert_eq!(
         StoreOp::ListCommits(&history).engine_args(),
         vec![
@@ -124,7 +121,7 @@ fn history_pages_are_forwarded_without_resolving_heads() {
         commit: t("saved"),
         branch: None,
     };
-    assert_eq!(StoreOp::GetCommit(&detail).method(), "branch.get_commit");
+    assert_eq!(StoreOp::GetCommit(&detail).method(), "commit.get");
     assert_eq!(names(&StoreOp::GetCommit(&detail)), ["commit"]);
 }
 

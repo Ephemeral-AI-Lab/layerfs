@@ -13,7 +13,7 @@ pub enum GcIntentKind {
     Init,
     /// A Branch merge.
     Merge,
-    /// A soft removal (`branch.remove`, `project.delete`, `project.remove_file`).
+    /// A soft removal (`branch.remove`, `project.delete`, `project.hide_path`).
     Removal,
     /// A Store compaction.
     Compaction,

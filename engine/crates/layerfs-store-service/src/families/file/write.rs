@@ -1,4 +1,4 @@
-//! `fs.write`.
+//! `file.write`.
 use crate::families::args::{commit, single, Answer};
 use crate::StoreService;
 use layerfs_protocol::sdk::SdkValue;

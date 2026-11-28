@@ -308,7 +308,7 @@ fn split() {
     let t = Instant::now();
     let reply = p
         .call(
-            "fs.grep",
+            "file.grep",
             vec![
                 ("pattern", SdkValue::text(NEVER)),
                 ("path", SdkValue::text("/")),
@@ -479,7 +479,7 @@ fn dump() {
             }
             for &size in &sizes {
                 let reply = p.call(
-                    "fs.grep",
+                    "file.grep",
                     vec![
                         ("pattern", SdkValue::text(pattern)),
                         ("path", SdkValue::text(path)),
@@ -522,7 +522,7 @@ fn dump() {
             }
             for &size in &sizes {
                 let reply = p.call(
-                    "fs.glob",
+                    "file.glob",
                     vec![
                         ("pattern", SdkValue::text(glob)),
                         ("path", SdkValue::text(path)),
@@ -535,7 +535,7 @@ fn dump() {
         }
         for &size in sizes.iter().filter(|_| part("list")) {
             let reply = p.call(
-                "fs.list",
+                "file.list",
                 vec![
                     ("path", SdkValue::text(path)),
                     ("pageSize", SdkValue::Int(size)),
@@ -573,7 +573,7 @@ fn dump() {
             if let Some(end) = end {
                 fields.push(("endLine", SdkValue::Int(end)));
             }
-            let reply = p.call("fs.read", fields);
+            let reply = p.call("file.read", fields);
             render(&mut text, &format!("read {file} {start} {end:?}"), &reply);
         }
     }
@@ -581,27 +581,27 @@ fn dump() {
     let mut paged = 0;
     for (method, base) in [
         (
-            "fs.grep",
+            "file.grep",
             vec![
                 ("pattern", SdkValue::text("import")),
                 ("path", SdkValue::text("/packages")),
             ],
         ),
         (
-            "fs.grep",
+            "file.grep",
             vec![
                 ("pattern", SdkValue::text("e")),
                 ("path", SdkValue::text("/docs")),
             ],
         ),
         (
-            "fs.glob",
+            "file.glob",
             vec![
                 ("pattern", SdkValue::text("**")),
                 ("path", SdkValue::text("/")),
             ],
         ),
-        ("fs.list", vec![("path", SdkValue::text("/"))]),
+        ("file.list", vec![("path", SdkValue::text("/"))]),
     ]
     .into_iter()
     .enumerate()
@@ -641,20 +641,20 @@ fn paging() {
     let Some(p) = probe() else { return };
     for (method, base) in [
         (
-            "fs.grep",
+            "file.grep",
             vec![
                 ("pattern", SdkValue::text("e")),
                 ("path", SdkValue::text("/")),
             ],
         ),
         (
-            "fs.glob",
+            "file.glob",
             vec![
                 ("pattern", SdkValue::text("**")),
                 ("path", SdkValue::text("/")),
             ],
         ),
-        ("fs.list", vec![("path", SdkValue::text("/"))]),
+        ("file.list", vec![("path", SdkValue::text("/"))]),
     ] {
         let mut position = SdkValue::Int(0);
         let mut cost = Vec::new();
@@ -689,7 +689,7 @@ fn time() {
     let t = Instant::now();
     let reply = p
         .call(
-            "fs.grep",
+            "file.grep",
             vec![
                 ("pattern", SdkValue::text(NEVER)),
                 ("path", SdkValue::text("/")),
@@ -945,9 +945,9 @@ fn reuse() {
 }
 
 /// One call kind per process (`LFS354_CALL`): its statements, object ids
-/// demanded at the Store, storage counters and time. `read` is one fs.read
+/// demanded at the Store, storage counters and time. `read` is one file.read
 /// call per regular file, for the first `LFS354_READS` files in walk order,
-/// and `stat` the same with fs.stat (the fixed part: snapshot, lookup, size);
+/// and `stat` the same with file.stat (the fixed part: snapshot, lookup, size);
 /// the others are one call over `/` (grep for a pattern that is never
 /// present unless `LFS354_PATTERN`, glob `**`, list `/`; `LFS354_ROOT`
 /// instead of `/`), each at `LFS354_PAGE` items. `heap_peak` is the most live
@@ -994,13 +994,16 @@ fn calls() {
         p.call(method, fields).unwrap();
     };
     match kind.as_str() {
-        "grep" => paged("fs.grep", vec![("pattern", SdkValue::text(&pattern))]),
-        "glob" => paged("fs.glob", vec![("pattern", SdkValue::text("**"))]),
-        "list" => paged("fs.list", vec![]),
+        "grep" => paged("file.grep", vec![("pattern", SdkValue::text(&pattern))]),
+        "glob" => paged("file.glob", vec![("pattern", SdkValue::text("**"))]),
+        "list" => paged("file.list", vec![]),
         "read" | "stat" => {
             for path in &files {
                 // A refusal (Binary) is an answer too.
-                let _ = p.call(&format!("fs.{kind}"), vec![("path", SdkValue::text(path))]);
+                let _ = p.call(
+                    &format!("file.{kind}"),
+                    vec![("path", SdkValue::text(path))],
+                );
                 calls += 1;
             }
         }
@@ -1029,9 +1032,9 @@ fn calls() {
     );
 }
 
-/// The fixed part of one fs.read, step by step, summed over the first
+/// The fixed part of one file.read, step by step, summed over the first
 /// `LFS354_READS` regular files: snapshot open (project, root, tree table),
-/// path lookup and size, then the content read, each as fs.read does it.
+/// path lookup and size, then the content read, each as file.read does it.
 /// Statements, object ids, pack bytes and time per step.
 #[test]
 fn fixed() {
@@ -1103,7 +1106,7 @@ fn fixed() {
         let (_, reader, snap) =
             layerfs_store_service::families::args::snapshot(&p.service.store, &p.args()).unwrap();
         let m1 = mark(&p);
-        // As fs.read: the lookup through a memo over the call's caches, the
+        // As file.read: the lookup through a memo over the call's caches, the
         // content through the caches.
         let cached = layerfs_store_service::filesystem::cache::Cached::new(&reader).unwrap();
         let entry = root::existing(

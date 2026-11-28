@@ -40,28 +40,28 @@ fn reads_do_not_wait_for_a_held_publication_lane() {
     let mut slow = Vec::new();
     for (method, fields) in [
         (
-            "fs.read",
+            "file.read",
             vec![
                 ("branch", SdkValue::text("work")),
                 ("path", SdkValue::text("/small.txt")),
             ],
         ),
         (
-            "fs.stat",
+            "file.stat",
             vec![
                 ("branch", SdkValue::text("work")),
                 ("path", SdkValue::text("/small.txt")),
             ],
         ),
         (
-            "fs.list",
+            "file.list",
             vec![
                 ("branch", SdkValue::text("work")),
                 ("path", SdkValue::text("/")),
             ],
         ),
         (
-            "fs.read",
+            "file.read",
             vec![
                 ("branch", SdkValue::text("main")),
                 ("path", SdkValue::text("/seed.txt")),

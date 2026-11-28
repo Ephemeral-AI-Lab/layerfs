@@ -168,7 +168,7 @@ fn two_daemons_commit_one_branch_with_identical_overlapping_content() {
     }
 }
 
-/// A Workspace Commit and a direct Store `fs.write` of another file on the
+/// A Workspace Commit and a direct Store `file.write` of another file on the
 /// same Branch (on another service where the backend allows it), at the
 /// same moment, round after round: each answer is a landed Commit or a
 /// documented refusal; the chain is exactly the answered Commits plus one
@@ -201,7 +201,7 @@ fn with_direct_writes(store: &TestStore) {
             let b = scope.spawn(move || {
                 assert!(gate.wait());
                 writer.call(
-                    "fs.write",
+                    "file.write",
                     vec![
                         ("branch", layerfs_protocol::sdk::SdkValue::text("mixed")),
                         ("path", layerfs_protocol::sdk::SdkValue::text(&direct)),
@@ -218,7 +218,7 @@ fn with_direct_writes(store: &TestStore) {
             }
             Err(refusal) => assert!(
                 documented(&refusal.code) || refusal.code.contains("Conflict"),
-                "{:?}: fs.write refused {refusal:?}",
+                "{:?}: file.write refused {refusal:?}",
                 store.kind
             ),
         }

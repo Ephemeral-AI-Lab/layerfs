@@ -29,16 +29,8 @@ fn a_single_change_does_not_walk_unchanged_large_trees_for_layer_endpoints() {
         f.fork("work");
         f.apply("work", vec![write("/changed", "after")]);
         let commit = pin(&f, "work");
-        let diff = |from: &str, to: &str| {
-            f.call(
-                "branch.diff_commits",
-                vec![
-                    ("from", t(from)),
-                    ("to", t(to)),
-                    ("hunks", SdkValue::Bool(false)),
-                ],
-            )
-        };
+        let diff =
+            |from: &str, to: &str| super::commit_diff(&f, from, to, 1000, &SdkValue::Null, false);
         let before = f.work();
         let first = diff(&base, &commit);
         let work = f.since(before);

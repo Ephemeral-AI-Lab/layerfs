@@ -31,7 +31,7 @@ struct Stored {
 fn write(fixture: &Fixture, branch: &str, bytes: Vec<u8>) -> Stored {
     let before = fixture.service.store.save_counters().delta.chunk_depths;
     let reply = fixture.call(
-        "fs.write",
+        "file.write",
         vec![
             ("branch", SdkValue::text(branch)),
             ("path", SdkValue::text("/big.bin")),
@@ -91,7 +91,7 @@ fn changed_chunks_of_a_rewritten_file_are_deltas() {
     }
     for (name, stored) in &cases {
         assert!(stored.deltas >= 1, "{name}: a changed chunk is a delta");
-        // Every fs.write Commit also stores one 12-byte chunk outside
+        // Every file.write Commit also stores one 12-byte chunk outside
         // /big.bin; no chunk of the file itself is stored FULL.
         assert!(stored.full <= 1, "{name}: a changed chunk is stored FULL");
         assert!(

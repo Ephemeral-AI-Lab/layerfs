@@ -55,7 +55,7 @@ pub fn glob(home: &Path, events: &mut Events<'_>, request: &FileSearch) -> Outco
         home,
         events,
         &request.project,
-        "fs.glob",
+        "file.glob",
         search_args(&page),
     )?;
     Ok(SdkValue::map([

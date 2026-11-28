@@ -1,5 +1,5 @@
 //! #818 lane RH: a connection dropped at every server message of one cold
-//! SDK read (`fs.stat` on a Branch with a marker present) on PostgreSQL
+//! SDK read (`file.stat` on a Branch with a marker present) on PostgreSQL
 //! (`support/read_sweep_rh.rs` states the invariants). Needs
 //! `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
 use crate::fault_proxy;

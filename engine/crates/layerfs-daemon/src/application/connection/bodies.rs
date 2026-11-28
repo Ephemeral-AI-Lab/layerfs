@@ -1,7 +1,7 @@
 //! Write bodies that follow one call's record on its connection.
 //!
 //! A file write's bytes once followed its call record, in records of at most
-//! one channel plaintext (`streamed` lengths in `fs.write` and `fs.apply`).
+//! one channel plaintext (`streamed` lengths in `file.write` and `file.apply`).
 //! Store calls are not served here (#352 F-020), so nothing reads them: the
 //! bytes a call declares are read and dropped before its answer, a record at
 //! a time, so the connection stays in step.
@@ -37,8 +37,8 @@ impl<'a> Bodies<'a> {
     }
 }
 
-/// Bytes the call's `streamed` write fields declare: `fs.write`'s own, or
-/// each `fs.apply` write change's. Other calls declare none.
+/// Bytes the call's `streamed` write fields declare: `file.write`'s own, or
+/// each `file.apply` write change's. Other calls declare none.
 fn declared(request: &Request) -> u64 {
     let call = match request {
         Request::Sdk(call) => call,
@@ -53,8 +53,8 @@ fn declared(request: &Request) -> u64 {
         _ => 0,
     };
     match call.method.as_str() {
-        "fs.write" => length(&call.args),
-        "fs.apply" => match call.args.get("changes") {
+        "file.write" => length(&call.args),
+        "file.apply" => match call.args.get("changes") {
             Some(SdkValue::List(changes)) => changes
                 .iter()
                 .filter(|change| change.get_text("op") == Some("write"))

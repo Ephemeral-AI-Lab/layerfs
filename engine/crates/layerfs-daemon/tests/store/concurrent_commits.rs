@@ -152,7 +152,7 @@ fn commit_together(
 fn read(fixture: &Fixture, path: &str) -> String {
     fixture
         .call(
-            "fs.read",
+            "file.read",
             vec![
                 ("branch", SdkValue::text(LANE)),
                 ("path", SdkValue::text(path)),
@@ -232,7 +232,7 @@ fn concurrent_fs_writes_of_different_files_all_publish() {
                 scope.spawn(move || {
                     barrier.wait();
                     let answer = fixture.call(
-                        "fs.write",
+                        "file.write",
                         vec![
                             ("branch", SdkValue::text(LANE)),
                             ("path", SdkValue::text(format!("/fs{i}.txt"))),

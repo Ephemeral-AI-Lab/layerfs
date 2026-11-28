@@ -153,7 +153,7 @@ impl<'a> Cached<'a> {
     }
 
     /// Whether the Store pays a round trip per demand (PostgreSQL), where
-    /// `fs.grep` and `fs.glob` take wide windows (#818 R6).
+    /// `file.grep` and `file.glob` take wide windows (#818 R6).
     pub fn wide(&self) -> bool {
         self.ports.batched_reads()
     }
@@ -302,7 +302,7 @@ impl<'a> Cached<'a> {
 pub const ROOTS: usize = 64;
 pub const ROOT_BYTES: usize = 4 * 1024 * 1024;
 /// A wide window's files and roots a demand at most (#818 R6): where the
-/// Store pays a round trip per demand (PostgreSQL), `fs.grep` lets
+/// Store pays a round trip per demand (PostgreSQL), `file.grep` lets
 /// [`ROOT_BYTES`] decide, up to this many.
 pub const WIDE_ROOTS: usize = 256;
 

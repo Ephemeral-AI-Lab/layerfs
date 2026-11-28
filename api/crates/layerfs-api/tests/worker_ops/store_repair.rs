@@ -87,7 +87,7 @@ fn seed(home: &Path) {
     .unwrap();
     assert_eq!(
         branch, recorded,
-        "project.list_branches names the main Branch add_project recorded"
+        "branch.list names the main Branch add_project recorded"
     );
     let stack = with_service(&open, |service| {
         Ok(layerfs_store_service::lookup::project(&service.store, "app")?.id)

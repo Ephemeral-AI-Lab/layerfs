@@ -10,5 +10,5 @@ pub fn mkdir(home: &Path, events: &mut Events<'_>, request: &FileMkdir) -> Outco
     let mut args = base(&request.branch, &request.guard);
     args.text("path", &request.path)
         .int("mode", mode(request.mode.as_deref())?);
-    commit(home, events, &request.project, "fs.mkdir", args)
+    commit(home, events, &request.project, "file.mkdir", args)
 }

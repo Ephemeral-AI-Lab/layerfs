@@ -118,22 +118,10 @@ impl Fixture {
 
     pub fn apply(&self, branch: &str, changes: Vec<SdkValue>) -> SdkValue {
         self.call(
-            "fs.apply",
+            "file.apply",
             vec![
                 ("branch", SdkValue::text(branch)),
                 ("changes", SdkValue::List(changes)),
-            ],
-        )
-    }
-
-    pub fn diff(&self, from: &str, to: &str, limit: i64, position: i64) -> SdkValue {
-        self.call(
-            "branch.diff_branches",
-            vec![
-                ("from", SdkValue::text(from)),
-                ("to", SdkValue::text(to)),
-                ("pageSize", SdkValue::Int(limit)),
-                ("pagePos", SdkValue::Int(position)),
             ],
         )
     }

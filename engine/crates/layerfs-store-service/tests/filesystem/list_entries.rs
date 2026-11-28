@@ -41,7 +41,7 @@ fn a_listing_costs_the_same_in_a_small_and_a_large_tree() {
         let fixture = Fixture::new(&format!("sdk-list-entries-{bulk}"), |s| tree(s, bulk));
         let list = || {
             fixture.call(
-                "fs.list",
+                "file.list",
                 vec![
                     ("branch", SdkValue::text("main")),
                     ("path", SdkValue::text("/listed")),

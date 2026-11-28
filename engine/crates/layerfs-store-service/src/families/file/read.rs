@@ -1,4 +1,4 @@
-//! `fs.read`.
+//! `file.read`.
 use crate::families::args::{line, path, snapshot_in, snapshot_target, Answer};
 use crate::filesystem::cache::Cached;
 use crate::{

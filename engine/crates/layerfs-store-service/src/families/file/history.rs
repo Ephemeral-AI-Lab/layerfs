@@ -1,4 +1,4 @@
-//! `fs.revision`: a path can be absent at the pinned tip.
+//! `file.history`: a path can be absent at the pinned tip.
 use crate::families::args::{path, project, text, Answer};
 use crate::filesystem::{
     paged::{query, revision},
@@ -8,7 +8,7 @@ use crate::history::saved;
 use crate::StoreService;
 use layerfs_protocol::sdk::SdkValue;
 
-pub fn revision(service: &StoreService, args: &SdkValue) -> Answer {
+pub fn history(service: &StoreService, args: &SdkValue) -> Answer {
     let stack = project(service, args)?;
     let branch = text(args, "branch")?;
     // a Commit id prefix is resolved first

@@ -217,9 +217,9 @@ fn ordinary_endpoint_refuses_methods_and_arguments_outside_the_allowlist() {
     let mut worker = home.start();
     home.ping();
     for (method, key, expected) in [
-        ("fs.write", "path", "Unsupported"),
-        ("fs.stat", "storePath", "InvalidInput"),
-        ("fs.list", "page", "InvalidInput"),
+        ("file.write", "path", "Unsupported"),
+        ("file.stat", "storePath", "InvalidInput"),
+        ("file.list", "page", "InvalidInput"),
     ] {
         let stream = UnixStream::connect(&home.paths.socket).unwrap();
         let end = Instant::now() + Duration::from_secs(5);
@@ -295,7 +295,7 @@ fn assert_malformed_reply(valid_envelope: bool) {
             .unwrap()
             .unwrap();
         let args = request.get("args").unwrap();
-        assert_eq!(args.get_text("method"), Some("fs.stat"));
+        assert_eq!(args.get_text("method"), Some("file.stat"));
         assert_eq!(args.get_text("store"), Some("shop"));
         assert_eq!(args.get_text("project"), Some("api"));
         assert!(args.get("store_record").is_none());

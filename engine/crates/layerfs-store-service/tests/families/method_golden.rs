@@ -133,12 +133,12 @@ fn public_methods_answer_as_recorded() {
     };
 
     // project
-    s.call("project.list_branches", vec![]);
-    s.call("project.list_branches", vec![("name", t("main"))]);
-    s.call("project.list_branches", vec![("name", SdkValue::Int(3))]);
-    s.call("project.list_branches", vec![("limit", SdkValue::Int(0))]);
+    s.call("branch.list", vec![]);
+    s.call("branch.list", vec![("name", t("main"))]);
+    s.call("branch.list", vec![("name", SdkValue::Int(3))]);
+    s.call("branch.list", vec![("limit", SdkValue::Int(0))]);
     s.call(
-        "project.list_branches",
+        "branch.list",
         vec![("prefix", t("f")), ("limit", SdkValue::Int(1))],
     );
 
@@ -151,7 +151,7 @@ fn public_methods_answer_as_recorded() {
 
     // writes
     s.call(
-        "fs.write",
+        "file.write",
         vec![
             ("branch", t("feat")),
             ("path", t("/new.txt")),
@@ -160,7 +160,7 @@ fn public_methods_answer_as_recorded() {
         ],
     );
     s.call(
-        "fs.write",
+        "file.write",
         vec![
             ("branch", t("main")),
             ("path", t("/x")),
@@ -168,7 +168,7 @@ fn public_methods_answer_as_recorded() {
         ],
     );
     s.call(
-        "fs.write",
+        "file.write",
         vec![
             ("branch", t("feat")),
             ("path", t("/new.txt")),
@@ -176,7 +176,7 @@ fn public_methods_answer_as_recorded() {
         ],
     );
     s.call(
-        "fs.write",
+        "file.write",
         vec![
             ("branch", t("feat")),
             ("path", t("bad//path")),
@@ -184,7 +184,7 @@ fn public_methods_answer_as_recorded() {
         ],
     );
     s.call(
-        "fs.write",
+        "file.write",
         vec![
             ("branch", t("feat")),
             ("path", t("/y")),
@@ -192,7 +192,7 @@ fn public_methods_answer_as_recorded() {
         ],
     );
     s.call(
-        "fs.write",
+        "file.write",
         vec![
             ("branch", t("feat")),
             ("path", t("/y")),
@@ -201,7 +201,7 @@ fn public_methods_answer_as_recorded() {
         ],
     );
     s.call(
-        "fs.edit",
+        "file.edit",
         vec![
             ("branch", t("feat")),
             ("path", t("/a.txt")),
@@ -210,7 +210,7 @@ fn public_methods_answer_as_recorded() {
         ],
     );
     s.call(
-        "fs.edit",
+        "file.edit",
         vec![
             ("branch", t("feat")),
             ("path", t("/a.txt")),
@@ -219,11 +219,11 @@ fn public_methods_answer_as_recorded() {
         ],
     );
     s.call(
-        "fs.mkdir",
+        "file.mkdir",
         vec![("branch", t("feat")), ("path", t("/made/deep"))],
     );
     s.call(
-        "fs.cp",
+        "file.cp",
         vec![
             ("branch", t("feat")),
             ("from", t("/dir")),
@@ -231,17 +231,17 @@ fn public_methods_answer_as_recorded() {
         ],
     );
     s.call(
-        "fs.mv",
+        "file.mv",
         vec![
             ("branch", t("feat")),
             ("from", t("/dir2/b.txt")),
             ("to", t("/moved.txt")),
         ],
     );
-    s.call("fs.rm", vec![("branch", t("feat")), ("path", t("/dir2"))]);
-    s.call("fs.rm", vec![("branch", t("feat")), ("path", t("/gone"))]);
+    s.call("file.rm", vec![("branch", t("feat")), ("path", t("/dir2"))]);
+    s.call("file.rm", vec![("branch", t("feat")), ("path", t("/gone"))]);
     s.call(
-        "fs.apply",
+        "file.apply",
         vec![
             ("branch", t("feat")),
             (
@@ -256,7 +256,7 @@ fn public_methods_answer_as_recorded() {
     // Two faults: the first change's own refusal comes before the second's
     // malformed op.
     s.call(
-        "fs.apply",
+        "file.apply",
         vec![
             ("branch", t("feat")),
             (
@@ -269,7 +269,7 @@ fn public_methods_answer_as_recorded() {
         ],
     );
     s.call(
-        "fs.apply",
+        "file.apply",
         vec![
             ("branch", t("feat")),
             (
@@ -281,9 +281,9 @@ fn public_methods_answer_as_recorded() {
             ),
         ],
     );
-    s.call("fs.apply", vec![("branch", t("feat"))]);
+    s.call("file.apply", vec![("branch", t("feat"))]);
     s.call(
-        "fs.write",
+        "file.write",
         vec![
             ("branch", t("other")),
             ("path", t("/a.txt")),
@@ -294,12 +294,12 @@ fn public_methods_answer_as_recorded() {
     // reads
     for branch in ["feat", "main"] {
         s.call(
-            "fs.read",
+            "file.read",
             vec![("branch", t(branch)), ("path", t("/a.txt"))],
         );
     }
     s.call(
-        "fs.read",
+        "file.read",
         vec![
             ("branch", t("feat")),
             ("path", t("/a.txt")),
@@ -308,7 +308,7 @@ fn public_methods_answer_as_recorded() {
         ],
     );
     s.call(
-        "fs.read",
+        "file.read",
         vec![
             ("branch", t("feat")),
             ("path", t("/a.txt")),
@@ -317,26 +317,29 @@ fn public_methods_answer_as_recorded() {
         ],
     );
     s.call(
-        "fs.read",
+        "file.read",
         vec![
             ("branch", t("feat")),
             ("path", t("/a.txt")),
             ("startLine", SdkValue::Int(0)),
         ],
     );
-    s.call("fs.read", vec![("branch", t("feat")), ("path", t("/nope"))]);
     s.call(
-        "fs.read",
+        "file.read",
+        vec![("branch", t("feat")), ("path", t("/nope"))],
+    );
+    s.call(
+        "file.read",
         vec![("branch", t("ghost")), ("path", t("/a.txt"))],
     );
-    s.call("fs.read", vec![("branch", t("feat"))]);
+    s.call("file.read", vec![("branch", t("feat"))]);
     s.call(
-        "fs.read",
+        "file.read",
         vec![("branch", t("main")), ("path", t("/blob.bin"))],
     );
-    s.call("fs.list", vec![("branch", t("feat"))]);
+    s.call("file.list", vec![("branch", t("feat"))]);
     s.call(
-        "fs.list",
+        "file.list",
         vec![
             ("branch", t("feat")),
             ("path", t("/dir")),
@@ -344,20 +347,23 @@ fn public_methods_answer_as_recorded() {
         ],
     );
     s.call(
-        "fs.list",
+        "file.list",
         vec![("branch", t("feat")), ("path", t("/a.txt"))],
     );
     s.call(
-        "fs.stat",
+        "file.stat",
         vec![("branch", t("main")), ("path", t("/a.txt"))],
     );
-    s.call("fs.stat", vec![("branch", t("feat")), ("path", t("/dir"))]);
     s.call(
-        "fs.grep",
+        "file.stat",
+        vec![("branch", t("feat")), ("path", t("/dir"))],
+    );
+    s.call(
+        "file.grep",
         vec![("branch", t("feat")), ("pattern", t("TWO|bee"))],
     );
     s.call(
-        "fs.grep",
+        "file.grep",
         vec![
             ("branch", t("feat")),
             ("pattern", t("e")),
@@ -365,59 +371,40 @@ fn public_methods_answer_as_recorded() {
             ("pageSize", SdkValue::Int(1)),
         ],
     );
-    s.call("fs.grep", vec![("branch", t("feat")), ("pattern", t("("))]);
     s.call(
-        "fs.glob",
+        "file.grep",
+        vec![("branch", t("feat")), ("pattern", t("("))],
+    );
+    s.call(
+        "file.glob",
         vec![("branch", t("feat")), ("pattern", t("**/*.txt"))],
     );
     s.call(
-        "fs.glob",
+        "file.glob",
         vec![("branch", t("feat")), ("pattern", t("dir/**"))],
     );
     s.call(
-        "fs.blame",
+        "file.blame",
         vec![("branch", t("feat")), ("path", t("/a.txt"))],
     );
     s.call(
-        "fs.blame",
+        "file.blame",
         vec![
             ("branch", t("feat")),
             ("path", t("/a.txt")),
             ("fromLine", SdkValue::Int(2)),
         ],
     );
-    s.call(
-        "fs.diff_files",
-        vec![
-            ("branch", t("feat")),
-            (
-                "left",
-                SdkValue::map([("path", t("/a.txt")), ("commit", t("main"))]),
-            ),
-            ("right", SdkValue::map([("path", t("/a.txt"))])),
-        ],
-    );
-    s.call(
-        "fs.diff_files",
-        vec![
-            ("left", SdkValue::map([("path", t("/dir"))])),
-            ("right", SdkValue::map([("path", t("/a.txt"))])),
-        ],
-    );
-    s.call(
-        "fs.diff_files",
-        vec![("left", SdkValue::map([("path", t("/a.txt"))]))],
-    );
 
     // history
-    s.call("branch.list_commits", vec![("branch", t("feat"))]);
+    s.call("commit.list", vec![("branch", t("feat"))]);
     s.call(
-        "branch.list_commits",
+        "commit.list",
         vec![("branch", t("feat")), ("limit", SdkValue::Int(2))],
     );
-    s.call("branch.list_commits", vec![("branch", t("main"))]);
+    s.call("commit.list", vec![("branch", t("main"))]);
     s.call(
-        "branch.list_commits",
+        "commit.list",
         vec![("branch", t("main")), ("limit", SdkValue::Int(1))],
     );
     s.call("commit.diff", vec![("ref", t("feat"))]);
@@ -430,27 +417,6 @@ fn public_methods_answer_as_recorded() {
         ],
     );
     s.call(
-        "branch.diff_branches",
-        vec![("from", t("main")), ("to", t("feat"))],
-    );
-    s.call(
-        "branch.diff_branches",
-        vec![
-            ("from", t("main")),
-            ("to", t("feat")),
-            ("pageSize", SdkValue::Int(2)),
-            ("pagePos", SdkValue::Int(1)),
-        ],
-    );
-    s.call(
-        "branch.diff_commits",
-        vec![("from", t("main")), ("to", t("other"))],
-    );
-    s.call(
-        "branch.diff_commits",
-        vec![("from", t("main")), ("to", t("ghost"))],
-    );
-    s.call(
         "branch.merge",
         vec![
             ("branch", t("feat")),
@@ -459,24 +425,16 @@ fn public_methods_answer_as_recorded() {
         ],
     );
     let commits = fixture.call(
-        "branch.list_commits",
+        "commit.list",
         vec![("branch", t("feat")), ("limit", SdkValue::Int(2))],
     );
     let ids: Vec<String> = support::items(&commits)
         .iter()
         .map(|item| item.get_text("commit").unwrap().to_owned())
         .collect();
-    s.call("branch.get_commit", vec![("commit", t(&ids[0][..12]))]);
+    s.call("commit.get", vec![("commit", t(&ids[0][..12]))]);
     s.call(
-        "branch.diff_commits",
-        vec![("from", t(&ids[1])), ("to", t(&ids[0]))],
-    );
-    s.call(
-        "branch.diff_commits",
-        vec![("from", t(&ids[1][..12])), ("to", t(&ids[0]))],
-    );
-    s.call(
-        "fs.read",
+        "file.read",
         vec![("commit", t(&ids[1])), ("path", t("/new.txt"))],
     );
     s.call(
@@ -486,7 +444,7 @@ fn public_methods_answer_as_recorded() {
     for (name, path) in [("left", "/left.txt"), ("right", "/right.txt")] {
         s.call("branch.fork", vec![("name", t(name))]);
         s.call(
-            "fs.write",
+            "file.write",
             vec![("branch", t(name)), ("path", t(path)), ("content", t(name))],
         );
     }
@@ -499,7 +457,7 @@ fn public_methods_answer_as_recorded() {
             ("message", t("merge both")),
         ],
     );
-    s.call("fs.list", vec![("branch", t("both"))]);
+    s.call("file.list", vec![("branch", t("both"))]);
     s.call(
         "branch.merge",
         vec![
@@ -528,14 +486,28 @@ fn public_methods_answer_as_recorded() {
     s.call("branch.publish", vec![("branch", t("feat"))]);
     s.call("branch.fork", vec![("name", t("empty"))]);
     s.call("branch.publish", vec![("branch", t("empty"))]);
-    s.call("project.list_branches", vec![]);
+    s.call("branch.list", vec![]);
     s.call(
-        "fs.read",
+        "file.read",
         vec![("branch", t("main")), ("path", t("/a.txt"))],
     );
 
     // table
     s.call("fs.nope", vec![]);
+    // The pre-2.0 engine names are gone, with no alias (#830).
+    for old in [
+        "fs.read",
+        "fs.revision",
+        "branch.get_commit",
+        "branch.list_commits",
+        "project.list_branches",
+        "project.remove_file",
+        "branch.diff_commits",
+        "branch.diff_branches",
+        "fs.diff_files",
+    ] {
+        s.call(old, vec![]);
+    }
     s.call("backend.store.project.get_storage", vec![]);
     s.call("project.list_overwritten", vec![]);
 
@@ -544,14 +516,14 @@ fn public_methods_answer_as_recorded() {
     // missing path (the project is looked up first).
     let two_faults = {
         let call = layerfs_protocol::sdk::SdkCall {
-            method: "fs.read".into(),
+            method: "file.read".into(),
             args: SdkValue::map([("project", t("ghost")), ("branch", t("feat"))]),
         };
         layerfs_store_service::families::call(&fixture.service, &call).unwrap_err()
     };
     let transcript = transcript
         + &format!(
-            "fs.read(project ghost, no path) -> refused {} {:?}\n",
+            "file.read(project ghost, no path) -> refused {} {:?}\n",
             two_faults.code, two_faults.message
         );
     fixture.cleanup();

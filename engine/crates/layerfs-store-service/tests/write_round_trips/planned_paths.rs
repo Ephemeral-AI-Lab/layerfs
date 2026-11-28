@@ -1,6 +1,6 @@
 //! #818 W6 (lane W): a file call plans its paths' base reads level by level
 //! (PostgreSQL) and walks the directories it passes by kind only, and still
-//! answers exactly as before. One `fs.apply` writes across directories at
+//! answers exactly as before. One `file.apply` writes across directories at
 //! several depths, creates a nested directory, copies and moves across
 //! directories and overwrites a file; refusals keep their order and texts
 //! (a name the grammar refuses before a parent that is a file, a parent
@@ -19,7 +19,7 @@ use rt::{branch_arg as branch, path_arg as path, t, Opened, Store};
 
 fn apply(opened: &Opened, changes: Vec<SdkValue>) -> Result<SdkValue, SdkRefusal> {
     let call = SdkCall {
-        method: "fs.apply".into(),
+        method: "file.apply".into(),
         args: SdkValue::map([
             ("project", t(rt::PROJECT)),
             ("branch", t(rt::BRANCH)),
@@ -48,7 +48,7 @@ fn write(to: &str, text: &str) -> SdkValue {
 
 fn text(opened: &Opened, at: &str) -> String {
     let read = opened
-        .call("fs.read", vec![branch(), path(at)])
+        .call("file.read", vec![branch(), path(at)])
         .unwrap_or_else(|refusal| panic!("read {at}: {refusal}"));
     read.get_text("text").unwrap_or_default().to_owned()
 }
@@ -107,7 +107,7 @@ fn scenario(store: &mut Store) {
     ] {
         assert_eq!(text(&opened, at), body, "{at}");
     }
-    let moved = opened.call("fs.stat", vec![branch(), path("/d4/z.txt")]);
+    let moved = opened.call("file.stat", vec![branch(), path("/d4/z.txt")]);
     assert!(moved.is_err(), "{moved:?}");
 
     // Refusals, each at its change, in the walk's order.
@@ -149,7 +149,7 @@ fn scenario(store: &mut Store) {
         );
     }
     assert!(opened
-        .call("fs.stat", vec![branch(), path("/d1/ok.txt")])
+        .call("file.stat", vec![branch(), path("/d1/ok.txt")])
         .is_err());
 
     // Past one plan window: every change commits.
@@ -204,7 +204,7 @@ fn postgresql_unread_refusal_comes_before_the_plan() {
             write("/dir/deeper/new.txt", "y\n"),
         ];
         let fields = vec![("branch", t("work")), ("changes", SdkValue::List(changes))];
-        service.call("fs.apply", fields)
+        service.call("file.apply", fields)
     };
     let named = |refusal: &SdkRefusal| {
         let index = refusal.detail.get_int("index");

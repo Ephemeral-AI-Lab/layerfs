@@ -193,7 +193,7 @@ fn with_upgrade_fix(
 
 /// Direct calls that use only published data, with no writer or Workspace.
 pub(crate) fn is_one_shot_read(method: &str) -> bool {
-    matches!(method, "fs.read" | "fs.stat" | "fs.list")
+    matches!(method, "file.read" | "file.stat" | "file.list")
 }
 
 /// Checks the authoritative record's binding on the only session this read uses.

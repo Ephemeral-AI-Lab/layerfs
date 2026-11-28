@@ -1,4 +1,4 @@
-//! The `project.remove_file` visibility filter over one resolved snapshot.
+//! The `project.hide_path` visibility filter over one resolved snapshot.
 //!
 //! A path is hidden at node `N` when its entry exists at `N` and the marker
 //! frontier, the maximum over the path and its `/`-boundary ancestors, is at

@@ -1,9 +1,9 @@
 //! #818 Phase 0 guard (verification Principles 4–6): one seeded call
-//! sequence over all 15 `fs.*` SDK methods and Namespace Init, refusals
+//! sequence over all 14 `file.*` SDK methods and Namespace Init, refusals
 //! included, runs on SQLite and on PostgreSQL, and the two transcripts must
 //! be equal. Later round-trip lanes run it to show that answers, refusal
 //! codes and order, continuation tokens, blame owners and coverage, revision
-//! and diff pages, `removed_count`, Init roots and each Commit's logical and
+//! pages, `removed_count`, Init roots and each Commit's logical and
 //! canonical Save statistics did not change.
 //!
 //! Calls go through the SDK's own route, as the probe
@@ -126,7 +126,7 @@ fn symlink(source: &Path, target: &str, at: &str) {
 /// symlink, repeated (device, inode) hardlinks in one directory, an
 /// all-hardlink directory, 30 directories repeating the same 10 names
 /// (repeated names in one placement window), the history files, the paths
-/// `project.remove_file` hides, a text file, an empty file, binary and
+/// `project.hide_path` hides, a text file, an empty file, binary and
 /// chunked files, and an empty directory.
 fn build_main_tree(source: &Path, rng: &mut Rng) {
     for d in 0..6 {
@@ -535,16 +535,7 @@ fn flag(name: &str, value: bool) -> (&str, SdkValue) {
     (name, SdkValue::Bool(value))
 }
 
-/// A file selector of `fs.diff_files`, at a Commit or on the call's Branch.
-fn at(commit: Option<&str>, path: &str) -> SdkValue {
-    let mut fields = vec![("path".to_owned(), t(path))];
-    if let Some(commit) = commit {
-        fields.push(("commit".to_owned(), t(commit)));
-    }
-    SdkValue::Map(fields)
-}
-
-/// One change of `fs.apply`.
+/// One change of `file.apply`.
 fn change(op: &str, fields: Fields<'_>) -> SdkValue {
     let mut all = vec![("op".to_owned(), t(op))];
     all.extend(fields.into_iter().map(|(k, v)| (k.to_owned(), v)));
@@ -791,15 +782,10 @@ fn reads(r: &mut Run) {
     r.step(
         "hide a file",
         OK,
-        "project.remove_file",
+        "project.hide_path",
         vec![p("hide/gone.txt")],
     );
-    r.step(
-        "hide a dir",
-        OK,
-        "project.remove_file",
-        vec![p("/hide/dir")],
-    );
+    r.step("hide a dir", OK, "project.hide_path", vec![p("/hide/dir")]);
 
     for path in [
         "/",
@@ -817,146 +803,162 @@ fn reads(r: &mut Run) {
         "/emptydir",
         "/hide/keep.txt",
     ] {
-        r.on(OK, "fs.stat", path, vec![]);
+        r.on(OK, "file.stat", path, vec![]);
     }
     r.on(
         no("InvalidInput"),
-        "fs.stat",
+        "file.stat",
         "/links/to_dir/f001.txt",
         vec![],
     );
-    r.on(no("Removed"), "fs.stat", "/hide/gone.txt", vec![]);
-    r.on(no("Removed"), "fs.stat", "/hide/dir/sub/c3.txt", vec![]);
-    r.on(no("NoSuchPath"), "fs.stat", "/absent", vec![]);
-    r.on(no("InvalidInput"), "fs.stat", "bad", vec![]);
+    r.on(no("Removed"), "file.stat", "/hide/gone.txt", vec![]);
+    r.on(no("Removed"), "file.stat", "/hide/dir/sub/c3.txt", vec![]);
+    r.on(no("NoSuchPath"), "file.stat", "/absent", vec![]);
+    r.on(no("InvalidInput"), "file.stat", "bad", vec![]);
     let ghost = vec![b("ghost"), p("/")];
-    r.step("bad branch", no("NoSuchBranch"), "fs.stat", ghost);
+    r.step("bad branch", no("NoSuchBranch"), "file.stat", ghost);
     let nope = vec![b("work"), p("/")];
-    r.step_in("nope", "bad project", no("NoSuchProject"), "fs.stat", nope);
-    r.step("on main", OK, "fs.stat", vec![b("main"), p("/hist/a.txt")]);
+    r.step_in(
+        "nope",
+        "bad project",
+        no("NoSuchProject"),
+        "file.stat",
+        nope,
+    );
+    r.step(
+        "on main",
+        OK,
+        "file.stat",
+        vec![b("main"), p("/hist/a.txt")],
+    );
 
     let binary = || flag("binary", true);
-    r.on(OK, "fs.read", "/src/d04/f011.txt", vec![]);
-    r.on(OK, "fs.read", "/text/big.txt", vec![]);
+    r.on(OK, "file.read", "/src/d04/f011.txt", vec![]);
+    r.on(OK, "file.read", "/text/big.txt", vec![]);
     let lines = vec![int("startLine", 640), int("endLine", 660)];
-    r.on(OK, "fs.read", "/text/big.txt", lines);
-    r.on(OK, "fs.read", "/text/empty.txt", vec![]);
-    r.on(OK, "fs.read", "/text/bin.dat", vec![binary()]);
-    r.on(no("Binary"), "fs.read", "/text/bin.dat", vec![]);
-    r.on(OK, "fs.read", "/text/chunky.bin", vec![binary()]);
-    r.on(OK, "fs.read", "/allhard/k2", vec![]);
-    r.on(OK, "fs.read", "/deep/a/b/c/d/e/f/leaf.txt", vec![]);
-    r.on(no("NotFile"), "fs.read", "/links/to_file", vec![]);
+    r.on(OK, "file.read", "/text/big.txt", lines);
+    r.on(OK, "file.read", "/text/empty.txt", vec![]);
+    r.on(OK, "file.read", "/text/bin.dat", vec![binary()]);
+    r.on(no("Binary"), "file.read", "/text/bin.dat", vec![]);
+    r.on(OK, "file.read", "/text/chunky.bin", vec![binary()]);
+    r.on(OK, "file.read", "/allhard/k2", vec![]);
+    r.on(OK, "file.read", "/deep/a/b/c/d/e/f/leaf.txt", vec![]);
+    r.on(no("NotFile"), "file.read", "/links/to_file", vec![]);
     r.on(
         no("InvalidInput"),
-        "fs.read",
+        "file.read",
         "/links/to_dir/f002.txt",
         vec![],
     );
-    r.on(no("IsDirectory"), "fs.read", "/src", vec![]);
-    r.on(no("Removed"), "fs.read", "/hide/dir/c1.txt", vec![]);
+    r.on(no("IsDirectory"), "file.read", "/src", vec![]);
+    r.on(no("Removed"), "file.read", "/hide/dir/c1.txt", vec![]);
     r.on(
         no("NoSuchPath"),
-        "fs.read",
+        "file.read",
         "/absent",
         vec![int("startLine", 0)],
     );
     r.on(
         no("InvalidInput"),
-        "fs.read",
+        "file.read",
         "/text/big.txt",
         vec![int("startLine", 0)],
     );
 
     for path in ["/", "/hide", "/links", "/allhard", "/emptydir"] {
-        r.on(OK, "fs.list", path, vec![]);
+        r.on(OK, "file.list", path, vec![]);
     }
     for pos in [0, 500, 590] {
         let page = vec![int("pageSize", 100), int("pagePos", pos)];
-        r.on(OK, "fs.list", "/wide", page);
+        r.on(OK, "file.list", "/wide", page);
     }
     r.on(
         OK,
-        "fs.list",
+        "file.list",
         "/wide",
         vec![int("page", 3), int("pageSize", 250)],
     );
-    r.on(no("NotDirectory"), "fs.list", "/hard/orig.txt", vec![]);
-    r.on(no("Removed"), "fs.list", "/hide/dir", vec![]);
+    r.on(no("NotDirectory"), "file.list", "/hard/orig.txt", vec![]);
+    r.on(no("Removed"), "file.list", "/hide/dir", vec![]);
     r.on(
         no("NoSuchPath"),
-        "fs.list",
+        "file.list",
         "/absent",
         vec![int("pageSize", 0)],
     );
-    r.on(no("InvalidInput"), "fs.list", "/", vec![int("pageSize", 0)]);
+    r.on(
+        no("InvalidInput"),
+        "file.list",
+        "/",
+        vec![int("pageSize", 0)],
+    );
 
     let pattern = |value| text("pattern", value);
-    r.on(OK, "fs.glob", "/", vec![pattern("**/*.txt")]);
-    r.on(OK, "fs.glob", "/hide", vec![pattern("**")]);
-    r.on(OK, "fs.glob", "/src/d02", vec![pattern("f01*")]);
+    r.on(OK, "file.glob", "/", vec![pattern("**/*.txt")]);
+    r.on(OK, "file.glob", "/hide", vec![pattern("**")]);
+    r.on(OK, "file.glob", "/src/d02", vec![pattern("f01*")]);
     let page = vec![pattern("w05*"), int("page", 2), int("pageSize", 40)];
-    r.on(OK, "fs.glob", "/wide", page);
-    r.on(OK, "fs.glob", "/same", vec![pattern("**/n3")]);
-    r.on(no("Removed"), "fs.glob", "/hide/dir", vec![pattern("*")]);
+    r.on(OK, "file.glob", "/wide", page);
+    r.on(OK, "file.glob", "/same", vec![pattern("**/n3")]);
+    r.on(no("Removed"), "file.glob", "/hide/dir", vec![pattern("*")]);
 
-    r.on(OK, "fs.grep", "/", vec![pattern("needle")]);
-    r.on(OK, "fs.grep", "/src/d01", vec![pattern("needle")]);
-    r.on(OK, "fs.grep", "/hide", vec![pattern("needle")]);
+    r.on(OK, "file.grep", "/", vec![pattern("needle")]);
+    r.on(OK, "file.grep", "/src/d01", vec![pattern("needle")]);
+    r.on(OK, "file.grep", "/hide", vec![pattern("needle")]);
     let folded = vec![pattern("NEEDLE"), flag("ignoreCase", true)];
-    r.on(OK, "fs.grep", "/text", folded);
+    r.on(OK, "file.grep", "/text", folded);
     let page = vec![pattern("lima"), int("page", 2), int("pageSize", 10)];
-    r.on(OK, "fs.grep", "/src", page);
-    r.on(no("InvalidInput"), "fs.grep", "bad", vec![pattern("")]);
-    r.on(no("Removed"), "fs.grep", "/hide/dir", vec![pattern("c")]);
+    r.on(OK, "file.grep", "/src", page);
+    r.on(no("InvalidInput"), "file.grep", "bad", vec![pattern("")]);
+    r.on(no("Removed"), "file.grep", "/hide/dir", vec![pattern("c")]);
 
-    // History reads of a hidden path while the base is the marked Layer;
-    // a file diff answers a hidden side as `removed` with its frontier.
-    r.on(no("Removed"), "fs.blame", "/hide/dir/c2.txt", vec![]);
-    r.on(no("Removed"), "fs.revision", "/hide/gone.txt", vec![]);
-    let left = ("left", at(None, "/hide/gone.txt"));
-    let right = ("right", at(None, "/hist/b.txt"));
-    let sides = vec![b("work"), left, right];
-    r.step("diff hidden", OK, "fs.diff_files", sides);
+    // History reads of a hidden path while the base is the marked Layer.
+    r.on(no("Removed"), "file.blame", "/hide/dir/c2.txt", vec![]);
+    r.on(no("Removed"), "file.history", "/hide/gone.txt", vec![]);
 
     // A write's private Workspace sees a hidden path as absent; edit and a
     // cp source tell `Removed` from absent through the base view (#818 W1).
     let replace = |old| vec![text("oldText", old), text("newText", "x")];
-    r.on(no("Removed"), "fs.edit", "/hide/dir/c1.txt", replace("c1"));
+    r.on(
+        no("Removed"),
+        "file.edit",
+        "/hide/dir/c1.txt",
+        replace("c1"),
+    );
     let from = |path| vec![b("work"), text("from", path), text("to", "/copied")];
     r.step(
         "cp hidden",
         no("Removed"),
-        "fs.cp",
+        "file.cp",
         from("/hide/dir/c2.txt"),
     );
     r.step(
         "mv hidden",
         no("NoSuchPath"),
-        "fs.mv",
+        "file.mv",
         from("/hide/gone.txt"),
     );
-    r.on(no("NoSuchPath"), "fs.rm", "/hide/dir/c2.txt", vec![]);
-    r.on(no("NoSuchPath"), "fs.edit", "/absent", replace("a"));
+    r.on(no("NoSuchPath"), "file.rm", "/hide/dir/c2.txt", vec![]);
+    r.on(no("NoSuchPath"), "file.edit", "/absent", replace("a"));
 }
 
-/// History on `work`: 24 seeded Commits through `fs.write` and `fs.edit`,
-/// then blame, revision pages and file diffs over them.
+/// History on `work`: 24 seeded Commits through `file.write` and `file.edit`,
+/// then blame and revision pages over them.
 fn history(r: &mut Run) {
     let mut rng = Rng(SEED ^ 0x4157);
-    let original = r.on(OK, "fs.read", "/hist/a.txt", vec![]);
+    let original = r.on(OK, "file.read", "/hist/a.txt", vec![]);
     let mut a: Vec<String> = original
         .get_text("text")
         .map(|text| text.lines().map(str::to_owned).collect())
         .unwrap_or_default();
-    assert!(!a.is_empty(), "fs.read answers `text` for a text file");
+    assert!(!a.is_empty(), "file.read answers `text` for a text file");
     for k in 1..=24usize {
         match k % 4 {
             0 => {
                 let content = format!("b{k} {}\n", rng.line());
                 r.on(
                     OK,
-                    "fs.write",
+                    "file.write",
                     "/hist/b.txt",
                     vec![text("content", &content)],
                 );
@@ -966,7 +968,7 @@ fn history(r: &mut Run) {
                 let content = a.join("\n") + "\n";
                 r.on(
                     OK,
-                    "fs.write",
+                    "file.write",
                     "/hist/a.txt",
                     vec![text("content", &content)],
                 );
@@ -976,202 +978,185 @@ fn history(r: &mut Run) {
                 let new = format!("line {} edited at {k} {}", i + 1, rng.line());
                 let old = std::mem::replace(&mut a[i], new);
                 let edit = vec![text("oldText", &old), text("newText", &a[i])];
-                r.on(OK, "fs.edit", "/hist/a.txt", edit);
+                r.on(OK, "file.edit", "/hist/a.txt", edit);
             }
         }
     }
 
-    let (c3, c10, c20) = (r.commit(3), r.commit(10), r.commit(20));
-    r.on(OK, "fs.blame", "/hist/a.txt", vec![]);
-    r.on(OK, "fs.blame", "/hist/a.txt", vec![text("commit", &c10)]);
+    let c10 = r.commit(10);
+    r.on(OK, "file.blame", "/hist/a.txt", vec![]);
+    r.on(OK, "file.blame", "/hist/a.txt", vec![text("commit", &c10)]);
     r.on(
         OK,
-        "fs.blame",
+        "file.blame",
         "/hist/a.txt",
         vec![text("commit", &c10[..14])],
     );
     let window = vec![int("fromLine", 5), int("lineCount", 10)];
-    r.on(OK, "fs.blame", "/hist/a.txt", window);
-    r.on(OK, "fs.blame", "/hist/b.txt", vec![]);
-    r.step("on main", OK, "fs.blame", vec![b("main"), p("/hist/a.txt")]);
-    r.on(no("NotFile"), "fs.blame", "/hist", vec![int("fromLine", 0)]);
-    r.on(no("NoSuchPath"), "fs.blame", "/hist/none.txt", vec![]);
+    r.on(OK, "file.blame", "/hist/a.txt", window);
+    r.on(OK, "file.blame", "/hist/b.txt", vec![]);
+    r.step(
+        "on main",
+        OK,
+        "file.blame",
+        vec![b("main"), p("/hist/a.txt")],
+    );
+    r.on(
+        no("NotFile"),
+        "file.blame",
+        "/hist",
+        vec![int("fromLine", 0)],
+    );
+    r.on(no("NoSuchPath"), "file.blame", "/hist/none.txt", vec![]);
     let bad = vec![text("commit", "zz")];
-    r.on(no("InvalidInput"), "fs.blame", "/hist/a.txt", bad);
+    r.on(no("InvalidInput"), "file.blame", "/hist/a.txt", bad);
     // The first write whiteouts the hidden paths in `work`'s tree.
-    r.on(no("NoSuchPath"), "fs.blame", "/hide/dir/c2.txt", vec![]);
+    r.on(no("NoSuchPath"), "file.blame", "/hide/dir/c2.txt", vec![]);
 
     let mut extra = vec![int("pageSize", 5)];
     for _ in 0..10 {
-        let page = r.on(OK, "fs.revision", "/hist/a.txt", extra);
+        let page = r.on(OK, "file.history", "/hist/a.txt", extra);
         let Some(token) = page.get_text("continuation") else {
             break;
         };
         extra = vec![int("pageSize", 5), text("continuation", token)];
     }
     let second = vec![int("page", 2), int("pageSize", 5)];
-    r.on(OK, "fs.revision", "/hist/a.txt", second);
+    r.on(OK, "file.history", "/hist/a.txt", second);
     let branch = vec![text("traversal", "branch")];
-    r.on(OK, "fs.revision", "/hist/b.txt", branch);
-    r.on(OK, "fs.revision", "/hist/a.txt", vec![text("commit", &c10)]);
-    let sideways = vec![text("traversal", "sideways")];
-    r.on(no("InvalidInput"), "fs.revision", "/hist/a.txt", sideways);
-    r.on(OK, "fs.revision", "/hide/gone.txt", vec![]);
-    let ghost = vec![b("ghost"), p("/hist/a.txt")];
-    r.step("bad branch", no("NoSuchBranch"), "fs.revision", ghost);
-
-    let a_at = |commit: Option<&str>| at(commit, "/hist/a.txt");
-    let mut diff = |label, expect, fields| {
-        r.step(label, expect, "fs.diff_files", fields);
-    };
-    let sides = vec![("left", a_at(Some(&c3))), ("right", a_at(Some(&c20)))];
-    diff("C3 C20", OK, sides);
-    let sides = vec![
-        b("work"),
-        ("left", a_at(Some("main"))),
-        ("right", a_at(None)),
-    ];
-    diff("main work", OK, sides);
-    let paged = vec![
-        b("work"),
-        ("left", a_at(Some(&c3))),
-        ("right", a_at(None)),
-        int("page", 2),
-        int("pageSize", 3),
-        flag("includeAttribution", true),
-    ];
-    diff("page with attribution", OK, paged);
-    let b_now = || at(None, "/hist/b.txt");
-    let two = vec![b("work"), ("left", b_now()), ("right", a_at(None))];
-    diff("two files", OK, two);
-    let missing = vec![
-        b("work"),
-        ("left", at(None, "/hist/none.txt")),
-        ("right", b_now()),
-        flag("allowMissing", true),
-    ];
-    diff("allow missing", OK, missing);
-    diff(
-        "absent left",
-        no("NoSuchPath"),
-        vec![("left", at(None, "/absent"))],
+    r.on(OK, "file.history", "/hist/b.txt", branch);
+    r.on(
+        OK,
+        "file.history",
+        "/hist/a.txt",
+        vec![text("commit", &c10)],
     );
-    let hidden = vec![
-        b("work"),
-        ("left", at(None, "/hide/gone.txt")),
-        ("right", b_now()),
-    ];
-    diff("hidden after a write", no("NoSuchPath"), hidden);
+    let sideways = vec![text("traversal", "sideways")];
+    r.on(no("InvalidInput"), "file.history", "/hist/a.txt", sideways);
+    r.on(OK, "file.history", "/hide/gone.txt", vec![]);
+    let ghost = vec![b("ghost"), p("/hist/a.txt")];
+    r.step("bad branch", no("NoSuchBranch"), "file.history", ghost);
 }
 
 /// Writes and their refusals on `work`, then reads of what they made.
 fn writes(r: &mut Run) {
     let content = |value| vec![text("content", value)];
     let bytes = vec![("bytes", SdkValue::Bytes(b"new\n".to_vec()))];
-    r.on(OK, "fs.write", "/src/d00/new.txt", bytes);
-    r.on(OK, "fs.write", "/src/d03/f007.txt", content("changed\n"));
-    r.on(OK, "fs.write", "/src/d03/f007.txt", content("changed\n"));
+    r.on(OK, "file.write", "/src/d00/new.txt", bytes);
+    r.on(OK, "file.write", "/src/d03/f007.txt", content("changed\n"));
+    r.on(OK, "file.write", "/src/d03/f007.txt", content("changed\n"));
     let mode = vec![text("content", "#!/bin/sh\n"), int("mode", 0o750)];
-    r.on(OK, "fs.write", "/tool/new.sh", mode);
+    r.on(OK, "file.write", "/tool/new.sh", mode);
     let deep = "/deep/a/b/c/d/e/f/g/h/new.txt";
-    r.on(OK, "fs.write", deep, content("deeper\n"));
+    r.on(OK, "file.write", deep, content("deeper\n"));
     let deeper = "/deep/a/b/c/d/e/f/g/h/i/j/new.txt";
-    r.on(no("NoSuchPath"), "fs.write", deeper, content("x"));
-    r.on(OK, "fs.write", "/hard/h2", content("h2 written\n"));
-    r.on(OK, "fs.write", "/hide/gone.txt", content("back\n"));
+    r.on(no("NoSuchPath"), "file.write", deeper, content("x"));
+    r.on(OK, "file.write", "/hard/h2", content("h2 written\n"));
+    r.on(OK, "file.write", "/hide/gone.txt", content("back\n"));
     let main = vec![b("main"), p("bad"), int("content", 1)];
-    r.step("main", no("ReadOnly"), "fs.write", main);
-    r.step("no branch", no("InvalidInput"), "fs.write", vec![p("/x")]);
+    r.step("main", no("ReadOnly"), "file.write", main);
+    r.step("no branch", no("InvalidInput"), "file.write", vec![p("/x")]);
     let ghost = vec![b("ghost"), p("/x"), text("content", "x")];
-    r.step("bad branch", no("NoSuchBranch"), "fs.write", ghost);
+    r.step("bad branch", no("NoSuchBranch"), "file.write", ghost);
     let nope = vec![b("work"), p("/x"), text("content", "x")];
-    r.step_in("nope", "bad project", no("NoSuchProject"), "fs.write", nope);
+    r.step_in(
+        "nope",
+        "bad project",
+        no("NoSuchProject"),
+        "file.write",
+        nope,
+    );
     r.on(
         no("InvalidInput"),
-        "fs.write",
+        "file.write",
         "bad",
         vec![int("content", 1)],
     );
-    r.on(no("InvalidInput"), "fs.write", "bad", content("x"));
-    r.on(no("IsDirectory"), "fs.write", "/src", content("x"));
+    r.on(no("InvalidInput"), "file.write", "bad", content("x"));
+    r.on(no("IsDirectory"), "file.write", "/src", content("x"));
     r.on(
         no("NotDirectory"),
-        "fs.write",
+        "file.write",
         "/hard/orig.txt/x",
         content("x"),
     );
 
     let replace = |old, new| vec![text("oldText", old), text("newText", new)];
     let needle = replace("the needle line", "the NEEDLE line");
-    r.on(OK, "fs.edit", "/text/big.txt", needle);
+    r.on(OK, "file.edit", "/text/big.txt", needle);
     let mut all = replace("3", "three");
     all.push(flag("replaceAll", true));
-    r.on(OK, "fs.edit", "/same/r03/n3", all);
+    r.on(OK, "file.edit", "/same/r03/n3", all);
     let absent = replace("absent text", "x");
-    r.on(no("NoMatch"), "fs.edit", "/text/big.txt", absent);
+    r.on(no("NoMatch"), "file.edit", "/text/big.txt", absent);
     r.on(
         no("NoSuchPath"),
-        "fs.edit",
+        "file.edit",
         "/hide/dir/c1.txt",
         replace("c1", "x"),
     );
-    r.on(no("NotFile"), "fs.edit", "/src", replace("a", "x"));
+    r.on(no("NotFile"), "file.edit", "/src", replace("a", "x"));
 
-    r.on(OK, "fs.mkdir", "/made", vec![]);
-    r.on(OK, "fs.mkdir", "/made/x/y", vec![]);
-    r.on(OK, "fs.mkdir", "/made", vec![]);
-    r.on(no("NotDirectory"), "fs.mkdir", "/hard/orig.txt/d", vec![]);
+    r.on(OK, "file.mkdir", "/made", vec![]);
+    r.on(OK, "file.mkdir", "/made/x/y", vec![]);
+    r.on(OK, "file.mkdir", "/made", vec![]);
+    r.on(no("NotDirectory"), "file.mkdir", "/hard/orig.txt/d", vec![]);
 
     let pair = |from, to| vec![b("work"), text("from", from), text("to", to)];
     r.step(
         "cp file",
         OK,
-        "fs.cp",
+        "file.cp",
         pair("/src/d01/f004.txt", "/made/copy.txt"),
     );
-    r.step("cp dir", OK, "fs.cp", pair("/src/d02", "/made/d02"));
+    r.step("cp dir", OK, "file.cp", pair("/src/d02", "/made/d02"));
     r.step(
         "cp symlink",
         OK,
-        "fs.cp",
+        "file.cp",
         pair("/links/chain", "/made/chain"),
     );
-    r.step("cp hardlink", OK, "fs.cp", pair("/allhard/k6", "/made/k6"));
+    r.step(
+        "cp hardlink",
+        OK,
+        "file.cp",
+        pair("/allhard/k6", "/made/k6"),
+    );
     let hidden = pair("/hide/dir/c2.txt", "/made/c2");
-    r.step("cp hidden", no("NoSuchPath"), "fs.cp", hidden);
+    r.step("cp hidden", no("NoSuchPath"), "file.cp", hidden);
     r.step(
         "cp absent",
         no("NoSuchPath"),
-        "fs.cp",
+        "file.cp",
         pair("/absent", "/made/a"),
     );
     let onto = pair("/src/d01/f004.txt", "/made/copy.txt");
-    r.step("cp onto a file", no("Exists"), "fs.cp", onto);
+    r.step("cp onto a file", no("Exists"), "file.cp", onto);
 
     r.step(
         "mv file",
         OK,
-        "fs.mv",
+        "file.mv",
         pair("/made/copy.txt", "/made/moved.txt"),
     );
-    r.step("mv dir", OK, "fs.mv", pair("/made/d02", "/made/x/d02"));
+    r.step("mv dir", OK, "file.mv", pair("/made/d02", "/made/x/d02"));
     r.step(
         "mv absent",
         no("NoSuchPath"),
-        "fs.mv",
+        "file.mv",
         pair("/absent", "/made/b"),
     );
 
-    r.on(OK, "fs.rm", "/made/moved.txt", vec![]);
-    r.on(OK, "fs.rm", "/src/d05", vec![flag("recursive", true)]);
-    r.on(OK, "fs.rm", "/same/r07", vec![]);
+    r.on(OK, "file.rm", "/made/moved.txt", vec![]);
+    r.on(OK, "file.rm", "/src/d05", vec![flag("recursive", true)]);
+    r.on(OK, "file.rm", "/same/r07", vec![]);
     r.on(
         no("NotEmpty"),
-        "fs.rm",
+        "file.rm",
         "/src/d04",
         vec![flag("recursive", false)],
     );
-    r.on(no("NoSuchPath"), "fs.rm", "/absent", vec![]);
+    r.on(no("NoSuchPath"), "file.rm", "/absent", vec![]);
 
     let from_to = |from, to| vec![text("from", from), text("to", to)];
     let uno = vec![
@@ -1193,7 +1178,7 @@ fn writes(r: &mut Run) {
         change("rm", vec![p("/src/d04/f001.txt")]),
     ];
     let apply = |changes| vec![b("work"), ("changes", SdkValue::List(changes))];
-    r.step("apply", OK, "fs.apply", apply(changes));
+    r.step("apply", OK, "file.apply", apply(changes));
     let failing = vec![
         change(
             "write",
@@ -1205,21 +1190,21 @@ fn writes(r: &mut Run) {
     r.step(
         "apply refused at 1",
         no("NoSuchPath"),
-        "fs.apply",
+        "file.apply",
         apply(failing),
     );
     let streamed = vec![change("write", vec![p("/s.txt"), int("streamed", 5)])];
     r.step(
         "apply streamed",
         no("InvalidInput"),
-        "fs.apply",
+        "file.apply",
         apply(streamed),
     );
     let unknown = vec![change("link", vec![p("/s.txt")])];
     r.step(
         "apply unknown op",
         no("InvalidInput"),
-        "fs.apply",
+        "file.apply",
         apply(unknown),
     );
 
@@ -1231,19 +1216,19 @@ fn writes(r: &mut Run) {
         "/hard/h3",
         "/tool/new.sh",
     ] {
-        r.on(OK, "fs.stat", path, vec![]);
+        r.on(OK, "file.stat", path, vec![]);
     }
-    r.on(OK, "fs.read", "/hide/gone.txt", vec![]);
-    r.on(OK, "fs.list", "/hide", vec![]);
-    r.on(OK, "fs.list", "/made/x/d02", vec![int("pageSize", 7)]);
-    r.on(OK, "fs.glob", "/", vec![text("pattern", "**/*.sh")]);
-    r.on(OK, "fs.grep", "/text", vec![text("pattern", "NEEDLE")]);
-    r.on(OK, "fs.revision", "/hide/gone.txt", vec![]);
-    r.on(OK, "fs.blame", "/hide/gone.txt", vec![]);
+    r.on(OK, "file.read", "/hide/gone.txt", vec![]);
+    r.on(OK, "file.list", "/hide", vec![]);
+    r.on(OK, "file.list", "/made/x/d02", vec![int("pageSize", 7)]);
+    r.on(OK, "file.glob", "/", vec![text("pattern", "**/*.sh")]);
+    r.on(OK, "file.grep", "/text", vec![text("pattern", "NEEDLE")]);
+    r.on(OK, "file.history", "/hide/gone.txt", vec![]);
+    r.on(OK, "file.blame", "/hide/gone.txt", vec![]);
     r.step("stats work", OK, "project.stats", vec![b("work")]);
     r.step("stats main", OK, "project.stats", vec![]);
     let listed = vec![b("work"), int("limit", 100)];
-    r.step("commits", OK, "branch.list_commits", listed);
+    r.step("commits", OK, "commit.list", listed);
 }
 
 fn fs_scenario(r: &mut Run) {
@@ -1263,23 +1248,23 @@ fn window_scenario(r: &mut Run) {
         "/flat/e03054",
         "/links/l13",
     ] {
-        r.on(OK, "fs.stat", path, vec![]);
+        r.on(OK, "file.stat", path, vec![]);
     }
     for page in [1, 82, 83, 84] {
         let page = vec![int("page", page), int("pageSize", 50)];
-        r.on(OK, "fs.list", "/flat", page);
+        r.on(OK, "file.list", "/flat", page);
     }
-    r.on(OK, "fs.list", "/links", vec![]);
+    r.on(OK, "file.list", "/links", vec![]);
     let pattern = vec![text("pattern", "e040*"), int("pageSize", 200)];
-    r.on(OK, "fs.glob", "/flat", pattern);
-    r.on(OK, "fs.read", "/links/l05", vec![]);
+    r.on(OK, "file.glob", "/flat", pattern);
+    r.on(OK, "file.read", "/links/l05", vec![]);
     r.on(
         OK,
-        "fs.write",
+        "file.write",
         "/flat/e04093",
         vec![text("content", "alone\n")],
     );
-    r.on(OK, "fs.read", "/flat/e04094", vec![]);
+    r.on(OK, "file.read", "/flat/e04094", vec![]);
     r.step("stats", OK, "project.stats", vec![b("work")]);
 }
 

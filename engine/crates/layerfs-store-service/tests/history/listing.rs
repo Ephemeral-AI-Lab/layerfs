@@ -31,7 +31,7 @@ fn texts<'a>(value: &'a SdkValue, key: &str) -> Vec<&'a str> {
 
 /// A Branch's head Commit, or main's head publication.
 fn head(fixture: &Fixture, branch: &str) -> String {
-    let listed = fixture.call("project.list_branches", vec![("name", t(branch))]);
+    let listed = fixture.call("branch.list", vec![("name", t(branch))]);
     items(&listed)[0].get_text("commit").unwrap().to_owned()
 }
 
@@ -43,7 +43,7 @@ fn refused(fixture: &Fixture, method: &str, fields: Vec<(&str, SdkValue)>) -> Sd
 }
 
 fn branch_page(fixture: &Fixture, fields: Vec<(&str, SdkValue)>) -> (Vec<String>, SdkValue) {
-    let page = fixture.call("project.list_branches", fields);
+    let page = fixture.call("branch.list", fields);
     let names = texts(&page, "branch").into_iter().map(str::to_owned);
     (
         names.collect(),
@@ -92,7 +92,7 @@ fn branches_page_by_name_with_a_prefix_and_an_excluded_prefix() {
     for limit in [0, 1001] {
         let refusal = refused(
             &fixture,
-            "project.list_branches",
+            "branch.list",
             vec![("limit", SdkValue::Int(limit))],
         );
         assert_eq!(refusal.code, "InvalidInput", "{refusal:?}");
@@ -110,7 +110,7 @@ fn a_commit_list_pages_from_the_commit_it_started_at() {
     let page = |fields: Vec<(&str, SdkValue)>| {
         let mut fields = fields;
         fields.push(("branch", t("feat")));
-        fixture.call("branch.list_commits", fields)
+        fixture.call("commit.list", fields)
     };
     let first = page(vec![("limit", SdkValue::Int(2))]);
     let ids: Vec<String> = texts(&first, "commit")
@@ -146,7 +146,7 @@ fn a_commit_list_pages_from_the_commit_it_started_at() {
     let gone = format!("{}{}", &pin[..2], "0".repeat(64));
     let refusal = refused(
         &fixture,
-        "branch.list_commits",
+        "commit.list",
         vec![
             ("branch", t("feat")),
             ("at", t(&gone)),
@@ -159,7 +159,7 @@ fn a_commit_list_pages_from_the_commit_it_started_at() {
     fixture.apply("other", vec![write("/o.txt", "o\n")]);
     let refusal = refused(
         &fixture,
-        "branch.list_commits",
+        "commit.list",
         vec![("branch", t("feat")), ("at", t(&head(&fixture, "other")))],
     );
     assert_eq!(refusal.code, "NotInHistory", "{refusal:?}");
@@ -172,7 +172,7 @@ fn a_commit_is_read_by_its_id_or_a_prefix_without_its_branch() {
     fixture.fork("feat");
     fixture.apply("feat", vec![write("/n.txt", "n\n")]);
     let id = head(&fixture, "feat");
-    let get = |commit: &str| fixture.try_call("branch.get_commit", vec![("commit", t(commit))]);
+    let get = |commit: &str| fixture.try_call("commit.get", vec![("commit", t(commit))]);
     for given in [id.as_str(), &id[..8], &id[..20]] {
         let commit = get(given).unwrap();
         assert_eq!(commit.get_text("commit"), Some(id.as_str()), "{given}");
@@ -196,7 +196,7 @@ fn a_commit_is_read_by_its_id_or_a_prefix_without_its_branch() {
     // a named Branch must hold it
     let refusal = refused(
         &fixture,
-        "branch.get_commit",
+        "commit.get",
         vec![("commit", t(&id)), ("branch", t("main"))],
     );
     assert_eq!(refusal.code, "NotInHistory", "{refusal:?}");
@@ -367,7 +367,7 @@ fn a_merge_moves_an_existing_branch_or_leaves_it_unchanged() {
     assert!(!merged.get_bool("fastForward") && !merged.get_bool("unchanged"));
     let commit = head(&fixture, "left");
     assert_eq!(merged.get_text("commit"), Some(commit.as_str()));
-    let read = fixture.call("branch.get_commit", vec![("commit", t(&commit))]);
+    let read = fixture.call("commit.get", vec![("commit", t(&commit))]);
     assert_eq!(read.get_text("via"), Some("merge"));
     assert_eq!(read.get_text("parent"), Some(left.as_str()));
     assert_eq!(
