@@ -97,6 +97,19 @@ fn layout(
             );
             None
         }
+        // a LayerFS folder: its home is its `home/`; nothing is moved
+        Layout::Container => {
+            checks.fail(LAYOUT, layerfs_home::disk::layout::container(home).message);
+            checks.fix(LAYOUT, layerfs_home::disk::layout::container_fix(home));
+            checks.evidence(
+                LAYOUT,
+                SdkValue::map([
+                    ("path", SdkValue::text(home.display().to_string())),
+                    ("layout", SdkValue::text("container")),
+                ]),
+            );
+            None
+        }
         Layout::Current(_) => {
             checks.pass(LAYOUT, "a current-layout home this build reads");
             let scanned = observed(home, build, budget, checks);

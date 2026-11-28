@@ -5234,10 +5234,10 @@
      "item": null,
      "examples": {
       "short": [
-       "{\"home\":\"/Users/me/.layerfs\"}",
-       "already a current home: {\"home\":\"/Users/me/.layerfs\",\"unchanged\":true}"
+       "{\"home\":\"/Users/me/.layerfs/home\"}",
+       "already a current home: {\"home\":\"/Users/me/.layerfs/home\",\"unchanged\":true}"
       ],
-      "long": "{\"home\":\"/Users/me/.layerfs\",\"unchanged\":false,\"outcome\":\"created\",\"layout\":3,\"version\":\"2.0.0\"}"
+      "long": "{\"home\":\"/Users/me/.layerfs/home\",\"unchanged\":false,\"outcome\":\"created\",\"layout\":3,\"version\":\"2.0.0\"}"
      },
      "dropped": [],
      "new_work": "No new capability. `outcome` is `created` or `unchanged`, from today's `created` boolean; `unchanged` is new as a key; `version` is the build's version. No `created_at`: the home's own file (`layerfs.json`) records its layout and id and no time. An older home is refused, not converted (v20)."
@@ -5995,6 +5995,52 @@
        }
       ]
      }
+    },
+    {
+     "call": "home.move",
+     "badge": "new",
+     "today": [],
+     "help": "move this home into another folder on the same filesystem; client folders stay",
+     "cli": "layerfs home move <to>",
+     "positionals": [
+      {
+       "name": "to",
+       "kind": "Text"
+      }
+     ],
+     "options": [],
+     "stdin": null,
+     "with": {},
+     "paging": null,
+     "progress": false,
+     "quiet": true,
+     "profile": "full",
+     "short": {
+      "always": [
+       "home"
+      ],
+      "sometimes": [
+       "left"
+      ]
+     },
+     "long": [
+      "home",
+      "from",
+      "outcome",
+      "moved",
+      "left",
+      "rewritten"
+     ],
+     "item": null,
+     "examples": {
+      "short": [
+       "{\"home\":\"/Users/me/.layerfs/home\",\"left\":[\"dsh\"]}",
+       "nothing beside the home: {\"home\":\"/Users/me/.layerfs/home\"}"
+      ],
+      "long": "{\"home\":\"/Users/me/.layerfs/home\",\"from\":\"/Users/me/.layerfs\",\"outcome\":\"moved\",\"moved\":[\"generation\",\"layerfs.json\",\"layerfs.lock\",\"machine\",\"runtime\",\"sandbox\",\"store\",\"trace\"],\"left\":[\"dsh\"],\"rewritten\":[\"machine/macos-host/record.json\"]}"
+     },
+     "dropped": [],
+     "new_work": "New (owner direction 2026-11-28, HM-1..HM-4): the default home moved to ~/.layerfs/home, and this is the supported way to move an existing home there. One attempt: a rename that fails puts back the entries already moved and answers Failed; a path that cannot be rewritten after the move answers Failed naming the new home."
     }
    ]
   },

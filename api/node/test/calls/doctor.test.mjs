@@ -41,7 +41,7 @@ test("home.doctor names a record that does not parse and its fix", async () => {
 
 test("home.leftovers and home.prune are gone (spec v20: LayerFS removes leftovers itself)", () => {
   const home = table.filter((spec) => spec.family === "home").map((spec) => spec.call);
-  assert.deepEqual(home, ["init", "get", "log", "clear_log", "doctor"]);
+  assert.deepEqual(home, ["init", "get", "log", "clear_log", "doctor", "move"]);
   assert.equal(layerfs.home.leftovers, undefined);
   assert.equal(layerfs.home.prune, undefined);
   const lfs = layerfs.client({ home: join(tmpdir(), "layerfs-node-doctor-gone") });

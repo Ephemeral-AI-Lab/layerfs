@@ -132,7 +132,8 @@ class Family:
 
 
 class Client:
-    """A client of ``home`` (default ``LAYERFS_HOME``, else ``~/.layerfs``),
+    """A client of ``home`` (default ``LAYERFS_HOME``, else ``~/.layerfs/home``,
+    or a legacy ``~/.layerfs`` that holds ``layerfs.json``),
     with an optional folder scope ``{"project": ..., "folder": ..., "branch": ...}``."""
 
     def __init__(self, home=None, scope=None):

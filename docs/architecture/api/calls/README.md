@@ -44,7 +44,7 @@ The call table and the one dispatcher every front end goes through: what a call 
 
 | Behaviour | Detail | Source |
 | --- | --- | --- |
-| Table | ten `Family { name, list }`; a `Call` is `{ family, call, args, options, help, run, quiet, opens, form, with, paging, profile, scope, policy, saves }`, an `Arg` `{ name, kind, optional, redact, shell, repeat, required }`; 83 calls, help order. Everything the machinery needs to know about one call is on its entry: no file under `calls/` lists call names | [`table.rs`](../../../../api/crates/layerfs-api/src/dispatch/table.rs), [`lib.rs`](../../../../api/crates/layerfs-api/src/lib.rs) `families` |
+| Table | ten `Family { name, list }`; a `Call` is `{ family, call, args, options, help, run, quiet, opens, form, with, paging, profile, scope, policy, saves }`, an `Arg` `{ name, kind, optional, redact, shell, repeat, required }`; 84 calls, help order. Everything the machinery needs to know about one call is on its entry: no file under `calls/` lists call names | [`table.rs`](../../../../api/crates/layerfs-api/src/dispatch/table.rs), [`lib.rs`](../../../../api/crates/layerfs-api/src/lib.rs) `families` |
 | JSON form | `table_json()`: `[{ family, call, args: [{ name, kind, optional, shell?, repeat?, required? }], options, help, form }]` (an option that must be given is `required: true` and `optional: false`); every call's `form` is `{ short: { always, sometimes }, long, parts?, with: { <section>: { where, keys, form? } }, paging, progress, quiet, profile }`; Node's `table`, Python's `TABLE`; the CLI parser and help read the same `Call` values | `table.rs` `table_json` |
 | Forms | every entry declares its answer ([forms](#forms)); the dispatcher shapes the one full map its run function returns into the short or the long form | [`form.rs`](../../../../api/crates/layerfs-api/src/dispatch/answer/form.rs), [`shape.rs`](../../../../api/crates/layerfs-api/src/dispatch/answer/shape.rs) |
 | Global options | `log_tag`, `detail` (Bool) and `with` (a list of section names, or one comma-separated text) are taken out of the arguments before the check, on every call; no entry declares them. A `with` name the entry does not list is `InvalidInput`, naming the ones it takes | `dispatch.rs` `take_tag`, `take_asked` |
@@ -53,7 +53,7 @@ The call table and the one dispatcher every front end goes through: what a call 
 | Kinds | below | `table.rs` `Kind` |
 | Checks | every argument against the entry, before any effect; sizes become bytes; result in table order | [`arguments.rs`](../../../../api/crates/layerfs-api/src/dispatch/guard/arguments.rs) |
 | Scope | an optional folder scope guards and rewrites arguments before the home is opened; an entry says how a scope treats it (`Call.scope`, a `Rule`: `Outside` by default, `History`, `File(paths)`, `FileChanges`, `Branch*`, `Workspace*`) | [`scope.rs`](../../../../api/crates/layerfs-api/src/dispatch/guard/scope.rs) |
-| Home | explicit, else `LAYERFS_HOME`, else `$HOME/.layerfs`; must be absolute | [`call.rs`](../../../../api/crates/layerfs-api/src/dispatch/run/call.rs) `home` |
+| Home | explicit, else `LAYERFS_HOME`, else `$HOME/.layerfs/home` (or a legacy `$HOME/.layerfs` that holds `layerfs.json`); must be absolute | [`call.rs`](../../../../api/crates/layerfs-api/src/dispatch/run/call.rs) `home` |
 | Platform policy | new work on a machine of a removed platform is `Unsupported` before the home is opened, in every build; reads and teardown keep their routes; an entry says where its machine is found (`Call.policy`, a `Policy`: `None` by default, `Machine`, `Store`, `Project`, `Sandbox`, …) | [`platform_policy.rs`](../../../../api/crates/layerfs-api/src/dispatch/guard/platform_policy.rs) |
 | Built-ins | `machine/macos-host/` (macOS) or `machine/linux-host/` (Linux) and `machine/docker/` exist from the first call (builds with the `machine` feature), checked once per process per home | `dispatch.rs` |
 | Context | the running call's home, what the caller asked of the answer (`context.detail()`, `context.with("tree")`) and its one event stream: `{ progress }`, a worker's events as they came, `{ stream, bytes }` | [`context.rs`](../../../../api/crates/layerfs-api/src/dispatch/context.rs), [`events.rs`](../../../../control/crates/layerfs-home/src/reply/events.rs) |
@@ -151,7 +151,7 @@ changes it. Reading and clearing it are `home.log` and `home.clear_log`
 
 The call surface 2.0 ([specification](../../../../core/docs/issues/call-surface-2-0/README.md))
 gives every call one form of answer, declared on its entry as a `Form`. All
-83 entries declare one. `home.log`'s entry, from
+84 entries declare one. `home.log`'s entry, from
 [`home/log.rs`](../../../../api/crates/layerfs-api/src/families/home/log.rs):
 
 ```rust
@@ -243,7 +243,7 @@ is empty (`calls`, `old_names`, `not_built` and `spec_sync`); the test's
 
 | Test or example | Command | Platform | Shows |
 | --- | --- | --- | --- |
-| [`table.rs`](../../../../api/crates/layerfs-api/tests/calls/table.rs) | `cargo +1.85.1 test --locked -p layerfs-api --test calls table` | any Unix host, temporary folders | ten families and 83 calls; unknown calls and arguments refused before any effect; each family reached; JSON round trips; sizes and keys; a relative home refused; one source file per call |
+| [`table.rs`](../../../../api/crates/layerfs-api/tests/calls/table.rs) | `cargo +1.85.1 test --locked -p layerfs-api --test calls table` | any Unix host, temporary folders | ten families and 84 calls; unknown calls and arguments refused before any effect; each family reached; JSON round trips; sizes and keys; a relative home refused; one source file per call |
 | [`allowed.rs`](../../../../api/crates/layerfs-api/tests/scope/allowed.rs) | `cargo +1.85.1 test --locked -p layerfs-api --test scope allowed` | any Unix host | a scope names its project, refuses every call it does not cover, needs a Sandbox of its project, and a scoped `branch.list` reads every page |
 | [`references.rs`](../../../../api/crates/layerfs-api/tests/scope/references.rs) | `cargo +1.85.1 test --locked -p layerfs-api --test scope references` | any Unix host | fork and publish references outside the namespace refused before any effect; the JSON form refuses the same |
 | [`log.rs`](../../../../api/crates/layerfs-api/tests/calls/log.rs) | `cargo +1.85.1 test --locked -p layerfs-api --test calls log` | any Unix host | one line per call, rendering and redaction, `home.log` and `home.clear_log` |

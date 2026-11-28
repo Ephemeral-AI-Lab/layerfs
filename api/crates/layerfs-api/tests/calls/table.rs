@@ -729,7 +729,7 @@ fn the_call_log_calls_moved_to_home_with_no_alias() {
         .iter()
         .map(|call| call.call)
         .collect();
-    assert_eq!(home, ["init", "get", "log", "clear_log", "doctor",]);
+    assert_eq!(home, ["init", "get", "log", "clear_log", "doctor", "move"]);
 }
 
 #[test]
@@ -762,6 +762,7 @@ fn a_migrated_entry_declares_its_forms_and_the_others_declare_none() {
         "home.log",
         "home.clear_log",
         "home.doctor",
+        "home.move",
     ];
     let branch = [
         "branch.list",

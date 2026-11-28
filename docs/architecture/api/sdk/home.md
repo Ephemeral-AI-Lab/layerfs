@@ -4,7 +4,7 @@
 
 The `home` calls: set a home up on purpose, read its state and what this
 build would use with it without changing anything, read and clear its call
-log and check it, within the [SDK](README.md). What interrupted operations
+log, check it and move it, within the [SDK](README.md). What interrupted operations
 left on disk LayerFS removes itself (spec v20;
 [Checks: leftovers](../../control/doctor/checks.md#leftovers)): there is no
 call to list or remove it. `home.doctor` is one of
@@ -12,8 +12,8 @@ call to list or remove it. `home.doctor` is one of
 
 | | |
 | --- | --- |
-| Source | [`crates/layerfs-api/src/families/home`](../../../../api/crates/layerfs-api/src/families/home) (one file per call), [`src/home/get.rs`](../../../../control/crates/layerfs-inspect/src/home/get.rs), [`src/home/tree.rs`](../../../../control/crates/layerfs-inspect/src/home/tree.rs), [`src/log/calls.rs`](../../../../control/crates/layerfs-home/src/log/calls.rs), [`layerfs-home/src/record/generation.rs`](../../../../control/crates/layerfs-home/src/record/generation.rs) |
-| Runs by default | the caller's process; `doctor` also asks each running machine's worker. `init`, `get` and `doctor` are not opened by the dispatcher (`Call.opens` is false): `init` opens the home itself, the others never do. `get`, `log` and `clear_log` are `quiet`: they write no call-log line |
+| Source | [`crates/layerfs-api/src/families/home`](../../../../api/crates/layerfs-api/src/families/home) (one file per call), [`src/home/get.rs`](../../../../control/crates/layerfs-inspect/src/home/get.rs), [`src/home/relocate.rs`](../../../../control/crates/layerfs-inspect/src/home/relocate.rs), [`src/home/tree.rs`](../../../../control/crates/layerfs-inspect/src/home/tree.rs), [`src/log/calls.rs`](../../../../control/crates/layerfs-home/src/log/calls.rs), [`layerfs-home/src/record/generation.rs`](../../../../control/crates/layerfs-home/src/record/generation.rs) |
+| Runs by default | the caller's process; `doctor` also asks each running machine's worker. `init`, `get`, `doctor` and `move` are not opened by the dispatcher (`Call.opens` is false): `init` opens the home itself, the others never do. `get`, `log`, `clear_log` and `move` are `quiet`: they write no call-log line |
 | Design | [Home](../../control/home/README.md), [opening a home](../../control/home/README.md#opening-a-home), [Doctors](../../control/doctor/README.md) |
 | Clients | `layerfs.home` is this family (`layerfs.home.get()`, `layerfs.home.init()`); a client's home is the one given to `client()` and is no field of it |
 
@@ -28,6 +28,9 @@ call to list or remove it. `home.doctor` is one of
                  + the built-in machine records   -> {outcome: created | unchanged}
  home.doctor     the home's own checks, then each machine, PostgreSQL Store
                  and bucket, shallowly                    -> the doctor report
+ home.move <to>  under the home lock, nothing running: rename the home's own
+                 entries into <to>, rewrite the paths records hold
+                                         -> {home: <to>, left: client folders}
 
  every other call ---- one line when it ends ----> <home>/trace/calls.jsonl
                                                     (calls.1.jsonl past 16 MiB)
@@ -42,8 +45,9 @@ call to list or remove it. `home.doctor` is one of
 | [`home.log`](#homelog) | `{ items }` + `next_cursor` when there is a next page | `{ items, next_cursor, skipped }` |
 | [`home.clear_log`](#homeclear_log) | `{ ok: true }` | `{ ok, outcome: "cleared", line_count }` |
 | [`home.doctor`](#homedoctor) | `{ ok: true }`, or `findings` and `not_checked` | `{ ok, findings, not_checked, status, counts, observed_at, tree }` |
+| [`home.move`](#homemove) | `{ home }` + `left` when anything stayed | `{ home, from, outcome: "moved", moved, left, rewritten }` |
 
-All five are `admin` in the MCP server.
+All six are `admin` in the MCP server.
 
 ### home.init
 
@@ -324,6 +328,63 @@ no `layerfs doctor` command: it was removed with no alias.
 Run on macOS (`macos-host`) with a debug build:
 
 ```console
+$ layerfs home doctor
+{"ok":true}
+```
+
+### home.move
+
+Move this home into another folder on the same filesystem; client folders stay.
+
+```text
+CLI     layerfs home move <to>
+Node    await layerfs.home.move(to)
+Python  layerfs.home.move(to)
+```
+
+| Argument | Kind | Rule |
+| --- | --- | --- |
+| `to` | text | absolute, no `..`; a new or empty folder whose parent exists, on the home's filesystem, not inside one of the home's own entries |
+
+| Answer | Keys |
+| --- | --- |
+| short | `home`; when set: `left` |
+| long | `home, from, outcome, moved, left, rewritten` |
+| call | writes no call-log line; MCP `admin` |
+
+The supported way to move a home, such as a legacy `~/.layerfs` into
+`~/.layerfs/home`, the default home since 2026-11-28
+([opening a home](../../control/home/README.md#the-default-home)). Under
+the home lock it renames the home's own top-level entries (`moved`:
+LayerFS's names and the integration folders `runtime/`, `job/`, `stat/`,
+`preset/`) one by one into `<to>`, `layerfs.json` last, so `<to>` may sit
+inside the old folder. Every other entry, a client's `dsh/` or `connect/`,
+stays where it is (`left`). Then it rewrites the absolute paths into moved
+entries that records hold (`rewritten`, paths relative to the new home): a
+machine record's `daemon` and `image_archive`, every text in a Sandbox
+record's `daemon`, each run folder's `owner` marker. A path into a folder
+that stayed is left as it is. It never copies: a copy would keep the id and
+drive the same machines.
+
+| Refused | Code | Before any effect |
+| --- | --- | --- |
+| no home there; a foreign folder; a LayerFS folder | `NotFound`; `Unsupported`; `InvalidInput` | yes |
+| an older layout | `InvalidInput`, fix `layerfs home init` | yes |
+| `<to>` relative, holding `..`, inside a moved entry, or its parent missing | `InvalidInput` | yes |
+| `<to>` not empty | `Exists` | yes |
+| `<to>` on another filesystem | `Unsupported` | yes |
+| an open host-machine Sandbox (its record has a runtime `id` or an `op`) | `InUse`, fix `layerfs sandbox remove <name>` | yes |
+| a live Store lease, or the host worker running | `InUse` | yes |
+| a rename fails | `Failed`; the entries already moved are put back | the move is undone |
+| a path cannot be rewritten | `Failed`, naming the new home | the home has moved |
+
+It writes no call-log line: the home it names is gone from that path when it
+ends. Run on macOS with a release build, a legacy home beside a client's
+folder:
+
+```console
+$ layerfs home move ~/.layerfs/home
+{"home":"/Users/me/.layerfs/home","left":["dsh"]}
 $ layerfs home doctor
 {"ok":true}
 ```

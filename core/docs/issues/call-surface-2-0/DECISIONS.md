@@ -91,9 +91,9 @@ the project record check is not new (and its finding is a notice with a fix, not
 
 ## Totals after the freeze
 
-83 calls in 10 families: project 8, file 14, sandbox 7, workspace 7, branch 6, commit 3, home 5,
+84 calls in 10 families: project 8, file 14, sandbox 7, workspace 7, branch 6, commit 3, home 6,
 machine 14, store 13, backup 6. (85 at the freeze, with home 7; version 20 removed `home leftovers`
-and `home prune`.)
+and `home prune`; `home move` was added on 2026-11-28, HM-1.)
 
 ## Fixes from the exit review
 
@@ -728,3 +728,28 @@ owner ruled to give it a full 2.0 entry rather than an exception.
   `operation`, since `op` is only ever the state companion (Fix 16). The `--op` option keeps its
   name. No alias for the old keys (no backward compatibility in 2.0).
 - **RM-3** Totals: 83 calls, store 13, as the totals above already say.
+
+## The LayerFS folder and `home move` (owner, 2026-11-28)
+
+`~/.layerfs` becomes a folder of homes' owners: LayerFS's home in `home/`, and each client's folder
+beside it (`dsh/`, `connect/`). Until now every client defaulted to `~/.layerfs` itself, so a folder
+holding only `home/` and `dsh/` was refused as an outdated home with a fix that moved it aside.
+
+- **HM-1** The default home is `$HOME/.layerfs/home`; `$HOME/.layerfs` stays the home while it holds
+  `layerfs.json` (a legacy home). `LAYERFS_HOME` and an explicit home are unchanged and still
+  absolute.
+- **HM-2** A folder with no `layerfs.json` that holds only folders (and `.DS_Store`), none of them
+  one of LayerFS's own top-level names, is a LayerFS folder, not a home: refused `InvalidInput`
+  with the fix `export LAYERFS_HOME=<folder>/home`; `home get` answers `broken`, `reason:
+  unsupported` with that fix; the doctor's `home.layout` fails with it. Never the move aside.
+- **HM-3** `home move <to>` (badge `new`, profile `full`, quiet, unopened) moves a current home into
+  a new or empty folder on the same filesystem by renaming its own entries, never by copy (a copy
+  keeps the id). Client folders stay (`left`). It rewrites the absolute paths into moved entries
+  that records hold: a machine record's `daemon` and `image_archive`, a Sandbox record's `daemon`,
+  each run folder's `owner`. A run folder's `config/daemon.setup` and `config/helper.spec` are read
+  only by the start that wrote them and stay as they are. Short `home` always, `left` when news;
+  long `home, from, outcome, moved, left, rewritten`.
+- **HM-4** Refused before any effect while anything runs in the home (`InUse`): an open host-machine
+  Sandbox (a runtime `id` or an `op` in its record; fix `layerfs sandbox remove <name>`), a live
+  Store lease, the host worker's locks held. It holds the home lock throughout. One attempt: a
+  failed rename puts back what moved and answers `Failed`.

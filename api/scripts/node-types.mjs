@@ -110,7 +110,7 @@ export interface CallOptions {
 }
 
 export interface ClientOptions {
-  /** Default \`LAYERFS_HOME\`, else \`~/.layerfs\`. */
+  /** Default \`LAYERFS_HOME\`, else \`~/.layerfs/home\` (or a legacy \`~/.layerfs\` that holds \`layerfs.json\`). */
   home?: string;
   scope?: Scope;
 }

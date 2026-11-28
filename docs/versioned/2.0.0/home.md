@@ -15,7 +15,7 @@ writes every record itself.
 
 | Setting | Meaning |
 | --- | --- |
-| `LAYERFS_HOME` | the home folder. Unset, it is `~/.layerfs` (O28) |
+| `LAYERFS_HOME` | the home folder. Unset, it is `~/.layerfs/home`, or a legacy `~/.layerfs` that holds `layerfs.json` (O28); `layerfs home move ~/.layerfs/home` moves a legacy one |
 | `LAYERFS_TRACE`, `LAYERFS_TRACE_STEP`, `LAYERFS_TRACE_START` | tracing. `LAYERFS_TRACE` names a file: each connection to a machine's worker appends `{at, event: "worker.connection", op, worker, sent, ms}` to it. With `LAYERFS_TRACE_STEP` also set (any non-empty value), each call appends one `{at, event: "step", op, step, us, ms}` line per step it timed: the caller's (`dispatch`, then for a Store call in this process `lease`, `store_open` and `call`, or for a worker-routed call `route`, `connect`, `ready`, `request`, `answer`) and, for a worker-routed call, the worker's as `worker.<step>`, which the worker sends back in its answer (a namespaces `workspace.exec` adds `worker.exec.*` and its helper's `worker.helper.*` stages). A process that closes its Stores before it exits (the `layerfs` command after its call, `layerfs.close()`) appends op `close` with steps `stores` and `sessions`. `LAYERFS_TRACE_START` is still not read |
 
 LayerFS reads no other user setting. A Node or Python client can name

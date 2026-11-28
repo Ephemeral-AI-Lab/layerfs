@@ -9,7 +9,7 @@ one file per call under its family in
 help, and the Node and Python functions are all built from that table, so
 the three front ends take the same arguments.
 
-There are 83 calls in ten families: `home` 5, `project` 8, `branch` 6,
+There are 84 calls in ten families: `home` 6, `project` 8, `branch` 6,
 `commit` 3, `file` 14, `sandbox` 7, `workspace` 7, `machine` 14, `store` 13
 and `backup` 6. `layerfs help` lists them, `layerfs help <family> [<call>]`
 prints one family or one call, and `layerfs help --json` prints the whole
@@ -57,10 +57,10 @@ works with, and the MCP server's default `work` profile lists only them:
 `branch.fork`, `commit.list`, `commit.diff`, `file.read`, `file.list`,
 `file.glob`, `file.grep`, `file.write`, `file.edit`, `file.rm`, `file.mv`,
 `sandbox.create`, `workspace.list`, `workspace.exec`, `workspace.cancel`,
-`workspace.commit` and `workspace.status`. The other 65 are `full`: the MCP
+`workspace.commit` and `workspace.status`. The other 67 are `full`: the MCP
 `admin` profile lists them with the 17. Every call is in the shell, Node
-and Python; an MCP tool is named `<family>_<call>` (`workspace_exec`). Eight `quiet` calls write no line to the home's call log:
-`home.get`, `home.log`, `home.clear_log`, `sandbox.files`, `sandbox.log`,
+and Python; an MCP tool is named `<family>_<call>` (`workspace_exec`). Nine `quiet` calls write no line to the home's call log:
+`home.get`, `home.log`, `home.clear_log`, `home.move`, `sandbox.files`, `sandbox.log`,
 `machine.stats`, `machine.files` and `machine.log`.
 
 A process that only reads a directly opened SQLite Store uses a read-only
@@ -179,7 +179,7 @@ $ echo $?
 
 `[x]` is an optional positional. Every family's results are snake_case.
 
-### `home` (5)
+### `home` (6)
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
@@ -188,11 +188,12 @@ $ echo $?
 | `log` | — | `call`, `project`, `client`, `tag`, `outcome`, `since`, `limit` (200), `cursor` | the calls made against this home, newest first |
 | `clear_log` | — | — | clears this home's call log |
 | `doctor` | — | `on_progress` | checks the home, then each machine, PostgreSQL Store and bucket, shallowly ([the doctors](#the-doctors)) |
+| `move` | `to` | — | moves this home into another folder on the same filesystem; client folders stay |
 
-- `init`, `get` and `doctor` are not opened by the dispatcher: `init`
-  opens or creates the home itself, and the others never open it. `get`,
-  `log` and `clear_log` write no line to the call log, and all five are
-  `admin` in the MCP server.
+- `init`, `get`, `doctor` and `move` are not opened by the dispatcher:
+  `init` opens or creates the home itself, and the others never open it.
+  `get`, `log`, `clear_log` and `move` write no line to the call log, and
+  all six are `admin` in the MCP server.
 - **`init`**, short: `{ home }`, with `unchanged: true` when the home was
   already current. Long: `home, unchanged, outcome, layout, version`:
   `outcome` is `created` or `unchanged`, and `version` is this build's.
@@ -200,6 +201,10 @@ $ echo $?
   layout, or files and no `layerfs.json`) is never converted: it is
   refused `Unsupported` with the fix
   `mv <home> <home>.old && layerfs home init`, and nothing in it is written.
+  A LayerFS folder (no `layerfs.json`, only folders, none of LayerFS's own
+  names, such as `~/.layerfs` holding `home/` and `dsh/`) is refused
+  `InvalidInput` with the fix `export LAYERFS_HOME=<folder>/home`; it is
+  never moved aside.
 - **`get`**, short: `{ home, state, version }`, with `generation` when the
   home is ready, and `reason` and `fix` when it is broken (`missing`: no
   home there, fixed by `layerfs home init`; `outdated`: a folder that is
@@ -207,7 +212,8 @@ $ echo $?
   names no layout this build knows, fixed by
   `mv <home> <home>.old && layerfs home init`; `failed`, with no fix: the
   system refused to read `layerfs.json` or list the folder, a permission or
-  I/O error, which the long form's `message` names). Long:
+  I/O error, which the long form's `message` names; `unsupported`: a
+  LayerFS folder, fixed by `export LAYERFS_HOME=<folder>/home`). Long:
   `home, state, version, generation, reason, fix, message, layout, mode,
   bundle, daemon, cache`. `mode` is the folder's permission bits as text
   (`"0700"`); `bundle` and `daemon` are
@@ -312,6 +318,24 @@ $ layerfs home clear-log --detail
 
 (Four lines: the three above and the refused `file read` shown under
 [errors](#errors-and-exit-codes), all from the same run.)
+
+- **`move <to>`**, short: `{ home }`, with `left` when anything stayed in
+  the old folder. Long: `home, from, outcome, moved, left, rewritten`. It
+  renames the home's own entries (LayerFS's names and `runtime/`, `job/`,
+  `stat/`, `preset/`) into `<to>`, a new or empty folder on the same
+  filesystem that may sit inside the old one, and rewrites the paths into
+  them that records hold (a machine's `daemon` and `image_archive`, a
+  Sandbox's `daemon`, each run folder's `owner`). A client's `dsh/` or
+  `connect/` stays. Refused before any effect while a host-machine Sandbox
+  is open, a Store is open in another process or the host worker runs
+  (`InUse`), when `<to>` is not empty (`Exists`) or on another filesystem
+  (`Unsupported`). It never copies: a copy keeps the id and would drive the
+  same machines.
+
+```console
+$ layerfs home move ~/.layerfs/home
+{"home":"/Users/me/.layerfs/home","left":["dsh"]}
+```
 
 ### `project` (8)
 

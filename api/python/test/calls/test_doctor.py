@@ -81,7 +81,7 @@ class Doctor(unittest.TestCase):
     def test_home_leftovers_and_prune_are_gone(self):
         # spec v20: LayerFS removes leftovers itself; the calls are gone
         home = [spec["call"] for spec in layerfs.TABLE if spec["family"] == "home"]
-        self.assertEqual(home, ["init", "get", "log", "clear_log", "doctor"])
+        self.assertEqual(home, ["init", "get", "log", "clear_log", "doctor", "move"])
         self.assertFalse(hasattr(layerfs.home, "leftovers"))
         self.assertFalse(hasattr(layerfs.home, "prune"))
         client = layerfs.client(home=os.path.join(tempfile.gettempdir(), "layerfs-py-gone"))

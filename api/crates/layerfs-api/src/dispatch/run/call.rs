@@ -65,14 +65,16 @@ pub const DETAIL: &str = "detail";
 pub const WITH: &str = "with";
 
 /// The home a call uses: `explicit` when given, else `LAYERFS_HOME`, else
-/// `~/.layerfs` (O28). It must be an absolute path.
+/// `~/.layerfs/home`, or a legacy `~/.layerfs` that holds `layerfs.json`
+/// (O28, [`default_home`](layerfs_home::disk::default_home)). It must be
+/// an absolute path.
 pub fn home(explicit: Option<&Path>) -> Result<PathBuf, layerfs_protocol::sdk::SdkRefusal> {
     let home = match explicit {
         Some(path) => path.to_owned(),
         None => match std::env::var_os("LAYERFS_HOME") {
             Some(path) if !path.is_empty() => PathBuf::from(path),
             _ => std::env::var_os("HOME")
-                .map(|home| PathBuf::from(home).join(".layerfs"))
+                .map(|home| layerfs_home::disk::default_home(Path::new(&home)))
                 .ok_or_else(|| refused("InvalidInput", "LAYERFS_HOME is unset and so is HOME"))?,
         },
     };

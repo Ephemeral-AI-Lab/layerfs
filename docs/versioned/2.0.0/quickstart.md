@@ -31,7 +31,7 @@ No package is published.
 
 ## 1. One home
 
-The home is `LAYERFS_HOME`, or `~/.layerfs` when it is unset. Use a private
+The home is `LAYERFS_HOME`, or `~/.layerfs/home` when it is unset (a legacy `~/.layerfs` that holds `layerfs.json` is used as it is). Use a private
 folder:
 
 ```bash

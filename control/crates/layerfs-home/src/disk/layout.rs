@@ -5,11 +5,14 @@
 //! the `docker` machine names its containers with it (O33) and backups
 //! record it as where they were exported from. A folder that is not such a
 //! home, and is not empty, is refused with a fix that moves it aside: this
-//! build writes nothing in it. Reading never changes anything.
+//! build writes nothing in it. A LayerFS folder, which keeps its home in
+//! `home/` and each client's folder beside it, is refused with a fix that
+//! names `home/` instead, never one that moves it. Reading never changes
+//! anything.
 use crate::record::file::{private_dir, read_record, unreadable, write_record};
 use crate::reply::outcome::{refused, shell_word, with_fix};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// The layout this build writes.
 pub const LAYOUT_VERSION: i64 = 4;
@@ -34,6 +37,12 @@ pub enum Layout {
     /// `layerfs.json`. Refused
     /// ([`foreign`]) and never written.
     Foreign,
+    /// A LayerFS folder, not a home ([`is_container`]): no `layerfs.json`,
+    /// only folders, none of them one of LayerFS's own names ([`OWN`]), as
+    /// `~/.layerfs` holding `home/` and client folders such as `dsh/` is.
+    /// Refused ([`container`]) with a fix that names its `home/`, and never
+    /// written or moved.
+    Container,
     /// The current layout, with its `layerfs.json`.
     Current(HomeFile),
 }
@@ -64,20 +73,50 @@ pub fn detect(home: &Path) -> Result<Layout, SdkRefusal> {
             },
             _ => Layout::Foreign,
         }),
-        None => match own_only(home) {
-            Ok(true) => Ok(Layout::Empty),
-            Ok(false) => Ok(Layout::Foreign),
+        None => match own_only(home).and_then(|own| Ok((own, is_container(home)?))) {
+            Ok((true, _)) => Ok(Layout::Empty),
+            Ok((false, true)) => Ok(Layout::Container),
+            Ok((false, false)) => Ok(Layout::Foreign),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Layout::Empty),
             Err(error) => Err(unreadable(home, &error)),
         },
     }
 }
 
+/// The home a call uses when it names none and `LAYERFS_HOME` is unset:
+/// `<user>/.layerfs/home`, beside each client's folder in the LayerFS
+/// folder `<user>/.layerfs`; but `<user>/.layerfs` itself while it holds a
+/// `layerfs.json`, a home made before the default moved (`layerfs home
+/// move` moves it into `home/`). `user` is `$HOME`.
+pub fn default_home(user: &Path) -> PathBuf {
+    let folder = user.join(".layerfs");
+    match std::fs::symlink_metadata(folder.join("layerfs.json")) {
+        Ok(_) => folder,
+        Err(_) => folder.join("home"),
+    }
+}
+
+/// LayerFS's own top-level names in a home (the Home README's top-level
+/// names): every path it builds there starts with one of them.
+pub const OWN: [&str; 11] = [
+    "layerfs.json",
+    "layerfs.lock",
+    "generation",
+    "machine",
+    "store",
+    "sandbox",
+    "backup",
+    "log",
+    "trace",
+    "secret",
+    "run",
+];
+
 /// The top-level folders the home reserves for integrations (the Home
 /// README's top-level names). LayerFS creates none of them, but an
 /// integration may make them before the home's first call, as
 /// `@layerfs/runtime` does with `runtime/`.
-const INTEGRATION: [&str; 4] = ["runtime", "job", "stat", "preset"];
+pub const INTEGRATION: [&str; 4] = ["runtime", "job", "stat", "preset"];
 
 /// Whether `home` holds nothing but what 2.0's own layout allows before its
 /// `layerfs.json`: the home lock [`open`] takes first, `layerfs.lock`; the
@@ -98,6 +137,48 @@ fn own_only(home: &Path) -> std::io::Result<bool> {
         }
     }
     Ok(true)
+}
+
+/// Whether `home`, with no `layerfs.json`, is a LayerFS folder rather than
+/// a home: it holds only folders (and macOS's `.DS_Store`), at least one,
+/// and none of them is one of LayerFS's own names ([`OWN`]). Its home is
+/// its `home/`; its other folders are its clients' (`dsh/`, `connect/`).
+fn is_container(home: &Path) -> std::io::Result<bool> {
+    let mut any = false;
+    for entry in std::fs::read_dir(home)? {
+        let entry = entry?;
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if name == ".DS_Store" {
+            continue;
+        }
+        if OWN.contains(&name.as_ref()) || !entry.file_type()?.is_dir() {
+            return Ok(false);
+        }
+        any = true;
+    }
+    Ok(any)
+}
+
+/// The fix for a LayerFS folder named as a home: name its `home/`.
+pub fn container_fix(folder: &Path) -> String {
+    let home = folder.join("home").display().to_string();
+    format!("export LAYERFS_HOME={}", shell_word(&home))
+}
+
+/// The refusal of a LayerFS folder named as a home: `InvalidInput`, with
+/// [`container_fix`]. Nothing in it is written or moved.
+pub fn container(folder: &Path) -> SdkRefusal {
+    let refusal = refused(
+        "InvalidInput",
+        format!(
+            "{} is a LayerFS folder, not a home: it keeps its home in {} beside its clients' folders; \
+             name that home instead",
+            folder.display(),
+            folder.join("home").display()
+        ),
+    );
+    with_fix(refusal, container_fix(folder))
 }
 
 /// The fix for a folder that is not a home of this build: move it aside,
@@ -141,6 +222,7 @@ pub fn ensure(home: &Path) -> Result<HomeFile, SdkRefusal> {
         Layout::Current(file) if file.layout == LAYOUT_VERSION => return Ok(file),
         Layout::Current(file) => Some(file.id),
         Layout::Foreign => return Err(foreign(home)),
+        Layout::Container => return Err(container(home)),
         Layout::Empty => None,
     };
     let _lock = crate::lock::home::take(home)?;
@@ -154,6 +236,7 @@ pub fn ensure(home: &Path) -> Result<HomeFile, SdkRefusal> {
         }
         Layout::Empty if expected.is_none() => create(home),
         Layout::Foreign => Err(foreign(home)),
+        Layout::Container => Err(container(home)),
         _ => Err(refused(
             "Unavailable",
             "home identity changed while opening it",

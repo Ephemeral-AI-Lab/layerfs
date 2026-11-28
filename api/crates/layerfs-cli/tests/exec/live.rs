@@ -199,6 +199,23 @@ fn table_reads_initialize_missing_and_default_homes_but_doctor_does_not() {
         .env_remove("LAYERFS_HOME")
         .env("HOME", &default));
     assert!(read.status.success(), "{}", text(&read.stderr));
-    assert!(default.join(".layerfs").exists());
+    // the default home is ~/.layerfs/home, beside clients' folders
+    assert!(default.join(".layerfs/home/layerfs.json").exists());
+    assert!(!default.join(".layerfs/layerfs.json").exists());
+    // a legacy ~/.layerfs that holds layerfs.json stays the home
+    let legacy = scratch.join("legacy");
+    let made = run(&mut layerfs(&legacy.join(".layerfs"), &["home", "init"]));
+    assert!(made.status.success(), "{}", text(&made.stderr));
+    let read = run(layerfs(&missing, &["home", "get"])
+        .env_remove("LAYERFS_HOME")
+        .env("HOME", &legacy));
+    assert!(read.status.success(), "{}", text(&read.stderr));
+    let home = legacy.join(".layerfs").display().to_string();
+    assert!(
+        text(&read.stdout).contains(&format!("\"home\":\"{home}\"")),
+        "{}",
+        text(&read.stdout)
+    );
+    assert!(!legacy.join(".layerfs/home").exists());
     std::fs::remove_dir_all(scratch).unwrap();
 }

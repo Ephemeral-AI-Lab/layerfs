@@ -54,7 +54,7 @@ node src/server.js --help
 | --- | --- |
 | `--profile work` | the default; the `work` calls, below |
 | `--profile admin` | the `work` calls plus every administrative call |
-| `--home <dir>` | the LayerFS home; default `LAYERFS_HOME`, else `~/.layerfs` |
+| `--home <dir>` | the LayerFS home; default `LAYERFS_HOME`, else `~/.layerfs/home` (or a legacy `~/.layerfs` that holds `layerfs.json`) |
 | `--scope-project <store>/<project>` | the folder scope's project; must be given with `--scope-folder` |
 | `--scope-folder <dir>` | the folder scope inside the project; the library checks every scoped call |
 | `--scope-branch <name>` | the scope's Branch namespace; needs both scope flags |
@@ -116,7 +116,7 @@ built addon).
 
 <!-- BEGIN GENERATED: api/scripts/mcp-profiles.mjs -->
 
-83 calls: 17 in `work` (the table's `agent` profile), 66 in `admin` only (`full`); `--profile admin` lists 83.
+84 calls: 17 in `work` (the table's `agent` profile), 67 in `admin` only (`full`); `--profile admin` lists 84.
 
 | Call | Bucket | Profiles that list it | Why |
 | --- | --- | --- | --- |
@@ -125,6 +125,7 @@ built addon).
 | `home.log` | admin | admin | set the home up, read its state and call log, and check it; the `full` profile (administration) |
 | `home.clear_log` | admin | admin | set the home up, read its state and call log, and check it; the `full` profile (administration) |
 | `home.doctor` | admin | admin | set the home up, read its state and call log, and check it; the `full` profile (administration) |
+| `home.move` | admin | admin | move this home into another folder on the same filesystem; client folders stay; the `full` profile (administration) |
 | `project.init` | admin | admin | import a host folder into a Store; the `full` profile (administration) |
 | `project.list` | admin | admin | import, list, read, count, export, delete or check a project, or hide a path in it; the `full` profile (administration) |
 | `project.get` | admin | admin | import, list, read, count, export, delete or check a project, or hide a path in it; the `full` profile (administration) |

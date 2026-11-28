@@ -101,7 +101,8 @@ function bind(client, spec) {
   };
 }
 
-/** A client of `home` (default `LAYERFS_HOME`, else `~/.layerfs`), with an
+/** A client of `home` (default `LAYERFS_HOME`, else `~/.layerfs/home`,
+ * or a legacy `~/.layerfs` that holds `layerfs.json`), with an
  * optional folder scope `{ project, folder, branch? }`. */
 export function client({ home, scope } = {}) {
   // the home is the client's own and not a field: `client.home` is the

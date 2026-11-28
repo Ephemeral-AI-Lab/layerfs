@@ -123,7 +123,7 @@ Each table call appends one call-log line with `client: "cli"`;
 `LAYERFS_LOGS_TAG` sets its tag and `LAYERFS_LOGS=0` turns the log off
 ([`call.rs`](../../../../api/crates/layerfs-api/src/dispatch/run/call.rs)).
 A wrong command line, `help`, `--version`, `worker` and the
-eight `quiet` calls write none.
+nine `quiet` calls write none.
 
 ## Invariants
 

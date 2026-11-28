@@ -62,7 +62,7 @@ export interface CallOptions {
 }
 
 export interface ClientOptions {
-  /** Default `LAYERFS_HOME`, else `~/.layerfs`. */
+  /** Default `LAYERFS_HOME`, else `~/.layerfs/home` (or a legacy `~/.layerfs` that holds `layerfs.json`). */
   home?: string;
   scope?: Scope;
 }
@@ -588,6 +588,8 @@ export interface HomeFamily {
   clear_log(options?: CallOptions): Promise<Result>;
   /** check the home, then each machine, PostgreSQL Store and bucket, shallowly */
   doctor(options?: HomeDoctorOptions): Promise<Result>;
+  /** move this home into another folder on the same filesystem; client folders stay */
+  move(to: string, options?: CallOptions): Promise<Result>;
 }
 
 export interface ProjectFamily {

@@ -2,7 +2,7 @@
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-Every call a program can make: **83 calls in 10 families**, the same names and arguments in JavaScript, Python, the MCP server and the `layerfs` command, one page per family.
+Every call a program can make: **84 calls in 10 families**, the same names and arguments in JavaScript, Python, the MCP server and the `layerfs` command, one page per family.
 
 | | |
 | --- | --- |
@@ -52,7 +52,7 @@ against the built table.
 
 | Family | Calls, in help order | Runs by default | Source |
 | --- | --- | --- | --- |
-| [`home`](home.md) (5) | [`init`](home.md#homeinit), [`get`](home.md#homeget), [`log`](home.md#homelog), [`clear_log`](home.md#homeclear_log), [`doctor`](home.md#homedoctor) | the caller's process; `get` reads files only and never opens the home; `doctor` asks running machines' workers | [`home/`](../../../../api/crates/layerfs-api/src/families/home) |
+| [`home`](home.md) (6) | [`init`](home.md#homeinit), [`get`](home.md#homeget), [`log`](home.md#homelog), [`clear_log`](home.md#homeclear_log), [`doctor`](home.md#homedoctor), [`move`](home.md#homemove) | the caller's process; `get` reads files only and never opens the home; `doctor` asks running machines' workers; `move` renames the home's own entries into another folder | [`home/`](../../../../api/crates/layerfs-api/src/families/home) |
 | [`project`](project.md) (8) | [`init`](project.md#projectinit), [`list`](project.md#projectlist), [`get`](project.md#projectget), [`stats`](project.md#projectstats), [`export`](project.md#projectexport), [`delete`](project.md#projectdelete), [`hide_path`](project.md#projecthide_path), [`doctor`](project.md#projectdoctor) | `list`, `get`: home records, then each ready Store's own list; the rest where the Store's calls run | [`project/`](../../../../api/crates/layerfs-api/src/families/project) |
 | [`branch`](branch.md) (6) | [`list`](branch.md#branchlist), [`get`](branch.md#branchget), [`fork`](branch.md#branchfork), [`merge`](branch.md#branchmerge), [`publish`](branch.md#branchpublish), [`remove`](branch.md#branchremove) | where the Store's calls run | [`branch/`](../../../../api/crates/layerfs-api/src/families/branch) |
 | [`commit`](commit.md) (3) | [`list`](commit.md#commitlist), [`get`](commit.md#commitget), [`diff`](commit.md#commitdiff) | where the Store's calls run | [`commit/`](../../../../api/crates/layerfs-api/src/families/commit) |

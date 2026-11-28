@@ -2,7 +2,7 @@
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-The public surface: the `layerfs-api` call table with its one dispatcher, and the front ends (the `layerfs` command, Node, Python and a local MCP server) that expose its 83 calls in ten families with the same names and arguments (the MCP server lists 17 of them in its `work` profile and all 83 in `admin`).
+The public surface: the `layerfs-api` call table with its one dispatcher, and the front ends (the `layerfs` command, Node, Python and a local MCP server) that expose its 84 calls in ten families with the same names and arguments (the MCP server lists 17 of them in its `work` profile and all 84 in `admin`).
 
 | | |
 | --- | --- |
@@ -58,7 +58,7 @@ give each call's own arguments, answer and errors.
 | One attempt | a call runs once; nothing retries, refreshes or replays it | [`run/call.rs`](../../../api/crates/layerfs-api/src/dispatch/run/call.rs) |
 | Paging | every list (15 calls) takes `--limit N --cursor C` and answers `{ items, next_cursor }`; pass `next_cursor` back as `cursor`, and a null `next_cursor` is the last page. `limit` is at most 1000 (default 100, 200 for a log). `file.read` and `file.blame` page by a line window (`line`, `limit`) | [`dispatch/table.rs`](../../../api/crates/layerfs-api/src/dispatch/table.rs) `CURSOR`, [`cursor.rs`](../../../control/crates/layerfs-home/src/reply/cursor.rs) |
 | Events | `on_progress` (19 calls, `--progress` in the CLI), each event `{ phase, done, total }`, and `workspace.exec`'s `stdout`/`stderr` functions receive events before the call answers; an event never means the call finished | [Errors and events](calls/errors-and-events.md) |
-| Home | explicit, else `LAYERFS_HOME`, else `$HOME/.layerfs`; absolute | [`run/call.rs`](../../../api/crates/layerfs-api/src/dispatch/run/call.rs) `home` |
+| Home | explicit, else `LAYERFS_HOME`, else `$HOME/.layerfs/home` (or a legacy `$HOME/.layerfs` that holds `layerfs.json`); absolute | [`run/call.rs`](../../../api/crates/layerfs-api/src/dispatch/run/call.rs) `home` |
 | Scope | a client may be bound to one project, folder and Branch namespace: out-of-scope calls are `InvalidInput`, paths are relative to the folder and Branch names to the namespace | [`guard/scope.rs`](../../../api/crates/layerfs-api/src/dispatch/guard/scope.rs), [folder scope](calls/README.md#folder-scope) |
 | Call log | every call whose entry is not `quiet` (eight: `home.get`, `home.log`, `home.clear_log`, and the polled `sandbox.files`, `sandbox.log`, `machine.stats`, `machine.files`, `machine.log`) writes one line to `<home>/trace/calls.jsonl` when it ends (not with `LAYERFS_LOGS=0`) | [the call log](calls/README.md#the-call-log) |
 
@@ -84,7 +84,7 @@ give each call's own arguments, answer and errors.
 
 | Test or example | Command | Platform | Shows |
 | --- | --- | --- | --- |
-| [`table.rs`](../../../api/crates/layerfs-api/tests/calls/table.rs) | `cargo +1.85.1 test --locked -p layerfs-api --test calls table` | any Unix host | 83 calls in ten families; one source file per call; refusals before any effect |
+| [`table.rs`](../../../api/crates/layerfs-api/tests/calls/table.rs) | `cargo +1.85.1 test --locked -p layerfs-api --test calls table` | any Unix host | 84 calls in ten families; one source file per call; refusals before any effect |
 | [`coverage.test.mjs`](../../../api/node/test/drift/coverage.test.mjs) | `node --test api/node/test/drift/coverage.test.mjs` | macOS or Linux, with the built addon, Python module and CLI | every front end matches the table |
 | [`file-history.mjs`](../../../api/node/examples/file-history.mjs) | `node api/node/examples/file-history.mjs` | macOS or Linux, with the built addon | a Store, Init, file writes and history reads |
 

@@ -30,7 +30,7 @@ instructions name the project (`<store>/<project>`, such as `shop/api`), your
 Branch, your Sandbox and how to reach the package or the command.
 
 - **One setting:** `LAYERFS_HOME`, the home folder that holds every record
-  (default `~/.layerfs`). Nothing else is needed.
+  (default `~/.layerfs/home`, or a legacy `~/.layerfs` that holds `layerfs.json`). Nothing else is needed.
 - **The integration may give you a folder scope** (`--scope <folder>
   --scope-project <store>/<project>`, or `client({ scope })`). Then you work
   in that one project, your paths must stay inside that folder, your Branch

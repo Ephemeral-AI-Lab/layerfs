@@ -36,6 +36,7 @@ const CALL_WHY = {
   "store.compact": "reclaim one Store's dead bytes; a folder scope refuses it",
   "store.upgrade": "bring an older-format Store to the latest format, in place; Ctrl-C cancels it before COMMIT",
   "store.repair_mount_holders": "the operator's explicit repair of the admissions that hold one Branch: list, preview, settle, release or audit",
+  "home.move": "move this home into another folder on the same filesystem; client folders stay",
   "sandbox.create": "start a Sandbox, and with --mount mount a Branch in it",
   "sandbox.remove": "stop a Sandbox and remove it",
 };

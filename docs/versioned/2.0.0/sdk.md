@@ -33,7 +33,7 @@ const lfs = layerfs.client({ home: "/data/lfs", scope: { project: "shop/web", fo
 - Node 22 or later. The package is an ES module.
 - The default export's ten families and the named exports `project`,
   `branch`, `commit`, `file`, `sandbox`, `workspace`, `machine`, `store` and
-  `backup` use the default home (`LAYERFS_HOME`, else `~/.layerfs`). The
+  `backup` use the default home (`LAYERFS_HOME`, else `~/.layerfs/home`). The
   `home` family is on the default export and on a client
   (`layerfs.home.get()`), not a named export.
 - `layerfs.client({ home, scope })` makes a client of another home, with an
@@ -138,7 +138,7 @@ asyncio.run(main())
 
 See [`project.export`](../../architecture/api/sdk/project.md#projectexport)
 for destination validation, fidelity, routing, refusal codes and result fields.
-The table has 83 calls, eight in the `project` family.
+The table has 84 calls, eight in the `project` family.
 
 ```js
 // /exports exists; the destination is absent or empty on this host.

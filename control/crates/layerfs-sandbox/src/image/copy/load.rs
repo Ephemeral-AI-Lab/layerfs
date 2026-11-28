@@ -381,6 +381,7 @@ pub(crate) fn existing_home_id(home: &Path) -> Result<Option<String>> {
         disk::Layout::Current(file) => Ok(Some(file.id)),
         disk::Layout::Empty => Ok(None),
         disk::Layout::Foreign => Err(disk::layout::foreign(home)),
+        disk::Layout::Container => Err(disk::layout::container(home)),
     }
 }
 

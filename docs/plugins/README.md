@@ -37,7 +37,7 @@ Build a LayerFS plugin with me: <what it should do>.
    the plugin, give them that skill.
 4. Design within these rules:
    - Use only the package's public calls. Never import LayerFS source files.
-   - The one setting is LAYERFS_HOME (default ~/.layerfs). Machines, Stores and buckets
+   - The one setting is LAYERFS_HOME (default ~/.layerfs/home). Machines, Stores and buckets
      are records in the home, made by the machine, store and backup calls; where a call
      runs comes from those records, not from the plugin.
    - Each call is attempted once. Handle a refusal (Conflict, Busy, NoSuchSandbox, …)

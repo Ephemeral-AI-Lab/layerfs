@@ -57,6 +57,15 @@ class AsyncHomeFamily:
         log_tag: str | None = None,
     ) -> Result:
         """check the home, then each machine, PostgreSQL Store and bucket, shallowly"""
+    async def move(
+        self,
+        to: str,
+        *,
+        detail: bool | None = None,
+        with_: Sequence[str] | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
+        """move this home into another folder on the same filesystem; client folders stay"""
 
 class AsyncProjectFamily:
     async def init(

@@ -18,7 +18,8 @@ every event reaches its function before the call settles; a refusal becomes
 `LayerFSError` (`code`, `message`, `fix`, the next-call fields as properties,
 `detail` only when the call asked for the long form); `log_tag` names the call-log line, with
 client `node` or `python`. The home defaults to `LAYERFS_HOME`, else
-`~/.layerfs`, decided by the library.
+`~/.layerfs/home` (or a legacy `~/.layerfs` that holds `layerfs.json`),
+decided by the library.
 
 ## layerfs-node
 
@@ -69,7 +70,7 @@ links it and holds the build and type scripts.
 
 | Test | Checks |
 | --- | --- |
-| [`every-call.test.mjs`](../../../../api/node/test/calls/every-call.test.mjs) | ten families and 83 calls, every function; required-argument refusals; a Store, Init with progress, file and Branch calls, bytes, a folder scope; the call log's `client` and `log_tag` |
+| [`every-call.test.mjs`](../../../../api/node/test/calls/every-call.test.mjs) | ten families and 84 calls, every function; required-argument refusals; a Store, Init with progress, file and Branch calls, bytes, a folder scope; the call log's `client` and `log_tag` |
 | [`shell.test.mjs`](../../../../api/node/test/contract/shell.test.mjs) | the command and the package refuse every call alike; a live Store read both ways (needs `target/debug/layerfs`) |
 | [`events.test.mjs`](../../../../api/node/test/calls/events.test.mjs), [`progress.test.mjs`](../../../../api/node/test/calls/progress.test.mjs) | handler failures, delivery before settling, exec output through functions and `stream: true` (exec half needs `LAYERFS_DAEMON`) |
 | [`values.test.mjs`](../../../../api/node/test/native/values.test.mjs) | exact `bigint`, refused values, bytes and the one-key map |

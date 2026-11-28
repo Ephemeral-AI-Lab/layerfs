@@ -13,4 +13,4 @@ pub use crate::record::file::{
     now_ms, private_dir, read_record, traversable, versioned, with_field, write_entity,
     write_record, RECORD_VERSION,
 };
-pub use layout::{detect, ensure, open, opened, HomeFile, Layout, LAYOUT_VERSION};
+pub use layout::{default_home, detect, ensure, open, opened, HomeFile, Layout, LAYOUT_VERSION};

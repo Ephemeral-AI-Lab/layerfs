@@ -37,6 +37,7 @@ pub(super) enum Found {
     Missing,
     Current,
     Foreign,
+    Container,
 }
 
 /// The sections `home.get` adds when asked (`--with`).
@@ -59,6 +60,7 @@ pub(super) fn state(
     Ok(match detect(home)? {
         Layout::Empty => (Found::Missing, None),
         Layout::Foreign => (Found::Foreign, None),
+        Layout::Container => (Found::Container, None),
         Layout::Current(file) => (Found::Current, Some(file.layout)),
     })
 }
@@ -90,6 +92,16 @@ pub fn get(home: &Path, build: Build<'_>, with: With) -> Outcome {
             ),
             layout,
             Some(layerfs_home::disk::layout::foreign(home).message),
+        ),
+        // a LayerFS folder holding `home/` and its clients' folders: not
+        // a home, and never moved aside; the fix names its `home/`
+        Ok((Found::Container, layout)) => (
+            State::broken(
+                Reason::Unsupported,
+                Some(&layerfs_home::disk::layout::container_fix(home)),
+            ),
+            layout,
+            Some(layerfs_home::disk::layout::container(home).message),
         ),
         // `detect` refuses only a read the system refused (permissions,
         // I/O), which may be a real 2.0 home: `failed` with the OS error,

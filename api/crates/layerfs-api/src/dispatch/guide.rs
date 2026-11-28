@@ -408,6 +408,11 @@ const ARGS: &[(&str, &str, &str)] = &[
     ),
     ("home.log", "limit", "the most lines in one page"),
     (
+        "home.move",
+        "to",
+        "the new home folder, new or empty, on the same filesystem",
+    ),
+    (
         "machine.load_image",
         "image",
         "a Docker reference, image id or sha256: digest in the host's Docker",
@@ -580,6 +585,7 @@ const EXAMPLES: &[(&str, &str)] = &[
     ("home.log", "layerfs home log --call file.write --limit 20"),
     ("home.clear_log", "layerfs home clear-log"),
     ("home.doctor", "layerfs home doctor"),
+    ("home.move", "layerfs home move ~/.layerfs/home"),
     (
         "project.init",
         "layerfs project init shop/web ~/code/web --progress",

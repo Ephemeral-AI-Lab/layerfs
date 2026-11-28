@@ -39,7 +39,8 @@ const USAGE = `usage: layerfs-mcp [--profile work|admin] [--home DIR]
   --profile admin  every call, including machines, Stores, backups and the
                    four GC calls project.delete, project.hide_path,
                    branch.remove and store.compact
-  --home DIR       the LayerFS home (default: LAYERFS_HOME, else ~/.layerfs)
+  --home DIR       the LayerFS home (default: LAYERFS_HOME, else ~/.layerfs/home,
+                   or a legacy ~/.layerfs that holds layerfs.json)
   --scope-project  the folder scope's project, with --scope-folder
   --scope-folder   the folder scope; the library checks every scoped call
   --scope-branch   the scope's Branch namespace; Branch and file calls need it
