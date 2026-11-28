@@ -74,8 +74,13 @@ fn function_options_are_refused_as_values_before_any_effect() {
         ("on_progress", SdkValue::text("f")),
     ]);
     let mut events = Vec::new();
-    let refused = layerfs_api::call(Some(&home), "machine.create", args, &mut |e| events.push(e))
-        .expect_err("a callback cannot cross the library boundary as a value");
+    let refused = layerfs_api::call(
+        Some(crate::root::root_of(&home)),
+        "machine.create",
+        args,
+        &mut |e| events.push(e),
+    )
+    .expect_err("a callback cannot cross the library boundary as a value");
     assert_eq!(refused.code, "InvalidInput", "{}", refused.message);
     assert!(events.is_empty(), "refused before any effect: {events:?}");
     assert!(!home.join("machine").exists(), "nothing was created");

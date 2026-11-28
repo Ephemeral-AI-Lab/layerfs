@@ -21,7 +21,8 @@ export function temp(prefix) {
   return mkdtempSync(join(base, `layerfs-mcp-${prefix}-`));
 }
 
-/** `{ home, source, out }` under one temp root; `source` holds `files`. */
+/** `{ root, home, source, out }` under one temp root, which is the
+ * LayerFS root (its home is `home`); `source` holds `files`. */
 export function workspace(prefix, files = {}) {
   const root = temp(prefix);
   const home = join(root, "home");
@@ -38,8 +39,8 @@ export function workspace(prefix, files = {}) {
 }
 
 /** A connected SDK client over a spawned `node src/server.js`. */
-export async function connect({ home, profile, scope, extra = [] }) {
-  const args = [SERVER, "--home", home];
+export async function connect({ root, profile, scope, extra = [] }) {
+  const args = [SERVER, "--root", root];
   if (profile) args.push("--profile", profile);
   if (scope) {
     args.push("--scope-project", scope.project, "--scope-folder", scope.folder);

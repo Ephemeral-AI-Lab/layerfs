@@ -6,6 +6,8 @@
 //! `Failed` with the same fix.
 #[path = "../support/mod.rs"]
 mod common;
+#[path = "../../../layerfs-api/tests/support/root.rs"]
+mod root;
 use common::{layerfs, run, tempdir, text};
 use layerfs_home::json::parse;
 use layerfs_protocol::sdk::SdkValue;

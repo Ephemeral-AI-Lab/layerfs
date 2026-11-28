@@ -56,11 +56,12 @@ async function worker(dir) {
 }
 
 test("a throwing on_progress does not stop a push; every event comes before it settles", { timeout: 60_000 }, async () => {
-  const home = temp("home");
+  const root = temp("home");
+  const home = join(root, "home");
   const guest = temp("guest");
   const box = await worker(guest);
   try {
-    const lfs = client({ home });
+    const lfs = client({ root });
     await lfs.store.create("shop");
     mkdirSync(join(home, "machine", "box"), { recursive: true });
     writeFileSync(join(home, "machine", "box", "record.json"), JSON.stringify({ name: "box", platform: "lima", vm_name: "layerfs-00000000-box" }));
@@ -95,7 +96,7 @@ test("a throwing on_progress does not stop a push; every event comes before it s
     assert.deepEqual(phases, settled);
   } finally {
     box.stop();
-    rmSync(home, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true });
     rmSync(guest, { recursive: true, force: true });
   }
 });
@@ -106,10 +107,10 @@ test("exec output: the stdout and stderr functions, and stream: true without the
   const home = temp("stream");
   const folder = temp("stream-folder");
   writeFileSync(join(folder, "README.md"), "streamed\n");
-  const lfs = client({ home });
+  const lfs = client({ root: home });
   await lfs.store.create("shop");
   const daemon = ["machine", "update", hostMachine, "--daemon", process.env.LAYERFS_DAEMON];
-  const updated = spawnSync(command, daemon, { env: { ...process.env, LAYERFS_HOME: home }, timeout: 30_000 });
+  const updated = spawnSync(command, daemon, { env: { ...process.env, LAYERFS_ROOT: home }, timeout: 30_000 });
   assert.equal(updated.status, 0, String(updated.stderr));
   await lfs.project.init("shop/api", folder);
   await lfs.branch.fork("shop/api", "dev", "main");
@@ -131,7 +132,7 @@ test("exec output: the stdout and stderr functions, and stream: true without the
     const script = `import { client } from ${JSON.stringify(new URL("../../src/index.js", import.meta.url).href)};
       await client().workspace.exec(${JSON.stringify(ws)}, "cat README.md; echo oops >&2", { stream: true });`;
     const child = spawnSync(process.execPath, ["--input-type=module", "-e", script], {
-      env: { ...process.env, LAYERFS_HOME: home },
+      env: { ...process.env, LAYERFS_ROOT: home },
       timeout: 60_000,
     });
     assert.equal(child.status, 0, String(child.stderr));

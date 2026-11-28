@@ -21,6 +21,14 @@ fn tempdir(tag: &str) -> PathBuf {
     dir
 }
 
+/// `home.init` of the home in `home`: an empty folder named as the root
+/// is made the home first (see `support/root.rs`), so `home.init` answers
+/// `unchanged` and the records below land in `home` itself.
+fn init(home: &Path) {
+    std::fs::create_dir_all(home).unwrap();
+    short(home, "home.init", &[]);
+}
+
 fn t(text: &str) -> SdkValue {
     SdkValue::text(text)
 }
@@ -40,9 +48,12 @@ fn call(
     pairs: &[(&str, SdkValue)],
 ) -> (Result<SdkValue, String>, Vec<SdkValue>) {
     let mut events = Vec::new();
-    let answer = layerfs_api::call(Some(home), name, args(pairs), &mut |event| {
-        events.push(event)
-    })
+    let answer = layerfs_api::call(
+        Some(crate::root::root_of(home)),
+        name,
+        args(pairs),
+        &mut |event| events.push(event),
+    )
     .map_err(|refusal| format!("{}: {}", refusal.code, refusal.message));
     (answer, events)
 }
@@ -199,7 +210,7 @@ fn sqlite_store(home: &Path, name: &str, machine: &str) {
 #[test]
 fn a_project_s_record_is_checked_against_its_store() {
     let home = tempdir("project");
-    short(&home, "home.init", &[]);
+    init(&home);
     sqlite_store(&home, "shop", layerfs_home::names::HOST_MACHINE);
     let manifest = layerfs_protocol::provision::manifest::StoreManifest {
         provider: layerfs_protocol::provision::manifest::ProviderKind::Sqlite,
@@ -284,7 +295,7 @@ fn a_project_s_record_is_checked_against_its_store() {
 #[test]
 fn a_bucket_s_record_is_its_first_check() {
     let home = tempdir("bucket");
-    short(&home, "home.init", &[]);
+    init(&home);
     write_entity(
         &paths::bucket_record(&home, "b1"),
         &SdkValue::map([("name", t("b1"))]),
@@ -318,7 +329,7 @@ fn what_is_not_there_is_refused_and_no_home_is_made() {
     }
     assert!(!home.exists(), "a doctor made the home");
     // `--machine` probes a PostgreSQL Store; a sqlite Store is refused
-    short(&home, "home.init", &[]);
+    init(&home);
     sqlite_store(&home, "shop", layerfs_home::names::HOST_MACHINE);
     let refused = call(
         &home,
@@ -347,7 +358,7 @@ fn what_is_not_there_is_refused_and_no_home_is_made() {
 #[test]
 fn a_store_s_broken_record_gives_its_state_s_fix() {
     let home = tempdir("store-fix");
-    short(&home, "home.init", &[]);
+    init(&home);
     for (store, user) in [("pg", None), ("gone", Some(("user", t("owner"))))] {
         let mut fields = vec![
             ("name", t(store)),
@@ -413,7 +424,7 @@ fn a_silent_server_fails_its_connection_within_the_handshake_limit() {
         }
     });
     let home = tempdir("silent");
-    short(&home, "home.init", &[]);
+    init(&home);
     layerfs_store::backend::postgresql::login::save(&home, "silent", "pw").unwrap();
     let url = format!("postgresql://127.0.0.1:{port}/layerfs_db?sslmode=disable");
     write_entity(
@@ -468,7 +479,7 @@ fn a_silent_server_fails_its_connection_within_the_handshake_limit() {
 #[test]
 fn a_sqlite_project_without_a_manifest_fails_project_doctor() {
     let home = tempdir("missing-manifest");
-    short(&home, "home.init", &[]);
+    init(&home);
     sqlite_store(&home, "shop", layerfs_home::names::HOST_MACHINE);
     write_entity(
         &paths::project_record(&home, "shop", "api"),

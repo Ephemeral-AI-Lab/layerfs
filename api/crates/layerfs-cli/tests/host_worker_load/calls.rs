@@ -101,7 +101,7 @@ fn a_caller_behind_a_wedged_worker_is_refused_before_sending() {
     let began = Instant::now();
     let mut read = std::process::Command::new(env!("CARGO_BIN_EXE_layerfs"))
         .args(["file", "read", "shop/api", "main", "/hello"])
-        .env("LAYERFS_HOME", &home.paths.home)
+        .env("LAYERFS_ROOT", crate::root::root_of(&home.paths.home))
         .env_remove("LAYERFS_TRACE")
         .env_remove("LAYERFS_TRACE_STEP")
         .stdin(Stdio::null())

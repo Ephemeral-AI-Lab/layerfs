@@ -151,7 +151,7 @@ fn connect(
         args.push(("detail".to_owned(), SdkValue::Bool(true)));
     }
     layerfs_api::call(
-        Some(home),
+        Some(crate::root::root_of(home)),
         "backup.connect",
         SdkValue::Map(args),
         &mut |_| {},

@@ -40,7 +40,8 @@ fn refusal(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> (String, Strin
             .map(|(n, v)| ((*n).to_owned(), v.clone()))
             .collect(),
     );
-    let refusal = layerfs_api::call(Some(home), name, args, &mut |_| {}).unwrap_err();
+    let refusal =
+        layerfs_api::call(Some(crate::root::root_of(home)), name, args, &mut |_| {}).unwrap_err();
     (refusal.code, refusal.message)
 }
 

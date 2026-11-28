@@ -28,14 +28,14 @@ fn ok(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> SdkValue {
             .map(|(n, v)| ((*n).to_owned(), v.clone()))
             .collect(),
     );
-    layerfs_api::call(Some(home), name, args, &mut |_| {})
+    layerfs_api::call(Some(crate::root::root_of(home)), name, args, &mut |_| {})
         .unwrap_or_else(|r| panic!("{name}: {} {}", r.code, r.message))
 }
 
 fn layerfs(home: &Path, words: &[&str]) -> std::process::Output {
     Command::new(LAYERFS)
         .args(words)
-        .env("LAYERFS_HOME", home)
+        .env("LAYERFS_ROOT", crate::root::root_of(home))
         .output()
         .unwrap()
 }
@@ -55,7 +55,7 @@ fn exec_stream_passes_output_and_the_commands_exit_code() {
     home::open(&home).unwrap();
     // the native machine's daemon is a setting of its record
     layerfs_api::call(
-        Some(&home),
+        Some(crate::root::root_of(&home)),
         "machine.update",
         SdkValue::map([
             ("machine", SdkValue::text(layerfs_api::names::HOST_MACHINE)),

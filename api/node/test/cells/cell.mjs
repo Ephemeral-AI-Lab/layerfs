@@ -16,8 +16,9 @@
 // the Sandbox image (`machine update docker --image`), and a docker worker
 // this home started (`layerfs-<home id8>-docker`) is removed with its data
 // volume at the end.
-// LFS533_HOME names an existing home that already holds <machine> (a VM is
-// made once per kind, not per cell): the cell's own Store `c<nn>` is made
+// LFS533_ROOT names an existing LayerFS root whose home already holds
+// <machine> (a VM is made once per kind, not per cell): the cell's own
+// Store `c<nn>` is made
 // there, moved native -> <machine> and, after the cells, moved back to native, then
 // removed; the home stays.
 // LFS535_PG_URL makes the cell's Store a PostgreSQL Store (#535 phase 8
@@ -29,7 +30,7 @@
 // One cell per command; nothing else runs a cell at the same time, so the
 // 1.1.0 host-wide lock is not ported. The receipt holds every step's time,
 // the 1-minute load and the verdict.
-import { mkdtempSync, chmodSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, chmodSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { loadavg, tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -71,11 +72,14 @@ async function step(name, call) {
   }
 }
 
-const shared = process.env.LFS533_HOME;
-const home = shared ?? mkdtempSync(join(tmpdir(), "lfs533-cell-"));
-if (!shared) chmodSync(home, 0o700);
+// a shared LayerFS root, else a fresh one; its home is the root itself
+// while it holds layerfs.json, else `<root>/home`
+const shared = process.env.LFS533_ROOT;
+const root = shared ?? mkdtempSync(join(tmpdir(), "lfs533-cell-"));
+if (!shared) chmodSync(root, 0o700);
+const home = existsSync(join(root, "layerfs.json")) ? root : join(root, "home");
 const empty = mkdtempSync(join(tmpdir(), "lfs533-src-"));
-const lfs = client({ home });
+const lfs = client({ root });
 const storeName = shared ? `c${cell.slice(1)}` : "cells";
 const project = `${storeName}/p`;
 let pushed = false;
@@ -103,7 +107,7 @@ try {
     const binary = process.env.LFS533_LAYERFS ?? new URL("../../../../target/debug/layerfs", import.meta.url).pathname;
     await step("machine.update", async () =>
       execFileSync(binary, ["machine", "update", hostMachine, "--daemon", process.env.LFS533_DAEMON], {
-        env: { PATH: process.env.PATH, HOME: process.env.HOME, LAYERFS_HOME: home },
+        env: { PATH: process.env.PATH, HOME: process.env.HOME, LAYERFS_ROOT: home },
         encoding: "utf8",
       }));
   }
@@ -206,7 +210,7 @@ try {
   }
   out.endedAt = new Date().toISOString();
   writeFileSync(receipt, JSON.stringify(out, null, 2) + "\n");
-  if (!shared) rmSync(home, { recursive: true, force: true });
+  if (!shared) rmSync(root, { recursive: true, force: true });
   rmSync(empty, { recursive: true, force: true });
 }
 if (out.pullError || out.removeError) {

@@ -19,8 +19,9 @@ Commit, merge, and publish to `main`.
 
 2.0 changes how a host reaches all of this:
 
-- **One home, one setting.** Every record lives under `LAYERFS_HOME`
-  (default `~/.layerfs/home`, or a legacy `~/.layerfs` that holds `layerfs.json`). The 1.1.0 platform settings are gone. See
+- **One home, one setting.** Every record lives in the home in the
+  LayerFS root `LAYERFS_ROOT` (default `~/.layerfs`): `<root>/home`, or a
+  legacy root that holds `layerfs.json` itself. The 1.1.0 platform settings are gone. See
   [the home](home.md).
 - **Machines and Stores.** Compute is machines: the host machine (`macos-host` or `linux-host`) and `docker` are
   built in; VM kinds (`apple-container`, `lima`) are created by name.
@@ -46,7 +47,7 @@ Commit, merge, and publish to `main`.
 1. [Quickstart](quickstart.md): one home, a Store, Init, Branch and file
    calls, a Sandbox and a Workspace, a Commit; in the shell, JavaScript and
    Python.
-2. [The home](home.md): the layout of `LAYERFS_HOME`, and what an older
+2. [The home](home.md): where `LAYERFS_ROOT` keeps it, its layout, and what an older
    LayerFS's home gets (it is not converted).
 3. [The calls](calls.md): all 84 calls with their positionals and options,
    the form of their answers, the doctors, errors and exit codes, the shell
@@ -105,7 +106,7 @@ each old name):
   `machine.update` are added (O24, O14, O11).
 - **Results.** Result keys are snake_case in every front end (`exit_code`,
   not `exitCode`).
-- **Settings.** Only `LAYERFS_HOME` and the trace and measurement settings
+- **Settings.** Only `LAYERFS_ROOT` and the trace and measurement settings
   are read; a 1.1.0 environment is not imported.
 - **Homes.** A folder that is not a LayerFS 2.0 home (an older LayerFS's
   home among them) is not converted (owner, 2026-11-19): every call

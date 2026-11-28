@@ -26,7 +26,8 @@ fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, 
             .map(|(n, v)| ((*n).to_owned(), v.clone()))
             .collect(),
     );
-    layerfs_api::call(Some(home), name, args, &mut |_| {}).map_err(|r| (r.code, r.message))
+    layerfs_api::call(Some(crate::root::root_of(home)), name, args, &mut |_| {})
+        .map_err(|r| (r.code, r.message))
 }
 
 fn ok(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> SdkValue {
@@ -43,7 +44,7 @@ fn a_sandbox_killed_behind_controls_back_is_lost_until_removed() {
     home::open(&home).unwrap();
     // the native machine's daemon is a setting of its record
     layerfs_api::call(
-        Some(&home),
+        Some(crate::root::root_of(&home)),
         "machine.update",
         SdkValue::map([
             ("machine", SdkValue::text(layerfs_home::names::HOST_MACHINE)),

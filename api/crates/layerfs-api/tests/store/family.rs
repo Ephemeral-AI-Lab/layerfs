@@ -33,7 +33,8 @@ fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, 
             .map(|(n, v)| ((*n).to_owned(), v.clone()))
             .collect(),
     );
-    layerfs_api::call(Some(home), name, args, &mut |_| {}).map_err(|r| (r.code, r.message))
+    layerfs_api::call(Some(crate::root::root_of(home)), name, args, &mut |_| {})
+        .map_err(|r| (r.code, r.message))
 }
 
 /// [`call`] asking for the long form.
@@ -221,25 +222,30 @@ fn a_store_is_pushed_to_a_worker_machine_and_pulled_back_with_equal_heads() {
         ("machine", t("box")),
         ("detail", SdkValue::Bool(true)),
     ]);
-    let moved = layerfs_api::call(Some(&home), "store.move", args, &mut |event| {
-        let progress = event.get("progress").unwrap();
-        let phase = progress.get_text("phase").unwrap();
-        if phases.last().map(String::as_str) != Some(phase) {
-            phases.push(phase.to_owned());
-        }
-        // bytes while hashing (`snapshot`, `verify`) or sending (`send`),
-        // null in every other phase (#536 §10b)
-        let (done, total) = (progress.get("done"), progress.get("total"));
-        match phase {
-            "snapshot" => snap.push((done.cloned(), total.cloned())),
-            "send" => sent.push((done.cloned(), total.cloned())),
-            "verify" => verified.push((done.cloned(), total.cloned())),
-            _ => assert_eq!(
-                (done, total),
-                (Some(&SdkValue::Null), Some(&SdkValue::Null))
-            ),
-        }
-    })
+    let moved = layerfs_api::call(
+        Some(crate::root::root_of(&home)),
+        "store.move",
+        args,
+        &mut |event| {
+            let progress = event.get("progress").unwrap();
+            let phase = progress.get_text("phase").unwrap();
+            if phases.last().map(String::as_str) != Some(phase) {
+                phases.push(phase.to_owned());
+            }
+            // bytes while hashing (`snapshot`, `verify`) or sending (`send`),
+            // null in every other phase (#536 §10b)
+            let (done, total) = (progress.get("done"), progress.get("total"));
+            match phase {
+                "snapshot" => snap.push((done.cloned(), total.cloned())),
+                "send" => sent.push((done.cloned(), total.cloned())),
+                "verify" => verified.push((done.cloned(), total.cloned())),
+                _ => assert_eq!(
+                    (done, total),
+                    (Some(&SdkValue::Null), Some(&SdkValue::Null))
+                ),
+            }
+        },
+    )
     .unwrap();
     assert_eq!(
         phases,
@@ -314,7 +320,7 @@ fn a_store_is_pushed_to_a_worker_machine_and_pulled_back_with_equal_heads() {
     let mut pull_snap = Vec::new();
     let mut pull_verified = Vec::new();
     let back = layerfs_api::call(
-        Some(&home),
+        Some(crate::root::root_of(&home)),
         "store.move",
         SdkValue::map([
             ("store", t("shop")),

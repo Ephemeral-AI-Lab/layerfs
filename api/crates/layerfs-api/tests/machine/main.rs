@@ -5,6 +5,8 @@ mod platforms_setup;
 mod provider_names;
 mod refusal_order;
 mod removed_platforms;
+#[path = "../support/root.rs"]
+mod root;
 
 #[cfg(feature = "machine")]
 #[path = "../support/env.rs"]

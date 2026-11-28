@@ -30,8 +30,13 @@ fn doctor(home: &Path, detail: bool) -> SdkValue {
         ("store", SdkValue::text("held")),
         ("detail", SdkValue::Bool(detail)),
     ]);
-    layerfs_api::call(Some(home), "store.doctor", args, &mut |_| {})
-        .unwrap_or_else(|r| panic!("{}: {}", r.code, r.message))
+    layerfs_api::call(
+        Some(crate::root::root_of(home)),
+        "store.doctor",
+        args,
+        &mut |_| {},
+    )
+    .unwrap_or_else(|r| panic!("{}: {}", r.code, r.message))
 }
 
 /// `(check, outcome)` of each row of the Store's node.
@@ -49,7 +54,7 @@ fn rows(long: &SdkValue) -> Vec<(String, String)> {
 fn a_store_another_writer_holds_is_busy_not_a_schema_error() {
     let home = tempdir("home");
     layerfs_api::call(
-        Some(&home),
+        Some(crate::root::made(&home)),
         "home.init",
         SdkValue::Map(Vec::new()),
         &mut |_| {},

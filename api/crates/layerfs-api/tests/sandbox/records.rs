@@ -31,7 +31,8 @@ fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, 
             .map(|(n, v)| ((*n).to_owned(), v.clone()))
             .collect(),
     );
-    layerfs_api::call(Some(home), name, args, &mut |_| {}).map_err(|r| (r.code, r.message))
+    layerfs_api::call(Some(crate::root::root_of(home)), name, args, &mut |_| {})
+        .map_err(|r| (r.code, r.message))
 }
 
 /// A Sandbox record as `sandbox.create` leaves it, without an id: with
@@ -145,7 +146,7 @@ fn sandbox_records_without_a_sandbox() {
     // `Unresolved`, naming the get that shows it and the remove that clears it
     unstarted(&home, "lost", Some((dead, true)));
     let refusal = layerfs_api::call(
-        Some(&home),
+        Some(crate::root::root_of(&home)),
         "workspace.exec",
         SdkValue::map([("workspace", t("lost:w")), ("command", t("true"))]),
         &mut |_| {},

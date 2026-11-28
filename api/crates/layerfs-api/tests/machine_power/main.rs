@@ -2,6 +2,8 @@ mod docker_default_image;
 mod force;
 mod force_native;
 mod no_start;
+#[path = "../support/root.rs"]
+mod root;
 mod start_stop;
 mod take_down;
 mod worker_dial;

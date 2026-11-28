@@ -18,10 +18,11 @@ test("close drops this process's leases, and a later call opens its Store again"
   assert.equal(layerfs.close, close);
   // outside the table: its families keep only their own calls (sandbox.remove is one)
   assert.ok(table.every((spec) => spec.family !== "close"));
-  const home = temp("close");
+  const root = temp("close");
+  const home = join(root, "home");
   const folder = temp("close-folder");
   writeFileSync(join(folder, "README.md"), "hello close\n");
-  const lfs = client({ home });
+  const lfs = client({ root });
   await lfs.store.create("shop");
   await lfs.project.init("shop/api", folder);
   await lfs.file.read("shop/api", "main", "/README.md");
@@ -34,6 +35,6 @@ test("close drops this process's leases, and a later call opens its Store again"
   assert.equal(read.text, "hello close\n");
   assert.ok(existsSync(lease), "the next call holds the lease again");
   close();
-  rmSync(home, { recursive: true, force: true });
+  rmSync(root, { recursive: true, force: true });
   rmSync(folder, { recursive: true, force: true });
 });

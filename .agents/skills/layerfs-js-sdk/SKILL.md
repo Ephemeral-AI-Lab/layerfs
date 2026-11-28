@@ -29,8 +29,9 @@ An integration is a host that runs you with a LayerFS project already set up. It
 instructions name the project (`<store>/<project>`, such as `shop/api`), your
 Branch, your Sandbox and how to reach the package or the command.
 
-- **One setting:** `LAYERFS_HOME`, the home folder that holds every record
-  (default `~/.layerfs/home`, or a legacy `~/.layerfs` that holds `layerfs.json`). Nothing else is needed.
+- **One setting:** `LAYERFS_ROOT`, the LayerFS root (default `~/.layerfs`)
+  whose home, `<root>/home` (or the root while it holds `layerfs.json`),
+  holds every record. Nothing else is needed.
 - **The integration may give you a folder scope** (`--scope <folder>
   --scope-project <store>/<project>`, or `client({ scope })`). Then you work
   in that one project, your paths must stay inside that folder, your Branch
@@ -124,7 +125,7 @@ only when it was cut). Never list source files. Details:
 
 | Piece | What it is | Family |
 | --- | --- | --- |
-| Home | `LAYERFS_HOME`: the records of every machine, Store, project, Sandbox and bucket, and the call log | `home` |
+| Home | the home in `LAYERFS_ROOT`: the records of every machine, Store, project, Sandbox and bucket, and the call log | `home` |
 | Store | One database holding projects and all their history: a sqlite file on one machine, or a PostgreSQL database | `store` |
 | Project | `<store>/<project>`, imported once from a host folder | `project` |
 | Branch | A named line of Commits. `main` changes only through `branch.publish` | `branch` |
@@ -169,8 +170,8 @@ layerfs file read shop/api agent /README.md --text
   `sandbox.files`/`machine.files`'s `path`, `machine.prune`'s `image`).
 - **Every call takes its project** (or its Sandbox, Workspace, machine,
   Store). There is no client to open and no default project.
-  `layerfs.client({ home, scope })` returns the same ten families bound to
-  another home or a folder scope. `layerfs.close()` releases the Stores this
+  `layerfs.client({ root, scope })` returns the same ten families bound to
+  another LayerFS root or a folder scope. `layerfs.close()` releases the Stores this
   process holds open; call it before a script exits.
 - **Node calls return promises.** Python calls are synchronous.
 - **Answers are snake_case** in every front end. Bytes are `Buffer` in Node,
@@ -287,7 +288,7 @@ layerfs file read shop/api agent /hello.js --text
 5. **Commit every step that changes files**, failures included; publish to
    `main` at milestones.
 6. **Workspaces outlive your process.** The handle works from any later
-   process with the same `LAYERFS_HOME`. Keep each Workspace's calls
+   process with the same `LAYERFS_ROOT`. Keep each Workspace's calls
    sequential.
 7. **Clean up:** commit or discard, then unmount every Workspace;
    `sandbox.remove` a Sandbox you created when you are done with it.

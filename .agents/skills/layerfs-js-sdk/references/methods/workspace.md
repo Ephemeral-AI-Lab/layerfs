@@ -26,7 +26,7 @@ at the Commit. For one small read or edit, [`file.*`](file.md) is cheaper.
 - A Workspace is named `<sandbox>:<name>`, such as `tests:agent`: the
   `workspace` key of `mount`'s answer. Pass that handle to every other call.
   The path form `<sandbox>:/path` is refused `InvalidInput`. The handle works
-  from any later process with the same `LAYERFS_HOME`; never use one after
+  from any later process with the same `LAYERFS_ROOT`; never use one after
   its unmount.
 - **Each mount is a new Workspace**, with its own uncommitted changes.
   Mounting doesn't copy or scan the tree.

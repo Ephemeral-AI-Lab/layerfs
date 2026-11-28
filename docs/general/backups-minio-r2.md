@@ -31,7 +31,7 @@ it. Only plain-HTTP MinIO works without it.
 ```bash
 cargo +1.85.1 build --locked --release -p layerfs-cli --features tls
 export PATH="$PWD/target/release:$PATH"
-export LAYERFS_HOME="$HOME/.layerfs"    # any empty folder for a clean home
+export LAYERFS_ROOT="$HOME/.layerfs"    # any empty folder for a clean root; its home is <root>/home
 ```
 
 ## 2. Prepare the bucket
@@ -143,7 +143,7 @@ Restore under a new name, or into a fresh home to prove the bucket alone is
 enough (that is what was tested):
 
 ```bash
-export LAYERFS_HOME="$HOME/.layerfs-restore"      # empty
+export LAYERFS_ROOT="$HOME/.layerfs-restore"      # empty
 layerfs backup connect lab <same URL> --key env:LAYERFS_LAB
 layerfs backup restore shop lab shop --progress
 layerfs branch list shop/api

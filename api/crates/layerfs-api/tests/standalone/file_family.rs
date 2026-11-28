@@ -4,6 +4,8 @@
 //! `--expected`, `edit --replace-all`, `rm --recursive`, `apply` with the
 //! single calls' field names, and cursor pages that carry their filters
 //! and the Commit their first page read. Store calls: Linux only.
+#[path = "../support/root.rs"]
+mod root;
 use layerfs_api::home;
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
 use std::os::unix::fs::PermissionsExt;
@@ -36,7 +38,12 @@ fn map(args: &[(&str, SdkValue)]) -> SdkValue {
 }
 
 fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, SdkRefusal> {
-    layerfs_api::call(Some(home), name, map(args), &mut |_| {})
+    layerfs_api::call(
+        Some(crate::root::root_of(home)),
+        name,
+        map(args),
+        &mut |_| {},
+    )
 }
 
 fn ok(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> SdkValue {

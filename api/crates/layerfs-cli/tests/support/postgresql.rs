@@ -168,7 +168,7 @@ pub fn spawn(home: &Path, words: &[&str], stdin: Option<&str>) -> std::process::
     let mut child = Command::new(CLI)
         .args(words)
         .arg("--json")
-        .env("LAYERFS_HOME", home)
+        .env("LAYERFS_ROOT", crate::root::root_of(home))
         .env_remove("LAYERFS_TRACE")
         .env_remove("LAYERFS_TRACE_STEP")
         .stdin(if stdin.is_some() {

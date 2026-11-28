@@ -56,7 +56,7 @@ fn stop_fences_warm_sdk_and_new_cli_calls_until_explicit_start() {
     let history = proof::commits(&home);
     let sdk_read = || {
         layerfs_api::call(
-            Some(&home.paths.home),
+            Some(crate::root::root_of(&home.paths.home)),
             "file.read",
             SdkValue::map([
                 ("project", SdkValue::text("shop/api")),
@@ -94,7 +94,7 @@ fn stop_fences_warm_sdk_and_new_cli_calls_until_explicit_start() {
     // the SDK's own stop closes its own idle copy first: only other
     // processes and a call running here hold the host
     layerfs_api::call(
-        Some(&home.paths.home),
+        Some(crate::root::root_of(&home.paths.home)),
         "machine.stop",
         SdkValue::map([("machine", SdkValue::text(HOST_MACHINE))]),
         &mut |_| {},

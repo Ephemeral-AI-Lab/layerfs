@@ -6,6 +6,8 @@
 #![cfg(feature = "worker-fault")]
 mod connection;
 mod inspect;
+#[path = "../support/root.rs"]
+mod root;
 mod store;
 #[path = "../support/worker_store.rs"]
 mod worker_store;

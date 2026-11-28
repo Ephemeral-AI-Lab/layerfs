@@ -10,7 +10,7 @@ fn t(s: &str) -> SdkValue {
 }
 fn call(home: &Path, method: &str, args: &[(&str, SdkValue)]) -> SdkValue {
     layerfs_api::call(
-        Some(home),
+        Some(crate::root::root_of(home)),
         method,
         SdkValue::Map(
             args.iter()
@@ -32,7 +32,7 @@ fn native_exec_keeps_large_binary_output_cancellation_and_effects_on_closed_stdo
     home::open(&home).unwrap();
     // the native machine's daemon is a setting of its record
     layerfs_api::call(
-        Some(&home),
+        Some(crate::root::root_of(&home)),
         "machine.update",
         SdkValue::map([
             ("machine", SdkValue::text(layerfs_api::names::HOST_MACHINE)),
@@ -196,18 +196,19 @@ fn table_reads_initialize_missing_and_default_homes_but_doctor_does_not() {
     let default = scratch.join("default");
     std::fs::create_dir(&default).unwrap();
     let read = run(layerfs(&missing, &["store", "list"])
-        .env_remove("LAYERFS_HOME")
+        .env_remove("LAYERFS_ROOT")
         .env("HOME", &default));
     assert!(read.status.success(), "{}", text(&read.stderr));
-    // the default home is ~/.layerfs/home, beside clients' folders
+    // the default root is ~/.layerfs, and its home ~/.layerfs/home,
+    // beside clients' folders
     assert!(default.join(".layerfs/home/layerfs.json").exists());
     assert!(!default.join(".layerfs/layerfs.json").exists());
-    // a legacy ~/.layerfs that holds layerfs.json stays the home
+    // a legacy ~/.layerfs that holds layerfs.json (made by an older build,
+    // which named the home itself) stays the home
     let legacy = scratch.join("legacy");
-    let made = run(&mut layerfs(&legacy.join(".layerfs"), &["home", "init"]));
-    assert!(made.status.success(), "{}", text(&made.stderr));
+    crate::root::made(&legacy.join(".layerfs"));
     let read = run(layerfs(&missing, &["home", "get"])
-        .env_remove("LAYERFS_HOME")
+        .env_remove("LAYERFS_ROOT")
         .env("HOME", &legacy));
     assert!(read.status.success(), "{}", text(&read.stderr));
     let home = legacy.join(".layerfs").display().to_string();

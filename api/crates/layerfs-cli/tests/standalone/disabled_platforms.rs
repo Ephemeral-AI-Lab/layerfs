@@ -2,6 +2,8 @@
 //! platforms removed in 2.0.
 #[path = "../support/mod.rs"]
 mod common;
+#[path = "../../../layerfs-api/tests/support/root.rs"]
+mod root;
 use layerfs_api::{json, Kind};
 use layerfs_protocol::sdk::SdkValue;
 use std::net::TcpListener;
@@ -11,6 +13,9 @@ fn cli_refuses_every_new_work_route_before_contacting_the_machine() {
     for platform in ["firecracker", "ssh", "microsandbox"] {
         let reason = format!("platform `{platform}` was removed in LayerFS 2.0");
         let home = common::tempdir(&format!("disabled-{platform}"));
+        // a home that holds records holds its `layerfs.json`, so the root
+        // that names it is its own home
+        layerfs_home::disk::ensure(&home).unwrap();
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         listener.set_nonblocking(true).unwrap();
         let fixture = include_str!("../../../layerfs-api/tests/support/disabled-platforms.json")

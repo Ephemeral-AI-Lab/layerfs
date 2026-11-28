@@ -4,6 +4,8 @@ mod gc;
 mod log;
 mod log_redaction;
 mod progress_options;
+#[path = "../support/root.rs"]
+mod root;
 mod table;
 
 #[path = "../support/env.rs"]

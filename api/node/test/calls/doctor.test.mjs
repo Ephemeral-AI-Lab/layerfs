@@ -14,7 +14,7 @@ test("home.doctor reports a home without making it, as a table call", async () =
   assert.deepEqual(names.sort(), ["backup.doctor", "home.doctor", "machine.doctor", "project.doctor", "sandbox.doctor", "store.doctor"]);
   const parent = mkdtempSync(join(tmpdir(), "layerfs-node-doctor-"));
   const home = join(parent, "home");
-  const report = await layerfs.client({ home }).home.doctor({ detail: true });
+  const report = await layerfs.client({ root: parent }).home.doctor({ detail: true });
   assert.deepEqual(Object.keys(report), ["ok", "findings", "not_checked", "status", "counts", "observed_at", "tree"]);
   assert.equal(report.tree.coverage, "shallow");
   assert.ok(!existsSync(home), "the doctor made the home");
@@ -22,9 +22,10 @@ test("home.doctor reports a home without making it, as a table call", async () =
 });
 
 test("home.doctor names a record that does not parse and its fix", async () => {
-  const home = mkdtempSync(join(tmpdir(), "layerfs-node-doctor-"));
-  chmodSync(home, 0o700);
-  const lfs = layerfs.client({ home });
+  const root = mkdtempSync(join(tmpdir(), "layerfs-node-doctor-"));
+  chmodSync(root, 0o700);
+  const home = join(root, "home");
+  const lfs = layerfs.client({ root });
   await lfs.store.list();
   await assert.rejects(lfs.machine.doctor("missing"), (error) => error instanceof LayerFSError && error.code === "NotFound");
   mkdirSync(join(home, "store", "bad"), { recursive: true, mode: 0o700 });
@@ -36,7 +37,7 @@ test("home.doctor names a record that does not parse and its fix", async () => {
   assert.equal(finding.severity, "error");
   assert.match(finding.message, /by hand/);
   assert.equal(finding.fix, undefined);
-  rmSync(home, { recursive: true, force: true });
+  rmSync(root, { recursive: true, force: true });
 });
 
 test("home.leftovers and home.prune are gone (spec v20: LayerFS removes leftovers itself)", () => {
@@ -44,7 +45,7 @@ test("home.leftovers and home.prune are gone (spec v20: LayerFS removes leftover
   assert.deepEqual(home, ["init", "get", "log", "clear_log", "doctor", "move"]);
   assert.equal(layerfs.home.leftovers, undefined);
   assert.equal(layerfs.home.prune, undefined);
-  const lfs = layerfs.client({ home: join(tmpdir(), "layerfs-node-doctor-gone") });
+  const lfs = layerfs.client({ root: join(tmpdir(), "layerfs-node-doctor-gone") });
   assert.equal(lfs.home.leftovers, undefined);
   assert.equal(lfs.home.prune, undefined);
 });

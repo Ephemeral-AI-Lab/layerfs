@@ -180,7 +180,7 @@ fn actual_runtime_negative_observations_preserve_records_and_ownership() {
             "b6-gone",
             layerfs_home::names::HOST_MACHINE,
         ])
-        .env("LAYERFS_HOME", &source)
+        .env("LAYERFS_ROOT", &source)
         .output()
         .unwrap();
     assert!(
@@ -190,7 +190,7 @@ fn actual_runtime_negative_observations_preserve_records_and_ownership() {
     let gone = copy(&source, 6);
     let closed = std::process::Command::new(&cli)
         .args(["sandbox", "remove", "b6-gone"])
-        .env("LAYERFS_HOME", &source)
+        .env("LAYERFS_ROOT", &source)
         .output()
         .unwrap();
     assert!(

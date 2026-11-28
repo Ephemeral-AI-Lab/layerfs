@@ -1,4 +1,4 @@
-// The `layerfs` package (#533 step 14): one client per home (and optional
+// The `layerfs` package (#533 step 14): one client per LayerFS root (and optional
 // folder scope, O32), ten families built from the library's call table.
 // Each function takes its positionals in the table's order, then an options
 // object; every call is one call into the library, made once. Any call's
@@ -9,7 +9,7 @@
 //   import layerfs from "@layerfs/node";
 //   await layerfs.store.create("shop");
 //   await layerfs.project.init("shop/api", "/src/api", { on_progress: console.log });
-//   const lfs = layerfs.client({ home: "/data/lfs", scope: { project: "shop/api", folder: "/web", branch: "agent" } });
+//   const lfs = layerfs.client({ root: "/data/lfs", scope: { project: "shop/api", folder: "/web", branch: "agent" } });
 import { native } from "./native.js";
 import { encode, decode, isPlain } from "./values.js";
 import { LayerFSError } from "./errors.js";
@@ -86,7 +86,7 @@ function bind(client, spec) {
     const reply = decode(await native.call(
       name,
       encode(args),
-      client.home ?? null,
+      client.root ?? null,
       client.scope ? encode(client.scope) : null,
       onEvent,
     ));
@@ -101,13 +101,22 @@ function bind(client, spec) {
   };
 }
 
-/** A client of `home` (default `LAYERFS_HOME`, else `~/.layerfs/home`,
- * or a legacy `~/.layerfs` that holds `layerfs.json`), with an
- * optional folder scope `{ project, folder, branch? }`. */
-export function client({ home, scope } = {}) {
-  // the home is the client's own and not a field: `client.home` is the
+/** A client of the LayerFS root `root` (default `LAYERFS_ROOT`, else
+ * `~/.layerfs`), whose home is `<root>/home`, or the root itself while it
+ * holds `layerfs.json`; with an optional folder scope
+ * `{ project, folder, branch? }`. */
+export function client(options = {}) {
+  const { root, scope } = options;
+  // a client names a root; an old `home` key would silently fall back to
+  // the default root, so any other key is refused
+  for (const key of Object.keys(options)) {
+    if (key !== "root" && key !== "scope") {
+      throw invalid(`client() takes { root, scope }, not ${key}`);
+    }
+  }
+  // the root is the client's own and not a field: `client.home` is the
   // `home` family
-  const where = { home, scope };
+  const where = { root, scope };
   const made = { scope };
   for (const family of families) made[family] = {};
   for (const spec of table) made[spec.family][spec.call] = bind(where, spec);

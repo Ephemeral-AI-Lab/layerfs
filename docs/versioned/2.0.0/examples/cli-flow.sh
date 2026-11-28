@@ -15,7 +15,7 @@ LAYERFS=${LAYERFS:-layerfs}
 root=$(mktemp -d "${TMPDIR:-/tmp}/layerfs-guide-XXXXXX")
 chmod 700 "$root"
 trap 'rm -rf "$root"' EXIT
-export LAYERFS_HOME="$root/home"
+export LAYERFS_ROOT="$root"   # its home is $root/home
 unset LAYERFS_NATIVE
 
 # the project is a copy of a host folder

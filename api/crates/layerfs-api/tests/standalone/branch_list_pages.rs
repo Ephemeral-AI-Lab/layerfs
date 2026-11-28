@@ -3,6 +3,8 @@
 //! is crossed, the last page has no `next_cursor`, and a bad limit or cursor
 //! is refused (#30, #33; 2.0 call surface). The Store's paging is real: one
 //! Normal home, Branches made by `branch.fork`.
+#[path = "../support/root.rs"]
+mod root;
 use layerfs_api::home;
 use layerfs_api::Scope;
 use layerfs_protocol::sdk::SdkValue;
@@ -42,7 +44,7 @@ fn call(
     args: &[(&str, SdkValue)],
 ) -> Result<SdkValue, (String, String)> {
     layerfs_api::call_scoped(
-        Some(home),
+        Some(crate::root::root_of(home)),
         scope,
         name,
         map(args),

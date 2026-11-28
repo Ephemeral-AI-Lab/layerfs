@@ -1,6 +1,6 @@
 """Runs a list of calls through the Python package for api/node/test/contract/front-ends.test.mjs.
 
-stdin: JSON `{ "home": ..., "aio": bool, "steps": [{ "call": "file.read", "args": [...], "opts": {...} }] }`
+stdin: JSON `{ "root": ..., "aio": bool, "steps": [{ "call": "file.read", "args": [...], "opts": {...} }] }`
 with bytes as `{"$bytes": base64}` and a float as `{"$float": text}` (a one-key `{"base64": ...}` map stays a map).
 stdout: JSON `[{ "ok": value } | { "refused": { error, message, fix?, ...fields, detail? } }]`, one per step,
 bytes as `{"$bytes": base64}`.
@@ -51,7 +51,7 @@ def refusal(error, long=False):
 
 
 def run_sync(request):
-    client = layerfs.client(home=request["home"], scope=request.get("scope"))
+    client = layerfs.client(root=request["root"], scope=request.get("scope"))
     out = []
     for step in request["steps"]:
         try:
@@ -63,7 +63,7 @@ def run_sync(request):
 
 
 async def run_aio(request):
-    client = aio.client(home=request["home"], scope=request.get("scope"))
+    client = aio.client(root=request["root"], scope=request.get("scope"))
     out = []
     for step in request["steps"]:
         try:

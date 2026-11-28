@@ -99,7 +99,12 @@ fn get(home: &Path) -> Result<SdkValue, (String, String)> {
             ("detail", SdkValue::Bool(true)),
             ("with", SdkValue::List(vec![t("stats")])),
         ]);
-        let got = layerfs_api::call(Some(&home), "sandbox.get", args, &mut |_| {});
+        let got = layerfs_api::call(
+            Some(crate::root::root_of(&home)),
+            "sandbox.get",
+            args,
+            &mut |_| {},
+        );
         let _ = sender.send(got.map_err(|r| (r.code, r.message)));
     });
     answer
@@ -473,7 +478,13 @@ fn files(root: &Path) -> BTreeMap<PathBuf, (u64, i64, i64, u64)> {
 /// process makes on a home writes the home's built-in machine records
 /// (once, #535 R6), whichever call it is, so the get is not that call.
 fn settle(home: &Path) {
-    layerfs_api::call(Some(home), "sandbox.list", SdkValue::Null, &mut |_| {}).unwrap();
+    layerfs_api::call(
+        Some(crate::root::root_of(home)),
+        "sandbox.list",
+        SdkValue::Null,
+        &mut |_| {},
+    )
+    .unwrap();
 }
 
 /// A Store being pushed, as far as another call can see it: its record
@@ -1354,7 +1365,12 @@ fn a_get_of_a_sandbox_whose_daemon_ended_finds_it_lost() {
         // the reason is the record's now: a list that asks nothing says it
         let record = read_record(&paths::sandbox_record(&home, "s1")).unwrap();
         assert_eq!(record.unwrap().get_text("reason"), Some("lost"), "{side}");
-        let listed = layerfs_api::call(Some(&home), "sandbox.list", SdkValue::Null, &mut |_| {});
+        let listed = layerfs_api::call(
+            Some(crate::root::root_of(&home)),
+            "sandbox.list",
+            SdkValue::Null,
+            &mut |_| {},
+        );
         let row = match listed.unwrap().get("items") {
             Some(SdkValue::List(rows)) => rows[0].clone(),
             other => panic!("{other:?}"),

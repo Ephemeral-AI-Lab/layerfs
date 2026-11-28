@@ -31,11 +31,12 @@ No package is published.
 
 ## 1. One home
 
-The home is `LAYERFS_HOME`, or `~/.layerfs/home` when it is unset (a legacy `~/.layerfs` that holds `layerfs.json` is used as it is). Use a private
-folder:
+The home is in the LayerFS root: `<root>/home`, where the root is
+`LAYERFS_ROOT`, or `~/.layerfs` when it is unset (a legacy `~/.layerfs`
+that holds `layerfs.json` is the home itself). Use a private root:
 
 ```bash
-export LAYERFS_HOME="$HOME/lfs-demo"
+export LAYERFS_ROOT=/tmp/demo
 ```
 
 ```console
@@ -166,7 +167,7 @@ JavaScript:
 ```js
 import layerfs, { LayerFSError } from "@layerfs/node";
 
-const lfs = layerfs.client({ home: "/path/to/home" });
+const lfs = layerfs.client({ root: "/path/to/root" });
 await lfs.store.create("web");
 await lfs.project.init("web/site", "/path/to/site", { on_progress: (p) => console.log(p.phase) }); // check, install, record
 await lfs.branch.fork("web/site", "agent", "main");
@@ -204,7 +205,7 @@ import asyncio
 import layerfs
 from layerfs import aio
 
-lfs = layerfs.client(home="/path/to/home")
+lfs = layerfs.client(root="/path/to/root")
 lfs.branch.fork("web/site", "py", "main")
 lfs.file.write("web/site", "py", "/notes.md", "from python\n", message="notes")
 print(lfs.file.read("web/site", "py", "/notes.md")["text"])   # from python
@@ -222,7 +223,7 @@ lfs.workspace.unmount(ws)
 lfs.sandbox.remove("tests")
 
 async def main():
-    page = await aio.client(home="/path/to/home").branch.list("web/site")
+    page = await aio.client(root="/path/to/root").branch.list("web/site")
     print([b["branch"] for b in page["items"]])      # ['agent', 'main', 'py']
 
 asyncio.run(main())

@@ -35,7 +35,8 @@ fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, 
             .map(|(n, v)| ((*n).to_owned(), v.clone()))
             .collect(),
     );
-    layerfs_api::call(Some(home), name, args, &mut |_| {}).map_err(|r| (r.code, r.message))
+    layerfs_api::call(Some(crate::root::root_of(home)), name, args, &mut |_| {})
+        .map_err(|r| (r.code, r.message))
 }
 
 fn ok(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> SdkValue {
@@ -297,7 +298,13 @@ fn a_missing_database_is_a_refused_session() {
             .map(|(n, v)| ((*n).to_owned(), v.clone()))
             .collect(),
     );
-    let refusal = layerfs_api::call(Some(&home), "store.connect", args, &mut |_| {}).unwrap_err();
+    let refusal = layerfs_api::call(
+        Some(crate::root::root_of(&home)),
+        "store.connect",
+        args,
+        &mut |_| {},
+    )
+    .unwrap_err();
     let message = &refusal.message;
     assert_eq!(refusal.code, "Unavailable", "{message}");
     assert!(message.contains("refused the connection"), "{message}");
@@ -370,7 +377,13 @@ fn an_old_format_store_answers_outdated_with_upgrade_as_its_fix() {
         ("with", SdkValue::List(vec![t("stats")])),
         ("detail", SdkValue::Bool(true)),
     ]);
-    let stats = layerfs_api::call(Some(&home), "store.get", args, &mut |_| {}).unwrap_err();
+    let stats = layerfs_api::call(
+        Some(crate::root::root_of(&home)),
+        "store.get",
+        args,
+        &mut |_| {},
+    )
+    .unwrap_err();
     assert_eq!(stats.code, "Unsupported", "{stats:?}");
     assert!(
         stats

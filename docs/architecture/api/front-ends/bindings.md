@@ -17,9 +17,10 @@ out; bytes cross as `{ "base64": "…" }` and come back as `Buffer`/`bytes`;
 every event reaches its function before the call settles; a refusal becomes
 `LayerFSError` (`code`, `message`, `fix`, the next-call fields as properties,
 `detail` only when the call asked for the long form); `log_tag` names the call-log line, with
-client `node` or `python`. The home defaults to `LAYERFS_HOME`, else
-`~/.layerfs/home` (or a legacy `~/.layerfs` that holds `layerfs.json`),
-decided by the library.
+client `node` or `python`. A client names a LayerFS root, never a home: the
+root defaults to `LAYERFS_ROOT`, else `~/.layerfs`, and its home is
+`<root>/home`, or the root while it holds `layerfs.json`, decided by the
+library.
 
 ## layerfs-node
 
@@ -50,7 +51,7 @@ lfs.file.read(p, b, path, {..})
 
 | Rule | Behaviour | Source |
 | --- | --- | --- |
-| Client | `client({ home, scope })` makes one function per entry, grouped by family, frozen; the default export and the family exports use `client()`. The named exports are nine families; `home` is on the default export and on a client only (`layerfs.home.get()`) | [`index.js`](../../../../api/node/src/index.js) |
+| Client | `client({ root, scope })` (any other key refused `InvalidInput`) makes one function per entry, grouped by family, frozen; the default export and the family exports use `client()`. The named exports are nine families; `home` is on the default export and on a client only (`layerfs.home.get()`) | [`index.js`](../../../../api/node/src/index.js) |
 | Options object | a trailing plain object is the options when there are more values than positionals, or when its slot is not a `json` positional, so an optional positional can be left off | `bind` |
 | `stream: true` | without `stdout`/`stderr` functions, output goes to `process.stdout`/`process.stderr` | `bind` |
 | Event order | the addon counts each event it queued; the call settles only after that many were delivered. Events wait in an unbounded queue (`create_threadsafe_function(0, …)`, `Blocking`), so a slow handler does not slow the call | [`call.rs`](../../../../api/crates/layerfs-node/src/call.rs) |
@@ -92,7 +93,7 @@ dependency).
 ```text
 api/crates/layerfs-python (cdylib "_native", PyO3, abi3-py310)
   lib.rs   #[pymodule] _native: table, call, close
-  call.rs  call(name, args, home=None, scope=None, on_event=None)
+  call.rs  call(name, args, root=None, scope=None, on_event=None)
              py.detach: call_json once; each event: attach, on_event(text)
 api/python/src/layerfs
   __init__.py   close(), and the ten families of the default client
@@ -106,7 +107,7 @@ api/python/src/layerfs
 | Rule | Behaviour | Source |
 | --- | --- | --- |
 | Interpreter | released (`py.detach`) for the whole library call; re-taken per event, so a slow function slows the call. An exception a function raises goes to `sys.unraisablehook` and the call goes on | [`call.rs`](../../../../api/crates/layerfs-python/src/call.rs) |
-| Client | `Client(home, scope)` sets one `Family` attribute per family and one function per entry, with the entry's `help` as docstring; module-level `layerfs.home` … `layerfs.backup` belong to `Client()` | [`_client.py`](../../../../api/python/src/layerfs/_client.py), [`__init__.py`](../../../../api/python/src/layerfs/__init__.py) |
+| Client | `Client(root, scope)` (keywords only these two) sets one `Family` attribute per family and one function per entry, with the entry's `help` as docstring; module-level `layerfs.home` … `layerfs.backup` belong to `Client()` | [`_client.py`](../../../../api/python/src/layerfs/_client.py), [`__init__.py`](../../../../api/python/src/layerfs/__init__.py) |
 | Keywords | optional positionals and options may be keywords: `file.read(p, b, path, line=2, limit=50)`; a Python keyword takes a trailing underscore, `with_` and `from_` (`branch.fork(p, "agent", from_="main")`); a positional given twice is refused | `_bind` |
 | `stream=True` | without functions, output goes to `sys.stdout`/`sys.stderr` (bytes to the buffer) | `_streamed` |
 | Values | `bytes`, `bytearray`, `memoryview` → `{ base64 }`; NaN, Infinity, lone surrogates (also in a home or scope), non-text map keys and types with no JSON form raise `InvalidInput` before any call; `int` exact both ways, the library refusing past signed 64 bits; exec output arrives as `str` when UTF-8, else `bytes` | [`_values.py`](../../../../api/python/src/layerfs/_values.py) |

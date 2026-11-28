@@ -11,6 +11,8 @@
 //!
 //! INTEGRATION: needs the engine and control halves (#804 W1, W2); on a
 //! build without them it says NOT_RUN and passes.
+#[path = "../support/root.rs"]
+mod root;
 #[path = "../support/upgrade.rs"]
 mod upgrade_support;
 use std::path::Path;
@@ -32,18 +34,23 @@ fn upgrade_cancelled_at(
     layerfs_api::cancel::flag().store(false, Ordering::SeqCst);
     let args = layerfs_protocol::sdk::SdkValue::map([("store", t("fx")), DETAIL]);
     let mut seen = Vec::new();
-    let outcome = layerfs_api::call(Some(home), "store.upgrade", args, &mut |event| {
-        let started = event
-            .get("progress")
-            .and_then(|progress| progress.get_text("phase"))
-            .map(str::to_owned);
-        if let Some(started) = started {
-            if started == phase {
-                layerfs_api::cancel::request();
+    let outcome = layerfs_api::call(
+        Some(crate::root::root_of(home)),
+        "store.upgrade",
+        args,
+        &mut |event| {
+            let started = event
+                .get("progress")
+                .and_then(|progress| progress.get_text("phase"))
+                .map(str::to_owned);
+            if let Some(started) = started {
+                if started == phase {
+                    layerfs_api::cancel::request();
+                }
+                seen.push(started);
             }
-            seen.push(started);
-        }
-    });
+        },
+    );
     layerfs_api::cancel::flag().store(false, Ordering::SeqCst);
     (outcome, seen)
 }

@@ -2,6 +2,8 @@
 //! `commit.get` reads any of them by id or prefix without naming the
 //! Branch; an absent Commit or Branch is refused `NotFound` (their `NoSuch*`
 //! codes fold into it since the call surface 2.0). #533 review, group calls.
+#[path = "../support/root.rs"]
+mod root;
 use layerfs_api::home;
 use layerfs_protocol::sdk::SdkValue;
 use std::os::unix::fs::PermissionsExt;
@@ -34,7 +36,13 @@ fn map(args: &[(&str, SdkValue)]) -> SdkValue {
 }
 
 fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, (String, String)> {
-    layerfs_api::call(Some(home), name, map(args), &mut |_| {}).map_err(|r| (r.code, r.message))
+    layerfs_api::call(
+        Some(crate::root::root_of(home)),
+        name,
+        map(args),
+        &mut |_| {},
+    )
+    .map_err(|r| (r.code, r.message))
 }
 
 fn ok(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> SdkValue {

@@ -53,7 +53,7 @@ The call table and the one dispatcher every front end goes through: what a call 
 | Kinds | below | `table.rs` `Kind` |
 | Checks | every argument against the entry, before any effect; sizes become bytes; result in table order | [`arguments.rs`](../../../../api/crates/layerfs-api/src/dispatch/guard/arguments.rs) |
 | Scope | an optional folder scope guards and rewrites arguments before the home is opened; an entry says how a scope treats it (`Call.scope`, a `Rule`: `Outside` by default, `History`, `File(paths)`, `FileChanges`, `Branch*`, `Workspace*`) | [`scope.rs`](../../../../api/crates/layerfs-api/src/dispatch/guard/scope.rs) |
-| Home | explicit, else `LAYERFS_HOME`, else `$HOME/.layerfs/home` (or a legacy `$HOME/.layerfs` that holds `layerfs.json`); must be absolute | [`call.rs`](../../../../api/crates/layerfs-api/src/dispatch/run/call.rs) `home` |
+| Home | found in the LayerFS root: the root explicitly named, else `LAYERFS_ROOT`, else `$HOME/.layerfs` (absolute); the home is `<root>/home`, or the root while it holds `layerfs.json` | [`call.rs`](../../../../api/crates/layerfs-api/src/dispatch/run/call.rs) `home` |
 | Platform policy | new work on a machine of a removed platform is `Unsupported` before the home is opened, in every build; reads and teardown keep their routes; an entry says where its machine is found (`Call.policy`, a `Policy`: `None` by default, `Machine`, `Store`, `Project`, `Sandbox`, …) | [`platform_policy.rs`](../../../../api/crates/layerfs-api/src/dispatch/guard/platform_policy.rs) |
 | Built-ins | `machine/macos-host/` (macOS) or `machine/linux-host/` (Linux) and `machine/docker/` exist from the first call (builds with the `machine` feature), checked once per process per home | `dispatch.rs` |
 | Context | the running call's home, what the caller asked of the answer (`context.detail()`, `context.with("tree")`) and its one event stream: `{ progress }`, a worker's events as they came, `{ stream, bytes }` | [`context.rs`](../../../../api/crates/layerfs-api/src/dispatch/context.rs), [`events.rs`](../../../../control/crates/layerfs-home/src/reply/events.rs) |
@@ -233,7 +233,7 @@ is empty (`calls`, `old_names`, `not_built` and `spec_sync`); the test's
 | Missing or null required positional | `InvalidInput` "`x` is required" | `check.rs` |
 | Wrong kind; bad size text or negative size | `InvalidInput` "`x` must be …"; "a size such as 512M or 8G" | `check.rs` |
 | Outside the folder scope | `InvalidInput` `out of scope: history \| path \| branch \| project \| sandbox \| <family.call>` | [`scope.rs`](../../../../api/crates/layerfs-api/src/dispatch/guard/scope.rs) |
-| Relative home, or neither `LAYERFS_HOME` nor `HOME` | `InvalidInput` | `dispatch.rs` `home` |
+| Relative root, or neither `LAYERFS_ROOT` nor `HOME` | `InvalidInput` | [`disk/root.rs`](../../../../control/crates/layerfs-home/src/disk/root.rs) `root` |
 | New work on a removed platform | `Unsupported` with the removal reason | [`platform_policy.rs`](../../../../api/crates/layerfs-api/src/dispatch/guard/platform_policy.rs) |
 | `machine.*` in a build without the `machine` feature | `Unsupported` before any effect | e.g. [`lifecycle/create.rs`](../../../../api/crates/layerfs-api/src/families/machine/lifecycle/create.rs) |
 | A scope that covers no Branch namespace | every `file` and `branch` call is `out of scope: branch`; only `workspace` calls other than `mount` pass | `scope.rs` |

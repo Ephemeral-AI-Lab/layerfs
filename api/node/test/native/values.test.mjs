@@ -120,7 +120,7 @@ test("through the library: i64 max arrives exactly, an unsafe number is refused 
   const home = temp("values");
   const folder = temp("values-folder");
   writeFileSync(join(folder, "README.md"), "hello\n");
-  const lfs = client({ home });
+  const lfs = client({ root: home });
   await lfs.store.create("shop");
   await lfs.project.init("shop/api", folder);
   // The library reads the line as an i64. i64 max is whole text it accepts and
@@ -146,7 +146,7 @@ test("through the library: empty, binary, Unicode and one-key-map content", asyn
   const home = temp("bytes");
   const folder = temp("bytes-folder");
   writeFileSync(join(folder, "README.md"), "hello\n");
-  const lfs = client({ home });
+  const lfs = client({ root: home });
   await lfs.store.create("shop");
   await lfs.project.init("shop/api", folder);
   await lfs.branch.fork("shop/api", "agent", "main");

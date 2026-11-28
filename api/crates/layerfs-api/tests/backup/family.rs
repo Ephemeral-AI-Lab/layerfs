@@ -39,7 +39,8 @@ fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, 
             .map(|(n, v)| ((*n).to_owned(), v.clone()))
             .collect(),
     );
-    layerfs_api::call(Some(home), name, args, &mut |_| {}).map_err(|r| (r.code, r.message))
+    layerfs_api::call(Some(crate::root::root_of(home)), name, args, &mut |_| {})
+        .map_err(|r| (r.code, r.message))
 }
 
 fn ok(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> SdkValue {
@@ -92,8 +93,13 @@ fn word(item: &SdkValue) -> String {
 /// The long form of `backup.list`.
 fn listed(home: &Path) -> Vec<SdkValue> {
     let args = SdkValue::map([("detail", SdkValue::Bool(true))]);
-    let listed = layerfs_api::call(Some(home), "backup.list", args, &mut |_| {})
-        .unwrap_or_else(|r| panic!("backup.list: {r:?}"));
+    let listed = layerfs_api::call(
+        Some(crate::root::root_of(home)),
+        "backup.list",
+        args,
+        &mut |_| {},
+    )
+    .unwrap_or_else(|r| panic!("backup.list: {r:?}"));
     assert_eq!(listed.get("not_listed"), Some(&SdkValue::List(vec![])));
     let Some(SdkValue::List(items)) = listed.get("items") else {
         panic!("{listed:?}")
@@ -272,7 +278,7 @@ fn backups_against_minio() {
     assert_eq!(read.get_text("text"), Some("x"));
     // the unchanged Store restores over itself
     let replaced = layerfs_api::call(
-        Some(&home),
+        Some(crate::root::root_of(&home)),
         "backup.restore",
         SdkValue::map([
             ("bucket", t("b1")),

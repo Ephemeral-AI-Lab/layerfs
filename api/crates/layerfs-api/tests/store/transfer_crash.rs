@@ -37,7 +37,13 @@ fn map(args: &[(&str, SdkValue)]) -> SdkValue {
 }
 
 fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, (String, String)> {
-    layerfs_api::call(Some(home), name, map(args), &mut |_| {}).map_err(|r| (r.code, r.message))
+    layerfs_api::call(
+        Some(crate::root::root_of(home)),
+        name,
+        map(args),
+        &mut |_| {},
+    )
+    .map_err(|r| (r.code, r.message))
 }
 
 fn call_ok(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> SdkValue {
@@ -95,12 +101,17 @@ fn record(home: &Path) -> SdkValue {
 /// the stop left it, its owner then made gone (another start time).
 fn stopped_at(home: &Path, name: &str, args: &[(&str, SdkValue)], phase: &str) -> SdkValue {
     let stopped = std::panic::catch_unwind(AssertUnwindSafe(|| {
-        layerfs_api::call(Some(home), name, map(args), &mut |event| {
-            let progress = event.get("progress").unwrap();
-            if progress.get_text("phase") == Some(phase) {
-                panic!("stopped at {phase}");
-            }
-        })
+        layerfs_api::call(
+            Some(crate::root::root_of(home)),
+            name,
+            map(args),
+            &mut |event| {
+                let progress = event.get("progress").unwrap();
+                if progress.get_text("phase") == Some(phase) {
+                    panic!("stopped at {phase}");
+                }
+            },
+        )
     }));
     assert!(stopped.is_err(), "{name} ran past {phase}: {stopped:?}");
     let op = record(home).get("op").cloned().expect("an op is left");
@@ -572,7 +583,7 @@ fn retire_failure_reports_authority_switched_to_target_and_source_unretired() {
     // `last_transfer.retired: false`; make the source's folder undeletable so
     // retiring it fails.
     let refusal = layerfs_api::call(
-        Some(&home),
+        Some(crate::root::root_of(&home)),
         "store.move",
         map(&[
             ("store", t("shop")),

@@ -15,11 +15,13 @@ writes every record itself.
 
 | Setting | Meaning |
 | --- | --- |
-| `LAYERFS_HOME` | the home folder. Unset, it is `~/.layerfs/home`, or a legacy `~/.layerfs` that holds `layerfs.json` (O28); `layerfs home move ~/.layerfs/home` moves a legacy one |
+| `LAYERFS_ROOT` | the LayerFS root, which holds the home in `home/` and each client's folder (`dsh/`, `connect/`) beside it. Unset, it is `~/.layerfs`. A root that holds `layerfs.json` itself is the home (a legacy `~/.layerfs`, O28); `layerfs home move ~/.layerfs/home` moves it into `home/`. It must be an absolute path |
 | `LAYERFS_TRACE`, `LAYERFS_TRACE_STEP`, `LAYERFS_TRACE_START` | tracing. `LAYERFS_TRACE` names a file: each connection to a machine's worker appends `{at, event: "worker.connection", op, worker, sent, ms}` to it. With `LAYERFS_TRACE_STEP` also set (any non-empty value), each call appends one `{at, event: "step", op, step, us, ms}` line per step it timed: the caller's (`dispatch`, then for a Store call in this process `lease`, `store_open` and `call`, or for a worker-routed call `route`, `connect`, `ready`, `request`, `answer`) and, for a worker-routed call, the worker's as `worker.<step>`, which the worker sends back in its answer (a namespaces `workspace.exec` adds `worker.exec.*` and its helper's `worker.helper.*` stages). A process that closes its Stores before it exits (the `layerfs` command after its call, `layerfs.close()`) appends op `close` with steps `stores` and `sessions`. `LAYERFS_TRACE_START` is still not read |
 
 LayerFS reads no other user setting. A Node or Python client can name
-another home: `layerfs.client({ home })`, `layerfs.client(home=...)`.
+another root: `layerfs.client({ root })`, `layerfs.client(root=...)`; the
+MCP server takes `--root`. No caller names a home: each finds it in its
+root the same way.
 
 A PostgreSQL login and a bucket's secret key are not settings either: they
 are kept in the home's secret folder; see
@@ -39,7 +41,7 @@ free call thread; past that it is refused `Unavailable` before anything is
 sent, naming the load, and can be made again. The first CLI call that
 finds no ready worker runs directly and starts one in the background for
 the next call; while another call is starting it, or the last one is still
-exiting, calls run directly too. The worker starts with only `LAYERFS_HOME`, `PATH`,
+exiting, calls run directly too. The worker starts with only `LAYERFS_ROOT` (the home itself), `PATH`,
 `HOME`, `TMPDIR`, the locale and the OpenSSL certificate settings from the
 command that started it, in `/`. The home itself keeps its permissions.
 The CLI checks the worker's build before it sends a request. If they differ,
@@ -297,16 +299,19 @@ under `machine/linux-guest/run/`. The worker's own output is in
   ([secrets](machines-and-stores.md#secrets)). An
   integration keeps its own secrets under `secret/`. A copy of a home
   carries all of these.
-- **Moving.** No call moves a home, and nothing rewrites a path in a
-  record. A started host-machine Sandbox's record names its run folder by
-  absolute path, and the run folder names its record's folder: after a
-  move every call on it is refused `InvalidInput`, and it is neither used
-  nor deleted. Close every host-machine Sandbox first and move the home only
-  while nothing in it runs; then name the new path (`LAYERFS_HOME`).
-  Machines, and the Stores and Sandboxes on them, are named by `vm_name`
-  and a loopback address, not by a path in the home, and are unchanged.
-  Files a record names outside the home (a machine's `image_archive`, a
-  `file:` secret reference) are not moved with it.
+- **Moving.** `layerfs home move <to>` ([calls](calls.md)) moves a home
+  by renaming its own entries into `<to>`, on the same filesystem, and
+  rewrites the paths into them that its records hold (a machine's `daemon`
+  and `image_archive`, a Sandbox's `daemon`, each run folder's `owner`).
+  It is refused while a host-machine Sandbox is open, a Store is open in
+  another process or the host worker runs. A client's folder beside the
+  home (`dsh/`, `connect/`) stays. A home moved into `<root>/home` is found
+  by the same root; one moved elsewhere is named by its new path as the
+  root (`LAYERFS_ROOT`). Machines, and the Stores and Sandboxes on them,
+  are named by `vm_name` and a loopback address, not by a path in the
+  home, and are unchanged. Files a record names outside the home (a
+  machine's `image_archive`, a `file:` secret reference) are not moved
+  with it.
 - **Copying.** A copy keeps the original's id and its records, so both
   homes use the same `layerfs-<id8>-` names: the same VMs, the same
   `docker` worker container and volume (a start from one replaces the
@@ -317,14 +322,14 @@ Not run for this manual; the statements are from the source.
 
 ## A new home
 
-The first call on an empty or missing folder creates it with
-`layerfs.json`, `layerfs.lock` and the two built-in machines. Run:
+The first call on a root whose home is an empty or missing folder creates
+it with `layerfs.json`, `layerfs.lock` and the two built-in machines. Run:
 
 ```console
-$ export LAYERFS_HOME=/tmp/lfs-new
+$ export LAYERFS_ROOT=/tmp/lfs-new
 $ layerfs store create shop
 {"name":"shop","kind":"sqlite","machine":"macos-host","profile":"normal",…}
-$ cat /tmp/lfs-new/layerfs.json
+$ cat /tmp/lfs-new/home/layerfs.json
 {"layout":3,"id":"2f51a567b6f153b6e914393cab0904b6"}
 ```
 

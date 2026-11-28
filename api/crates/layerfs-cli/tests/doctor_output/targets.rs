@@ -11,7 +11,7 @@ fn home(tag: &str) -> PathBuf {
 fn layerfs(root: &PathBuf, args: &[&str]) -> Output {
     Command::new(CLI)
         .args(args)
-        .env("LAYERFS_HOME", root)
+        .env("LAYERFS_ROOT", crate::root::root_of(root))
         .output()
         .unwrap()
 }

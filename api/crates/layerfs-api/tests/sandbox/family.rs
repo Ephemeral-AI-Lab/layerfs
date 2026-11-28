@@ -25,7 +25,8 @@ fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, 
             .map(|(n, v)| ((*n).to_owned(), v.clone()))
             .collect(),
     );
-    layerfs_api::call(Some(home), name, args, &mut |_| {}).map_err(|r| (r.code, r.message))
+    layerfs_api::call(Some(crate::root::root_of(home)), name, args, &mut |_| {})
+        .map_err(|r| (r.code, r.message))
 }
 
 fn ok(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> SdkValue {
@@ -112,7 +113,7 @@ fn named_sandboxes_on_native() {
     assert!(Path::new(&daemon).is_file());
     // the native machine's daemon is a setting of its record
     layerfs_api::call(
-        Some(&home),
+        Some(crate::root::root_of(&home)),
         "machine.update",
         SdkValue::map([
             ("machine", SdkValue::text(layerfs_home::names::HOST_MACHINE)),
@@ -178,7 +179,7 @@ fn named_sandboxes_on_native() {
     // fix forks the Branch before it mounts it (LF2 review: only for a
     // missing Branch)
     let missing = layerfs_api::call(
-        Some(&home),
+        Some(crate::root::root_of(&home)),
         "sandbox.create",
         SdkValue::map([
             ("project", t("shop/api")),
@@ -277,7 +278,7 @@ fn named_sandboxes_on_native() {
     let dev = text(&dev, "commit");
     assert_ne!(dev, head);
     let wrong = layerfs_api::call(
-        Some(&home),
+        Some(crate::root::root_of(&home)),
         "workspace.commit",
         SdkValue::map([("workspace", t(&fresh)), ("expected", t(&dev))]),
         &mut |_| {},
@@ -339,7 +340,7 @@ fn named_sandboxes_on_native() {
     // output events, in full; output that is not UTF-8 stays bytes
     let mut events = Vec::new();
     let big = layerfs_api::call(
-        Some(&home),
+        Some(crate::root::root_of(&home)),
         "workspace.exec",
         SdkValue::map([
             ("workspace", t(&both[0])),

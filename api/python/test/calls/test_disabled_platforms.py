@@ -26,7 +26,8 @@ class DisabledPlatforms(unittest.TestCase):
                 listener.bind(("127.0.0.1", 0))
                 listener.listen()
                 listener.setblocking(False)
-                home = Path(folder)
+                # records only, with no layerfs.json: the root's home is `<root>/home`
+                home = Path(folder) / "home"
                 data = json.loads(
                     FIXTURE.replace("$host", "macos-host" if sys.platform == "darwin" else "linux-host").replace("$platform", platform).replace("$address", f"127.0.0.1:{listener.getsockname()[1]}")
                 )
@@ -39,7 +40,7 @@ class DisabledPlatforms(unittest.TestCase):
                     return {str(p.relative_to(home)): p.read_bytes() for p in home.rglob("*") if p.is_file()}
 
                 before = snapshot()
-                lfs = layerfs.client(home=home)
+                lfs = layerfs.client(root=folder)
                 for row in data["cases"]:
                     family, call = row["call"].split(".")
                     with self.assertRaises(layerfs.LayerFSError, msg=row["call"]) as caught:

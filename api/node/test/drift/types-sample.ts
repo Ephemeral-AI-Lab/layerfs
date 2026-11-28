@@ -4,7 +4,7 @@
 //     --typeRoots <that dir>/node_modules/@types api/node/test/drift/types-sample.ts
 import layerfs, { client, close, table, LayerFSError, type Result, type FileReadOptions } from "../../src/index.js";
 
-const lfs = client({ home: "/tmp/home", scope: { project: "shop/api", folder: "/web", branch: "agent" } });
+const lfs = client({ root: "/tmp/home", scope: { project: "shop/api", folder: "/web", branch: "agent" } });
 
 async function main(): Promise<void> {
   await layerfs.store.create("shop");

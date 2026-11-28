@@ -30,7 +30,8 @@ fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, 
             .map(|(n, v)| ((*n).to_owned(), v.clone()))
             .collect(),
     );
-    layerfs_api::call(Some(home), name, args, &mut |_| {}).map_err(|r| (r.code, r.message))
+    layerfs_api::call(Some(crate::root::root_of(home)), name, args, &mut |_| {})
+        .map_err(|r| (r.code, r.message))
 }
 
 fn ok(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> SdkValue {
@@ -126,8 +127,13 @@ fn init_files_branches_move_and_remove() {
         ("folder", t(&folder.display().to_string())),
         ("detail", SdkValue::Bool(true)),
     ]);
-    let made = layerfs_api::call(Some(&home), "project.init", args, &mut |e| events.push(e))
-        .unwrap_or_else(|e| panic!("init: {} {}", e.code, e.message));
+    let made = layerfs_api::call(
+        Some(crate::root::root_of(&home)),
+        "project.init",
+        args,
+        &mut |e| events.push(e),
+    )
+    .unwrap_or_else(|e| panic!("init: {} {}", e.code, e.message));
     assert_eq!(made.get_text("project"), Some("shop/api"));
     assert_eq!(
         made.get_text("machine"),
@@ -414,7 +420,8 @@ fn refused(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> SdkRefusal {
             .map(|(n, v)| ((*n).to_owned(), v.clone()))
             .collect(),
     );
-    layerfs_api::call(Some(home), name, args, &mut |_| {}).expect_err("the call is refused")
+    layerfs_api::call(Some(crate::root::root_of(home)), name, args, &mut |_| {})
+        .expect_err("the call is refused")
 }
 
 fn private_home(tag: &str) -> PathBuf {

@@ -21,11 +21,14 @@ test("the table: ten families, 84 calls, each a function", () => {
   for (const spec of table) assert.equal(typeof layerfs[spec.family][spec.call], "function", `${spec.family}.${spec.call}`);
 });
 
-test("client.home is the home family; the client's home is where it calls", async () => {
+test("client.home is the home family; the client's home is the one in its root", async () => {
   const parent = temp("home");
-  const home = join(parent, "made");
+  const root = join(parent, "made");
+  const home = join(root, "home");
   try {
-    const lfs = client({ home });
+    const lfs = client({ root });
+    // a client names a root; the old `home` key is refused, not ignored
+    assert.throws(() => client({ home: root }), (error) => error instanceof LayerFSError && error.error === "InvalidInput");
     assert.equal(typeof lfs.home.init, "function");
     // the short form: what is wrong and its fix; nothing else
     const missing = await lfs.home.get();
@@ -59,7 +62,7 @@ test("client.home is the home family; the client's home is where it calls", asyn
 
 test("every call reaches the library, which checks its arguments first", async () => {
   const home = temp("check");
-  const lfs = client({ home });
+  const lfs = client({ root: home });
   for (const spec of table) {
     const required = spec.args.filter((a) => !a.optional);
     if (required.length === 0) continue;
@@ -85,7 +88,7 @@ test("a Store, an Init with progress, files, Branches and a folder scope", async
   const home = temp("home");
   const folder = temp("folder");
   writeFileSync(join(folder, "README.md"), "hello node\n");
-  const lfs = client({ home });
+  const lfs = client({ root: home });
   await lfs.store.create("shop");
   const progress = [];
   const made = await lfs.project.init("shop/api", folder, { on_progress: (p) => progress.push(p), detail: true });
@@ -100,7 +103,7 @@ test("a Store, an Init with progress, files, Branches and a folder scope", async
   assert.equal(stat.size, 3);
 
   // scoped: paths beneath /web, Branch names under agent., no history
-  const scoped = client({ home, scope: { project: "shop/api", folder: "/web", branch: "agent" } });
+  const scoped = client({ root: home, scope: { project: "shop/api", folder: "/web", branch: "agent" } });
   const inside = await scoped.file.stat("shop/api", "main", "/web/a.bin");
   assert.equal(inside.size, 3);
   await assert.rejects(scoped.file.read("shop/api", "main", "/README.md"), /out of scope: path/);
@@ -109,15 +112,15 @@ test("a Store, an Init with progress, files, Branches and a folder scope", async
   assert.deepEqual(branches.items.map((b) => b.branch), ["main"]);
   await assert.rejects(scoped.store.list(), /out of scope: store.list/);
   await assert.rejects(scoped.file.stat("shop/other", "main", "/web/a.bin"), /out of scope: project/);
-  await assert.rejects(client({ home, scope: { folder: "/web" } }).store.list(), /scope.project/);
-  await assert.rejects(client({ home, scope: { project: "shop/api", folder: "web" } }).file.stat("shop/api", "main", "/web"), /canonical/);
+  await assert.rejects(client({ root: home, scope: { folder: "/web" } }).store.list(), /scope.project/);
+  await assert.rejects(client({ root: home, scope: { project: "shop/api", folder: "web" } }).file.stat("shop/api", "main", "/web"), /canonical/);
   rmSync(home, { recursive: true, force: true });
   rmSync(folder, { recursive: true, force: true });
 });
 
 test("the call log names the client node and takes log_tag with any call (#659)", async () => {
   const home = temp("logs");
-  const lfs = client({ home });
+  const lfs = client({ root: home });
   await lfs.store.create("shop");
   await lfs.store.list({ log_tag: "dsh:s1:r1" });
   await assert.rejects(lfs.store.get("nope", { log_tag: "dsh:s1:r2" }), LayerFSError);
@@ -147,7 +150,7 @@ test("the call log names the client node and takes log_tag with any call (#659)"
 
 test("a refusal carries its public code, its fix and, in the long form, its detail", async () => {
   const home = temp("refusal");
-  const lfs = client({ home });
+  const lfs = client({ root: home });
   await lfs.store.create("shop");
   const short = await lfs.file.read("shop/nope", "main", "/a").catch((error) => error);
   assert.ok(short instanceof LayerFSError);

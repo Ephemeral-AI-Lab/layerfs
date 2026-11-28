@@ -27,7 +27,7 @@ const temp = (tag) => {
 /** One shell call: `{ status, value }` or `{ status, refused }`. */
 function shell(home, words, input) {
   const run = spawnSync(command, words, {
-    env: { ...process.env, LAYERFS_HOME: home },
+    env: { ...process.env, LAYERFS_ROOT: home },
     input: input ?? "",
     timeout: 60_000,
   });
@@ -63,7 +63,7 @@ const refusing = { project: "nosuch/x", name: "Bad!", text: "/x", json: [], cont
 
 test("every call is refused the same way by the command and the package", { skip: !existsSync(command) }, async () => {
   const home = temp("refused");
-  const lfs = client({ home });
+  const lfs = client({ root: home });
   // home.init would say `created` only to the first front end
   await lfs.home.init();
   for (const spec of table) {
@@ -80,7 +80,7 @@ test("every call is refused the same way by the command and the package", { skip
     if (spec.options.some((opt) => opt.required)) {
       // a missing required option: the shell judges the line itself (exit
       // 2, nothing called); the package's call is refused before any effect
-      const run = spawnSync(command, words, { env: { ...process.env, LAYERFS_HOME: home }, input: input ?? "" });
+      const run = spawnSync(command, words, { env: { ...process.env, LAYERFS_ROOT: home }, input: input ?? "" });
       assert.equal(run.status, 2, `${spec.family}.${spec.call}: ${run.stderr}`);
       assert.match(run.stderr.toString(), / is required/);
       assert.equal(fromNode.refused?.error, "InvalidInput", `${spec.family}.${spec.call}`);
@@ -89,7 +89,7 @@ test("every call is refused the same way by the command and the package", { skip
     same(`${spec.family}.${spec.call}`, shell(home, words, input), fromNode);
   }
   // a wrong command line is exit 2 and calls nothing
-  const wrong = spawnSync(command, ["file", "write", "a"], { env: { ...process.env, LAYERFS_HOME: home } });
+  const wrong = spawnSync(command, ["file", "write", "a"], { env: { ...process.env, LAYERFS_ROOT: home } });
   assert.equal(wrong.status, 2);
   assert.equal(spawnSync(command, ["store", "get", "s", "--bogus"]).status, 2);
   rmSync(home, { recursive: true, force: true });
@@ -99,10 +99,10 @@ test("a live Store gives the same answers both ways", { skip: !existsSync(comman
   const home = temp("live");
   const folder = temp("folder");
   writeFileSync(join(folder, "README.md"), "hello shell\n");
-  const lfs = client({ home });
+  const lfs = client({ root: home });
   assert.equal(shell(home, ["store", "create", "shop"]).status, 0);
   const progress = spawnSync(command, ["project", "init", "shop/api", folder, "--progress"], {
-    env: { ...process.env, LAYERFS_HOME: home },
+    env: { ...process.env, LAYERFS_ROOT: home },
   });
   assert.equal(progress.status, 0, progress.stderr.toString());
   // progress, when Init reports any, is one JSON line per event on stderr:
@@ -141,7 +141,7 @@ test("a live Store gives the same answers both ways", { skip: !existsSync(comman
   assert.equal(scoped.status, 125);
   assert.match(scoped.refused.message, /out of scope: path/);
   // a scope names its project; another call is out of scope
-  const usage = spawnSync(command, ["store", "list", "--scope", "/web"], { env: { ...process.env, LAYERFS_HOME: home }, timeout: 60_000 });
+  const usage = spawnSync(command, ["store", "list", "--scope", "/web"], { env: { ...process.env, LAYERFS_ROOT: home }, timeout: 60_000 });
   assert.equal(usage.status, 2);
   assert.match(usage.stderr.toString(), /--scope-project/);
   const store = shell(home, ["store", "remove", "shop", "--scope", "/web", "--scope-project", "shop/api"]);

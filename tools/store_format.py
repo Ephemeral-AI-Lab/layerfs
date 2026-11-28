@@ -74,7 +74,7 @@ class Cli:
     def __init__(self, path: Path, home: Path, bundle: Path | None, flags: tuple = ("--detail", "--json")) -> None:
         self.path = path
         self.flags = flags
-        self.env = dict(os.environ, LAYERFS_HOME=str(home))
+        self.env = dict(os.environ, LAYERFS_ROOT=str(home))
         if bundle is not None:
             self.env["LAYERFS_BUNDLE"] = str(bundle)
 

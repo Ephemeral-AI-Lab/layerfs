@@ -43,8 +43,8 @@ try:
     (folder / "docs" / "a.txt").write_text("one\ntwo\n")
 
     P = "shop/site"
-    home = str(root / "home")
-    lfs = layerfs.client(home=home)
+    # the LayerFS root; its home is root/home
+    lfs = layerfs.client(root=str(root))
 
     lfs.store.create("shop")
     say("store.get", json.dumps(lfs.store.get("shop")))
@@ -85,7 +85,7 @@ try:
     refused("missing Branch", lambda: lfs.file.read(P, "nope", "/README.md"))
     refused("write to main", lambda: lfs.file.write(P, "main", "/x.txt", "x\n"))
     refused("unknown option", lambda: lfs.file.read(P, "agent", "/README.md", colour=True))
-    scoped = layerfs.client(home=home, scope={"project": P, "folder": "/docs", "branch": "ns"})
+    scoped = layerfs.client(root=str(root), scope={"project": P, "folder": "/docs", "branch": "ns"})
     refused("scope: other call", lambda: scoped.store.list())
     refused("scope: outside folder", lambda: scoped.file.read(P, "main", "/README.md"))
 finally:

@@ -37,7 +37,7 @@ fn create(home: &Path, name: &str, image: Option<&str>) -> SdkRefusal {
         fields.push(("image".to_owned(), t(image)));
     }
     layerfs_api::call(
-        Some(home),
+        Some(crate::root::root_of(home)),
         "sandbox.create",
         SdkValue::Map(fields),
         &mut |_| {},
@@ -47,7 +47,7 @@ fn create(home: &Path, name: &str, image: Option<&str>) -> SdkRefusal {
 
 fn start(home: &Path) -> SdkRefusal {
     layerfs_api::call(
-        Some(home),
+        Some(crate::root::root_of(home)),
         "machine.start",
         SdkValue::map([("machine", t("docker"))]),
         &mut |_| {},

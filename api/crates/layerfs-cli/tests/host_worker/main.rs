@@ -12,5 +12,7 @@ mod peer;
 mod postgresql;
 #[path = "../support/host_worker_proof.rs"]
 mod proof;
+#[path = "../../../layerfs-api/tests/support/root.rs"]
+mod root;
 mod start;
 mod uncertain;

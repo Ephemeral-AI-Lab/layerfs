@@ -18,7 +18,7 @@ def on_output(data: str | bytes) -> None:
 
 
 def sync_flow() -> None:
-    lfs = layerfs.client(home=Path("/data/lfs"), scope={"project": "shop/api", "folder": "/web", "branch": "agent"})
+    lfs = layerfs.client(root=Path("/data/lfs"), scope={"project": "shop/api", "folder": "/web", "branch": "agent"})
     lfs.store.create("shop")
     lfs.project.init("shop/api", "/src/api", on_progress=on_progress, timeout=60)
     lfs.branch.fork("shop/api", "agent", "main")
@@ -54,7 +54,7 @@ def sync_flow() -> None:
 
 
 async def async_flow() -> None:
-    lfs = aio.client(home="/data/lfs")
+    lfs = aio.client(root="/data/lfs")
     await lfs.store.create("shop")
     await lfs.project.init("shop/api", "/src/api", on_progress=on_progress)
     await lfs.commit.list("shop/api", "main", limit=10)

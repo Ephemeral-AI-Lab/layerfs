@@ -255,6 +255,7 @@ fn set_user_version(home: &Path, store: &str, version: i64) {
 #[test]
 fn the_format_section_reads_each_status_from_the_header_alone() {
     let home = tempdir("format").join("home");
+    crate::root::made(&home);
     ok(&home, "home.init", &[]);
     if !{
         ok(&home, "store.create", &[("name", t("fx"))]);

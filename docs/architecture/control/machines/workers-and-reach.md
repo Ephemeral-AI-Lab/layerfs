@@ -775,8 +775,8 @@ whose lifetime lock is free has no owner (its worker died between bind and
 chmod), so a starting caller treats it as absent and launches a worker that
 replaces it, and a caller that does not start one reports no endpoint (an
 ordinary call goes direct).
-The CLI starts the worker with an empty environment except `LAYERFS_HOME`
-and `PATH`, `HOME`, `TMPDIR`, `LANG`, `LC_ALL`, `LC_CTYPE`, `SSL_CERT_FILE`
+The CLI starts the worker with an empty environment except `LAYERFS_ROOT`
+(the open home, which holds `layerfs.json` and so is its own home) and `PATH`, `HOME`, `TMPDIR`, `LANG`, `LC_ALL`, `LC_CTYPE`, `SSL_CERT_FILE`
 and `SSL_CERT_DIR`, in `/`: the worker serves later callers too, so it
 takes no caller's secrets (such as `PGPASSWORD`), per-call settings or
 directory (spec P-B). A started worker holds that lock

@@ -146,7 +146,13 @@ fn postgresql_writes_commit_once_each_on_held_sessions() {
         ("branch", SdkValue::text("work")),
         ("limit", SdkValue::Int(200)),
     ]);
-    let sdk = layerfs_api::call(Some(path), "commit.list", args, &mut |_| {}).unwrap();
+    let sdk = layerfs_api::call(
+        Some(crate::root::root_of(path)),
+        "commit.list",
+        args,
+        &mut |_| {},
+    )
+    .unwrap();
     assert!(matches!(sdk.get("items"), Some(SdkValue::List(i)) if i.len() == before + 5));
     layerfs_api::close();
 

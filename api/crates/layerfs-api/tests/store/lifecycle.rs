@@ -40,7 +40,8 @@ fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, 
             .map(|(n, v)| ((*n).to_owned(), v.clone()))
             .collect(),
     );
-    layerfs_api::call(Some(home), name, args, &mut |_| {}).map_err(|r| (r.code, r.message))
+    layerfs_api::call(Some(crate::root::root_of(home)), name, args, &mut |_| {})
+        .map_err(|r| (r.code, r.message))
 }
 
 /// Machine `name`'s record; one that is not `running` is stopped.
@@ -475,7 +476,7 @@ fn refusal(
             .map(|(n, v)| ((*n).to_owned(), v.clone()))
             .collect(),
     );
-    layerfs_api::call(Some(home), name, args, &mut |_| {}).unwrap_err()
+    layerfs_api::call(Some(crate::root::root_of(home)), name, args, &mut |_| {}).unwrap_err()
 }
 
 fn related(kind: &str, name: &str) -> SdkValue {

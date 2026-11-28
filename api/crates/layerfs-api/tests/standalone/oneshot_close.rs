@@ -2,6 +2,8 @@
 //! its call opened before it ends, folding the write-ahead log in, even
 //! while that call's idle checkpoint is still running. Its own test binary:
 //! `close_idle` acts on every Store this process holds.
+#[path = "../support/root.rs"]
+mod root;
 use layerfs_api::home::{self};
 use layerfs_home::disk::paths;
 use layerfs_protocol::sdk::SdkValue;
@@ -24,7 +26,7 @@ fn ok(home: &Path, name: &str, args: &[(&str, &str)]) -> SdkValue {
             .map(|(n, v)| ((*n).to_owned(), SdkValue::text(*v)))
             .collect(),
     );
-    layerfs_api::call(Some(home), name, args, &mut |_| {})
+    layerfs_api::call(Some(crate::root::root_of(home)), name, args, &mut |_| {})
         .unwrap_or_else(|r| panic!("{name}: {r:?}"))
 }
 

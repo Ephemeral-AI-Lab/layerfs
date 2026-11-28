@@ -20,7 +20,12 @@ fn t(text: &str) -> SdkValue {
 
 fn call(home: &Path, name: &str, pairs: Vec<(&str, SdkValue)>) -> Result<SdkValue, SdkRefusal> {
     let args = pairs.into_iter().map(|(k, v)| (k.to_owned(), v)).collect();
-    layerfs_api::call(Some(home), name, SdkValue::Map(args), &mut |_| {})
+    layerfs_api::call(
+        Some(crate::root::root_of(home)),
+        name,
+        SdkValue::Map(args),
+        &mut |_| {},
+    )
 }
 
 fn answer(home: &Path, name: &str, pairs: Vec<(&str, SdkValue)>) -> SdkValue {
@@ -69,6 +74,7 @@ fn an_unreadable_record_is_a_broken_node_and_its_siblings_are_listed() {
     std::env::set_var("LAYERFS_TOOL_FALLBACKS", "");
 
     let home = tempdir("home");
+    crate::root::made(&home);
     answer(&home, "home.init", Vec::new());
     write_entity(
         &paths::store_record(&home, "cache"),

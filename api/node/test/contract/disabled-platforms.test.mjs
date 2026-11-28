@@ -16,7 +16,9 @@ function snapshot(root, dir = root) {
 }
 const reason = platform => `platform \`${platform}\` was removed in LayerFS 2.0`;
 for (const platform of ["firecracker", "ssh", "microsandbox"]) test(`${platform}: Node refuses new work without modifying records or contacting workers`, async () => {
-  const home = mkdtempSync(join(tmpdir(), "layerfs-disabled-node-"));
+  // records only, with no layerfs.json: the root's home is `<root>/home`
+  const root = mkdtempSync(join(tmpdir(), "layerfs-disabled-node-"));
+  const home = join(root, "home");
   const server = createServer(socket => { contacts++; socket.destroy(); });
   let contacts = 0;
   await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
@@ -27,7 +29,7 @@ for (const platform of ["firecracker", "ssh", "microsandbox"]) test(`${platform}
       writeFileSync(join(home, file), JSON.stringify(value));
     }
     const before = snapshot(home);
-    const lfs = client({ home });
+    const lfs = client({ root });
     for (const row of data.cases) {
       const [family, call] = row.call.split(".");
       const spec = table.find(s => s.family === family && s.call === call);
@@ -40,6 +42,6 @@ for (const platform of ["firecracker", "ssh", "microsandbox"]) test(`${platform}
     assert.equal(contacts, 0);
   } finally {
     await new Promise(resolve => server.close(resolve));
-    rmSync(home, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true });
   }
 });

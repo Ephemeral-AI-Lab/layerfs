@@ -29,7 +29,7 @@ class Fixture(unittest.TestCase):
         cls.home = tempfile.mkdtemp(prefix="layerfs-py-values-")
         cls.folder = tempfile.mkdtemp(prefix="layerfs-py-values-folder-")
         Path(cls.folder, "README.md").write_text("hello\n")
-        cls.lfs = layerfs.client(home=cls.home)
+        cls.lfs = layerfs.client(root=cls.home)
         cls.lfs.store.create("shop")
         cls.lfs.project.init(P, cls.folder)
         cls.lfs.branch.fork(P, B, "main")
@@ -56,9 +56,9 @@ class Encoding(Fixture):
         self.invalid(self.lfs.file.write, pattern, P, B, lone, "x")
         self.invalid(self.lfs.file.write, pattern, P, B, "/s", "x", message=lone)
         self.invalid(self.lfs.file.apply, pattern, P, B, [{"op": "write", "path": "/s", "content": lone}])
-        self.invalid(layerfs.client(home=self.home, scope={"project": P, "folder": lone}).store.list, pattern)
+        self.invalid(layerfs.client(root=self.home, scope={"project": P, "folder": lone}).store.list, pattern)
         with self.assertRaisesRegex(layerfs.LayerFSError, pattern) as caught:
-            layerfs.client(home=lone)
+            layerfs.client(root=lone)
         self.assertEqual(caught.exception.code, "InvalidInput")
 
     def test_a_paired_surrogate_written_as_one_character_is_fine(self):
@@ -71,7 +71,7 @@ class Encoding(Fixture):
             self.invalid(self.lfs.branch.list, "JSON", P, limit=number)
             self.invalid(self.lfs.file.apply, "JSON", P, B, [{"op": "write", "path": "/n", "content": [number]}])
             self.invalid(
-                layerfs.client(home=self.home, scope={"project": P, "folder": "/", "x": number}).store.list, "JSON"
+                layerfs.client(root=self.home, scope={"project": P, "folder": "/", "x": number}).store.list, "JSON"
             )
 
     def test_values_json_has_no_form_for_are_invalid_input(self):
@@ -185,16 +185,16 @@ class Scopes(Fixture):
             ({"project": P, "folder": "/web", "branch": 7}, "scope.branch"),
         ]:
             with self.assertRaisesRegex(layerfs.LayerFSError, pattern, msg=repr(scope)) as caught:
-                layerfs.client(home=self.home, scope=scope).store.list()
+                layerfs.client(root=self.home, scope=scope).store.list()
             self.assertEqual(caught.exception.code, "InvalidInput", scope)
 
     def test_a_scope_without_a_branch_is_accepted_and_confines_paths(self):
-        scoped = layerfs.client(home=self.home, scope={"project": P, "folder": "/web", "branch": None})
+        scoped = layerfs.client(root=self.home, scope={"project": P, "folder": "/web", "branch": None})
         with self.assertRaisesRegex(layerfs.LayerFSError, "out of scope: path"):
             scoped.file.stat(P, "main", "/README.md")
 
     def test_the_scope_of_a_client_is_not_shared_with_the_default_client(self):
-        scoped = layerfs.client(home=self.home, scope={"project": P, "folder": "/web"})
+        scoped = layerfs.client(root=self.home, scope={"project": P, "folder": "/web"})
         self.assertEqual(scoped.scope, {"project": P, "folder": "/web"})
         self.assertIsNone(self.lfs.scope)
         self.assertIsNone(layerfs.client().scope)

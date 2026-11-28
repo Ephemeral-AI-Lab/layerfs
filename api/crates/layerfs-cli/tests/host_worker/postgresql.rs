@@ -56,7 +56,8 @@ fn held_session_serves_later_reads_without_a_login() {
             ("branch", SdkValue::text("main")),
             ("path", SdkValue::text(words[4])),
         ]);
-        let sdk = layerfs_api::call(Some(path), &method, args, &mut |_| {}).unwrap();
+        let sdk = layerfs_api::call(Some(crate::root::root_of(path)), &method, args, &mut |_| {})
+            .unwrap();
         assert_eq!(&sdk, routed, "{method} through the worker matches the SDK");
     }
     layerfs_api::close();

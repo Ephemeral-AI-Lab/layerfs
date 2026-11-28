@@ -49,7 +49,12 @@ fn map(fields: &[(&str, SdkValue)]) -> SdkValue {
 }
 
 fn call(home: &Path, name: &str, fields: &[(&str, SdkValue)]) -> Result<SdkValue, SdkRefusal> {
-    layerfs_api::call(Some(home), name, map(fields), &mut |_| {})
+    layerfs_api::call(
+        Some(crate::root::root_of(home)),
+        name,
+        map(fields),
+        &mut |_| {},
+    )
 }
 
 fn ok(home: &Path, name: &str, fields: &[(&str, SdkValue)]) -> SdkValue {

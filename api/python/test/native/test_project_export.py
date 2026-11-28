@@ -122,7 +122,7 @@ class Binding(unittest.TestCase):
     def test_keywords_home_scope_and_progress_are_forwarded_once(self):
         events = []
         scope = {"project": "shop/api", "folder": "/src", "branch": "agent"}
-        result = sdk.client(home="/data/lfs", scope=scope).project.export(
+        result = sdk.client(root="/data/lfs", scope=scope).project.export(
             project="shop/api", destination="/exports/api", branch="agent", on_progress=events.append
         )
         self.assertEqual(len(self.calls), 1)
@@ -300,7 +300,7 @@ class NativeExport(unittest.TestCase):
             (source / "link").symlink_to("ignored.bin")
             timestamp = 1_700_000_000_123_456_789
             os.utime(source / "ignored.bin", ns=(timestamp, timestamp))
-            lfs = self.real.client(home=home)
+            lfs = self.real.client(root=home)
             try:
                 lfs.store.create("shop")  # public create selects the sole Normal profile
                 self.assertEqual(lfs.store.get("shop", detail=True)["profile"], "normal")
@@ -341,7 +341,7 @@ class NativeExport(unittest.TestCase):
                         threads.append(threading.get_ident())
                         events.append(event)
 
-                    result = await asyncio.wait_for(self.real_aio.client(home=home).project.export(
+                    result = await asyncio.wait_for(self.real_aio.client(root=home).project.export(
                         "shop/api", str(destination), branch="agent", on_progress=handler
                     ), 15)
                     check_progress(self, events, result)

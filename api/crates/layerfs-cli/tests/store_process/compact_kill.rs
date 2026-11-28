@@ -116,7 +116,7 @@ fn crash_and_kill(home: &Path, failpoint: &'static str) {
         .expect("a nonblocking crash gate");
     let mut child = Command::new(LAYERFS)
         .args(["store", "compact", "s"])
-        .env("LAYERFS_HOME", home)
+        .env("LAYERFS_ROOT", crate::root::root_of(home))
         .env(GATE_ENV, &gate)
         .env(FAILPOINT_ENV, failpoint)
         .stdin(Stdio::null())

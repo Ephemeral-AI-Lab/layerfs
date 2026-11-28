@@ -29,7 +29,7 @@ fn call(home: &Path, op: &str, fields: &[(&str, &str)]) -> Result<SdkValue, SdkR
             .map(|(key, value)| ((*key).to_owned(), t(value)))
             .collect(),
     );
-    layerfs_api::call(Some(home), op, args, &mut |_| {})
+    layerfs_api::call(Some(crate::root::root_of(home)), op, args, &mut |_| {})
 }
 
 fn new_home() -> Fixture {

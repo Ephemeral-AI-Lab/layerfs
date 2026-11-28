@@ -5,14 +5,14 @@
 //! the `docker` machine names its containers with it (O33) and backups
 //! record it as where they were exported from. A folder that is not such a
 //! home, and is not empty, is refused with a fix that moves it aside: this
-//! build writes nothing in it. A LayerFS folder, which keeps its home in
+//! build writes nothing in it. A LayerFS root, which keeps its home in
 //! `home/` and each client's folder beside it, is refused with a fix that
-//! names `home/` instead, never one that moves it. Reading never changes
+//! names it as the root, never one that moves it. Reading never changes
 //! anything.
 use crate::record::file::{private_dir, read_record, unreadable, write_record};
 use crate::reply::outcome::{refused, shell_word, with_fix};
 use layerfs_protocol::sdk::{SdkRefusal, SdkValue};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 /// The layout this build writes.
 pub const LAYOUT_VERSION: i64 = 4;
@@ -37,11 +37,11 @@ pub enum Layout {
     /// `layerfs.json`. Refused
     /// ([`foreign`]) and never written.
     Foreign,
-    /// A LayerFS folder, not a home ([`is_container`]): no `layerfs.json`,
+    /// A LayerFS root, not a home ([`is_container`]): no `layerfs.json`,
     /// only folders, none of them one of LayerFS's own names ([`OWN`]), as
     /// `~/.layerfs` holding `home/` and client folders such as `dsh/` is.
-    /// Refused ([`container`]) with a fix that names its `home/`, and never
-    /// written or moved.
+    /// Refused ([`container`]) with a fix that names it as the root, and
+    /// never written or moved.
     Container,
     /// The current layout, with its `layerfs.json`.
     Current(HomeFile),
@@ -80,19 +80,6 @@ pub fn detect(home: &Path) -> Result<Layout, SdkRefusal> {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Layout::Empty),
             Err(error) => Err(unreadable(home, &error)),
         },
-    }
-}
-
-/// The home a call uses when it names none and `LAYERFS_HOME` is unset:
-/// `<user>/.layerfs/home`, beside each client's folder in the LayerFS
-/// folder `<user>/.layerfs`; but `<user>/.layerfs` itself while it holds a
-/// `layerfs.json`, a home made before the default moved (`layerfs home
-/// move` moves it into `home/`). `user` is `$HOME`.
-pub fn default_home(user: &Path) -> PathBuf {
-    let folder = user.join(".layerfs");
-    match std::fs::symlink_metadata(folder.join("layerfs.json")) {
-        Ok(_) => folder,
-        Err(_) => folder.join("home"),
     }
 }
 
@@ -139,7 +126,7 @@ fn own_only(home: &Path) -> std::io::Result<bool> {
     Ok(true)
 }
 
-/// Whether `home`, with no `layerfs.json`, is a LayerFS folder rather than
+/// Whether `home`, with no `layerfs.json`, is a LayerFS root rather than
 /// a home: it holds only folders (and macOS's `.DS_Store`), at least one,
 /// and none of them is one of LayerFS's own names ([`OWN`]). Its home is
 /// its `home/`; its other folders are its clients' (`dsh/`, `connect/`).
@@ -160,20 +147,20 @@ fn is_container(home: &Path) -> std::io::Result<bool> {
     Ok(any)
 }
 
-/// The fix for a LayerFS folder named as a home: name its `home/`.
+/// The fix for a LayerFS root used as a home: name it as the root.
 pub fn container_fix(folder: &Path) -> String {
-    let home = folder.join("home").display().to_string();
-    format!("export LAYERFS_HOME={}", shell_word(&home))
+    let root = folder.display().to_string();
+    format!("export {}={}", super::root::ROOT_ENV, shell_word(&root))
 }
 
-/// The refusal of a LayerFS folder named as a home: `InvalidInput`, with
+/// The refusal of a LayerFS root used as a home: `InvalidInput`, with
 /// [`container_fix`]. Nothing in it is written or moved.
 pub fn container(folder: &Path) -> SdkRefusal {
     let refusal = refused(
         "InvalidInput",
         format!(
-            "{} is a LayerFS folder, not a home: it keeps its home in {} beside its clients' folders; \
-             name that home instead",
+            "{} is a LayerFS root, not a home: it keeps its home in {} beside its clients' folders; \
+             name it as the root",
             folder.display(),
             folder.join("home").display()
         ),

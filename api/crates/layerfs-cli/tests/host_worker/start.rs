@@ -150,7 +150,7 @@ fn a_spawned_worker_keeps_no_caller_secret_or_directory() {
     let caller = home.paths.home.join("proof-input");
     let out = Command::new(CLI)
         .args(["file", "read", "shop/api", "main", "/hello"])
-        .env("LAYERFS_HOME", &home.paths.home)
+        .env("LAYERFS_ROOT", crate::root::root_of(&home.paths.home))
         .env("PGPASSWORD", "caller-secret-819")
         .env("DSH_TOKEN", "caller-token-819")
         .env("LAYERFS_LOGS_TAG", "caller-tag-819")
@@ -167,7 +167,7 @@ fn a_spawned_worker_keeps_no_caller_secret_or_directory() {
             "worker inherited {secret}: {environment}"
         );
     }
-    assert!(environment.contains("LAYERFS_HOME="), "{environment}");
+    assert!(environment.contains("LAYERFS_ROOT="), "{environment}");
     assert_eq!(directory(pid), std::path::PathBuf::from("/"));
     drained(&home);
 }

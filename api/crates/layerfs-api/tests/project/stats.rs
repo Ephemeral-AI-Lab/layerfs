@@ -26,8 +26,13 @@ fn args(method: &str, fields: &[(&str, SdkValue)]) -> SdkValue {
     SdkValue::Map(fields)
 }
 fn call(home: &Path, method: &str, fields: &[(&str, SdkValue)]) -> SdkValue {
-    layerfs_api::call(Some(home), method, args(method, fields), &mut |_| {})
-        .unwrap_or_else(|r| panic!("{method}: {r:?}"))
+    layerfs_api::call(
+        Some(crate::root::root_of(home)),
+        method,
+        args(method, fields),
+        &mut |_| {},
+    )
+    .unwrap_or_else(|r| panic!("{method}: {r:?}"))
 }
 fn check_counts(value: &SdkValue, files: i64, dirs: i64, links: i64, size: i64) {
     for (key, n) in [
@@ -118,7 +123,7 @@ fn check(home: &Path, tag: &str) {
     );
     assert_eq!(prefixed, saved);
     let short = layerfs_api::call(
-        Some(home),
+        Some(crate::root::root_of(home)),
         "project.stats",
         args(
             "project.stats",
@@ -139,7 +144,7 @@ fn check(home: &Path, tag: &str) {
     );
     assert_eq!(base, stats);
     let bad = layerfs_api::call(
-        Some(home),
+        Some(crate::root::root_of(home)),
         "project.stats",
         args(
             "project.stats",

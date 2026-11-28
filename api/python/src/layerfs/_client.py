@@ -1,4 +1,4 @@
-"""One client per home (and optional folder scope, O32): ten families
+"""One client per LayerFS root (and optional folder scope, O32): ten families
 built from the library's call table. Each function takes its positionals
 in the table's order; optional positionals and options may be keywords.
 Any call also takes ``log_tag=``, the tag of its call log line (#659),
@@ -109,7 +109,7 @@ def _bind(client, spec):
         if args.get("stream") is True:
             _streamed(handlers)
         scope = encode(client.scope) if client.scope is not None else None
-        answer = decode(_native.call(name, encode(args), client._home, scope, _event_handler(handlers)))
+        answer = decode(_native.call(name, encode(args), client._root, scope, _event_handler(handlers)))
         refused = answer.get("refused")
         if refused is not None:
             raise LayerFSError.from_refusal(refused)
@@ -132,13 +132,13 @@ class Family:
 
 
 class Client:
-    """A client of ``home`` (default ``LAYERFS_HOME``, else ``~/.layerfs/home``,
-    or a legacy ``~/.layerfs`` that holds ``layerfs.json``),
-    with an optional folder scope ``{"project": ..., "folder": ..., "branch": ...}``."""
+    """A client of the LayerFS root ``root`` (default ``LAYERFS_ROOT``, else
+    ``~/.layerfs``), whose home is ``<root>/home``, or the root itself while
+    it holds ``layerfs.json``; with an optional folder scope ``{"project": ..., "folder": ..., "branch": ...}``."""
 
-    def __init__(self, home=None, scope=None):
-        # not ``self.home``: that is the ``home`` family
-        self._home = path_text(home)
+    def __init__(self, root=None, scope=None):
+        # not ``self.root`` beside ``self.home``, the ``home`` family
+        self._root = path_text(root)
         self.scope = scope
         for family in FAMILIES:
             setattr(self, family, Family(family))
@@ -146,6 +146,6 @@ class Client:
             setattr(getattr(self, spec["family"]), spec["call"], _bind(self, spec))
 
 
-def client(home=None, scope=None):
-    """A client of ``home``, with an optional folder scope."""
-    return Client(home, scope)
+def client(root=None, scope=None):
+    """A client of the LayerFS root ``root``, with an optional folder scope."""
+    return Client(root, scope)

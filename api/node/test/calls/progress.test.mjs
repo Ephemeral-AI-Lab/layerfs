@@ -51,7 +51,7 @@ test("project.init in this process: check, install, record with null counts, whi
   const home = temp("init");
   const folder = folderOf(2000);
   try {
-    const lfs = client({ home });
+    const lfs = client({ root: home });
     await lfs.store.create("shop");
     const started = performance.now();
     const events = [];
@@ -92,7 +92,7 @@ test("a throwing on_progress does not stop Init: every event is still delivered,
   const onWarning = (warning) => warnings.push(warning);
   process.on("warning", onWarning);
   try {
-    const lfs = client({ home });
+    const lfs = client({ root: home });
     await lfs.store.create("shop");
     const phases = [];
     const result = await lfs.project.init("shop/api", folder, {
@@ -126,7 +126,7 @@ test("an async handler that rejects is not caught: Node's unhandled-rejection ru
   try {
     const script = `
       import { client } from ${JSON.stringify(new URL("../../src/index.js", import.meta.url).href)};
-      const lfs = client({ home: ${JSON.stringify(home)} });
+      const lfs = client({ root: ${JSON.stringify(home)} });
       await lfs.store.create("shop");
       await lfs.project.init("shop/api", ${JSON.stringify(folder)}, {
         on_progress: async (p) => { throw new Error("async boom at " + p.phase); },
@@ -176,12 +176,13 @@ async function worker(dir) {
 const sends = (events) => events.filter((p) => p.phase === "send");
 
 test("through a worker: push, pull and init report bytes per phase; null outside it; the last `send` precedes verification and installation", { timeout: 90_000, skip: noCommand }, async () => {
-  const home = temp("worker-home");
+  const root = temp("worker-home");
+  const home = join(root, "home");
   const guest = temp("worker-guest");
   const folder = folderOf(100);
   const box = await worker(guest);
   try {
-    const lfs = client({ home });
+    const lfs = client({ root });
     await lfs.store.create("shop");
     mkdirSync(join(home, "machine", "box"), { recursive: true });
     writeFileSync(join(home, "machine", "box", "record.json"), JSON.stringify({ name: "box", platform: "lima", vm_name: "layerfs-00000000-box" }));
@@ -235,7 +236,7 @@ test("through a worker: push, pull and init report bytes per phase; null outside
     }
   } finally {
     box.stop();
-    rmSync(home, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true });
     rmSync(guest, { recursive: true, force: true });
     rmSync(folder, { recursive: true, force: true });
   }

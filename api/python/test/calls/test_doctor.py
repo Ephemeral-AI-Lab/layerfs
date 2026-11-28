@@ -39,7 +39,7 @@ class Doctor(unittest.TestCase):
         parent = tempfile.mkdtemp(prefix="layerfs-py-doctor-")
         home = os.path.join(parent, "home")
         try:
-            report = layerfs.client(home=home).home.doctor(detail=True)
+            report = layerfs.client(root=parent).home.doctor(detail=True)
             self.assertEqual(list(report), ["ok", "findings", "not_checked", "status", "counts", "observed_at", "tree"])
             self.assertEqual(report["tree"]["coverage"], "shallow")
             self.assertFalse(os.path.exists(home))
@@ -47,10 +47,11 @@ class Doctor(unittest.TestCase):
             shutil.rmtree(parent)
 
     def test_a_record_that_does_not_parse_is_an_error_with_its_fix(self):
-        home = tempfile.mkdtemp(prefix="layerfs-py-doctor-")
-        os.chmod(home, 0o700)
+        root = tempfile.mkdtemp(prefix="layerfs-py-doctor-")
+        os.chmod(root, 0o700)
+        home = os.path.join(root, "home")
         try:
-            lfs = layerfs.client(home=home)
+            lfs = layerfs.client(root=root)
             lfs.store.list()
             with self.assertRaises(layerfs.LayerFSError) as refused:
                 lfs.machine.doctor("missing")
@@ -76,7 +77,7 @@ class Doctor(unittest.TestCase):
             self.assertIn("by hand", finding["message"])
             self.assertNotIn("fix", finding)
         finally:
-            shutil.rmtree(home)
+            shutil.rmtree(root)
 
     def test_home_leftovers_and_prune_are_gone(self):
         # spec v20: LayerFS removes leftovers itself; the calls are gone
@@ -84,10 +85,10 @@ class Doctor(unittest.TestCase):
         self.assertEqual(home, ["init", "get", "log", "clear_log", "doctor", "move"])
         self.assertFalse(hasattr(layerfs.home, "leftovers"))
         self.assertFalse(hasattr(layerfs.home, "prune"))
-        client = layerfs.client(home=os.path.join(tempfile.gettempdir(), "layerfs-py-gone"))
+        client = layerfs.client(root=os.path.join(tempfile.gettempdir(), "layerfs-py-gone"))
         self.assertFalse(hasattr(client.home, "leftovers"))
         self.assertFalse(hasattr(client.home, "prune"))
-        self.assertFalse(hasattr(aio.client(home=tempfile.gettempdir()).home, "prune"))
+        self.assertFalse(hasattr(aio.client(root=tempfile.gettempdir()).home, "prune"))
 
 if __name__ == "__main__":
     unittest.main()

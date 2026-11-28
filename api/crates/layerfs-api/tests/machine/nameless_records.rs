@@ -44,7 +44,7 @@ fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, 
             .chain(detail)
             .collect(),
     );
-    layerfs_api::call(Some(home), name, args, &mut |_| {})
+    layerfs_api::call(Some(crate::root::root_of(home)), name, args, &mut |_| {})
 }
 
 /// The texts of list `value`.
@@ -68,7 +68,7 @@ fn short(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> SdkValue {
             .map(|(n, v)| ((*n).to_owned(), v.clone()))
             .collect(),
     );
-    layerfs_api::call(Some(home), name, args, &mut |_| {}).unwrap()
+    layerfs_api::call(Some(crate::root::root_of(home)), name, args, &mut |_| {}).unwrap()
 }
 
 /// Machine `name`'s item of list answer `list`.

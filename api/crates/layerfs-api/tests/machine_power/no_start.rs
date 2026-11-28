@@ -41,7 +41,8 @@ fn call(home: &Path, name: &str, args: &[(&str, &str)]) -> Result<SdkValue, (Str
         (n, v) => (n.to_owned(), t(v)),
     };
     let args = SdkValue::Map(args.iter().map(live).collect());
-    layerfs_api::call(Some(home), name, args, &mut |_| {}).map_err(|r| (r.code, r.message))
+    layerfs_api::call(Some(crate::root::root_of(home)), name, args, &mut |_| {})
+        .map_err(|r| (r.code, r.message))
 }
 
 /// A home with stopped Lima machine `dev` holding sqlite Store `shop`
@@ -136,8 +137,13 @@ fn every_read(home: &Path) {
     assert!(message.contains("layerfs machine start dev"), "{message}");
     // and carries it as the refusal's `fix` (conformance R1 F5)
     let args = SdkValue::map([("workspace", t("s1:w"))]);
-    let refusal =
-        layerfs_api::call(Some(home), "workspace.status", args, &mut |_| {}).expect_err("refused");
+    let refusal = layerfs_api::call(
+        Some(crate::root::root_of(home)),
+        "workspace.status",
+        args,
+        &mut |_| {},
+    )
+    .expect_err("refused");
     assert_eq!(
         refusal.detail.get_text("fix"),
         Some("layerfs machine start dev"),

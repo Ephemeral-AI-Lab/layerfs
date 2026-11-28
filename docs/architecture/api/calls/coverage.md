@@ -144,7 +144,7 @@ These are not calls and are not in the matrix.
 | Helper | Node | Python | CLI |
 | --- | --- | --- | --- |
 | the table | `table`, `families` | `TABLE`, `FAMILIES` | `layerfs help [<family> [<call>]]`, `layerfs help --json` |
-| a client with home and folder scope | `client({ home, scope })`, frozen | `client(home=, scope=)` | `--scope`, `--scope-project`, `--scope-branch`; the home is `LAYERFS_HOME` only |
+| a client with a LayerFS root and folder scope | `client({ root, scope })`, frozen | `client(root=, scope=)` | `--scope`, `--scope-project`, `--scope-branch`; the root is `LAYERFS_ROOT` only |
 | the module-level default client | `layerfs.<family>` | `layerfs.<family>`, `layerfs.aio.<family>` | — |
 | `close` | `close()` | `layerfs.close()` | none: the command closes its idle Stores after every call |
 | the error | `LayerFSError { code, message, fix, detail }` and the next-call fields | `LayerFSError` (`code`, also `error`; `message`, `fix`, `fields`, `detail`) | JSON `{ error, message, fix, … }` on stderr (`detail` with `--detail`), exit 125 |

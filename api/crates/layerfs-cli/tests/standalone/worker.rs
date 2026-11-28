@@ -1,5 +1,7 @@
 //! `layerfs worker` (#533 step 15): it serves behind its secret file and
 //! answers a ping; without its settings it refuses to start.
+#[path = "../../../layerfs-api/tests/support/root.rs"]
+mod root;
 use layerfs_api::worker::{ping, Endpoint};
 use std::io::Read;
 use std::net::TcpListener;

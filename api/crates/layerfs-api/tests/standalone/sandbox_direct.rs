@@ -10,6 +10,8 @@
 //! (`sandbox_daemon/direct_live.rs` dials a host daemon). One test, because it
 //! sets the process's environment.
 #![cfg(all(unix, feature = "machine"))]
+#[path = "../support/root.rs"]
+mod root;
 use layerfs_api::home::{self, paths, read_record, write_record};
 use layerfs_api::worker::{read_frame, write_frame};
 use layerfs_protocol::sdk::SdkValue;
@@ -37,7 +39,8 @@ fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, 
             .map(|(n, v)| ((*n).to_owned(), v.clone()))
             .collect(),
     );
-    layerfs_api::call(Some(home), name, args, &mut |_| {}).map_err(|r| (r.code, r.message))
+    layerfs_api::call(Some(crate::root::root_of(home)), name, args, &mut |_| {})
+        .map_err(|r| (r.code, r.message))
 }
 
 /// What the stand-in worker was sent: each Sandbox operation's name and

@@ -3,6 +3,8 @@
 //! Ctrl-C is not left cancelling every later upgrade, while a request made
 //! before a call still cancels that call. Its own test binary: the flag is
 //! process-wide, so no other upgrade runs beside these.
+#[path = "../support/root.rs"]
+mod root;
 #[path = "../support/worker_store.rs"]
 mod worker_store;
 

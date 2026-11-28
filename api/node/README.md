@@ -49,11 +49,11 @@ import { client, close } from "@layerfs/node";
 
 const root = mkdtempSync(join(tmpdir(), "layerfs-"));
 const folder = join(root, "app");
-const home = join(root, "home");
 mkdirSync(folder);
 writeFileSync(join(folder, "README.md"), "# app\n");
 
-const lfs = client({ home });
+// the LayerFS root; its home is root/home
+const lfs = client({ root });
 try {
   await lfs.store.create("shop");
   await lfs.project.init("shop/app", folder);

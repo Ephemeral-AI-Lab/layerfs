@@ -17,8 +17,10 @@ home.clear_log()
 home.doctor({ on_progress })
 ```
 
-The home is `LAYERFS_HOME` (default `~/.layerfs/home`, or a legacy `~/.layerfs` that holds `layerfs.json`), or the `home` of
-`layerfs.client({ home })`. Its layout and settings are in the manual's
+The home is found in the LayerFS root, `LAYERFS_ROOT` (default
+`~/.layerfs`), or the `root` of `layerfs.client({ root })`: it is
+`<root>/home`, or the root while it holds `layerfs.json` (a legacy home,
+which `home.move` moves into `<root>/home`). Its layout and settings are in the manual's
 [home page](../../../../../docs/versioned/2.0.0/home.md).
 
 ## `home.init` and `home.get`

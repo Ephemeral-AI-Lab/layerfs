@@ -44,12 +44,18 @@ fn map(args: &[(&str, SdkValue)]) -> SdkValue {
 }
 
 fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, String> {
-    layerfs_api::call(Some(home), name, map(args), &mut |_| {}).map_err(|r| r.code)
+    layerfs_api::call(
+        Some(crate::root::root_of(home)),
+        name,
+        map(args),
+        &mut |_| {},
+    )
+    .map_err(|r| r.code)
 }
 
 fn scoped(home: &Path, scope: &Scope, name: &str, args: &[(&str, SdkValue)]) {
     let _ = layerfs_api::call_scoped(
-        Some(home),
+        Some(crate::root::root_of(home)),
         Some(scope),
         name,
         map(args),
@@ -514,7 +520,7 @@ fn the_tag_comes_from_the_environment_or_the_call() {
     // the JSON form takes it too, and names its client
     std::env::remove_var("LAYERFS_LOGS_TAG");
     let answer = layerfs_api::call_json(
-        Some(&home),
+        Some(crate::root::root_of(&home)),
         None,
         "store.list",
         r#"{"log_tag":"py:1"}"#,
@@ -527,7 +533,7 @@ fn the_tag_comes_from_the_environment_or_the_call() {
     assert_eq!(line.get_text("client"), Some("python"));
     // bad JSON is refused before any check and still logged
     layerfs_api::call_json(
-        Some(&home),
+        Some(crate::root::root_of(&home)),
         None,
         "store.list",
         "{",
@@ -554,10 +560,12 @@ fn the_logs_calls_and_logs_off_write_nothing() {
     std::env::remove_var("LAYERFS_LOGS");
     ok(&home, "store.list", &[]);
     assert_eq!(lines(&home).len(), 1);
-    // a folder that is not a home gets no log
+    // a root with no home yet gets no log, in it or in its `home/`
     let bare = tempdir("bare");
+    std::fs::write(bare.join("kept.txt"), "kept").unwrap();
     let _ = call(&bare, "fs.read", &[]);
     assert!(!paths::trace_dir(&bare).exists());
+    assert!(!bare.join("home").exists());
     std::fs::remove_dir_all(home).unwrap();
     std::fs::remove_dir_all(bare).unwrap();
 }

@@ -45,7 +45,7 @@ class Flow(unittest.TestCase):
         self.addCleanup(layerfs.close)
 
     def test_a_flow_written_through_aio_reads_the_same_through_both(self):
-        sync, lfs = layerfs.client(home=self.home), aio.client(home=self.home)
+        sync, lfs = layerfs.client(root=self.home), aio.client(root=self.home)
         progress = []
 
         async def write():
@@ -101,7 +101,7 @@ class Flow(unittest.TestCase):
         )
 
     def test_the_history_of_the_flow_is_one_commit_per_write(self):
-        sync = layerfs.client(home=self.home)
+        sync = layerfs.client(root=self.home)
         sync.store.create("shop")
         sync.project.init(P, self.folder)
         sync.branch.fork(P, "agent", "main")
@@ -115,11 +115,11 @@ class Flow(unittest.TestCase):
         self.assertEqual(refusal(sync.file.stat, P, "agent", "/two", at=oldest)["refused"][0], "NotFound")
 
     def test_a_scope_refuses_the_same_way_through_both(self):
-        sync = layerfs.client(home=self.home)
+        sync = layerfs.client(root=self.home)
         sync.store.create("shop")
         sync.project.init(P, self.folder)
         scope = {"project": P, "folder": "/web"}
-        scoped, ascoped = layerfs.client(home=self.home, scope=scope), aio.client(home=self.home, scope=scope)
+        scoped, ascoped = layerfs.client(root=self.home, scope=scope), aio.client(root=self.home, scope=scope)
         calls = [
             ("file", "stat", [P, "main", "/README.md"]),
             ("store", "remove", ["shop"]),

@@ -13,7 +13,7 @@ fn t(value: &str) -> SdkValue {
 }
 fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> SdkValue {
     layerfs_api::call(
-        Some(home),
+        Some(crate::root::root_of(home)),
         name,
         SdkValue::Map(
             args.iter()
@@ -41,7 +41,7 @@ fn exec_helper() {
     let home = Path::new(&home);
     let name = std::env::var("LAYERFS_FORCE_NATIVE_NAME").unwrap();
     let _ = layerfs_api::call(
-        Some(home),
+        Some(crate::root::root_of(home)),
         "workspace.exec",
         SdkValue::map([
             ("workspace", t(&format!("{name}:work"))),
@@ -211,7 +211,7 @@ fn identity_case(home: &Path) {
     let moved = home::with_field(daemon, "pid", SdkValue::Int(i64::from(other.0.id())));
     write_record(&path, &home::with_field(original.clone(), "daemon", moved)).unwrap();
     let refused = layerfs_api::call(
-        Some(home),
+        Some(crate::root::root_of(home)),
         "machine.stop",
         SdkValue::map([
             ("machine", t(layerfs_home::names::HOST_MACHINE)),
@@ -301,7 +301,7 @@ fn native_force_stops_live_daemon_and_command_and_detaches_mount_without_opening
     );
     // the native machine's daemon is a setting of its record
     layerfs_api::call(
-        Some(&home),
+        Some(crate::root::root_of(&home)),
         "machine.update",
         SdkValue::map([
             ("machine", SdkValue::text(layerfs_home::names::HOST_MACHINE)),

@@ -1,4 +1,4 @@
-//! `table()`, `call(name, args, home=None, scope=None, on_event=None)` and
+//! `table()`, `call(name, args, root=None, scope=None, on_event=None)` and
 //! `close()`; the doctors are calls like any other.
 use pyo3::prelude::*;
 use std::path::PathBuf;
@@ -9,22 +9,22 @@ pub fn table() -> String {
     layerfs_api::table_json()
 }
 
-/// Runs the call `name` once with JSON `args`, in `home` (else the
-/// library's default) and under JSON `scope`. Each event is passed to
+/// Runs the call `name` once with JSON `args`, in the home found in the
+/// LayerFS root `root` (else the library's default) and under JSON `scope`. Each event is passed to
 /// `on_event` as JSON text, with the interpreter held; an exception it
 /// raises is reported as unraisable and the call goes on. Returns the
 /// answer as JSON text: `{ value }` or `{ refused }`.
 #[pyfunction]
-#[pyo3(signature = (name, args, home=None, scope=None, on_event=None))]
+#[pyo3(signature = (name, args, root=None, scope=None, on_event=None))]
 pub fn call(
     py: Python<'_>,
     name: String,
     args: String,
-    home: Option<String>,
+    root: Option<String>,
     scope: Option<String>,
     on_event: Option<Py<PyAny>>,
 ) -> String {
-    let home = home.map(PathBuf::from);
+    let root = root.map(PathBuf::from);
     py.detach(move || {
         let mut send = |event: String| {
             if let Some(function) = &on_event {
@@ -36,7 +36,7 @@ pub fn call(
             }
         };
         layerfs_api::call_json(
-            home.as_deref(),
+            root.as_deref(),
             scope.as_deref(),
             &name,
             &args,

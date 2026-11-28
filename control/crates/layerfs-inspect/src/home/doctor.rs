@@ -97,7 +97,8 @@ fn layout(
             );
             None
         }
-        // a LayerFS folder: its home is its `home/`; nothing is moved
+        // a LayerFS root opened as a home: its home is its `home/`, found
+        // by naming it as the root; nothing is moved
         Layout::Container => {
             checks.fail(LAYOUT, layerfs_home::disk::layout::container(home).message);
             checks.fix(LAYOUT, layerfs_home::disk::layout::container_fix(home));

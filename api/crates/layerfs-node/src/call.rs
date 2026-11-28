@@ -13,8 +13,8 @@ pub fn table() -> String {
     layerfs_api::table_json()
 }
 
-/// Runs the call `name` once with JSON `args`, in `home` (else the
-/// library's default) and under `scope` (JSON `{ project, folder, branch? }`),
+/// Runs the call `name` once with JSON `args`, in the home found in the
+/// LayerFS root `root` (else the library's default) and under `scope` (JSON `{ project, folder, branch? }`),
 /// each event sent to `on_event` as JSON text. Resolves to JSON text
 /// `{ events, answer }`: `events` counts the events queued to `on_event`,
 /// which arrive on their own handle and may come after the resolve, so the
@@ -24,7 +24,7 @@ pub fn table() -> String {
 pub fn call(
     name: String,
     args: String,
-    home: Option<String>,
+    root: Option<String>,
     scope: Option<String>,
     on_event: Option<JsFunction>,
 ) -> napi::Result<AsyncTask<Call>> {
@@ -39,7 +39,7 @@ pub fn call(
     Ok(AsyncTask::new(Call {
         name,
         args,
-        home: home.map(PathBuf::from),
+        root: root.map(PathBuf::from),
         scope,
         events,
     }))
@@ -59,7 +59,7 @@ pub fn close() -> u32 {
 pub struct Call {
     name: String,
     args: String,
-    home: Option<PathBuf>,
+    root: Option<PathBuf>,
     scope: Option<String>,
     events: Option<ThreadsafeFunction<String, ErrorStrategy::Fatal>>,
 }
@@ -81,7 +81,7 @@ impl Task for Call {
             }
         };
         let answer = layerfs_api::call_json(
-            self.home.as_deref(),
+            self.root.as_deref(),
             self.scope.as_deref(),
             &self.name,
             &self.args,

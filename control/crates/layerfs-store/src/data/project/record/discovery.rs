@@ -28,15 +28,16 @@ pub struct Project {
     pub installed: Option<StoreManifest>,
 }
 
-/// The home a call names, else `LAYERFS_HOME`: absolute, and a private
+/// The home a call names, else the one found in `LAYERFS_ROOT` (else
+/// `~/.layerfs`; [`layerfs_home::disk::root`]): absolute, and a private
 /// directory of this user's, made if absent.
 pub fn home_of(home: Option<&Path>) -> Result<PathBuf> {
-    let home = home
-        .map(Path::to_path_buf)
-        .or_else(|| std::env::var_os("LAYERFS_HOME").map(PathBuf::from))
-        .ok_or_else(|| refused("InvalidInput", "LAYERFS_HOME is required"))?;
+    let home = match home {
+        Some(home) => home.to_path_buf(),
+        None => layerfs_home::disk::root::home(None)?,
+    };
     if !home.is_absolute() {
-        return Err(refused("InvalidInput", "LAYERFS_HOME must be absolute"));
+        return Err(refused("InvalidInput", "the home must be an absolute path"));
     }
     directory(&home)?;
     Ok(home)
@@ -268,7 +269,7 @@ pub fn save_project(path: &Path, project: &Project) -> Result<()> {
     layerfs_home::disk::write_entity(&path.join("record.json"), &record)
 }
 /// Project `name` of Store `store` (by default, the Store of its own name)
-/// in `home` (by default, `LAYERFS_HOME`), read from its entry.
+/// in `home` (by default, the one found in `LAYERFS_ROOT`), read from its entry.
 pub fn project(home: Option<&Path>, store: Option<&str>, name: Option<&str>) -> Result<Project> {
     let path = project_dir(home, store, name)?;
     let value = layerfs_home::disk::read_record(&path.join("record.json"))?

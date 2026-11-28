@@ -41,7 +41,7 @@ fn call(
     args: &[(&str, SdkValue)],
 ) -> Result<SdkValue, (String, String)> {
     layerfs_api::call_scoped(
-        Some(home),
+        Some(crate::root::root_of(home)),
         scope,
         name,
         map(args),

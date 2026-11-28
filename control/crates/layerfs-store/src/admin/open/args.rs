@@ -30,7 +30,7 @@ pub const ROUTING: [&str; 9] = [
 /// it travels as.
 #[derive(Clone, Default)]
 pub struct OpenArgs {
-    /// `home`; `None` takes `LAYERFS_HOME`.
+    /// `home`; `None` takes the one found in `LAYERFS_ROOT`.
     pub home: Option<PathBuf>,
     /// `store`.
     pub store: Option<String>,

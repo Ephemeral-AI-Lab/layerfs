@@ -23,7 +23,7 @@ impl Cli {
         Self(Some(
             Command::new(CLI)
                 .args(words)
-                .env("LAYERFS_HOME", home)
+                .env("LAYERFS_ROOT", crate::root::root_of(home))
                 .env_remove("LAYERFS_TRACE")
                 .env_remove("LAYERFS_TRACE_STEP")
                 .stdin(Stdio::null())

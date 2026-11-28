@@ -33,7 +33,7 @@ fn refusal(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> SdkRefusal {
             .map(|(n, v)| ((*n).to_owned(), v.clone()))
             .collect(),
     );
-    layerfs_api::call(Some(home), name, args, &mut |_| {}).unwrap_err()
+    layerfs_api::call(Some(crate::root::root_of(home)), name, args, &mut |_| {}).unwrap_err()
 }
 
 fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, (String, String)> {
@@ -42,7 +42,8 @@ fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, 
             .map(|(n, v)| ((*n).to_owned(), v.clone()))
             .collect(),
     );
-    layerfs_api::call(Some(home), name, args, &mut |_| {}).map_err(|r| (r.code, r.message))
+    layerfs_api::call(Some(crate::root::root_of(home)), name, args, &mut |_| {})
+        .map_err(|r| (r.code, r.message))
 }
 
 fn ok(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> SdkValue {
@@ -287,7 +288,13 @@ fn a_postgresql_store_call_holds_the_stores_lease() {
                 ("branch", t("main")),
                 ("path", t("/a")),
             ]);
-            layerfs_api::call(Some(&home), "file.read", args, &mut |_| {}).map_err(|r| r.code)
+            layerfs_api::call(
+                Some(crate::root::root_of(&home)),
+                "file.read",
+                args,
+                &mut |_| {},
+            )
+            .map_err(|r| r.code)
         })
     };
     let (stream, _) = listener.accept().unwrap();

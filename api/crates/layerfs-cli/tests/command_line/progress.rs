@@ -36,7 +36,7 @@ fn fixture(tag: &str, files: usize) -> (PathBuf, PathBuf) {
 fn layerfs(home: &Path, words: &[&str]) -> std::process::Output {
     Command::new(LAYERFS)
         .args(words)
-        .env("LAYERFS_HOME", home)
+        .env("LAYERFS_ROOT", crate::root::root_of(home))
         .output()
         .unwrap()
 }
@@ -55,7 +55,7 @@ fn progress_is_json_lines_on_stderr_before_the_result_on_stdout() {
     // read both pipes as they fill, to see which line comes when
     let mut child = Command::new(LAYERFS)
         .args(["project", "init", "shop/api", &folder_text, "--progress"])
-        .env("LAYERFS_HOME", &home)
+        .env("LAYERFS_ROOT", crate::root::root_of(&home))
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -135,7 +135,7 @@ fn a_closed_stderr_does_not_fail_the_call() {
     let run = Command::new("sh")
         .args(["-c", "exec \"$@\" 2>&-", "sh", LAYERFS])
         .args(["project", "init", "shop/api", &folder_text, "--progress"])
-        .env("LAYERFS_HOME", &home)
+        .env("LAYERFS_ROOT", crate::root::root_of(&home))
         .output()
         .unwrap();
     assert_eq!(run.status.code(), Some(0), "{run:?}");

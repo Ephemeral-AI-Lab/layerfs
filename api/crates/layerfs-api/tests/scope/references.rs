@@ -42,7 +42,7 @@ fn call(
     args: &[(&str, SdkValue)],
 ) -> Result<SdkValue, (String, String)> {
     layerfs_api::call_scoped(
-        Some(home),
+        Some(crate::root::root_of(home)),
         scope,
         name,
         map(args),
@@ -304,7 +304,7 @@ fn the_json_form_refuses_like_the_table_call() {
     let scope_text = r#"{"project":"shop/api","folder":"/web","branch":"agent"}"#;
     let args = r#"{"project":"shop/api","name":"x","from":"../work"}"#;
     let answer = layerfs_api::call_json(
-        Some(&home),
+        Some(crate::root::root_of(&home)),
         Some(scope_text),
         "branch.fork",
         args,

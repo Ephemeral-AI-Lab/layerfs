@@ -47,8 +47,13 @@ fn call(home: &Path, name: &str, pairs: &[(&str, &str)], detail: bool) -> (SdkVa
         args.push(("detail".to_owned(), SdkValue::Bool(true)));
     }
     let mut events = 0;
-    let answer = layerfs_api::call(Some(home), name, SdkValue::Map(args), &mut |_| events += 1)
-        .unwrap_or_else(|r| panic!("{name}: {} {}", r.code, r.message));
+    let answer = layerfs_api::call(
+        Some(crate::root::root_of(home)),
+        name,
+        SdkValue::Map(args),
+        &mut |_| events += 1,
+    )
+    .unwrap_or_else(|r| panic!("{name}: {} {}", r.code, r.message));
     (answer, events)
 }
 
@@ -73,6 +78,7 @@ fn checks(node: &SdkValue) -> Vec<&str> {
 /// A home with its native daemon recorded as an executable file.
 fn initialized(tag: &str) -> PathBuf {
     let home = tempdir(tag);
+    crate::root::made(&home);
     call(&home, "home.init", &[], false);
     let daemon = home.join("layerfs-daemon");
     std::fs::write(&daemon, "#!/bin/sh\n").unwrap();

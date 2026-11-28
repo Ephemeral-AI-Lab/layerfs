@@ -69,7 +69,8 @@ fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, 
             .map(|(n, v)| ((*n).to_owned(), v.clone()))
             .collect(),
     );
-    layerfs_api::call(Some(home), name, args, &mut |_| {}).map_err(|r| (r.code, r.message))
+    layerfs_api::call(Some(crate::root::root_of(home)), name, args, &mut |_| {})
+        .map_err(|r| (r.code, r.message))
 }
 
 /// `machine.create(name, lima)`'s refusal.
@@ -197,7 +198,7 @@ fn provider_names_and_their_refusals() {
     );
     let before = effects(&tools);
     let refused = layerfs_api::call(
-        Some(&old),
+        Some(crate::root::root_of(&old)),
         "machine.start",
         SdkValue::map([("machine", t("docker"))]),
         &mut |_| {},
@@ -308,7 +309,13 @@ fn provider_names_and_their_refusals() {
     assert_eq!(code, "Failed", "{message}");
     assert!(message.contains("has no vm_name"), "{message}");
     let start = SdkValue::map([("machine", t("e.f"))]);
-    let refused = layerfs_api::call(Some(&home), "machine.start", start, &mut |_| {}).unwrap_err();
+    let refused = layerfs_api::call(
+        Some(crate::root::root_of(&home)),
+        "machine.start",
+        start,
+        &mut |_| {},
+    )
+    .unwrap_err();
     assert_eq!(
         refused.detail.get_text("fix"),
         Some("layerfs machine remove e.f")

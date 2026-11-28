@@ -21,6 +21,8 @@
 #![cfg(all(unix, feature = "machine"))]
 #[path = "../support/mod.rs"]
 mod common;
+#[path = "../../../layerfs-api/tests/support/root.rs"]
+mod root;
 use common::{layerfs, run, tempdir, text};
 use layerfs_api::home::{self, paths, read_record, write_record};
 use layerfs_api::worker::{read_frame, write_frame};

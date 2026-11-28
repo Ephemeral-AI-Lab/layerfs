@@ -47,8 +47,8 @@ async def main(root: Path):
     (folder / "docs" / "a.txt").write_text("one\ntwo\n")
 
     P = "shop/site"
-    home = str(root / "home")
-    lfs = aio.client(home=home)
+    # the LayerFS root; its home is root/home
+    lfs = aio.client(root=str(root))
 
     await lfs.store.create("shop")
     say("store.get", json.dumps((await lfs.store.get("shop"))))
@@ -89,7 +89,7 @@ async def main(root: Path):
     await refused("missing Branch", lambda: lfs.file.read(P, "nope", "/README.md"))
     await refused("write to main", lambda: lfs.file.write(P, "main", "/x.txt", "x\n"))
     await refused("unknown option", lambda: lfs.file.read(P, "agent", "/README.md", colour=True))
-    scoped = aio.client(home=home, scope={"project": P, "folder": "/docs", "branch": "ns"})
+    scoped = aio.client(root=str(root), scope={"project": P, "folder": "/docs", "branch": "ns"})
     await refused("scope: other call", lambda: scoped.store.list())
     await refused("scope: outside folder", lambda: scoped.file.read(P, "main", "/README.md"))
 

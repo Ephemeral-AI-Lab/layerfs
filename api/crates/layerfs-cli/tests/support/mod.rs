@@ -37,7 +37,7 @@ pub fn layerfs<S: AsRef<std::ffi::OsStr>>(home: &Path, words: &[S]) -> Command {
     let mut command = Command::new(LAYERFS);
     command
         .args(words)
-        .env("LAYERFS_HOME", home)
+        .env("LAYERFS_ROOT", crate::root::root_of(home))
         .stdin(Stdio::null());
     command
 }

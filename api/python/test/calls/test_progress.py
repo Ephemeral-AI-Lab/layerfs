@@ -94,7 +94,7 @@ class Progress(unittest.TestCase):
         self.assertEqual(declaring("stderr"), ["workspace.exec"])
 
     def test_sync_init_reports_check_install_record_while_it_runs_before_it_returns(self):
-        lfs = layerfs.client(home=self.home)
+        lfs = layerfs.client(root=self.home)
         lfs.store.create("shop")
         events, returned = [], [False]
 
@@ -117,7 +117,7 @@ class Progress(unittest.TestCase):
         self.assertEqual(len(events), 3)
 
     def test_a_raising_function_is_reported_as_unraisable_and_the_call_goes_on(self):
-        lfs = layerfs.client(home=self.home)
+        lfs = layerfs.client(root=self.home)
         lfs.store.create("shop")
         phases, unraisable = [], []
         previous = sys.unraisablehook
@@ -137,7 +137,7 @@ class Progress(unittest.TestCase):
         self.assertEqual(lfs.project.get("shop/api", detail=True)["project"], "shop/api", "the Init happened")
 
     def test_aio_init_reports_on_the_loop_thread_before_it_returns_and_a_raise_goes_to_the_loop(self):
-        lfs = aio.client(home=self.home)
+        lfs = aio.client(root=self.home)
 
         async def run():
             loop = asyncio.get_running_loop()

@@ -4,6 +4,8 @@
 //! `layerfs_api::close` appends op `close` with `stores` and `sessions`.
 //! One test in its own binary: it sets the process's environment.
 #![cfg(any(target_os = "linux", target_os = "macos"))]
+#[path = "../support/root.rs"]
+mod root;
 use layerfs_api::home;
 use layerfs_protocol::sdk::SdkValue;
 use std::os::unix::fs::PermissionsExt;
@@ -23,7 +25,7 @@ fn ok(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> SdkValue {
             .map(|(n, v)| ((*n).to_owned(), v.clone()))
             .collect(),
     );
-    layerfs_api::call(Some(home), name, args, &mut |_| {})
+    layerfs_api::call(Some(crate::root::root_of(home)), name, args, &mut |_| {})
         .unwrap_or_else(|refusal| panic!("{name}: {refusal:?}"))
 }
 

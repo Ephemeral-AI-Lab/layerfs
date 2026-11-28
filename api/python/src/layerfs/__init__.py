@@ -4,7 +4,7 @@ table, synchronous; ``layerfs.aio`` has the same calls as coroutines (O19).
     import layerfs
     layerfs.store.create("shop")
     layerfs.project.init("shop/api", "/src/api", on_progress=print)
-    lfs = layerfs.client(home="/data/lfs", scope={"project": "shop/api", "folder": "/web", "branch": "agent"})
+    lfs = layerfs.client(root="/data/lfs", scope={"project": "shop/api", "folder": "/web", "branch": "agent"})
 """
 
 import importlib

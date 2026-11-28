@@ -36,8 +36,8 @@ let calls = [];
 let answer = { value: result };
 const stub = {
   table: () => JSON.stringify([spec]),
-  async call(name, args, home, scope, onEvent) {
-    calls.push({ name, args: JSON.parse(args), home, scope, onEvent });
+  async call(name, args, root, scope, onEvent) {
+    calls.push({ name, args: JSON.parse(args), root, scope, onEvent });
     // Deliberately resolve the native reply before the queued events arrive.
     if (onEvent) setImmediate(() => {
       for (const event of progress) onEvent(JSON.stringify({ progress: event }));
@@ -102,21 +102,21 @@ test("export is generated; omission leaves the main default to the library", asy
   assert.equal(calls.length, 1);
   assert.deepEqual(calls[0].args, { project: "shop/api", destination: "/exports/api" });
   assert.equal(calls[0].name, "project.export");
-  assert.equal(calls[0].home, null);
+  assert.equal(calls[0].root, null);
   assert.equal(calls[0].onEvent, undefined);
 });
 
-test("branch, home and scope are forwarded once; callbacks stay out of JSON", async () => {
+test("branch, root and scope are forwarded once; callbacks stay out of JSON", async () => {
   calls = [];
   const scope = { project: "shop/api", folder: "/src", branch: "agent" };
   const events = [];
-  const lfs = sdk.client({ home: "/data/lfs", scope });
+  const lfs = sdk.client({ root: "/data/lfs", scope });
   await lfs.project.export("shop/api", "/exports/api", {
     branch: "agent", on_progress: (e) => events.push(e),
   });
   assert.equal(calls.length, 1);
   assert.deepEqual(calls[0].args, { project: "shop/api", destination: "/exports/api", branch: "agent" });
-  assert.equal(calls[0].home, "/data/lfs");
+  assert.equal(calls[0].root, "/data/lfs");
   assert.deepEqual(JSON.parse(calls[0].scope), scope);
   assert.deepEqual(events, progress);
 });
@@ -207,7 +207,7 @@ test("native Node export: default main, selected Branch, callbacks, refusals and
 }, async () => {
   const real = await import("../../src/index.js");
   const f = fixture();
-  const lfs = real.client({ home: f.home });
+  const lfs = real.client({ root: f.parent });
   try {
     assert.equal(typeof lfs.project.export, "function", "LP53a table entry required");
     await lfs.store.create("shop"); // public create selects the sole Normal profile
@@ -237,7 +237,7 @@ test("native Node export: default main, selected Branch, callbacks, refusals and
     await assert.rejects(lfs.project.export("shop/api", plainFile), (e) => ["Exists", "InvalidInput"].includes(e.error));
     assert.equal(readFileSync(plainFile, "utf8"), "not a folder");
     await assert.rejects(lfs.project.export("shop/api", join(f.parent, "missing"), { branch: "absent" }), (e) => e.error === "NotFound");
-    const scoped = real.client({ home: f.home, scope: { project: "shop/api", folder: "/", branch: "agent" } });
+    const scoped = real.client({ root: f.parent, scope: { project: "shop/api", folder: "/", branch: "agent" } });
     await assert.rejects(scoped.project.export("shop/api", join(f.parent, "scoped")), /out of scope: project.export/);
     assert.ok(!readdirSync(f.parent).some((n) => n.startsWith(".layerfs-export-")));
   } finally {
@@ -247,9 +247,9 @@ test("native Node export: default main, selected Branch, callbacks, refusals and
 });
 
 const command = process.env.LAYERFS_EXPORT_CLI;
-function shell(home, words) {
+function shell(root, words) {
   const run = spawnSync(command, words, {
-    env: { ...process.env, LAYERFS_HOME: home }, encoding: "utf8", timeout: 15_000,
+    env: { ...process.env, LAYERFS_ROOT: root }, encoding: "utf8", timeout: 15_000,
   });
   assert.ifError(run.error);
   return run;
@@ -258,7 +258,7 @@ const cliSkip = !command && "NOT_RUN: set LAYERFS_EXPORT_CLI after building LP53
 test("CLI export help and parser: two positionals, branch/progress, no commit", { timeout: 30_000, skip: cliSkip }, () => {
   const f = fixture();
   try {
-    const help = shell(f.home, ["help", "project", "export"]);
+    const help = shell(f.parent, ["help", "project", "export"]);
     assert.equal(help.status, 0, help.stderr);
     assert.match(help.stdout, /project export <project> <destination>/);
     // 2.0 usage: an option value is a short word (`[--branch B] [--at C]`)
@@ -267,7 +267,7 @@ test("CLI export help and parser: two positionals, branch/progress, no commit", 
     for (const words of [["project", "export", "shop/api"],
       ["project", "export", "shop/api", "/exports/api", "--commit", "abc"],
       ["project", "export", "shop/api", "/exports/api", "--branch"]]) {
-      const run = shell(f.home, words);
+      const run = shell(f.parent, words);
       assert.equal(run.status, 2, run.stderr);
       assert.equal(run.stdout, "");
     }
@@ -281,12 +281,12 @@ test("CLI export: stdout JSON/text, stderr progress JSONL, default/selected Bran
   try {
     for (const words of [["store", "create", "shop"], ["project", "init", "shop/api", f.source],
       ["branch", "fork", "shop/api", "agent", "main"]]) {
-      const run = shell(f.home, words);
+      const run = shell(f.parent, words);
       assert.equal(run.status, 0, run.stderr);
     }
-    assert.equal(JSON.parse(shell(f.home, ["store", "get", "shop", "--detail"]).stdout).profile, "normal");
+    assert.equal(JSON.parse(shell(f.parent, ["store", "get", "shop", "--detail"]).stdout).profile, "normal");
     const dest = join(f.parent, "out");
-    const run = shell(f.home, ["project", "export", "shop/api", dest, "--progress", "--detail"]);
+    const run = shell(f.parent, ["project", "export", "shop/api", dest, "--progress", "--detail"]);
     assert.equal(run.status, 0, run.stderr);
     assert.equal(run.stdout.trim().split("\n").length, 1);
     const out = JSON.parse(run.stdout);
@@ -300,12 +300,12 @@ test("CLI export: stdout JSON/text, stderr progress JSONL, default/selected Bran
     });
     checkProgress(events, out);
     checkTree(dest);
-    const text = shell(f.home, ["project", "export", "shop/api", join(f.parent, "text"), "--branch=agent", "--text"]);
+    const text = shell(f.parent, ["project", "export", "shop/api", join(f.parent, "text"), "--branch=agent", "--text"]);
     assert.equal(text.status, 0, text.stderr);
     assert.equal(text.stderr, "");
     assert.match(text.stdout, /file_count\s+\d/);
     assert.match(text.stdout, /size\s+/);
-    const refused = shell(f.home, ["project", "export", "shop/api", dest]);
+    const refused = shell(f.parent, ["project", "export", "shop/api", dest]);
     assert.equal(refused.status, 125);
     assert.equal(refused.stdout, "");
     assert.equal(JSON.parse(refused.stderr).error, "InvalidInput");

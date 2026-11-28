@@ -14,7 +14,7 @@ fn t(value: &str) -> SdkValue {
 
 fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> SdkValue {
     layerfs_api::call(
-        Some(home),
+        Some(crate::root::root_of(home)),
         name,
         SdkValue::Map(
             (args.iter())

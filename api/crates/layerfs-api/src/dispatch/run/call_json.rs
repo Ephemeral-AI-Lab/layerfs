@@ -50,7 +50,7 @@ fn run(
     (outcome, detail)
 }
 
-/// Runs the call `name` of `families` once with JSON `args`, in `home` (else the default)
+/// Runs the call `name` of `families` once with JSON `args`, in the home found in `root` (else the default)
 /// and under JSON `scope` (`{ folder, branch? }`); each event goes to
 /// `events` as JSON text, the call logged as made by `client`. Returns the
 /// answer as JSON text.

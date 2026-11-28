@@ -4,6 +4,8 @@
 //! one line. With `LAYERFS_TRACE_STEP` set too, a call appends one line per
 //! step, the worker's sent back in its answer; unset, none, and the answer
 //! is the same.
+#[path = "../support/root.rs"]
+mod root;
 use layerfs_home::log::trace;
 use layerfs_machine::route::{
     self, read_frame, read_frame_within, write_frame, Endpoint, Hello, MAX_HELLO, PROTOCOL,

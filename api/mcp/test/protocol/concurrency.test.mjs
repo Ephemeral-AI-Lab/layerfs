@@ -9,7 +9,7 @@ const files = Object.fromEntries(Array.from({ length: 10 }, (_, index) => [`f${i
 
 test("ten concurrent calls, then stdin close exits 0 within 5 s with no orphan", async () => {
   const box = workspace("concurrency", files);
-  const server = await connect({ home: box.home, profile: "admin" });
+  const server = await connect({ root: box.root, profile: "admin" });
   try {
     const run = async (name, args) => value((await call(server.client, name, args)).result);
     await run("store_create", { name: "shop" });
@@ -50,7 +50,7 @@ test("ten concurrent calls, then stdin close exits 0 within 5 s with no orphan",
 
 test("SIGTERM closes idle Stores and exits 0", async () => {
   const box = workspace("sigterm", { "a.txt": "a\n" });
-  const server = await connect({ home: box.home, profile: "admin" });
+  const server = await connect({ root: box.root, profile: "admin" });
   try {
     const created = await call(server.client, "store_create", { name: "shop", detail: true });
     assert.equal(value(created.result).store, "shop");

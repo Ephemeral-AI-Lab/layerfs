@@ -2,6 +2,8 @@ mod doctor_sandbox;
 mod local_root_modes;
 mod project_delete;
 mod project_doctor;
+#[path = "../support/root.rs"]
+mod root;
 mod store_compact;
 mod store_doctor;
 mod store_repair;

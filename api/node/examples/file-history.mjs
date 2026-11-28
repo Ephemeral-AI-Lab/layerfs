@@ -17,7 +17,7 @@ chmodSync(root, 0o700);
 try {
   const folder = join(root, "app");
   const home = join(root, "home");
-  const lfs = client({ home });
+  const lfs = client({ root: home });
 
   await lfs.store.create("shop");
   // the project is a copy of a host folder: make one with a README

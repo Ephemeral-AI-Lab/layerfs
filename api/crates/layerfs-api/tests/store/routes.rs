@@ -57,7 +57,13 @@ fn read(home: &std::path::Path, project: &str) -> Result<SdkValue, (String, Stri
         ("branch", t("main")),
         ("path", t("/a")),
     ]);
-    layerfs_api::call(Some(home), "file.read", args, &mut |_| {}).map_err(|r| (r.code, r.message))
+    layerfs_api::call(
+        Some(crate::root::root_of(home)),
+        "file.read",
+        args,
+        &mut |_| {},
+    )
+    .map_err(|r| (r.code, r.message))
 }
 
 #[test]

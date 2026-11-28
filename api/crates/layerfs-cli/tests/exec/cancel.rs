@@ -49,7 +49,8 @@ fn call(
             .map(|(n, v)| ((*n).to_owned(), v.clone()))
             .collect(),
     );
-    layerfs_api::call(Some(home), name, args, events).map_err(|r| (r.code, r.message))
+    layerfs_api::call(Some(crate::root::root_of(home)), name, args, events)
+        .map_err(|r| (r.code, r.message))
 }
 
 fn ok(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> SdkValue {
@@ -69,7 +70,7 @@ const TAG: &str = "dsh:s9:t1";
 fn started(home: &Path, ws: &str, script: &str) -> (Child, String) {
     let mut child = Command::new(LAYERFS)
         .args(["workspace", "exec", ws, script, "--progress"])
-        .env("LAYERFS_HOME", home)
+        .env("LAYERFS_ROOT", crate::root::root_of(home))
         .env("LAYERFS_LOGS_TAG", TAG)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -155,7 +156,7 @@ fn exec_ids_records_and_cancel_on_native() {
     home::open(&home).unwrap();
     // the native machine's daemon is a setting of its record
     layerfs_api::call(
-        Some(&home),
+        Some(crate::root::root_of(&home)),
         "machine.update",
         SdkValue::map([
             ("machine", SdkValue::text(layerfs_api::names::HOST_MACHINE)),
@@ -440,7 +441,7 @@ fn two_commands_run_at_once_in_one_workspace_on_native() {
     home::open(&home).unwrap();
     // the native machine's daemon is a setting of its record
     layerfs_api::call(
-        Some(&home),
+        Some(crate::root::root_of(&home)),
         "machine.update",
         SdkValue::map([
             ("machine", SdkValue::text(layerfs_api::names::HOST_MACHINE)),
@@ -550,7 +551,7 @@ fn forced_native_machine_stop_cancels_running_commands() {
     home::open(&home).unwrap();
     // the native machine's daemon is a setting of its record
     layerfs_api::call(
-        Some(&home),
+        Some(crate::root::root_of(&home)),
         "machine.update",
         SdkValue::map([
             ("machine", SdkValue::text(layerfs_api::names::HOST_MACHINE)),

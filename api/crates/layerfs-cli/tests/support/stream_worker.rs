@@ -159,7 +159,12 @@ pub fn home_with_workspace(tag: &str) -> PathBuf {
         ("machine", t("docker")),
         ("image", t(&format!("sha256:{}", "c".repeat(64)))),
     ]);
-    layerfs_api::call(Some(&home), "sandbox.create", args, &mut |_| {})
-        .unwrap_or_else(|r| panic!("sandbox.create: {} {}", r.code, r.message));
+    layerfs_api::call(
+        Some(crate::root::root_of(&home)),
+        "sandbox.create",
+        args,
+        &mut |_| {},
+    )
+    .unwrap_or_else(|r| panic!("sandbox.create: {} {}", r.code, r.message));
     home
 }

@@ -28,7 +28,8 @@ fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, 
             .map(|(n, v)| ((*n).to_owned(), v.clone()))
             .collect(),
     );
-    layerfs_api::call(Some(home), name, args, &mut |_| {}).map_err(|r| (r.code, r.message))
+    layerfs_api::call(Some(crate::root::root_of(home)), name, args, &mut |_| {})
+        .map_err(|r| (r.code, r.message))
 }
 
 /// A home with Sandbox `one` of `shop/app` recorded as started on
@@ -125,7 +126,8 @@ fn fix_of(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> (String, String
             .map(|(n, v)| ((*n).to_owned(), v.clone()))
             .collect(),
     );
-    let refusal = layerfs_api::call(Some(home), name, args, &mut |_| {}).unwrap_err();
+    let refusal =
+        layerfs_api::call(Some(crate::root::root_of(home)), name, args, &mut |_| {}).unwrap_err();
     let fix = refusal.detail.get_text("fix").unwrap_or("").to_owned();
     (refusal.code, fix)
 }
@@ -211,7 +213,13 @@ fn a_start_that_fails_is_refused_in_words_with_a_fix() {
     )
     .unwrap();
     let args = SdkValue::map([("project", t("shop/web")), ("name", t("two"))]);
-    let refusal = layerfs_api::call(Some(&home), "sandbox.create", args, &mut |_| {}).unwrap_err();
+    let refusal = layerfs_api::call(
+        Some(crate::root::root_of(&home)),
+        "sandbox.create",
+        args,
+        &mut |_| {},
+    )
+    .unwrap_err();
     assert_eq!(refusal.code, "Failed", "{refusal:?}");
     assert!(
         refusal.message.starts_with("Sandbox two did not start: "),

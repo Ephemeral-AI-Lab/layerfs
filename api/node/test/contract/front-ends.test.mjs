@@ -65,7 +65,7 @@ function fromDriver(text) {
 }
 
 async function runNode(ctx) {
-  const lfs = client({ home: ctx.home });
+  const lfs = client({ root: ctx.home });
   const out = [];
   for (const step of steps) {
     try {
@@ -83,7 +83,7 @@ async function runNode(ctx) {
 }
 
 function runPython(ctx, aio) {
-  const request = { home: ctx.home, aio, steps: steps.map((step) => ({ call: step.call, args: resolveArgs(step, ctx), opts: { ...step.opts, ...step.pythonOpts } })) };
+  const request = { root: ctx.home, aio, steps: steps.map((step) => ({ call: step.call, args: resolveArgs(step, ctx), opts: { ...step.opts, ...step.pythonOpts } })) };
   const run = spawnSync(python, ["-B", driver], { input: toDriver(request), encoding: "utf8", timeout: 100_000, maxBuffer: 1 << 28 });
   assert.equal(run.error, undefined, String(run.error));
   assert.equal(run.status, 0, `the Python driver failed (aio=${aio}): ${run.stderr}`);
@@ -120,7 +120,7 @@ function runCli(ctx) {
   return steps.map((step) => {
     if (step.cli === "skip") return { skipped: true };
     const { words, input } = cliWords(specs.get(step.call), step, ctx);
-    const run = spawnSync(command, words, { env: { ...process.env, LAYERFS_HOME: ctx.home }, input: input ?? "", timeout: 60_000 });
+    const run = spawnSync(command, words, { env: { ...process.env, LAYERFS_ROOT: ctx.home }, input: input ?? "", timeout: 60_000 });
     assert.equal(run.error, undefined, `${step.id}: ${run.error}`);
     const lines = run.stderr.toString().trim().split("\n");
     if (run.status === 0) return { ok: decode(run.stdout.toString()) };
@@ -283,14 +283,14 @@ test("contract: result names are snake_case", () => {
 });
 
 test("contract: the command's --text is a readable result, not JSON", { skip: missing.cli ?? false }, () => {
-  const run = spawnSync(command, ["store", "list", "--text"], { env: { ...process.env, LAYERFS_HOME: homes.cli.home }, encoding: "utf8" });
+  const run = spawnSync(command, ["store", "list", "--text"], { env: { ...process.env, LAYERFS_ROOT: homes.cli.home }, encoding: "utf8" });
   assert.equal(run.status, 0, run.stderr);
   assert.match(run.stdout, /shop/);
   assert.throws(() => JSON.parse(run.stdout));
 });
 
 test("contract: the command reads content from --from and a text option from --NAME-from", { skip: missing.cli ?? false }, () => {
-  const env = { ...process.env, LAYERFS_HOME: homes.cli.home };
+  const env = { ...process.env, LAYERFS_ROOT: homes.cli.home };
   const content = join(homes.cli.folder, "payload.bin");
   const message = join(homes.cli.folder, "message.txt");
   writeFileSync(content, Buffer.from([0, 255, 1]));

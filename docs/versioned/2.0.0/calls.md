@@ -201,10 +201,10 @@ $ echo $?
   layout, or files and no `layerfs.json`) is never converted: it is
   refused `Unsupported` with the fix
   `mv <home> <home>.old && layerfs home init`, and nothing in it is written.
-  A LayerFS folder (no `layerfs.json`, only folders, none of LayerFS's own
-  names, such as `~/.layerfs` holding `home/` and `dsh/`) is refused
-  `InvalidInput` with the fix `export LAYERFS_HOME=<folder>/home`; it is
-  never moved aside.
+  A LayerFS root opened as a home (no `layerfs.json`, only folders, none
+  of LayerFS's own names, such as `~/.layerfs` holding `home/` and `dsh/`)
+  is refused `InvalidInput` with the fix `export LAYERFS_ROOT=<folder>`; it
+  is never moved aside.
 - **`get`**, short: `{ home, state, version }`, with `generation` when the
   home is ready, and `reason` and `fix` when it is broken (`missing`: no
   home there, fixed by `layerfs home init`; `outdated`: a folder that is
@@ -213,7 +213,7 @@ $ echo $?
   `mv <home> <home>.old && layerfs home init`; `failed`, with no fix: the
   system refused to read `layerfs.json` or list the folder, a permission or
   I/O error, which the long form's `message` names; `unsupported`: a
-  LayerFS folder, fixed by `export LAYERFS_HOME=<folder>/home`). Long:
+  LayerFS root opened as a home, fixed by `export LAYERFS_ROOT=<folder>`). Long:
   `home, state, version, generation, reason, fix, message, layout, mode,
   bundle, daemon, cache`. `mode` is the folder's permission bits as text
   (`"0700"`); `bundle` and `daemon` are

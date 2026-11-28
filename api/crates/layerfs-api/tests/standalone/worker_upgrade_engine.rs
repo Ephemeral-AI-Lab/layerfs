@@ -5,6 +5,8 @@
 //! here fails; they run at integration. The SQLite files of other formats
 //! for the `format` display (M) are copies of a current Store whose header
 //! `user_version` is rewritten: a display test, never an upgrade test.
+#[path = "../support/root.rs"]
+mod root;
 #[path = "../support/worker_store.rs"]
 mod worker_store;
 

@@ -18,7 +18,7 @@ fn tempdir(tag: &str) -> PathBuf {
 fn layerfs(home: &Path, words: &[&str]) {
     let out = Command::new(LAYERFS)
         .args(words)
-        .env("LAYERFS_HOME", home)
+        .env("LAYERFS_ROOT", crate::root::root_of(home))
         .output()
         .unwrap();
     assert!(

@@ -3,6 +3,8 @@ mod family;
 mod kind;
 mod lifecycle;
 mod projects;
+#[path = "../support/root.rs"]
+mod root;
 mod routes;
 mod stats;
 mod transfer_crash;

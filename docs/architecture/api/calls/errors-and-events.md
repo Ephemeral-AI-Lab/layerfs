@@ -100,7 +100,7 @@ Refusals that come before any effect, in the order a call meets them
 | 2. find `family.call` | `InvalidInput` "no call named …" | [`dispatch/table.rs`](../../../../api/crates/layerfs-api/src/dispatch/table.rs) `find` |
 | 3. check arguments | `InvalidInput`: not named fields, unknown argument, a function crossing in, missing positional, wrong kind, bad size | [`guard/arguments.rs`](../../../../api/crates/layerfs-api/src/dispatch/guard/arguments.rs) |
 | 4. apply folder scope | `InvalidInput` `out of scope: history`, `path`, `branch`, `project` or the call's name | [`guard/scope.rs`](../../../../api/crates/layerfs-api/src/dispatch/guard/scope.rs) `apply` |
-| 5. resolve the home | `InvalidInput`: not absolute, or neither `LAYERFS_HOME` nor `HOME` set | `dispatch::home` |
+| 5. find the home in the root | `InvalidInput`: the root not absolute, or neither `LAYERFS_ROOT` nor `HOME` set | [`disk/root.rs`](../../../../control/crates/layerfs-home/src/disk/root.rs) `home` |
 | 6. platform policy | `Unsupported`: new work on a removed platform's machine | [`guard/platform_policy.rs`](../../../../api/crates/layerfs-api/src/dispatch/guard/platform_policy.rs) |
 | 7. open the home | the home's refusal: a folder that is not a LayerFS 2.0 home (a `layerfs.json` of another layout, or anything but `layerfs.lock`, the integration folders and `.DS_Store` with no `layerfs.json`) `Unsupported` with the fix `mv <home> <home>.old && layerfs home init`, an unreadable `layerfs.json` `Failed`, the home lock `Unavailable` | [`disk/layout.rs`](../../../../control/crates/layerfs-home/src/disk/layout.rs) `open` |
 | 8. scope owns the Sandbox | `InvalidInput` `out of scope: sandbox` | [`guard/scope.rs`](../../../../api/crates/layerfs-api/src/dispatch/guard/scope.rs) `owns` |

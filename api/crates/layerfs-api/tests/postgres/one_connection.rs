@@ -24,7 +24,14 @@ impl Drop for Fixture {
 }
 
 fn cli(home: &Path, method: &str, args: SdkValue) -> layerfs_home::reply::outcome::Outcome {
-    layerfs_api::call_scoped(Some(home), None, method, args, &mut |_| {}, Client::Cli)
+    layerfs_api::call_scoped(
+        Some(crate::root::root_of(home)),
+        None,
+        method,
+        args,
+        &mut |_| {},
+        Client::Cli,
+    )
 }
 
 fn file(home: &Path, method: &str, path: &str) -> layerfs_home::reply::outcome::Outcome {

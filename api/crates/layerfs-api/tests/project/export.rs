@@ -72,7 +72,8 @@ fn call_with_events(
         args.push(("detail".to_owned(), SdkValue::Bool(true)));
     }
     let args = SdkValue::Map(args);
-    layerfs_api::call(Some(home), name, args, events).map_err(|r| (r.code, r.message))
+    layerfs_api::call(Some(crate::root::root_of(home)), name, args, events)
+        .map_err(|r| (r.code, r.message))
 }
 
 fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, (String, String)> {
@@ -591,7 +592,7 @@ fn destination_and_argument_refusals_have_no_side_effects() {
         assert_eq!(code, "InvalidInput", "{bad}");
     }
 
-    // 3. Inside the Store home (neutral wording, no LAYERFS_HOME)
+    // 3. Inside the Store home (neutral wording, no LAYERFS_ROOT)
     let in_home = home.join("exported");
     let (code, msg) = call(
         &home,
@@ -604,7 +605,7 @@ fn destination_and_argument_refusals_have_no_side_effects() {
     .unwrap_err();
     assert_eq!(code, "InvalidInput");
     assert!(msg.contains("inside the Store home"), "{msg}");
-    assert!(!msg.contains("LAYERFS_HOME"), "{msg}");
+    assert!(!msg.contains("LAYERFS_ROOT"), "{msg}");
     assert!(!in_home.exists());
 
     // 4. Missing parent directory
@@ -712,7 +713,7 @@ fn destination_and_argument_refusals_have_no_side_effects() {
     ]))
     .unwrap();
     let scoped_err = layerfs_api::call_scoped(
-        Some(&home),
+        Some(crate::root::root_of(&home)),
         Some(&scoped),
         "project.export",
         SdkValue::map([

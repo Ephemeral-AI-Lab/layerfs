@@ -5,6 +5,8 @@
 //! the Linux bundle names `linux-<arch>` and the tool that places it. One
 //! test, because it sets the process's environment.
 #![cfg(feature = "machine")]
+#[path = "../support/root.rs"]
+mod root;
 use layerfs_api::home;
 use layerfs_protocol::sdk::SdkValue;
 use std::path::{Path, PathBuf};
@@ -28,7 +30,8 @@ fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, 
             .map(|(n, v)| ((*n).to_owned(), v.clone()))
             .collect(),
     );
-    layerfs_api::call(Some(home), name, args, &mut |_| {}).map_err(|r| (r.code, r.message))
+    layerfs_api::call(Some(crate::root::root_of(home)), name, args, &mut |_| {})
+        .map_err(|r| (r.code, r.message))
 }
 
 #[test]
@@ -61,9 +64,12 @@ fn the_daemon_and_the_linux_bundle_come_from_the_versioned_cache() {
         ("name", t("t")),
         ("machine", t(layerfs_home::names::HOST_MACHINE)),
     ]);
-    let refusal = layerfs_api::call(Some(&home), "sandbox.create", args, &mut |event| {
-        events.push(event)
-    })
+    let refusal = layerfs_api::call(
+        Some(crate::root::root_of(&home)),
+        "sandbox.create",
+        args,
+        &mut |event| events.push(event),
+    )
     .unwrap_err();
     let (code, message) = (refusal.code, refusal.message);
     let phases: Vec<_> = (events.iter())

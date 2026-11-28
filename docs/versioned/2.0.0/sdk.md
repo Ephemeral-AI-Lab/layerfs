@@ -27,16 +27,18 @@ await layerfs.file.write("shop/api", "agent", "/README.md", "hello\n");
 // a named Workspace: workspace is "tests:build"
 const { workspace } = await layerfs.workspace.mount("tests", "agent", { name: "build" });
 
-const lfs = layerfs.client({ home: "/data/lfs", scope: { project: "shop/web", folder: "/web", branch: "agent" } });
+const lfs = layerfs.client({ root: "/data/lfs", scope: { project: "shop/web", folder: "/web", branch: "agent" } });
 ```
 
 - Node 22 or later. The package is an ES module.
 - The default export's ten families and the named exports `project`,
   `branch`, `commit`, `file`, `sandbox`, `workspace`, `machine`, `store` and
-  `backup` use the default home (`LAYERFS_HOME`, else `~/.layerfs/home`). The
+  `backup` use the default root (`LAYERFS_ROOT`, else `~/.layerfs`) and
+  the home in it (`<root>/home`, or the root while it holds `layerfs.json`). The
   `home` family is on the default export and on a client
   (`layerfs.home.get()`), not a named export.
-- `layerfs.client({ home, scope })` makes a client of another home, with an
+- `layerfs.client({ root, scope })` makes a client of another LayerFS root
+  (any other key is refused `InvalidInput`), with an
   optional [folder scope](calls.md#folder-scope) `{ project, folder, branch? }`.
 - Every call is `async`. Positionals come in the table's order, then an
   options object. A trailing plain object is read as the options unless its
@@ -85,7 +87,7 @@ layerfs.branch.fork("shop/api", "agent", "main")
 layerfs.file.write("shop/api", "agent", "/README.md", "hello\n", message="docs")
 text = layerfs.file.read("shop/api", "agent", "/README.md")["text"]
 
-lfs = layerfs.client(home="/data/lfs", scope={"project": "shop/web", "folder": "/web", "branch": "agent"})
+lfs = layerfs.client(root="/data/lfs", scope={"project": "shop/web", "folder": "/web", "branch": "agent"})
 ```
 
 - Python 3.10 or later (abi3). The native module is `layerfs._native`,
@@ -127,7 +129,7 @@ import asyncio
 from layerfs import aio
 
 async def main():
-    lfs = aio.client(home="/data/lfs")
+    lfs = aio.client(root="/data/lfs")
     page = await lfs.branch.list("shop/api")
     print([b["branch"] for b in page["items"]])
 

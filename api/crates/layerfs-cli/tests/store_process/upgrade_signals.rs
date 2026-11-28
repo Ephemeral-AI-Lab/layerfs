@@ -266,6 +266,7 @@ fn fixture_home(tag: &str) -> Option<PathBuf> {
         .filter(|out| out.status.success())?;
     let binding = text(&binding.stdout).trim().to_owned();
     let home = tempdir(tag).join("home");
+    crate::root::made(&home);
     for words in [&["home", "init"][..], &["store", "create", "fx"]] {
         let out = common::run(&mut layerfs(&home, words));
         assert!(out.status.success(), "{words:?}: {}", text(&out.stderr));
@@ -401,7 +402,7 @@ fn at_failpoint(home: &Path, tag: &str, n: u32) -> (Child, std::os::unix::net::U
     let (path, ready) = gate(&dir);
     let child = Command::new(LAYERFS)
         .args(["store", "upgrade", "fx", "--json"])
-        .env("LAYERFS_HOME", home)
+        .env("LAYERFS_ROOT", crate::root::root_of(home))
         .env("LAYERFS_UPGRADE_CRASH_GATE", &path)
         .env("LAYERFS_UPGRADE_CRASH_FAILPOINT", n.to_string())
         .stdin(Stdio::null())

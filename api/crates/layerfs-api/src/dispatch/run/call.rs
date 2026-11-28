@@ -1,4 +1,4 @@
-//! The one entry of the library: `call(home, name, args, events)`. Every
+//! The one entry of the library: `call(root, name, args, events)`. Every
 //! front end (the `layerfs` binary, Node and Python) makes exactly this
 //! call, so results and errors are the same by construction. A machine's
 //! worker serves its requests through `worker_server` (`ops::run`), not here, so
@@ -64,27 +64,12 @@ pub const DETAIL: &str = "detail";
 /// Python `with_=["a", "b"]`.
 pub const WITH: &str = "with";
 
-/// The home a call uses: `explicit` when given, else `LAYERFS_HOME`, else
-/// `~/.layerfs/home`, or a legacy `~/.layerfs` that holds `layerfs.json`
-/// (O28, [`default_home`](layerfs_home::disk::default_home)). It must be
-/// an absolute path.
-pub fn home(explicit: Option<&Path>) -> Result<PathBuf, layerfs_protocol::sdk::SdkRefusal> {
-    let home = match explicit {
-        Some(path) => path.to_owned(),
-        None => match std::env::var_os("LAYERFS_HOME") {
-            Some(path) if !path.is_empty() => PathBuf::from(path),
-            _ => std::env::var_os("HOME")
-                .map(|home| layerfs_home::disk::default_home(Path::new(&home)))
-                .ok_or_else(|| refused("InvalidInput", "LAYERFS_HOME is unset and so is HOME"))?,
-        },
-    };
-    if !home.is_absolute() {
-        return Err(refused(
-            "InvalidInput",
-            "LAYERFS_HOME must be an absolute path",
-        ));
-    }
-    Ok(home)
+/// The home a call uses, found in its LayerFS root: `root` when given,
+/// else `LAYERFS_ROOT`, else `~/.layerfs` (O28); the root itself while it
+/// holds `layerfs.json`, else `<root>/home`
+/// ([`layerfs_home::disk::root`]). The root must be an absolute path.
+pub fn home(root: Option<&Path>) -> Result<PathBuf, layerfs_protocol::sdk::SdkRefusal> {
+    layerfs_home::disk::root::home(root)
 }
 
 /// Runs the call `name` (`family.call`) of `families` once with named

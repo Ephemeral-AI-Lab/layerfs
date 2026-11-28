@@ -2,6 +2,8 @@
 //! answers its secret with its protocol and bundle hash, and a caller sends
 //! nothing to a worker of another protocol or bundle (an old worker, whose
 //! hello names no protocol, included); the matching worker answers.
+#[path = "../support/root.rs"]
+mod root;
 use layerfs_machine::route::{
     self, read_frame, read_frame_within, write_frame, Endpoint, Hello, MAX_HELLO, PROTOCOL,
 };

@@ -18,7 +18,7 @@ fn home_path(tag: &str) -> PathBuf {
 fn layerfs(home: &Path, words: &[&str]) -> std::process::Output {
     Command::new(LAYERFS)
         .args(words)
-        .env("LAYERFS_HOME", home)
+        .env("LAYERFS_ROOT", crate::root::root_of(home))
         .output()
         .unwrap()
 }

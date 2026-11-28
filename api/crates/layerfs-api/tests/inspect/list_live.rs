@@ -64,7 +64,7 @@ fn call(home: &Path, name: &str, args: &[(&str, &str)], live: bool) -> SdkValue 
         ));
     }
     let args = SdkValue::Map(args);
-    layerfs_api::call(Some(home), name, args, &mut |_| {})
+    layerfs_api::call(Some(crate::root::root_of(home)), name, args, &mut |_| {})
         .unwrap_or_else(|r| panic!("{name}: {} {}", r.code, r.message))
 }
 
@@ -381,7 +381,13 @@ fn native_with_live_answers_the_free_bytes_of_the_homes_disk() {
         ("machine", SdkValue::text(layerfs_home::names::HOST_MACHINE)),
         ("with", SdkValue::List(vec![SdkValue::text("live")])),
     ]);
-    let short = layerfs_api::call(Some(&home), "machine.get", args, &mut |_| {}).unwrap();
+    let short = layerfs_api::call(
+        Some(crate::root::root_of(&home)),
+        "machine.get",
+        args,
+        &mut |_| {},
+    )
+    .unwrap();
     let live = short.get("live").unwrap();
     assert!(live.get_int("disk_free_bytes").unwrap() > 0, "{short:?}");
     assert_eq!(live.get_text("machine_state"), Some("enabled"), "{short:?}");

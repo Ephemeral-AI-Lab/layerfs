@@ -8,21 +8,21 @@ use layerfs_protocol::sdk::SdkValue;
 
 #[test]
 fn built_ins_are_checked_once_per_home() {
-    let home = std::env::temp_dir().join(format!("lfs-builtins-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&home);
-    let list = |home: &std::path::Path| {
-        layerfs_api::call(Some(home), "machine.list", SdkValue::Null, &mut |_| {}).unwrap()
-    };
-    list(&home);
+    let root = std::env::temp_dir().join(format!("lfs-builtins-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let home = root.join("home");
+    let list =
+        || layerfs_api::call(Some(&root), "machine.list", SdkValue::Null, &mut |_| {}).unwrap();
+    list();
     let docker = paths::machine_record(&home, "docker");
     assert!(docker.is_file());
     std::fs::remove_file(&docker).unwrap();
-    list(&home);
+    list();
     assert!(!docker.exists(), "the second call did not check again");
 
     // the same path, a new home: checked again
     std::fs::remove_dir_all(&home).unwrap();
-    list(&home);
+    list();
     assert!(docker.is_file());
-    std::fs::remove_dir_all(&home).unwrap();
+    std::fs::remove_dir_all(&root).unwrap();
 }

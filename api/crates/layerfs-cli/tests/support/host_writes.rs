@@ -18,7 +18,7 @@ pub fn cli(home: &Path, words: &[&str]) -> Command {
     command
         .args(words)
         .args(["--json", "--detail"])
-        .env("LAYERFS_HOME", home)
+        .env("LAYERFS_ROOT", crate::root::root_of(home))
         .env("LAYERFS_TRACE", home.join("trace.jsonl"))
         .env_remove("LAYERFS_TRACE_STEP")
         .stdout(Stdio::piped())

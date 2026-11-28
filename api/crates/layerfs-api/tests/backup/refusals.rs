@@ -28,7 +28,8 @@ fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, 
             .map(|(n, v)| ((*n).to_owned(), v.clone()))
             .collect(),
     );
-    layerfs_api::call(Some(home), name, args, &mut |_| {}).map_err(|r| (r.code, r.message))
+    layerfs_api::call(Some(crate::root::root_of(home)), name, args, &mut |_| {})
+        .map_err(|r| (r.code, r.message))
 }
 
 fn ok(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> SdkValue {
@@ -369,7 +370,7 @@ fn a_second_create_of_a_store_is_busy() {
         .unwrap();
     assert!(record.get("op").is_none(), "{record:?}");
     let got = layerfs_api::call(
-        Some(&home),
+        Some(crate::root::root_of(&home)),
         "store.get",
         SdkValue::map([("store", t("shop")), ("detail", SdkValue::Bool(true))]),
         &mut |_| {},
@@ -445,7 +446,7 @@ fn create_and_restore_without_a_saved_secret_carry_the_connect_again_fix() {
                 .map(|(n, v)| ((*n).to_owned(), v.clone()))
                 .collect(),
         );
-        layerfs_api::call(Some(&home), name, args, &mut |_| {}).unwrap_err()
+        layerfs_api::call(Some(crate::root::root_of(&home)), name, args, &mut |_| {}).unwrap_err()
     };
     let created = refused(
         "backup.create",

@@ -56,7 +56,7 @@ fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, 
     let (home, name, args) = (home.to_owned(), name.to_owned(), map(args));
     let (sender, answer) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
-        let got = layerfs_api::call(Some(&home), &name, args, &mut |_| {});
+        let got = layerfs_api::call(Some(crate::root::root_of(&home)), &name, args, &mut |_| {});
         let _ = sender.send(got.map_err(|r| (r.code, r.message)));
     });
     answer
@@ -220,7 +220,13 @@ fn files(root: &Path) -> BTreeMap<PathBuf, (u64, i64, i64, u64)> {
 /// a process makes on a home writes its built-in machine records (once,
 /// #535 R6), and it writes a call-log line, which a `logs` call does not.
 fn settle(home: &Path) {
-    layerfs_api::call(Some(home), "sandbox.list", SdkValue::Null, &mut |_| {}).unwrap();
+    layerfs_api::call(
+        Some(crate::root::root_of(home)),
+        "sandbox.list",
+        SdkValue::Null,
+        &mut |_| {},
+    )
+    .unwrap();
     assert!(paths::calls_file(home).is_file(), "the call log is on");
 }
 
@@ -486,7 +492,13 @@ fn a_native_machine_s_layerfs_folders_are_read_here_with_no_lock_line_or_write()
     no_lease(&home);
     // the log is on: the next ordinary call writes its line
     drop(push);
-    layerfs_api::call(Some(&home), "sandbox.list", SdkValue::Null, &mut |_| {}).unwrap();
+    layerfs_api::call(
+        Some(crate::root::root_of(&home)),
+        "sandbox.list",
+        SdkValue::Null,
+        &mut |_| {},
+    )
+    .unwrap();
     assert!(std::fs::read(paths::calls_file(&home)).unwrap().len() > log.len());
     std::fs::remove_dir_all(home).unwrap();
 }

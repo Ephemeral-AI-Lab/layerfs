@@ -10,7 +10,7 @@ its outcome is dropped. Read the state again (``list``, ``get``,
 
     from layerfs import aio
     await aio.store.create("shop")
-    lfs = aio.client(home="/data/lfs")
+    lfs = aio.client(root="/data/lfs")
 """
 
 import asyncio
@@ -24,8 +24,8 @@ from ._errors import LayerFSError
 class AsyncClient:
     """``Client`` with each call a coroutine function."""
 
-    def __init__(self, home=None, scope=None):
-        self._sync = Client(home, scope)
+    def __init__(self, root=None, scope=None):
+        self._sync = Client(root, scope)
         for family in FAMILIES:
             setattr(self, family, Family(family))
         for spec in TABLE:
@@ -106,9 +106,9 @@ def _coroutine(sync, functions):
     return call
 
 
-def client(home=None, scope=None):
-    """An async client of ``home``, with an optional folder scope."""
-    return AsyncClient(home, scope)
+def client(root=None, scope=None):
+    """An async client of the LayerFS root ``root``, with an optional folder scope."""
+    return AsyncClient(root, scope)
 
 
 _default = AsyncClient()

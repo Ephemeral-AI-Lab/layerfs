@@ -36,7 +36,7 @@ try {
   writeFileSync(join(folder, "docs", "a.txt"), "one\ntwo\n");
 
   const P = "shop/site";
-  const lfs = client({ home: join(root, "home") });
+  const lfs = client({ root });
 
   await lfs.store.create("shop");
   say("store.get", JSON.stringify(await lfs.store.get("shop")));
@@ -77,7 +77,7 @@ try {
   await refused("missing Branch", () => lfs.file.read(P, "nope", "/README.md"));
   await refused("write to main", () => lfs.file.write(P, "main", "/x.txt", "x\n"));
   await refused("unknown option", () => lfs.file.read(P, "agent", "/README.md", { colour: true }));
-  const scoped = client({ home: join(root, "home"), scope: { project: P, folder: "/docs", branch: "ns" } });
+  const scoped = client({ root, scope: { project: P, folder: "/docs", branch: "ns" } });
   await refused("scope: other call", () => scoped.store.list());
   await refused("scope: outside folder", () => scoped.file.read(P, "main", "/README.md"));
 } finally {

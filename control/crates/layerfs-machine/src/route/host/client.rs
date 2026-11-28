@@ -38,7 +38,8 @@ pub const HOST_HELD_WRITES: usize = 32;
 /// The caller's environment a spawned host worker keeps: `PATH` and `HOME`
 /// for the platform's ordinary process lookups, `TMPDIR` for SQLite's
 /// temporary files, the locale, and OpenSSL's trust-store overrides for a
-/// PostgreSQL TLS check. `LAYERFS_HOME` is set explicitly.
+/// PostgreSQL TLS check. `LAYERFS_ROOT` is set explicitly, to the open
+/// home itself: its `layerfs.json` makes the root its own home.
 const INHERITED: [&str; 8] = [
     "PATH",
     "HOME",
@@ -460,7 +461,7 @@ impl HostPaths {
         }
         command
             .args(["worker", "--host"])
-            .env("LAYERFS_HOME", &self.home)
+            .env(layerfs_home::disk::root::ROOT_ENV, &self.home)
             .stdin(startup.map_or_else(Stdio::null, Stdio::from))
             .stdout(log)
             .stderr(stderr)

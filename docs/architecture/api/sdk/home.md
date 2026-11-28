@@ -368,7 +368,7 @@ drive the same machines.
 
 | Refused | Code | Before any effect |
 | --- | --- | --- |
-| no home there; a foreign folder; a LayerFS folder | `NotFound`; `Unsupported`; `InvalidInput` | yes |
+| no home there; a foreign folder; a LayerFS root opened as a home | `NotFound`; `Unsupported`; `InvalidInput` | yes |
 | an older layout | `InvalidInput`, fix `layerfs home init` | yes |
 | `<to>` relative, holding `..`, inside a moved entry, or its parent missing | `InvalidInput` | yes |
 | `<to>` not empty | `Exists` | yes |

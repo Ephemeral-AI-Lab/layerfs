@@ -51,7 +51,7 @@ For an agent run you want to analyse afterwards:
 
 1. Record identities: LayerFS commit, the `layerfs` binary or addon build
    (`layerfs --version`), the daemon bundle (`home.get({ detail: true })`
-   names it), and `LAYERFS_HOME`.
+   names it), and `LAYERFS_ROOT` (`home.get` answers the home in it).
 2. At the start and end, save `store.get(store, { with: ["stats"], detail:
    true })` for the project's Store, and `branch.list` for the project.
 3. After the run, page `commit.list` for every Branch (and `main`) with

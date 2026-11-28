@@ -110,8 +110,8 @@ export interface CallOptions {
 }
 
 export interface ClientOptions {
-  /** Default \`LAYERFS_HOME\`, else \`~/.layerfs/home\` (or a legacy \`~/.layerfs\` that holds \`layerfs.json\`). */
-  home?: string;
+  /** The LayerFS root: default \`LAYERFS_ROOT\`, else \`~/.layerfs\`. Its home is \`<root>/home\`, or the root itself while it holds \`layerfs.json\`. */
+  root?: string;
   scope?: Scope;
 }
 
@@ -192,7 +192,7 @@ export const table: readonly CallSpec[];
 /** The families, in help order. */
 export const families: readonly string[];
 
-/** A client of \`home\` with an optional folder scope. */
+/** A client of the LayerFS root \`root\` with an optional folder scope. */
 export function client(options?: ClientOptions): Client;
 /** Closes every Store this process holds open with no call running; answers how many. Outside the call table. */
 export function close(): number;

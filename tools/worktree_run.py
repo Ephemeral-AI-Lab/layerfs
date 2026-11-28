@@ -137,7 +137,7 @@ def launch(args):
     # the Linux engine socket, as the existing SDK verification helper uses.
     socket = "/var/run/docker.sock" if os.uname().sysname == "Darwin" else endpoint[len("unix://") :]
     env = {
-        "LAYERFS_HOME": "/layerfs-store/sdk-home",
+        "LAYERFS_ROOT": "/layerfs-store/sdk-home",
         "LAYERFS_STORE_PATH": "/layerfs-store/global/store.sqlite",
         "LAYERFS_DOCKER": "/var/run/docker.sock",
         "LAYERFS_IMAGE": resources["images"]["sandbox"],

@@ -30,7 +30,7 @@ const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url),
 const VERSION = pkg.version;
 const GRACE_MS = 2000;
 
-const USAGE = `usage: layerfs-mcp [--profile work|admin] [--home DIR]
+const USAGE = `usage: layerfs-mcp [--profile work|admin] [--root DIR]
                   [--scope-project <store>/<project> --scope-folder DIR [--scope-branch NAME]]
                   [--export-root DIR]...
                   [--help] [--version]
@@ -39,8 +39,8 @@ const USAGE = `usage: layerfs-mcp [--profile work|admin] [--home DIR]
   --profile admin  every call, including machines, Stores, backups and the
                    four GC calls project.delete, project.hide_path,
                    branch.remove and store.compact
-  --home DIR       the LayerFS home (default: LAYERFS_HOME, else ~/.layerfs/home,
-                   or a legacy ~/.layerfs that holds layerfs.json)
+  --root DIR       the LayerFS root (default: LAYERFS_ROOT, else ~/.layerfs);
+                   its home is DIR/home, or DIR itself while it holds layerfs.json
   --scope-project  the folder scope's project, with --scope-folder
   --scope-folder   the folder scope; the library checks every scoped call
   --scope-branch   the scope's Branch namespace; Branch and file calls need it
@@ -63,9 +63,9 @@ function usageError(message) {
   process.exit(2);
 }
 
-/** `{ profile, home, scope }` from the command line, or a usage exit. */
+/** `{ profile, root, scope }` from the command line, or a usage exit. */
 function flagsOf(argv) {
-  const flags = { profile: "work", home: undefined, scopeProject: undefined, scopeFolder: undefined, scopeBranch: undefined, exportRoots: [] };
+  const flags = { profile: "work", root: undefined, scopeProject: undefined, scopeFolder: undefined, scopeBranch: undefined, exportRoots: [] };
   for (let i = 0; i < argv.length; i += 1) {
     let word = argv[i];
     let inline;
@@ -84,9 +84,9 @@ function flagsOf(argv) {
       case "--profile":
         flags.profile = take();
         break;
-      case "--home":
-        flags.home = take();
-        if (flags.home === "") usageError("--home needs a directory");
+      case "--root":
+        flags.root = take();
+        if (flags.root === "") usageError("--root needs a directory");
         break;
       case "--scope-project":
         flags.scopeProject = take();
@@ -129,7 +129,7 @@ function flagsOf(argv) {
   const scope = project
     ? { project: flags.scopeProject, folder: flags.scopeFolder, ...(flags.scopeBranch === undefined ? {} : { branch: flags.scopeBranch }) }
     : undefined;
-  return { profile: flags.profile, home: flags.home, scope, exportRoots };
+  return { profile: flags.profile, root: flags.root, scope, exportRoots };
 }
 
 const flags = flagsOf(process.argv.slice(2));
@@ -141,7 +141,7 @@ if (profileProblems.length > 0) {
 const specs = toolsOfProfile(layerfs.table, flags.profile);
 const tools = toolsOf(specs);
 const byName = new Map(tools.map((tool) => [tool.name, tool]));
-const client = layerfs.client({ home: flags.home, scope: flags.scope });
+const client = layerfs.client({ root: flags.root, scope: flags.scope });
 
 const inflight = new Set();
 let stopping = false;
@@ -256,7 +256,7 @@ process.stdout.on("error", (error) => log(`stdout error: ${error?.message ?? err
 
 await server.connect(transport);
 log(
-  `layerfs-mcp ${VERSION}: profile ${flags.profile}, ${tools.length} tools, home ${flags.home ?? process.env.LAYERFS_HOME ?? "default"}` +
+  `layerfs-mcp ${VERSION}: profile ${flags.profile}, ${tools.length} tools, root ${flags.root ?? process.env.LAYERFS_ROOT ?? "default"}` +
     (flags.scope ? `, scope ${flags.scope.project} at ${flags.scope.folder}${flags.scope.branch ? ` (branch ${flags.scope.branch})` : ""}` : "") +
     `, export roots ${flags.exportRoots.length === 0 ? "none (project_export is refused)" : flags.exportRoots.join(", ")}`,
 );

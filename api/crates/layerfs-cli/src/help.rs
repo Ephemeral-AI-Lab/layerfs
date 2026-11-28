@@ -170,7 +170,7 @@ fn top() -> String {
     ));
     text.push_str("Exit 0 done · 2 wrong command line · 125 refused, with the reason on stderr\n");
     text.push_str(
-        "Home: LAYERFS_HOME, else ~/.layerfs/home · More: layerfs help <family> [<call>]\n",
+        "Root: LAYERFS_ROOT, else ~/.layerfs; its home is <root>/home · More: layerfs help <family> [<call>]\n",
     );
     text
 }

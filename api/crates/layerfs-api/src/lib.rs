@@ -77,27 +77,28 @@ pub fn table_json() -> String {
     machinery::table_json(families())
 }
 
-/// Runs the call `name` (`family.call`) once with named `args`, logged as
-/// a direct library call (`client` `rust`); see [`dispatch::call`].
+/// Runs the call `name` (`family.call`) once with named `args`, in the
+/// home found in the LayerFS root `root` ([`home`]), logged as a direct
+/// library call (`client` `rust`); see [`dispatch::call`].
 pub fn call(
-    home: Option<&Path>,
+    root: Option<&Path>,
     name: &str,
     args: SdkValue,
     events: &mut dyn FnMut(SdkValue),
 ) -> Outcome {
-    machinery::call(families(), home, name, args, events)
+    machinery::call(families(), root, name, args, events)
 }
 
 /// [`call`] for a front end (`client`) with a folder scope (O32).
 pub fn call_scoped(
-    home: Option<&Path>,
+    root: Option<&Path>,
     scope: Option<&Scope>,
     name: &str,
     args: SdkValue,
     events: &mut dyn FnMut(SdkValue),
     client: Client,
 ) -> Outcome {
-    machinery::call_scoped(families(), home, scope, name, args, events, client)
+    machinery::call_scoped(families(), root, scope, name, args, events, client)
 }
 
 /// Runs the CLI executable's checked call on its selected Store route.
@@ -124,12 +125,12 @@ pub fn cli_defers(name: &str, project: &str) -> bool {
 
 /// [`call`] with JSON text on both sides, for the Node and Python bindings.
 pub fn call_json(
-    home: Option<&Path>,
+    root: Option<&Path>,
     scope: Option<&str>,
     name: &str,
     args: &str,
     events: &mut dyn FnMut(String),
     client: Client,
 ) -> String {
-    machinery::call_json(families(), home, scope, name, args, events, client)
+    machinery::call_json(families(), root, scope, name, args, events, client)
 }

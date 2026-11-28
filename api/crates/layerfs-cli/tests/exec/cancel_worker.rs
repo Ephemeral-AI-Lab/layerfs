@@ -160,8 +160,13 @@ fn home_with_sandbox(tag: &str, seen: Seen) -> PathBuf {
         ("machine", t("docker")),
         ("image", t(&format!("sha256:{}", "c".repeat(64)))),
     ]);
-    layerfs_api::call(Some(&home), "sandbox.create", args, &mut |_| {})
-        .unwrap_or_else(|r| panic!("sandbox.create: {} {}", r.code, r.message));
+    layerfs_api::call(
+        Some(crate::root::root_of(&home)),
+        "sandbox.create",
+        args,
+        &mut |_| {},
+    )
+    .unwrap_or_else(|r| panic!("sandbox.create: {} {}", r.code, r.message));
     home
 }
 
@@ -173,8 +178,13 @@ fn exec(home: &Path, args: &[(&str, SdkValue)]) -> (SdkValue, Vec<SdkValue>) {
             .collect(),
     );
     let mut events = Vec::new();
-    let answer = layerfs_api::call(Some(home), "workspace.exec", args, &mut |e| events.push(e))
-        .unwrap_or_else(|r| panic!("workspace.exec: {} {}", r.code, r.message));
+    let answer = layerfs_api::call(
+        Some(crate::root::root_of(home)),
+        "workspace.exec",
+        args,
+        &mut |e| events.push(e),
+    )
+    .unwrap_or_else(|r| panic!("workspace.exec: {} {}", r.code, r.message));
     (answer, events)
 }
 
@@ -230,7 +240,13 @@ fn the_exec_id_is_the_first_event_and_travels_to_the_worker() {
         ("command", t("true")),
         ("exec_id", t("build-7")),
     ]);
-    let refused = layerfs_api::call(Some(&home), "workspace.exec", args, &mut |_| {}).unwrap_err();
+    let refused = layerfs_api::call(
+        Some(crate::root::root_of(&home)),
+        "workspace.exec",
+        args,
+        &mut |_| {},
+    )
+    .unwrap_err();
     assert_eq!(refused.code, "InvalidInput");
     assert_eq!(seen.lock().unwrap().len(), 2);
     std::fs::remove_dir_all(home).unwrap();

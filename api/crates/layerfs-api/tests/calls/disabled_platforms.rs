@@ -26,6 +26,9 @@ fn snapshot(root: &Path) -> BTreeMap<String, Vec<u8>> {
     }
     let mut out = BTreeMap::new();
     walk(root, root, &mut out);
+    // the home's call log records every call, refused ones too: a line in
+    // it is not a change to the home's state
+    out.remove("trace/calls.jsonl");
     out
 }
 
@@ -37,6 +40,9 @@ fn every_new_work_route_refuses_before_writes_or_worker_and_daemon_connections()
         let home =
             std::env::temp_dir().join(format!("lfs-disabled-{platform}-{}", std::process::id()));
         std::fs::create_dir(&home).unwrap();
+        // a home that holds records holds its `layerfs.json`, so the root
+        // that names it is its own home (and keeps a call log)
+        layerfs_api::home::ensure(&home).unwrap();
         let data = CASES
             .replace("$host", layerfs_api::names::HOST_MACHINE)
             .replace("$platform", platform)
@@ -58,7 +64,7 @@ fn every_new_work_route_refuses_before_writes_or_worker_and_daemon_connections()
             let name = case.get_text("call").unwrap();
             let reason = removed_reason(platform).unwrap();
             let refusal = call(
-                Some(&home),
+                Some(crate::root::root_of(&home)),
                 name,
                 case.get("args").unwrap().clone(),
                 &mut |_| panic!("event before refusal"),
@@ -78,7 +84,7 @@ fn every_new_work_route_refuses_before_writes_or_worker_and_daemon_connections()
         // A forwarded Sandbox still carries its platform when its machine record is absent.
         std::fs::remove_file(home.join("machine/legacy/record.json")).unwrap();
         let refusal = call(
-            Some(&home),
+            Some(crate::root::root_of(&home)),
             "workspace.exec",
             SdkValue::map([
                 ("workspace", SdkValue::text("box:one")),
@@ -101,7 +107,13 @@ fn disabled_selection_does_not_create_a_home() {
             ("name", SdkValue::text("new")),
             ("platform", SdkValue::text(platform)),
         ]);
-        let refusal = call(Some(&home), "machine.create", args, &mut |_| {}).unwrap_err();
+        let refusal = call(
+            Some(crate::root::root_of(&home)),
+            "machine.create",
+            args,
+            &mut |_| {},
+        )
+        .unwrap_err();
         assert_eq!(refusal.message, removed_reason(platform).unwrap());
         assert!(!home.exists());
     }

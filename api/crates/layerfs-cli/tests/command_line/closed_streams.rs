@@ -19,7 +19,7 @@ fn a_closed_stdout_is_not_an_error() {
     let script = format!("exec '{LAYERFS}' store list >&-");
     let out = run(Command::new("sh")
         .args(["-c", &script])
-        .env("LAYERFS_HOME", &home));
+        .env("LAYERFS_ROOT", crate::root::root_of(&home)));
     assert_eq!(out.status.code(), Some(0), "{:?}", out.stderr);
     assert!(out.stderr.is_empty(), "{:?}", out.stderr);
     std::fs::remove_dir_all(home).unwrap();

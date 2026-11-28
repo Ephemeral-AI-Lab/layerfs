@@ -21,7 +21,7 @@ fn cli(home: &Fixture, words: &[&str]) -> SdkValue {
     let output = Command::new(CLI)
         .args(words)
         .arg("--detail")
-        .env("LAYERFS_HOME", &home.paths.home)
+        .env("LAYERFS_ROOT", crate::root::root_of(&home.paths.home))
         .output()
         .unwrap();
     assert!(output.status.success(), "{words:?}: {output:?}");

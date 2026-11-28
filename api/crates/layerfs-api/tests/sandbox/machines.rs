@@ -55,7 +55,8 @@ fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, 
             .map(|(n, v)| ((*n).to_owned(), v.clone()))
             .collect(),
     );
-    layerfs_api::call(Some(home), name, args, &mut |_| {}).map_err(|r| (r.code, r.message))
+    layerfs_api::call(Some(crate::root::root_of(home)), name, args, &mut |_| {})
+        .map_err(|r| (r.code, r.message))
 }
 
 fn ok(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> SdkValue {
@@ -239,8 +240,13 @@ fn a_sandbox_runs_where_its_store_can_be_reached() {
                 ("name", t("t")),
                 ("machine", t("dev")),
             ]);
-            let refusal =
-                layerfs_api::call(Some(&home), "sandbox.create", args, &mut |_| {}).unwrap_err();
+            let refusal = layerfs_api::call(
+                Some(crate::root::root_of(&home)),
+                "sandbox.create",
+                args,
+                &mut |_| {},
+            )
+            .unwrap_err();
             assert_eq!(
                 refusal.detail.get_text("fix"),
                 Some("layerfs store attach pg --machine dev")
@@ -354,7 +360,13 @@ fn a_forced_remove_says_why_its_store_s_url_cannot_be_made() {
     };
     let remove = || {
         let args = SdkValue::map([("sandbox", t("s1")), ("force", SdkValue::Bool(true))]);
-        layerfs_api::call(Some(&home), "sandbox.remove", args, &mut |_| {}).unwrap_err()
+        layerfs_api::call(
+            Some(crate::root::root_of(&home)),
+            "sandbox.remove",
+            args,
+            &mut |_| {},
+        )
+        .unwrap_err()
     };
     // the Store's password is not saved: the fix connects it with one
     store(("user", "u"));
@@ -472,7 +484,7 @@ fn a_postgresql_store_s_sandboxes_on_native_and_docker() {
     let id = home::open(&home).unwrap().id;
     // the native machine's daemon is a setting of its record
     layerfs_api::call(
-        Some(&home),
+        Some(crate::root::root_of(&home)),
         "machine.update",
         SdkValue::map([
             ("machine", SdkValue::text(layerfs_home::names::HOST_MACHINE)),
@@ -891,7 +903,13 @@ fn a_sandbox_with_no_machine_runs_on_its_store_s() {
         ("name", t("t3")),
         ("machine", t("box")),
     ]);
-    let refusal = layerfs_api::call(Some(&home), "sandbox.create", args, &mut |_| {}).unwrap_err();
+    let refusal = layerfs_api::call(
+        Some(crate::root::root_of(&home)),
+        "sandbox.create",
+        args,
+        &mut |_| {},
+    )
+    .unwrap_err();
     assert_eq!(refusal.code, "InvalidInput", "{refusal:?}");
     assert_eq!(
         refusal.message,
@@ -905,8 +923,13 @@ fn a_sandbox_with_no_machine_runs_on_its_store_s() {
     // with no machine named, a Store with no machine attached is refused
     // with the attach as its fix: there is no default machine
     let args = SdkValue::map([("project", t("pg/app")), ("name", t("t2"))]);
-    let none =
-        layerfs_api::call(Some(&home), "sandbox.create", args.clone(), &mut |_| {}).unwrap_err();
+    let none = layerfs_api::call(
+        Some(crate::root::root_of(&home)),
+        "sandbox.create",
+        args.clone(),
+        &mut |_| {},
+    )
+    .unwrap_err();
     assert_eq!(none.code, "InvalidInput", "{none:?}");
     assert_eq!(
         none.message,
@@ -918,7 +941,13 @@ fn a_sandbox_with_no_machine_runs_on_its_store_s() {
     );
     // several attached: the call names one
     pg_record(&home, &["box", layerfs_home::names::HOST_MACHINE]);
-    let several = layerfs_api::call(Some(&home), "sandbox.create", args, &mut |_| {}).unwrap_err();
+    let several = layerfs_api::call(
+        Some(crate::root::root_of(&home)),
+        "sandbox.create",
+        args,
+        &mut |_| {},
+    )
+    .unwrap_err();
     assert_eq!(several.code, "InvalidInput", "{several:?}");
     assert!(
         several.message.contains("name one with --machine"),

@@ -2,6 +2,8 @@
 //! log is checkpointed and truncated while the Store stays open, so the
 //! quiesced file is the Store's closed bytes. The checkpoint runs after the
 //! call is answered; the wait below is bounded.
+#[path = "../support/root.rs"]
+mod root;
 use layerfs_api::home::{self};
 use layerfs_home::disk::paths;
 use layerfs_protocol::sdk::SdkValue;
@@ -24,7 +26,7 @@ fn ok(home: &Path, name: &str, args: &[(&str, &str)]) -> SdkValue {
             .map(|(n, v)| ((*n).to_owned(), SdkValue::text(*v)))
             .collect(),
     );
-    layerfs_api::call(Some(home), name, args, &mut |_| {})
+    layerfs_api::call(Some(crate::root::root_of(home)), name, args, &mut |_| {})
         .unwrap_or_else(|r| panic!("{name}: {r:?}"))
 }
 

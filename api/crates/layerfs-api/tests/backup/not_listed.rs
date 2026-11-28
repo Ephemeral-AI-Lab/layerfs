@@ -43,7 +43,7 @@ fn a_bucket_not_asked_is_refused_not_lost() {
     std::fs::write(&bad, "not json").unwrap();
 
     let listed = layerfs_api::call(
-        Some(&home),
+        Some(crate::root::root_of(&home)),
         "backup.list",
         SdkValue::Map(Vec::new()),
         &mut |_| {},
@@ -153,8 +153,13 @@ fn a_missing_or_refused_key_gives_the_connect_fix() {
     ];
     for detail in [false, true] {
         let args = SdkValue::map([("detail", SdkValue::Bool(detail))]);
-        let listed = layerfs_api::call(Some(&home), "backup.list", args, &mut |_| {})
-            .unwrap_or_else(|refusal| panic!("{refusal:?}"));
+        let listed = layerfs_api::call(
+            Some(crate::root::root_of(&home)),
+            "backup.list",
+            args,
+            &mut |_| {},
+        )
+        .unwrap_or_else(|refusal| panic!("{refusal:?}"));
         let Some(SdkValue::List(skipped)) = listed.get("not_listed") else {
             panic!("{listed:?}");
         };

@@ -24,7 +24,7 @@ fn call(home: &Path, method: &str, fields: &[(&str, SdkValue)]) -> SdkValue {
             .map(|(k, v)| (k.to_string(), v.clone()))
             .collect(),
     );
-    layerfs_api::call(Some(home), method, args, &mut |_| {})
+    layerfs_api::call(Some(crate::root::root_of(home)), method, args, &mut |_| {})
         .unwrap_or_else(|r| panic!("{method}: {r:?}"))
 }
 fn check(home: &Path, kind: &str, test: &str) {
@@ -119,7 +119,7 @@ fn check(home: &Path, kind: &str, test: &str) {
     );
     assert_eq!(removed.get("stored_bytes"), published.get("stored_bytes"));
     let gone = layerfs_api::call(
-        Some(home),
+        Some(crate::root::root_of(home)),
         "project.get",
         SdkValue::map([("project", t(&name))]),
         &mut |_| {},
@@ -166,7 +166,7 @@ fn native_sqlite_and_worker_statistics_use_the_same_counters() {
     layerfs_api::close_idle(std::time::Duration::ZERO);
     std::fs::remove_file(paths::worker_record(&home, "box")).unwrap();
     let refused = layerfs_api::call(
-        Some(&home),
+        Some(crate::root::root_of(&home)),
         "store.get",
         SdkValue::map([("store", t("stats")), ("with", t("stats"))]),
         &mut |_| {},

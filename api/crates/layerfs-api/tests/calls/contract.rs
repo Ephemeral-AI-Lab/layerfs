@@ -977,7 +977,7 @@ fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, 
             .map(|(key, value)| ((*key).to_owned(), value.clone()))
             .collect(),
     );
-    layerfs_api::call(Some(home), name, args, &mut |_| {})
+    layerfs_api::call(Some(crate::root::root_of(home)), name, args, &mut |_| {})
         .map_err(|refusal| format!("{}: {}", refusal.code, refusal.message))
 }
 

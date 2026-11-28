@@ -19,7 +19,13 @@ fn t(value: &str) -> SdkValue {
 }
 
 fn prepare(home: &Path) {
-    layerfs_api::call(Some(home), "home.init", SdkValue::map([]), &mut |_| {}).unwrap();
+    layerfs_api::call(
+        Some(crate::root::made(home)),
+        "home.init",
+        SdkValue::map([]),
+        &mut |_| {},
+    )
+    .unwrap();
     let source = home.join("source");
     std::fs::create_dir_all(source.join("docs")).unwrap();
     std::fs::write(source.join("docs/a.txt"), "one\ntwo\n").unwrap();
@@ -27,14 +33,14 @@ fn prepare(home: &Path) {
     std::fs::write(source.join("docs/raw"), b"x\0x").unwrap();
     std::fs::create_dir(source.join("docs/empty")).unwrap();
     layerfs_api::call(
-        Some(home),
+        Some(crate::root::root_of(home)),
         "store.create",
         SdkValue::map([("name", t("shop"))]),
         &mut |_| {},
     )
     .unwrap();
     layerfs_api::call(
-        Some(home),
+        Some(crate::root::root_of(home)),
         "project.init",
         SdkValue::map([
             ("project", t("shop/api")),
@@ -106,7 +112,7 @@ fn cold_cli_launches_and_warm_reads_match_the_direct_results() {
         ("list", "/docs"),
     ] {
         let direct = layerfs_api::call(
-            Some(path),
+            Some(crate::root::root_of(path)),
             &format!("file.{method}"),
             SdkValue::map([
                 ("project", t("shop/api")),
@@ -164,7 +170,7 @@ fn non_cli_scope_refusal_and_long_socket_paths_keep_the_direct_boundary() {
     let home = Fixture::new();
     prepare(&home.paths.home);
     let direct = layerfs_api::call_scoped(
-        Some(&home.paths.home),
+        Some(crate::root::root_of(&home.paths.home)),
         None,
         "file.read",
         SdkValue::map([

@@ -73,7 +73,9 @@ pub fn call_events(
             .collect(),
     );
     let mut events = Vec::new();
-    let outcome = layerfs_api::call(Some(home), name, args, &mut |event| events.push(event));
+    let outcome = layerfs_api::call(Some(crate::root::root_of(home)), name, args, &mut |event| {
+        events.push(event)
+    });
     (outcome, events)
 }
 
@@ -166,6 +168,7 @@ pub fn sqlite_fixture_home(tag: &str) -> Option<PathBuf> {
         return None;
     }
     let home = tempdir(tag).join("home");
+    crate::root::made(&home);
     ok(&home, "home.init", &[]);
     ok(&home, "store.create", &[("name", t("fx"))]);
     layerfs_api::close_idle(std::time::Duration::ZERO);
@@ -256,6 +259,7 @@ pub fn postgresql_fixture_home(server: &Postgres, tag: &str, db: &str) -> PathBu
         .batch_execute(&format!("CREATE DATABASE {db}"))
         .unwrap();
     let home = tempdir(tag).join("home");
+    crate::root::made(&home);
     ok(&home, "home.init", &[]);
     let (url, user) = server.store_url(db);
     ok(

@@ -73,7 +73,7 @@ def shell(home, words, data=b""):
         [str(COMMAND), *words],
         input=data if isinstance(data, bytes) else data.encode(),
         capture_output=True,
-        env={**os.environ, "LAYERFS_HOME": home},
+        env={**os.environ, "LAYERFS_ROOT": home},
         timeout=60,
         check=False,
     )
@@ -330,7 +330,7 @@ class Calls(unittest.TestCase):
 
     def test_the_call_log_names_python_and_takes_log_tag(self):
         home = temp("logs")
-        lfs = layerfs.client(home=home)
+        lfs = layerfs.client(root=home)
         lfs.store.create("shop")
         lfs.store.list(log_tag="dsh:s1:r1")
         with self.assertRaises(layerfs.LayerFSError):
@@ -366,8 +366,12 @@ class Calls(unittest.TestCase):
 
     def test_client_home_is_the_home_family_and_the_client_calls_its_home(self):
         parent = temp("home")
-        home = os.path.join(parent, "made")
-        lfs = layerfs.client(home=home)
+        root = os.path.join(parent, "made")
+        home = os.path.join(root, "home")
+        lfs = layerfs.client(root=root)
+        # a client names a root; the old `home` keyword is refused, not ignored
+        with self.assertRaises(TypeError):
+            layerfs.client(home=root)
         # the short form: what is wrong and its fix; nothing else
         missing = lfs.home.get()
         self.assertEqual(list(missing), ["home", "state", "version", "reason", "fix"])
@@ -429,13 +433,13 @@ class Calls(unittest.TestCase):
             ],
         )
         with self.assertRaises(layerfs.LayerFSError) as caught:
-            layerfs.client(home=temp("bogus")).store.get("shop", bogus=1)
+            layerfs.client(root=temp("bogus")).store.get("shop", bogus=1)
         self.assertEqual(caught.exception.code, "InvalidInput")
 
     @unittest.skipUnless(COMMAND.exists(), "the layerfs command is not built")
     def test_every_call_is_refused_as_the_command_refuses_it(self):
         home = temp("refused")
-        lfs = layerfs.client(home=home)
+        lfs = layerfs.client(root=home)
         # home.init would say `created` only to the first front end
         lfs.home.init()
         for spec in layerfs.TABLE:
@@ -466,7 +470,7 @@ class Calls(unittest.TestCase):
     def test_a_live_store_reads_the_same_both_ways(self):
         home, folder = temp("live"), temp("folder")
         Path(folder, "README.md").write_text("hello python\n")
-        lfs = layerfs.client(home=home)
+        lfs = layerfs.client(root=home)
         lfs.store.create("shop")
         progress = []
         made = lfs.project.init("shop/api", folder, on_progress=progress.append, detail=True)
@@ -492,7 +496,7 @@ class Calls(unittest.TestCase):
         # a Commit id as `at` reads that history, and a folder scope
         first = lfs.commit.list("shop/api", "agent")["items"][-1]["commit"]
         self.assertEqual(lfs.file.read("shop/api", "agent", "/README.md", at=first)["text"], "hello python\n")
-        scoped = layerfs.client(home=home, scope={"project": "shop/api", "folder": "/web"})
+        scoped = layerfs.client(root=home, scope={"project": "shop/api", "folder": "/web"})
         with self.assertRaisesRegex(layerfs.LayerFSError, "out of scope: path"):
             scoped.file.stat("shop/api", "main", "/README.md")
         # a scope covers its project's files, Branches and Workspaces only
@@ -506,7 +510,7 @@ class Calls(unittest.TestCase):
 
     def test_aio_makes_the_same_calls_as_coroutines(self):
         home = temp("aio")
-        lfs = aio.client(home=home)
+        lfs = aio.client(root=home)
 
         async def run():
             await lfs.store.create("one")
@@ -519,7 +523,7 @@ class Calls(unittest.TestCase):
 
     def test_aio_functions_run_on_the_loop_before_the_call_returns(self):
         home = temp("aio-loop")
-        lfs = aio.client(home=home)
+        lfs = aio.client(root=home)
         seen = []
 
         async def run():
@@ -541,7 +545,7 @@ class Calls(unittest.TestCase):
         home, folder = temp("aio-cancel"), temp("aio-cancel-folder")
         for i in range(5000):
             Path(folder, f"f{i}.txt").write_text(f"file {i}\n")
-        lfs = aio.client(home=home)
+        lfs = aio.client(root=home)
         seen = []
 
         async def run():
@@ -568,7 +572,7 @@ class Calls(unittest.TestCase):
         at_cancel = asyncio.run(run())
         self.assertGreaterEqual(at_cancel, 1)
         self.assertEqual(len(seen), at_cancel, "no function ran after the cancel")
-        self.assertEqual(layerfs.client(home=home).project.get("shop/api", detail=True)["project"], "shop/api")
+        self.assertEqual(layerfs.client(root=home).project.get("shop/api", detail=True)["project"], "shop/api")
         shutil.rmtree(home)
         shutil.rmtree(folder)
 
@@ -576,10 +580,10 @@ class Calls(unittest.TestCase):
     def test_exec_output_through_functions_and_stream_without_them(self):
         home, folder = temp("stream"), temp("stream-folder")
         Path(folder, "README.md").write_text("streamed\n")
-        lfs = layerfs.client(home=home)
+        lfs = layerfs.client(root=home)
         lfs.store.create("shop")
         daemon = [str(COMMAND), "machine", "update", ("macos-host" if sys.platform == "darwin" else "linux-host"), "--daemon", os.environ["LAYERFS_DAEMON"]]
-        updated = subprocess.run(daemon, env={**os.environ, "LAYERFS_HOME": home}, capture_output=True, timeout=30)
+        updated = subprocess.run(daemon, env={**os.environ, "LAYERFS_ROOT": home}, capture_output=True, timeout=30)
         self.assertEqual(updated.returncode, 0, updated.stderr)
         lfs.project.init("shop/api", folder)
         lfs.branch.fork("shop/api", "dev", "main")
@@ -600,7 +604,7 @@ class Calls(unittest.TestCase):
             )
             child = subprocess.run(
                 [sys.executable, "-c", script, str(HERE.parent / "src"), ws],
-                env={**os.environ, "LAYERFS_HOME": home},
+                env={**os.environ, "LAYERFS_ROOT": home},
                 capture_output=True,
                 timeout=60,
             )
@@ -619,7 +623,7 @@ class Calls(unittest.TestCase):
 class Refusals(unittest.TestCase):
     def test_a_refusal_has_its_public_code_its_fix_and_in_the_long_form_its_detail(self):
         home = temp("refusal")
-        lfs = layerfs.client(home=home)
+        lfs = layerfs.client(root=home)
         lfs.store.create("shop")
         with self.assertRaises(layerfs.LayerFSError) as caught:
             lfs.file.read("shop/nope", "main", "/a")

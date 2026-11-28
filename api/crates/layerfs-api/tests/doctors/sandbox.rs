@@ -35,7 +35,7 @@ fn doctor(home: &Path, detail: bool) -> (SdkValue, Vec<SdkValue>) {
         args.push(("detail".to_owned(), SdkValue::Bool(true)));
     }
     let answer = layerfs_api::call(
-        Some(home),
+        Some(crate::root::root_of(home)),
         "sandbox.doctor",
         SdkValue::Map(args),
         &mut |event| events.push(event),
@@ -58,7 +58,13 @@ fn native_home() -> PathBuf {
         NEXT.fetch_add(1, Ordering::Relaxed)
     ));
     let _ = std::fs::remove_dir_all(&home);
-    layerfs_api::call(Some(&home), "home.init", SdkValue::map([]), &mut |_| {}).unwrap();
+    layerfs_api::call(
+        Some(crate::root::made(&home)),
+        "home.init",
+        SdkValue::map([]),
+        &mut |_| {},
+    )
+    .unwrap();
     write_entity(
         &paths::store_record(&home, "s"),
         &SdkValue::map([

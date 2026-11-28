@@ -2,6 +2,8 @@ mod files;
 mod images;
 mod list_live;
 mod logs;
+#[path = "../support/root.rs"]
+mod root;
 mod sandbox_files;
 mod stats;
 

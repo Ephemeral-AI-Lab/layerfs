@@ -28,7 +28,8 @@ fn call(
     args: SdkValue,
     events: &mut dyn FnMut(SdkValue),
 ) -> Result<SdkValue, (String, String)> {
-    layerfs_api::call(Some(home), name, args, events).map_err(|r| (r.code, r.message))
+    layerfs_api::call(Some(crate::root::root_of(home)), name, args, events)
+        .map_err(|r| (r.code, r.message))
 }
 
 /// Init's arguments, asking for its long form (`detail`).
@@ -236,7 +237,7 @@ fn init_into_a_worker_s_store_copies_the_caller_s_folder() {
     assert_eq!(stat.get_text("type"), Some("symlink"), "{stat:?}");
 
     let again = layerfs_api::call(
-        Some(&home),
+        Some(crate::root::root_of(&home)),
         "project.init",
         init_args("shop/web", &folder),
         &mut |_| {},

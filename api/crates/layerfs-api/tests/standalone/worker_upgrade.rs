@@ -4,6 +4,8 @@
 //! upgrade left unresolved, the worker's `store.upgrade` refusals and its
 //! `store.cancel` plumbing, and the `format` section's shape. Nothing here
 //! needs the engine's conversion (`store_upgrade_engine.rs` does).
+#[path = "../support/root.rs"]
+mod root;
 #[path = "../support/worker_store.rs"]
 mod worker_store;
 

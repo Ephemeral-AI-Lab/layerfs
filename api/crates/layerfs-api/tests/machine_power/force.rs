@@ -12,7 +12,7 @@ fn call(
     args: &[(&str, SdkValue)],
 ) -> Result<SdkValue, layerfs_protocol::sdk::SdkRefusal> {
     layerfs_api::call(
-        Some(home),
+        Some(crate::root::root_of(home)),
         name,
         SdkValue::Map(
             (args.iter())

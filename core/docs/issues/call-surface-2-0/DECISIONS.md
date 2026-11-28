@@ -729,18 +729,21 @@ owner ruled to give it a full 2.0 entry rather than an exception.
   name. No alias for the old keys (no backward compatibility in 2.0).
 - **RM-3** Totals: 83 calls, store 13, as the totals above already say.
 
-## The LayerFS folder and `home move` (owner, 2026-11-28)
+## The LayerFS root and `home move` (owner, 2026-11-28)
 
-`~/.layerfs` becomes a folder of homes' owners: LayerFS's home in `home/`, and each client's folder
-beside it (`dsh/`, `connect/`). Until now every client defaulted to `~/.layerfs` itself, so a folder
-holding only `home/` and `dsh/` was refused as an outdated home with a fix that moved it aside.
+`~/.layerfs` becomes the LayerFS root: LayerFS's home in `home/`, and each client's folder beside it
+(`dsh/`, `connect/`). Until now every client defaulted to `~/.layerfs` itself, so a folder holding
+only `home/` and `dsh/` was refused as an outdated home with a fix that moved it aside.
 
-- **HM-1** The default home is `$HOME/.layerfs/home`; `$HOME/.layerfs` stays the home while it holds
-  `layerfs.json` (a legacy home). `LAYERFS_HOME` and an explicit home are unchanged and still
-  absolute.
+- **HM-1** A caller names a root, never a home ("we do not set layerfs home as env but layerfs root
+  and search for home"). The root is the one named (`client({ root })`, `client(root=)`, MCP
+  `--root`), else `LAYERFS_ROOT`, else `$HOME/.layerfs`; it must be absolute. Its home is
+  `<root>/home`, or the root itself while it holds `layerfs.json` (a legacy home). `LAYERFS_ROOT`
+  replaces `LAYERFS_HOME`, and the SDKs' and MCP's `home` argument became `root`, with no alias;
+  Node refuses a `client()` key other than `root` and `scope`.
 - **HM-2** A folder with no `layerfs.json` that holds only folders (and `.DS_Store`), none of them
-  one of LayerFS's own top-level names, is a LayerFS folder, not a home: refused `InvalidInput`
-  with the fix `export LAYERFS_HOME=<folder>/home`; `home get` answers `broken`, `reason:
+  one of LayerFS's own top-level names, is a LayerFS root opened as a home, not a home: refused
+  `InvalidInput` with the fix `export LAYERFS_ROOT=<folder>`; `home get` answers `broken`, `reason:
   unsupported` with that fix; the doctor's `home.layout` fails with it. Never the move aside.
 - **HM-3** `home move <to>` (badge `new`, profile `full`, quiet, unopened) moves a current home into
   a new or empty folder on the same filesystem by renaming its own entries, never by copy (a copy

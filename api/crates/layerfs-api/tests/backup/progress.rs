@@ -34,7 +34,7 @@ fn traced(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> (SdkValue, Vec<
             .collect(),
     );
     let mut seen = Vec::new();
-    let result = layerfs_api::call(Some(home), name, args, &mut |event| {
+    let result = layerfs_api::call(Some(crate::root::root_of(home)), name, args, &mut |event| {
         if let Some(p) = event.get("progress") {
             seen.push((
                 p.get_text("phase").unwrap().to_owned(),

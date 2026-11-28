@@ -32,8 +32,13 @@ fn call_events(home: &Path, method: &str, fields: &[(&str, SdkValue)]) -> (SdkVa
             .collect(),
     );
     let mut events = Vec::new();
-    let answer = layerfs_api::call(Some(home), method, args, &mut |event| events.push(event))
-        .unwrap_or_else(|r| panic!("{method}: {r:?}"));
+    let answer = layerfs_api::call(
+        Some(crate::root::root_of(home)),
+        method,
+        args,
+        &mut |event| events.push(event),
+    )
+    .unwrap_or_else(|r| panic!("{method}: {r:?}"));
     (answer, events)
 }
 
@@ -106,7 +111,7 @@ fn source(tag: &str) -> PathBuf {
 fn sqlite_full_reads_main_and_each_branch_and_names_a_damaged_object_in_each_project() {
     let home = folder("home");
     let created = layerfs_api::call(
-        Some(&home),
+        Some(crate::root::root_of(&home)),
         "store.create",
         SdkValue::map([("name", t("shop"))]),
         &mut |_| {},
@@ -431,7 +436,7 @@ fn hex(bytes: &[u8]) -> String {
 fn a_store_of_another_id_blocks_the_project_checks_and_full_is_not_claimed() {
     let home = folder("other-id");
     let created = layerfs_api::call(
-        Some(&home),
+        Some(crate::root::root_of(&home)),
         "store.create",
         SdkValue::map([("name", t("shop"))]),
         &mut |_| {},

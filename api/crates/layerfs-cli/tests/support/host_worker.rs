@@ -35,7 +35,13 @@ impl Fixture {
             .mode(0o700)
             .create(&path)
             .unwrap();
-        layerfs_api::call(Some(&path), "home.init", SdkValue::map([]), &mut |_| {}).unwrap();
+        layerfs_api::call(
+            Some(crate::root::root_of(&path)),
+            "home.init",
+            SdkValue::map([]),
+            &mut |_| {},
+        )
+        .unwrap();
         Self {
             paths: HostPaths::new(&path).unwrap(),
             aliases: Vec::new(),
@@ -57,7 +63,7 @@ impl Fixture {
         Worker {
             child: Command::new(BINARY)
                 .args(["worker", "--host"])
-                .env("LAYERFS_HOME", home)
+                .env("LAYERFS_ROOT", crate::root::root_of(home))
                 .stdin(Stdio::null())
                 .stdout(Stdio::null())
                 .spawn()

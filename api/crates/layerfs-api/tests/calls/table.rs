@@ -22,7 +22,12 @@ fn t(s: &str) -> SdkValue {
 fn run(name: &str, args: SdkValue) -> (Result<SdkValue, (String, String)>, Vec<SdkValue>) {
     let home = tempdir();
     let mut events = Vec::new();
-    let outcome = layerfs_api::call(Some(&home), name, args, &mut |event| events.push(event));
+    let outcome = layerfs_api::call(
+        Some(crate::root::root_of(&home)),
+        name,
+        args,
+        &mut |event| events.push(event),
+    );
     let _ = std::fs::remove_dir_all(&home);
     (outcome.map_err(|r| (r.code, r.message)), events)
 }
@@ -567,7 +572,7 @@ fn home_leftovers_and_prune_are_gone() {
 fn an_explicit_home_must_be_absolute() {
     let mut events = Vec::new();
     let refused = layerfs_api::call(
-        Some(Path::new("relative")),
+        Some(crate::root::root_of(Path::new("relative"))),
         "machine.list",
         SdkValue::Null,
         &mut |e| events.push(e),
@@ -660,7 +665,8 @@ fn native_machine_images_reports_host_userland_without_a_bundle() {
         ),
     ] {
         let home = tempdir();
-        let error = layerfs_api::call(Some(&home), call, args, &mut |_| {}).unwrap_err();
+        let error = layerfs_api::call(Some(crate::root::root_of(&home)), call, args, &mut |_| {})
+            .unwrap_err();
         let _ = std::fs::remove_dir_all(&home);
         assert_eq!(error.code, "Unsupported", "{call}");
         assert_eq!(error.detail.get_text("reason"), Some("host"), "{call}");

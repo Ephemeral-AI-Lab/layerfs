@@ -45,8 +45,13 @@ fn call(
     name: &str,
     fields: &[(&str, SdkValue)],
 ) -> Result<SdkValue, (String, String)> {
-    layerfs_api::call(Some(home), name, map(fields), &mut |_| {})
-        .map_err(|refusal| (refusal.code, refusal.message))
+    layerfs_api::call(
+        Some(crate::root::root_of(home)),
+        name,
+        map(fields),
+        &mut |_| {},
+    )
+    .map_err(|refusal| (refusal.code, refusal.message))
 }
 
 fn ok(home: &Path, name: &str, fields: &[(&str, SdkValue)]) -> SdkValue {
@@ -290,7 +295,7 @@ fn project_init_after_delete_is_nametaken_deleted() {
     let (home, folder) = project();
     ok(&home, "project.delete", &[p()]);
     let refusal = layerfs_api::call(
-        Some(&home),
+        Some(crate::root::root_of(&home)),
         "project.init",
         map(&[
             ("project", t("shop/api")),
@@ -317,7 +322,7 @@ fn store_compact_sends_each_phase_as_a_progress_event() {
     let compact = || {
         let mut phases = Vec::new();
         let report = layerfs_api::call(
-            Some(&home),
+            Some(crate::root::root_of(&home)),
             "store.compact",
             map(&[("store", t("shop")), ("detail", SdkValue::Bool(true))]),
             &mut |event| {

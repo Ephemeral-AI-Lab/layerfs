@@ -220,7 +220,7 @@ workers in [Workers and reach](docs/architecture/control/machines/workers-and-re
   no retry and no replay; an uncertain outcome is reported, never resent.
 - **Secrets:** a PostgreSQL password is resolved only in the caller and travels
   only in one worker request and the Sandbox's private daemon setup file.
-- **Plugin-neutral** (owner, 2026-10-24): LayerFS reads `LAYERFS_HOME` and the
+- **Plugin-neutral** (owner, 2026-10-24): LayerFS reads `LAYERFS_ROOT` and the
   trace settings only; no adapter name, integration check or code that names a
   plugin. An integration maps its own prefixed names (such as `DSH_*`).
 - **Removed stays removed** (owner, 2026-11-08): Firecracker, Microsandbox and

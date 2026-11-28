@@ -56,7 +56,7 @@ fn called(home: &Path, name: &str, machine: &str) -> Result<(SdkValue, Vec<Strin
             phases.push(phase.to_owned());
         }
     };
-    let answer = layerfs_api::call(Some(home), name, args, &mut seen)?;
+    let answer = layerfs_api::call(Some(crate::root::root_of(home)), name, args, &mut seen)?;
     Ok((answer, phases))
 }
 
@@ -229,7 +229,13 @@ fn lima_power(home: &Path, tools: &Path) {
     let mut phases = Vec::new();
     let mut seen = |event: SdkValue| phases.push(json(&event));
     let args = SdkValue::map([("machine", t("dev"))]);
-    let refusal = layerfs_api::call(Some(home), "machine.start", args, &mut seen).unwrap_err();
+    let refusal = layerfs_api::call(
+        Some(crate::root::root_of(home)),
+        "machine.start",
+        args,
+        &mut seen,
+    )
+    .unwrap_err();
     assert_eq!(refusal.code, "Unsupported", "{}", refusal.message);
     assert!(refusal.message.contains("bundle"), "{}", refusal.message);
     assert!(paths::machine_dir(home, "dev").join("start.lock").exists());

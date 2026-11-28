@@ -93,8 +93,8 @@ pub fn get(home: &Path, build: Build<'_>, with: With) -> Outcome {
             layout,
             Some(layerfs_home::disk::layout::foreign(home).message),
         ),
-        // a LayerFS folder holding `home/` and its clients' folders: not
-        // a home, and never moved aside; the fix names its `home/`
+        // a LayerFS root holding `home/` and its clients' folders: not a
+        // home, and never moved aside; the fix names it as the root
         Ok((Found::Container, layout)) => (
             State::broken(
                 Reason::Unsupported,

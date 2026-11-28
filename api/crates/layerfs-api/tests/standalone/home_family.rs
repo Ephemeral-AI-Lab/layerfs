@@ -12,31 +12,39 @@ use std::path::{Path, PathBuf};
 
 static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
-/// A fresh folder under the temporary directory, not yet created.
+/// The home in a fresh root under the temporary directory, neither yet
+/// created: the root holds no `layerfs.json`, so its home is `<root>/home`.
 fn place() -> PathBuf {
-    std::env::temp_dir().join(format!(
-        "layerfs-home-calls-{}-{}",
-        std::process::id(),
-        NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-    ))
+    std::env::temp_dir()
+        .join(format!(
+            "layerfs-home-calls-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        ))
+        .join("home")
+}
+
+/// The root a call names to reach `home`.
+fn root(home: &Path) -> &Path {
+    home.parent().unwrap()
 }
 
 fn call(home: &Path, name: &str) -> SdkValue {
-    layerfs_api::call(Some(home), name, SdkValue::Null, &mut |_| {})
+    layerfs_api::call(Some(root(home)), name, SdkValue::Null, &mut |_| {})
         .unwrap_or_else(|r| panic!("{name}: {}: {}", r.code, r.message))
 }
 
 /// `name` in its long form.
 fn long(home: &Path, name: &str) -> SdkValue {
     let detail = SdkValue::map([("detail", SdkValue::Bool(true))]);
-    layerfs_api::call(Some(home), name, detail, &mut |_| {})
+    layerfs_api::call(Some(root(home)), name, detail, &mut |_| {})
         .unwrap_or_else(|r| panic!("{name}: {}: {}", r.code, r.message))
 }
 
 /// `home.get` in its long form.
 fn get(home: &Path) -> SdkValue {
     let detail = SdkValue::map([("detail", SdkValue::Bool(true))]);
-    layerfs_api::call(Some(home), "home.get", detail, &mut |_| {})
+    layerfs_api::call(Some(root(home)), "home.get", detail, &mut |_| {})
         .unwrap_or_else(|r| panic!("home.get: {}: {}", r.code, r.message))
 }
 
@@ -69,7 +77,7 @@ fn get_answers_for_a_missing_home_and_creates_nothing() {
     let short = call(&home, "home.get");
     assert_eq!(keys(&short), ["home", "state", "version", "reason", "fix"]);
     assert_eq!(short.get_text("version"), Some(env!("CARGO_PKG_VERSION")));
-    assert!(!home.exists(), "home.get created {}", home.display());
+    assert!(!root(&home).exists(), "home.get created {}", home.display());
 }
 
 #[test]
@@ -110,7 +118,7 @@ fn init_creates_a_home_then_leaves_it_and_get_reads_it_without_a_log_line() {
         Some(&SdkValue::Int(layerfs_home::disk::LAYOUT_VERSION))
     );
     assert_eq!(got.get_text("mode"), Some("0700"));
-    let _ = std::fs::remove_dir_all(&home);
+    let _ = std::fs::remove_dir_all(root(&home));
 }
 
 #[test]
@@ -128,7 +136,7 @@ fn the_mode_is_answered_as_it_is() {
         assert_eq!(got.get_text("state"), Some("ready"));
     }
     set(0o700);
-    let _ = std::fs::remove_dir_all(&home);
+    let _ = std::fs::remove_dir_all(root(&home));
 }
 
 #[test]
@@ -153,6 +161,7 @@ fn a_foreign_home_is_outdated_and_init_refuses_it_with_the_move_fix() {
         let home = place();
         std::fs::DirBuilder::new()
             .mode(0o700)
+            .recursive(true)
             .create(&home)
             .unwrap();
         std::fs::write(home.join(name), text).unwrap();
@@ -165,14 +174,15 @@ fn a_foreign_home_is_outdated_and_init_refuses_it_with_the_move_fix() {
         let message = layerfs_home::disk::layout::foreign(&home).message;
         assert_eq!(got.get_text("message"), Some(message.as_str()), "{text}");
         let refused =
-            layerfs_api::call(Some(&home), "home.init", SdkValue::Null, &mut |_| {}).unwrap_err();
+            layerfs_api::call(Some(root(&home)), "home.init", SdkValue::Null, &mut |_| {})
+                .unwrap_err();
         assert_eq!(refused.code, "Unsupported", "{}", refused.message);
         assert_eq!(refused.detail.get_text("fix"), Some(fix.as_str()));
         // any other call is refused the same way, and nothing is written, not
         // even the call log
         for call in ["machine.list", "store.list", "home.log"] {
-            let other =
-                layerfs_api::call(Some(&home), call, SdkValue::Null, &mut |_| {}).unwrap_err();
+            let other = layerfs_api::call(Some(root(&home)), call, SdkValue::Null, &mut |_| {})
+                .unwrap_err();
             assert_eq!(
                 other.code, "Unsupported",
                 "{call} {text}: {}",
@@ -186,7 +196,7 @@ fn a_foreign_home_is_outdated_and_init_refuses_it_with_the_move_fix() {
             .collect();
         names.sort();
         assert_eq!(names, [name]);
-        let _ = std::fs::remove_dir_all(&home);
+        let _ = std::fs::remove_dir_all(root(&home));
     }
 }
 
@@ -250,7 +260,7 @@ fn a_home_the_system_refuses_to_read_is_failed_with_no_move_aside() {
             "Permission denied (os error 13)",
         );
     }
-    let _ = std::fs::remove_dir_all(&home);
+    let _ = std::fs::remove_dir_all(root(&home));
 }
 
 #[test]
@@ -264,13 +274,19 @@ fn the_generation_moves_when_a_record_is_written_or_removed_and_not_on_a_read() 
     call(&home, "home.log");
     assert_eq!(generation(&home), start);
     let named = SdkValue::map([("name", SdkValue::text("shop"))]);
-    layerfs_api::call(Some(&home), "store.create", named.clone(), &mut |_| {}).unwrap();
+    layerfs_api::call(
+        Some(root(&home)),
+        "store.create",
+        named.clone(),
+        &mut |_| {},
+    )
+    .unwrap();
     let created = generation(&home);
     assert!(created > start, "{created} after {start}");
     let removed = SdkValue::map([("store", SdkValue::text("shop"))]);
-    layerfs_api::call(Some(&home), "store.remove", removed, &mut |_| {}).unwrap();
+    layerfs_api::call(Some(root(&home)), "store.remove", removed, &mut |_| {}).unwrap();
     assert!(generation(&home) > created);
-    let _ = std::fs::remove_dir_all(&home);
+    let _ = std::fs::remove_dir_all(root(&home));
 }
 
 /// The machine nodes of `home.get --with tree`, long form.
@@ -279,7 +295,7 @@ fn tree_machines(home: &Path) -> Vec<SdkValue> {
         ("detail", SdkValue::Bool(true)),
         ("with", SdkValue::List(vec![SdkValue::text("tree")])),
     ]);
-    let answer = layerfs_api::call(Some(home), "home.get", asked, &mut |_| {})
+    let answer = layerfs_api::call(Some(root(home)), "home.get", asked, &mut |_| {})
         .unwrap_or_else(|r| panic!("home.get: {}: {}", r.code, r.message));
     match answer.get("tree").and_then(|tree| tree.get("machines")) {
         Some(SdkValue::List(machines)) => machines.clone(),
@@ -292,7 +308,7 @@ fn the_tree_lists_a_machine_only_a_store_names() {
     let home = place();
     call(&home, "home.init");
     let named = SdkValue::map([("name", SdkValue::text("shop"))]);
-    layerfs_api::call(Some(&home), "store.create", named, &mut |_| {}).unwrap();
+    layerfs_api::call(Some(root(&home)), "store.create", named, &mut |_| {}).unwrap();
     // `native` exists with or without a record: its Store is under it, ready
     let _ = std::fs::remove_dir_all(home.join("machine"));
     let machines = tree_machines(&home);
@@ -332,5 +348,5 @@ fn the_tree_lists_a_machine_only_a_store_names() {
     let by = stores[0].get("blocked_by").unwrap();
     assert_eq!(by.get_text("machine"), Some("gone"));
     assert_eq!(by.get_text("reason"), Some("missing"));
-    let _ = std::fs::remove_dir_all(&home);
+    let _ = std::fs::remove_dir_all(root(&home));
 }
