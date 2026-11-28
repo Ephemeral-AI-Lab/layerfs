@@ -23,7 +23,7 @@ This plugin is the replacement. You do not pass `-C` once per candidate, and you
 - `report` prints how much disk the Store used against a worktree baseline.
 - `discard` and `keep` only change the ledger. They do not copy a tree, check out a worktree, or delete commits.
 
-`workspace.mount` returns a path such as `/workspaces/1`. That path is inside the Sandbox. It is not a directory on the host, so `codex exec -C /workspaces/1` does not see the candidate. Host Codex stays in the real checkout. Edits for a candidate go to that candidate's Branch (`fs.write` / `fs.apply`, or one `workspace.exec` plus one `workspace.commit`). The verify command runs with `workspace.exec`, which is the step that used to run in the directory passed to `-C`.
+`workspace.mount` returns a path such as `/layerfs/workspaces/agent`. That path is inside the Sandbox. It is not a directory on the host, so `codex exec -C /layerfs/workspaces/agent` does not see the candidate. Host Codex stays in the real checkout. Edits for a candidate go to that candidate's Branch (`fs.write` / `fs.apply`, or one `workspace.exec` plus one `workspace.commit`). The verify command runs with `workspace.exec`, which is the step that used to run in the directory passed to `-C`.
 
 One Codex session, one Branch. The next hypothesis is another Branch, not another `-C`.
 

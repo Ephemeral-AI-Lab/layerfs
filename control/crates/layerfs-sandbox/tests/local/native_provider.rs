@@ -42,6 +42,7 @@ fn runtime_preserves_partial_launch_owner_and_reopens_the_exact_process() {
                 gid: nix::unistd::Gid::effective().as_raw(),
             },
             environment: vec![],
+            mount_home: None,
         },
     };
     let mut sandbox = provider.launch(request("success")).unwrap();

@@ -12,6 +12,29 @@ pub(crate) const MAGIC: &[u8] = b"LFSC\x01";
 /// A named mount's project and Branch names travel as given, invalid ones
 /// too (the daemon refuses them as its lookup does), up to the field limit.
 const NAME_FIELD: usize = u16::MAX as usize;
+/// The longest Workspace name a named attach carries (S §2.3).
+pub const MOUNT_NAME_LIMIT: usize = 63;
+
+/// `name` as one folder of a daemon's mount home (#846): a Workspace name's
+/// rule (S §2.3), 1 to 63 lowercase letters, digits, `_`, `.` and `-`,
+/// starting and ending with a letter or digit. So it is one plain path
+/// segment, never `.`, `..` or a hidden folder such as the NFS companions'
+/// `.appledouble`.
+pub fn checked_mount_name(name: &str) -> Result<&str, ControlError> {
+    let bytes = name.as_bytes();
+    let edge = |b: &u8| b.is_ascii_lowercase() || b.is_ascii_digit();
+    let plain = (1..=MOUNT_NAME_LIMIT).contains(&bytes.len())
+        && bytes
+            .iter()
+            .all(|b| edge(b) || matches!(b, b'_' | b'.' | b'-'))
+        && bytes.first().is_some_and(edge)
+        && bytes.last().is_some_and(edge);
+    if plain {
+        Ok(name)
+    } else {
+        Err(ControlError("mount name"))
+    }
+}
 impl Call {
     /// Encodes one checked request. Failure before send has no remote effect.
     pub fn encode(&self) -> Result<Vec<u8>, ControlError> {
@@ -110,6 +133,11 @@ impl Call {
                 out.byte(9)?;
                 put_token(&mut out, *token)?;
             }
+            Request::AttachNamed { token, name } => {
+                out.byte(18)?;
+                put_token(&mut out, *token)?;
+                out.blob(checked_mount_name(name)?.as_bytes())?;
+            }
             Request::Locate(workspace) => {
                 out.byte(10)?;
                 out.put(&workspace.to_bytes())?;
@@ -207,6 +235,10 @@ impl Call {
             3 => Request::Status(token(&mut input)?),
             4 => Request::Unmount(crate::daemon::unmount::unmount(&mut input)?),
             9 => Request::Attach(token(&mut input)?),
+            18 => Request::AttachNamed {
+                token: token(&mut input)?,
+                name: checked_mount_name(&input.text(MOUNT_NAME_LIMIT)?)?.to_owned(),
+            },
             10 => Request::Locate(history(WorkspaceId::from_authority(input.array()?))?),
             11 => Request::ForceUnmount {
                 token: token(&mut input)?,
@@ -492,6 +524,17 @@ pub enum Request {
     },
     /// Mount the bound Workspace mountly; acknowledged only when it is Ready.
     Attach(WorkspaceToken),
+    /// [`Request::Attach`] at the mount home's folder `name`, the
+    /// Workspace's own name (#846), instead of its namespace number: a
+    /// Workspace mounted again under one name lands on one path. `name` is
+    /// one [`checked_mount_name`]; a folder of that name that is still
+    /// there (an earlier mount not yet released) refuses the attach.
+    AttachNamed {
+        /// The bound Workspace, as for [`Request::Attach`].
+        token: WorkspaceToken,
+        /// Its mount home folder: the Workspace's own name.
+        name: String,
+    },
     /// Observe one incarnation by identity alone; settles no original unknown.
     Locate(WorkspaceId),
     /// Abort the owned connection and close terminally; no caller process is signalled.

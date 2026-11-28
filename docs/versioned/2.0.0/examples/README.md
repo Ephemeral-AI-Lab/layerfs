@@ -217,7 +217,7 @@ shortened):
 
 ```js
 await lfs.sandbox.create("web/site", "tests", { mount: "agent" });
-// {"workspace":"tests:agent","path":"…/machine/macos-host/run/layerfs-260d8ebe-tests/workspaces/1"}
+// {"workspace":"tests:agent","path":"…/sandbox/tests/workspaces/agent"}
 const run = await lfs.workspace.exec("tests:agent", "ls && echo built > out.txt", {
   on_progress: (p) => console.log(p), // {"phase":"start","done":0,"total":1,"exec":"exec-52e9eb931534ce95"}
 });

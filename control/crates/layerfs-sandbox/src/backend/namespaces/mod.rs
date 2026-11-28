@@ -36,7 +36,7 @@ pub use instance::cgroup::{give_controllers, leaf, split};
 pub use instance::exec::NO_HELPER_COPY;
 #[cfg(target_os = "linux")]
 pub use instance::handle::Sandbox;
-pub use instance::spec::{HelperSpec, SpecNetwork, RESOLVER_FILES};
+pub use instance::spec::{HelperSpec, SpecNetwork, RESOLVER_FILES, SANDBOX_MOUNTS};
 #[cfg(target_os = "linux")]
 pub use provider::NamespaceProvider;
 #[cfg(target_os = "linux")]

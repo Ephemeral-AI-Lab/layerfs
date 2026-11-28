@@ -145,10 +145,11 @@ pub(crate) fn serve(side: &Side<'_>, request: &SdkValue, budget: &Budget) -> Out
         walk.measure(&paths::log_dir(root), &[]) + walk.measure(&paths::trace_dir(root), &[])
     });
     let other = walk.part(|walk| {
-        ["incoming", "backup", "sandbox"]
+        let folders: u64 = ["incoming", "backup"]
             .into_iter()
             .map(|folder| walk.measure(&root.join(folder), &[]))
-            .sum()
+            .sum();
+        folders + walk.sandbox_records(&root.join("sandbox"))
     });
 
     let parts = [
@@ -355,6 +356,24 @@ impl Walk<'_> {
         // are what was counted, and `deadline` says so
         let cut = (!self.complete).then_some(live::DEADLINE);
         (row(name, Some(parts), cut), parts.iter().sum())
+    }
+
+    /// The home's `sandbox/` folder, each Sandbox's records, never entering
+    /// its `workspaces/`: a process Sandbox's mount home (#846), whose
+    /// mounts a stopped daemon's NFS server would leave waiting.
+    fn sandbox_records(&mut self, folder: &Path) -> u64 {
+        let mut bytes = match std::fs::symlink_metadata(folder) {
+            Ok(top) => self.blocks(&top),
+            Err(_) => return 0,
+        };
+        let Ok(entries) = std::fs::read_dir(folder) else {
+            self.unreadable += 1;
+            return bytes;
+        };
+        for entry in entries.flatten() {
+            bytes += self.measure(&entry.path(), &["workspaces"]);
+        }
+        bytes
     }
 
     /// The run root's entries no listed Sandbox's run folder is (`named`):

@@ -85,6 +85,10 @@ fn commands_are_bounded_exact_and_reject_every_truncated_prefix() {
             discard: true,
         }),
         Request::Attach(token),
+        Request::AttachNamed {
+            token,
+            name: "feature-login".into(),
+        },
         Request::Locate(token.workspace),
         Request::Fork(ForkRequest {
             stack: binding.branch.stack,
@@ -144,6 +148,28 @@ fn commands_are_bounded_exact_and_reject_every_truncated_prefix() {
     }
     .encode()
     .is_err());
+    // a named attach's folder is one plain Workspace name (#846)
+    for name in [
+        "",
+        ".",
+        "..",
+        ".appledouble",
+        "a/b",
+        "Agent",
+        "-a",
+        "a-",
+        &"a".repeat(64),
+    ] {
+        let call = Call {
+            id: 1,
+            request: Request::AttachNamed {
+                token,
+                name: name.into(),
+            },
+        };
+        assert!(call.encode().is_err(), "{name:?}");
+    }
+    assert_eq!(checked_mount_name("a.b_c-1"), Ok("a.b_c-1"));
 }
 #[test]
 fn replies_preserve_scoped_status_conflict_and_known_publication() {

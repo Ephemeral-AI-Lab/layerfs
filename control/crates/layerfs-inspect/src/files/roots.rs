@@ -63,6 +63,8 @@ pub(super) enum Kept {
 ///   Workspaces' databases) are restricted, `daemon.log` is a log, and
 ///   what is under `workspaces/` is a Workspace mount. Its `tmp/` is the
 ///   commands' home: theirs, open.
+/// - What is under a Sandbox's `sandbox/<name>/workspaces/` is a Workspace
+///   mount: a process Sandbox's daemon mounts there (#846).
 /// - Elsewhere under `root`: `control.json` and `worker.json` (keys),
 ///   `lock` and `*.lock` (locks), a Store's `open/` (its leases), and
 ///   `log/worker.log` with `worker.1.log` (logs).
@@ -105,6 +107,10 @@ pub(super) fn kept(root: &Path, path: &Path) -> Kept {
             }
             _ => Kept::Open,
         };
+    }
+    // a process Sandbox's mount home beside its records (#846)
+    if named(0, "sandbox") && named(2, WORKSPACES) && names.len() > 3 {
+        return Kept::Workspace;
     }
     if named(0, "store") && named(2, "open") {
         return Kept::Restricted;

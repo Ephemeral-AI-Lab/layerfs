@@ -32,14 +32,17 @@ enum Stop {
 impl Service {
     /// Ready is acknowledged only after the kernel mount exists, the handshake
     /// completed, every receive loop entered and the registry records it.
+    /// `name` names its mount home folder (#846); `None` keeps the
+    /// namespace number.
     pub(crate) fn attach(
         &self,
         token: WorkspaceToken,
+        name: Option<&str>,
         timing: &layerfs_telemetry::timer::TimingScope<'_, layerfs_telemetry::timer::Active>,
     ) -> Result<Success, Failure> {
         if let Some(export) = self.export.clone() {
             return crate::telemetry::phase(timing, "kernel.attach", || {
-                self.attach_export(&export, token)
+                self.attach_export(&export, token, name)
             });
         }
         let Some(serving) = self.kernel.clone() else {
@@ -50,7 +53,7 @@ impl Service {
         };
         let workspace = self.admit_attach(token)?;
         match crate::telemetry::phase(timing, "kernel.attach", || {
-            self.attach_admitted(&serving, token, &workspace)
+            self.attach_admitted(&serving, (token, name), &workspace)
         }) {
             Ok(attached) => {
                 let reply = Reply::Ready(Box::new(attached.ready.clone()));
@@ -94,10 +97,11 @@ impl Service {
     fn attach_admitted(
         &self,
         serving: &KernelServing,
-        token: WorkspaceToken,
+        (token, name): (WorkspaceToken, Option<&str>),
         workspace: &Arc<BoundWorkspace>,
     ) -> Result<Attached, Stop> {
-        let directory = serving.directory(token);
+        let directory = serving.directory(token, name);
+        super::super::kernel::named_point_free(&directory, name).map_err(Stop::Unattached)?;
         let Some(text) = directory
             .to_str()
             .filter(|text| text.len() <= MOUNT_DIRECTORY_LIMIT)

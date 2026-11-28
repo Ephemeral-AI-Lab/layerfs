@@ -22,6 +22,10 @@ pub struct Local {
     /// macOS only).
     #[cfg(target_os = "macos")]
     pub(crate) environment: Vec<(String, String)>,
+    /// Where a process daemon mounts its Workspaces when not its own
+    /// `workspaces` (#846), macOS only.
+    #[cfg(target_os = "macos")]
+    pub(crate) mount_home: Option<PathBuf>,
 }
 
 /// Where one Sandbox keeps its parts, all under its directory.
@@ -33,7 +37,9 @@ pub struct LocalPaths {
     pub config: PathBuf,
     /// Its daemon overlay template, `overlay/overlay.sqlite`, in a 0700 directory.
     pub overlay: PathBuf,
-    /// Its Workspace mount home, `workspaces`, made 0755 by the daemon.
+    /// Its `workspaces`: a process daemon's link to its mount home (#846:
+    /// the home's `sandbox/<name>/workspaces`, made by the daemon). A
+    /// namespaces daemon mounts at [`crate::SANDBOX_MOUNTS`] instead.
     pub mounts: PathBuf,
     /// Its daemon's output, `daemon.log`, 0600.
     pub log: PathBuf,
@@ -109,7 +115,16 @@ impl Local {
             name: None,
             #[cfg(target_os = "macos")]
             environment: Vec::new(),
+            #[cfg(target_os = "macos")]
+            mount_home: None,
         })
+    }
+    /// Mounts the next daemon's Workspaces in `home` (#846): its create
+    /// links its own `workspaces` to it. `None` keeps that folder.
+    #[cfg(target_os = "macos")]
+    pub fn mount_home(mut self, home: Option<PathBuf>) -> Self {
+        self.mount_home = home;
+        self
     }
     /// Starts the next daemon with `environment` besides its search path (the
     /// kernel route its provider chose and the NFS mount helpers). Nothing

@@ -119,6 +119,7 @@ pub fn close(host: &Host, held: &[String]) -> Outcome {
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
         .remove(&directory);
+    crate::lifecycle::create::unmounted(&directory).map_err(after_stop)?;
     std::fs::remove_dir_all(&directory).map_err(|error| after_stop(failed(error)))?;
     layerfs_home::record::generation::moved_above(&directory);
     Ok(SdkValue::map([

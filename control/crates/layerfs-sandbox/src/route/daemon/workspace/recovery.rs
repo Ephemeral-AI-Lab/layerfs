@@ -67,6 +67,21 @@ impl WorkspaceApi<'_> {
             reply => Err(OperationFailure::unexpected(request, reply)),
         }
     }
+    /// [`Self::attach`] at the mount home's folder `name` (#846).
+    pub fn attach_named(
+        &mut self,
+        token: WorkspaceToken,
+        name: &str,
+    ) -> Result<ReadyMount, Box<OperationFailure>> {
+        let request = Request::AttachNamed {
+            token,
+            name: name.to_owned(),
+        };
+        match self.exchange(request.clone())? {
+            Reply::Ready(ready) => Ok(*ready),
+            reply => Err(OperationFailure::unexpected(request, reply)),
+        }
+    }
     /// Observes one incarnation by identity alone, for a caller whose binding
     /// or attachment acknowledgement was lost. It binds and attaches nothing.
     pub fn locate(

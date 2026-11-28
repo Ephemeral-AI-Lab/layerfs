@@ -212,8 +212,8 @@ impl ExportServing {
     pub fn reaped_helpers(&self) -> Vec<(u32, String)> {
         self.helpers.reaped()
     }
-    fn directory(&self, token: WorkspaceToken) -> PathBuf {
-        self.config.mounts.join(token.namespace.to_string())
+    fn directory(&self, token: WorkspaceToken, name: Option<&str>) -> PathBuf {
+        crate::workspace::kernel::mount_directory(&self.config.mounts, token, name)
     }
     /// Whether the host's table still lists this mount. The table comes from
     /// the home the daemon owns, never from the mount itself: see [`listed`].
@@ -262,6 +262,17 @@ impl ExportServing {
                 }
             }
         }));
+        // a mount home that outlives its daemon (#846: the home's
+        // `sandbox/<name>/workspaces`) keeps the empty folders a forced
+        // unmount leaves; each goes once (`rmdir` never enters a mount), so
+        // a named mount finds its point free
+        if let Ok(entries) = std::fs::read_dir(&self.config.mounts) {
+            for path in entries.flatten().map(|entry| entry.path()) {
+                if std::fs::remove_dir(&path).is_ok() {
+                    lines.push(format!("removed empty {}", path.display()));
+                }
+            }
+        }
         lines
     }
 }
@@ -353,9 +364,10 @@ impl Service {
         &self,
         serving: &ExportServing,
         token: WorkspaceToken,
+        name: Option<&str>,
     ) -> Result<Success, Failure> {
         let workspace = self.admit_export(token)?;
-        match self.export_admitted(serving, token, &workspace) {
+        match self.export_admitted(serving, (token, name), &workspace) {
             Ok(exported) => {
                 let reply = Reply::Ready(Box::new(exported.ready.clone()));
                 self.settle(token, Kernel::Exported(Box::new(exported)), Activity::Idle);
@@ -398,11 +410,12 @@ impl Service {
     fn export_admitted(
         &self,
         serving: &ExportServing,
-        token: WorkspaceToken,
+        (token, name): (WorkspaceToken, Option<&str>),
         workspace: &Arc<BoundWorkspace>,
     ) -> Result<Exported, Stop> {
         let config = &serving.config;
-        let directory = serving.directory(token);
+        let directory = serving.directory(token, name);
+        crate::workspace::kernel::named_point_free(&directory, name).map_err(Stop::Unattached)?;
         let Some(text) = directory
             .to_str()
             .filter(|text| text.len() <= MOUNT_DIRECTORY_LIMIT)

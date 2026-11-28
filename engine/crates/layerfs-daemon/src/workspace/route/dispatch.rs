@@ -160,8 +160,13 @@ impl Service {
                 relinquish_unknown,
             } => self.force_unmount(*token, *relinquish_unknown),
             Request::Attach(token) => crate::telemetry::timed("sandbox.mount.attach", |timing| {
-                self.attach(*token, timing)
+                self.attach(*token, None, timing)
             }),
+            Request::AttachNamed { token, name } => {
+                crate::telemetry::timed("sandbox.mount.attach", |timing| {
+                    self.attach(*token, Some(name.as_str()), timing)
+                })
+            }
             Request::Locate(workspace) => self.locate(*workspace),
             // History calls are Store calls: they run in the SDK's process.
             Request::Fork(_) | Request::Branches { .. } | Request::History(_) => Err(

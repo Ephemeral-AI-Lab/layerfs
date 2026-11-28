@@ -455,6 +455,7 @@ pub fn close(host: &Host, force: bool, held: &[String], drain: &dyn WorkspaceDra
         ),
     };
     let left = left.into_iter().chain(unretired).collect();
+    crate::lifecycle::create::unmounted(&directory)?;
     lock(&SANDBOXES)?.remove(&directory);
     std::fs::remove_dir_all(&directory).map_err(failed)?;
     layerfs_home::record::generation::moved_above(&directory);
@@ -522,6 +523,7 @@ fn bound_mounts(
 /// the user to remove (`docker rm -f`); nothing else is touched.
 fn forget(id: &str, directory: &Path, recorded: &DaemonRecord) -> Outcome {
     let _guard = layerfs_store::data::project::record::discovery::guard(directory)?;
+    crate::lifecycle::create::unmounted(directory)?;
     let container = discard(directory, recorded)?;
     std::fs::remove_dir_all(directory).map_err(failed)?;
     layerfs_home::record::generation::moved_above(directory);
@@ -544,6 +546,7 @@ fn forget(id: &str, directory: &Path, recorded: &DaemonRecord) -> Outcome {
 /// tombstone is written: that process may still run.
 fn forget_unread(id: &str, directory: &Path, recorded: &DaemonRecord, why: &str) -> Outcome {
     let _guard = layerfs_store::data::project::record::discovery::guard(directory)?;
+    crate::lifecycle::create::unmounted(directory)?;
     discard(directory, recorded)?;
     std::fs::remove_dir_all(directory).map_err(failed)?;
     layerfs_home::record::generation::moved_above(directory);
@@ -628,6 +631,7 @@ pub fn reclaim(host: &Host, container: &str, stopped: bool) -> Outcome {
     // (the close that reclaimed it answers `NoSuchSandbox`, its `left`
     // detail naming a tombstone that was not written)
     let unretired = retired(host, id);
+    crate::lifecycle::create::unmounted(&directory)?;
     lock(&SANDBOXES)?.remove(&directory);
     std::fs::remove_dir_all(&directory).map_err(failed)?;
     layerfs_home::record::generation::moved_above(&directory);

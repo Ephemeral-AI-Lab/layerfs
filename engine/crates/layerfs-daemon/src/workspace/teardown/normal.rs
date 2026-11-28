@@ -231,10 +231,11 @@ impl Service {
     pub(crate) fn attach(
         &self,
         token: WorkspaceToken,
+        name: Option<&str>,
         _timing: &layerfs_telemetry::timer::TimingScope<'_, layerfs_telemetry::timer::Active>,
     ) -> Result<Success, Failure> {
         if let Some(export) = self.export.clone() {
-            return self.attach_export(&export, token);
+            return self.attach_export(&export, token, name);
         }
         Err(Failure::Rejected(
             layerfs_protocol::daemon::ControlCode::Invalid,

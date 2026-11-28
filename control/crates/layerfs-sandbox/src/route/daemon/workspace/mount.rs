@@ -87,22 +87,26 @@ impl WorkspaceApi<'_> {
         branch: BranchId,
     ) -> Result<MountedWorkspace, Box<MountFailure>> {
         let bound = self.bind(workspace, branch);
-        self.attached(bound)
+        self.attached(bound, None)
     }
     /// [`Self::mount`] of Branch `branch` of project `project`, which the
-    /// daemon finds by name (#64): the caller reads no Store.
+    /// daemon finds by name (#64): the caller reads no Store. A Workspace
+    /// `name` is its mount point's folder (#846); none keeps the daemon's
+    /// namespace number.
     pub fn mount_named(
         &mut self,
         workspace: WorkspaceId,
         (project, branch): (&str, &str),
+        name: Option<&str>,
     ) -> Result<MountedWorkspace, Box<MountFailure>> {
         let bound = self.bind_named(workspace, project, branch);
-        self.attached(bound)
+        self.attached(bound, name)
     }
     /// The attach step of a mount whose bind answered `bound`.
     fn attached(
         &mut self,
         bound: Result<BoundWorkspace, Box<OperationFailure>>,
+        name: Option<&str>,
     ) -> Result<MountedWorkspace, Box<MountFailure>> {
         let bound = bound.map_err(|failure| {
             Box::new(MountFailure {
@@ -110,7 +114,11 @@ impl WorkspaceApi<'_> {
                 failure,
             })
         })?;
-        match self.attach(bound.token) {
+        let ready = match name {
+            Some(name) => self.attach_named(bound.token, name),
+            None => self.attach(bound.token),
+        };
+        match ready {
             Ok(ready) => Ok(MountedWorkspace { bound, ready }),
             Err(failure) => Err(Box::new(MountFailure {
                 bound: Some(bound),

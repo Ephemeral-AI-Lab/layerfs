@@ -1161,7 +1161,7 @@ home; ids shortened to 8 characters and `…`):
 
 ```console
 $ layerfs workspace mount tests agent
-{"workspace":"tests:agent","path":"/tmp/demo/home/machine/macos-host/run/layerfs-8a7387b2-tests/workspaces/1"}
+{"workspace":"tests:agent","path":"/tmp/demo/home/sandbox/tests/workspaces/agent"}
 $ layerfs workspace list
 {"items":[{"workspace":"tests:agent","branch":"agent"}]}
 $ layerfs workspace exec tests:agent 'echo hello > out.txt && uname -s'

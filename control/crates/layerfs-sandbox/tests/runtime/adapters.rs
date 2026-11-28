@@ -68,6 +68,7 @@ fn a_bind_is_refused_where_the_backend_does_not_bind() {
         options: ProviderLaunchOptions::Local {
             command_identity: CommandIdentity { uid: 501, gid: 20 },
             environment: Vec::new(),
+            mount_home: None,
         },
     };
     let root = std::env::temp_dir().join(format!("lfs-binds-{}", std::process::id()));

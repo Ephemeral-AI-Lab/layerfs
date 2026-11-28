@@ -400,7 +400,7 @@ is checked for its range and not used. `depth` is 1 to 32; `byte_length` is
 
 | `role` | Entry | From |
 | --- | --- | --- |
-| `workspace` | one per mounted Workspace: `type: "dir"`, `not_read: "mount"`, `path` its mount (`<run folder>/workspaces/<n>`), `workspace` its handle. Ordered by path, `2` before `10` | the Workspace records on the side that keeps them. The mount is never `stat`ed or opened: a stopped daemon cannot hang the answer |
+| `workspace` | one per mounted Workspace: `type: "dir"`, `not_read: "mount"`, `path` its mount (`/layerfs/workspaces/<name>` in a Sandbox with a root of its own; the home's `sandbox/<sandbox>/workspaces/<name>` on `macos-host`, #846), `workspace` its handle. Ordered by path, shorter first | the Workspace records on the side that keeps them. The mount is never `stat`ed or opened: a stopped daemon cannot hang the answer |
 | `home` | `type: "dir"`, `path` `<run folder>/tmp`: `HOME` for the Sandbox's commands | the run folder |
 | `log` | `type: "file"`, `path` `<run folder>/daemon.log`, with its `size`. It is read with [`sandbox log`](#sandboxlog), not with this call | the run folder |
 | `root` | `type: "dir"`, `path` `/`: what the Sandbox's commands see as `/`. Only for a Sandbox with a root of its own (the `namespaces` backend: `linux-host`, docker, Lima, Apple Container) | the Sandbox's record: nothing of the root is opened for this answer, so a stopped Sandbox lists it too |
@@ -456,7 +456,7 @@ Run on macOS (`macos-host`) with a debug build:
 
 ```console
 $ layerfs sandbox files tests
-{"items":[{"path":"/tmp/demo/home/machine/macos-host/run/layerfs-8a7387b2-tests/workspaces/1","type":"dir","not_read":"mount"},{"path":"/tmp/demo/home/machine/macos-host/run/layerfs-8a7387b2-tests/tmp","type":"dir"},{"path":"/tmp/demo/home/machine/macos-host/run/layerfs-8a7387b2-tests/daemon.log","type":"file","size":38}]}
+{"items":[{"path":"/tmp/demo/home/sandbox/tests/workspaces/agent","type":"dir","not_read":"mount"},{"path":"/tmp/demo/home/machine/macos-host/run/layerfs-8a7387b2-tests/tmp","type":"dir"},{"path":"/tmp/demo/home/machine/macos-host/run/layerfs-8a7387b2-tests/daemon.log","type":"file","size":38}]}
 ```
 
 ### sandbox.log

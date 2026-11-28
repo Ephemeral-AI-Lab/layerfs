@@ -97,6 +97,7 @@ pub(crate) fn request_token(request: &Request) -> Option<WorkspaceToken> {
         Request::Unmount(control) => Some(control.token),
         Request::Status(token)
         | Request::Attach(token)
+        | Request::AttachNamed { token, .. }
         | Request::Cleanup(token)
         | Request::ForceUnmount { token, .. } => Some(*token),
         _ => None,

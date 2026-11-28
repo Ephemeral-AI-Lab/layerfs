@@ -31,9 +31,14 @@ impl fmt::Debug for LaunchRequest {
 }
 #[derive(Clone, Debug)]
 pub enum ProviderLaunchOptions {
+    /// The macOS process backend. `mount_home`, when given, is where its
+    /// daemon mounts Workspaces instead of its directory's `workspaces`
+    /// (#846: the home's `sandbox/<name>/workspaces`); that `workspaces`
+    /// is then a link to it, so a stop or delete still finds every mount.
     Local {
         command_identity: CommandIdentity,
         environment: Vec<(String, String)>,
+        mount_home: Option<PathBuf>,
     },
     /// The Linux namespace backend: a namespaced daemon whose private root
     /// takes the launch's binds (a sqlite Store's [`crate::Bind::store`],

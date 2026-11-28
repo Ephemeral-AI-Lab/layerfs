@@ -116,7 +116,7 @@ $ layerfs sandbox create shop/api tests --progress
 {"phase":"start","done":1,"total":1}
 {"ok":true}
 $ layerfs workspace mount tests agent
-{"workspace":"tests:agent","path":"/tmp/demo/home/machine/macos-host/run/layerfs-8a7387b2-tests/workspaces/1"}
+{"workspace":"tests:agent","path":"/tmp/demo/home/sandbox/tests/workspaces/agent"}
 $ layerfs workspace exec tests:agent 'echo hello > out.txt && uname -s'
 {"exit_code":0,"stdout":"Darwin\n"}
 $ layerfs workspace status tests:agent
@@ -183,7 +183,7 @@ const page = await lfs.commit.list("web/site", "agent", { limit: 1 });
 // {"items":[{"commit":"12799ab7…","message":"add notes"}]}: next_cursor only while there are more
 
 await lfs.sandbox.create("web/site", "tests", { mount: "agent" });
-// {"workspace":"tests:agent","path":"…/workspaces/1"}
+// {"workspace":"tests:agent","path":"…/workspaces/agent"}
 const run = await lfs.workspace.exec("tests:agent", "ls && echo built > out.txt");
 // {"exit_code":0,"stdout":"README.md\nnotes.md\n"}
 await lfs.workspace.commit("tests:agent", { message: "ls output" }); // {"commit":"12222172…"}

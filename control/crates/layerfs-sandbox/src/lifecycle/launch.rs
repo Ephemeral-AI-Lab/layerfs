@@ -121,7 +121,7 @@ impl SandboxApi {
             {
                 if std::path::Path::new(&request.setup.overlay)
                     != directory.join("overlay/overlay.sqlite")
-                    || std::path::Path::new(&request.setup.mounts) != directory.join("workspaces")
+                    || !own_mounts(&request.setup.mounts, &directory, &request.launch.options)
                     || matches!(
                         &request.setup.store,
                         layerfs_protocol::DaemonStore::Sqlite { locator, .. }
@@ -230,7 +230,7 @@ impl SandboxApi {
             {
                 if std::path::Path::new(&request.setup.overlay)
                     != directory.join("overlay/overlay.sqlite")
-                    || std::path::Path::new(&request.setup.mounts) != directory.join("workspaces")
+                    || !own_mounts(&request.setup.mounts, &directory, &request.launch.options)
                     || matches!(
                         &request.setup.store,
                         layerfs_protocol::DaemonStore::Sqlite { locator, .. }
@@ -366,5 +366,26 @@ fn binds(
             .map(|bind| vec![bind])
             .map_err(|cause| SandboxCause::Runtime(crate::WireFailure::local(cause))),
         _ => Ok(Vec::new()),
+    }
+}
+
+/// Whether a launch's mount home `mounts` is its own (#846): the
+/// `mount_home` its process launch names, else its directory's
+/// `workspaces`; a namespaces launch's is [`crate::SANDBOX_MOUNTS`] in the
+/// Sandbox's own root.
+fn own_mounts(
+    mounts: &str,
+    directory: &std::path::Path,
+    options: &crate::ProviderLaunchOptions,
+) -> bool {
+    let mounts = std::path::Path::new(mounts);
+    match options {
+        crate::ProviderLaunchOptions::Local { mount_home, .. } => match mount_home {
+            Some(home) => mounts == home,
+            None => mounts == directory.join("workspaces"),
+        },
+        crate::ProviderLaunchOptions::Namespaces { .. } => {
+            mounts == std::path::Path::new(crate::SANDBOX_MOUNTS)
+        }
     }
 }

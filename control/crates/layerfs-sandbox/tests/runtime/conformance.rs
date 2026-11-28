@@ -63,6 +63,7 @@ fn options(backend: Backend) -> ProviderLaunchOptions {
         Backend::Process => ProviderLaunchOptions::Local {
             command_identity,
             environment: Vec::new(),
+            mount_home: None,
         },
         Backend::Namespaces => ProviderLaunchOptions::Namespaces {
             command_identity,
