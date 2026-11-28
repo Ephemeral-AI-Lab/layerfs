@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-labelledby="title description">
+  <title id="title">LayerCache</title>
+  <desc id="description">A replay arrow encircles a tool-call prefix that splits into two cached results.</desc>
+  <circle cx="64" cy="64" r="60" fill="#281D35"/>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M42 100 A42 42 0 1 1 96 91 M96 77l-1 16 16-2" stroke="#FF985E" stroke-width="8"/>
+    <path d="M64 81V68m0 0L51 55m13 13 13-13" stroke="#FFE0A3" stroke-width="7"/>
+  </g>
+  <g fill="#FFE0A3">
+    <rect x="44" y="46" width="14" height="14" rx="3"/>
+    <rect x="70" y="46" width="14" height="14" rx="3"/>
+  </g>
+</svg>

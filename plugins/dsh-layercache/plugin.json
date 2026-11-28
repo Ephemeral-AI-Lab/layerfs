@@ -1,0 +1,45 @@
+{
+  "schema": 1,
+  "id": "dsh-layercache",
+  "name": "DSH LayerCache",
+  "summary": "Reuse TVCache-style tool prefixes and filesystem states in dsh with LayerFS.",
+  "authors": [
+    {
+      "name": "aotenjou",
+      "github": "aotenjou"
+    }
+  ],
+  "license": "Apache-2.0",
+  "repository": "https://github.com/aotenjou/dsh-layercache",
+  "tags": [
+    "dsh",
+    "agents",
+    "cache",
+    "training",
+    "branches"
+  ],
+  "platforms": [
+    "linux",
+    "windows-wsl2"
+  ],
+  "uses": [
+    "agent"
+  ],
+  "host": {
+    "name": "DeepSeek Harness",
+    "url": "https://github.com/deepseek-ai/deepseek-harness"
+  },
+  "status": "preview",
+  "versions": [
+    {
+      "version": "0.1.0",
+      "commit": "747d82652e28594055581f77aa11d50e3e47168c",
+      "date": "2026-11-20",
+      "layerfs": {
+        "version": "v1.1.0",
+        "commit": "7d42d0b506eac64801864923149f796f5c7c8d7e"
+      },
+      "notes": "Pinned source includes tool preflight, checkpoint expiry, resource validation, and asynchronous cache publication."
+    }
+  ]
+}
